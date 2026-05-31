@@ -1,0 +1,5 @@
+# High-Performance Workstation Dependencies
+websocket-client
+pandas
+requests
+plotly
