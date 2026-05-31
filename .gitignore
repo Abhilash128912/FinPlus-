@@ -1,0 +1,15 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database journal files
+*.db-journal
+
+# Sensitive session caches (Never push credentials!)
+.token.txt
+
+# Local IDE folders
+.vscode/
+.idea/
+.gemini/
