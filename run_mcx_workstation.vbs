@@ -12,6 +12,6 @@ WshShell.CurrentDirectory = "c:\Users\AbhilashBabu\Finance"
 
 ' Launch Streamlit on dedicated port 8502
 ' (7 = Minimized command window, False = Do not wait for completion)
-WshShell.Run "cmd.exe /c ""C:\Users\AbhilashBabu\AppData\Local\Programs\Python\Python311\Scripts\streamlit.exe"" run mcx_workstation.py --server.port 8502", 7, False
+WshShell.Run "cmd.exe /c ""C:\Users\AbhilashBabu\AppData\Local\Programs\Python\Python311\Scripts\streamlit.exe"" run mcx_workstation.py --server.port 8507", 7, False
 
 Set WshShell = Nothing

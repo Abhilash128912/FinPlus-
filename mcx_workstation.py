@@ -21,77 +21,89 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling (Dark Glassmorphic Premium Theme)
+# Custom Styling (Light Institutional Neumorphic Theme matching styles.css)
 st.markdown("""
 <style>
     :root {
-        --primary-color: #ff9f43;
-        --secondary-color: #00d2d3;
-        --bg-color: #0f1115;
-        --card-bg: rgba(22, 27, 34, 0.7);
-        --border-color: rgba(255, 255, 255, 0.1);
-        --text-color: #f0f6fc;
-        --success-color: #2ecc71;
-        --error-color: #ea2027;
+        --primary-color: #4F46E5;
+        --secondary-color: #10B981;
+        --bg-color: #F8FAFC;
+        --card-bg: #FFFFFF;
+        --border-color: #E2E8F0;
+        --text-color: #0F172A;
+        --text-secondary: #475569;
+        --success-color: #059669;
+        --error-color: #DC2626;
     }
     
     .stApp {
-        background-color: var(--bg-color);
-        color: var(--text-color);
-        font-family: 'Outfit', sans-serif;
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
+        font-family: 'Plus Jakarta Sans', 'Outfit', sans-serif !important;
     }
     
     .main-title {
         font-size: 2.2rem;
-        font-weight: 700;
-        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        font-weight: 800;
+        background: linear-gradient(135deg, #0F172A 30%, #334155 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 0.2rem;
+        letter-spacing: -0.02em;
     }
     
     .sub-title {
         font-size: 1rem;
-        color: #8b949e;
+        color: var(--text-secondary);
         margin-bottom: 1.5rem;
     }
     
     .premium-card {
         background-color: var(--card-bg);
         border: 1px solid var(--border-color);
-        border-radius: 12px;
+        border-bottom: 5px solid #CBD5E1; /* Raised neomorphic bevel */
+        border-radius: 16px;
         padding: 1.5rem;
         margin-bottom: 1.5rem;
-        backdrop-filter: blur(10px);
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 10px 18px -4px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+        color: var(--text-color) !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .premium-card:hover {
+        border-color: #A7F3D0;
+        border-bottom-color: #10B981;
+        transform: translateY(-4px);
     }
     
     .price-value {
         font-size: 2.5rem;
         font-weight: 800;
+        color: var(--text-color);
         margin: 0.5rem 0;
     }
     
     .metric-label {
         font-size: 0.85rem;
-        color: #8b949e;
+        color: var(--text-secondary);
         text-transform: uppercase;
         letter-spacing: 1px;
+        font-weight: 600;
     }
     
     .status-bullish {
         color: var(--success-color);
-        font-weight: 600;
+        font-weight: 700;
     }
     
     .status-bearish {
         color: var(--error-color);
-        font-weight: 600;
+        font-weight: 700;
     }
     
     .status-neutral {
-        color: #ffc107;
-        font-weight: 600;
+        color: #d97706;
+        font-weight: 700;
     }
     
     .news-item {
@@ -102,19 +114,73 @@ st.markdown("""
     .news-title {
         font-size: 0.95rem;
         font-weight: 600;
-        color: #f0f6fc;
+        color: var(--text-color) !important;
         text-decoration: none;
         transition: color 0.2s;
     }
     
     .news-title:hover {
-        color: var(--primary-color);
+        color: var(--primary-color) !important;
     }
     
     .news-meta {
         font-size: 0.75rem;
-        color: #8b949e;
+        color: var(--text-secondary);
         margin-top: 0.3rem;
+    }
+    
+    /* Sidebar high contrast matching main styles.css */
+    section[data-testid="stSidebar"] {
+        background-color: #FFFFFF !important;
+        border-right: 1px solid var(--border-color) !important;
+    }
+    
+    /* Neumorphic Metric containers */
+    div[data-testid="metric-container"] {
+        background: var(--card-bg) !important;
+        border: 1px solid var(--border-color) !important;
+        border-bottom: 4px solid #CBD5E1 !important;
+        border-radius: 14px !important;
+        padding: 14px 18px !important;
+        box-shadow: 0 6px 12px -3px rgba(0, 0, 0, 0.03) !important;
+    }
+    
+    div[data-testid="stMetricValue"] {
+        font-family: 'Outfit', sans-serif !important;
+        font-size: 1.6rem !important;
+        font-weight: 700 !important;
+        color: var(--text-color) !important;
+    }
+    
+    /* Neumorphic Tab bar matching main styles.css */
+    div[data-testid="stTabBar"] {
+        background: #F1F5F9 !important;
+        border-radius: 12px !important;
+        padding: 4px !important;
+        margin-bottom: 24px !important;
+        border: 1px solid var(--border-color) !important;
+    }
+    
+    button[data-testid="stTabBarTab"] {
+        font-family: 'Outfit', sans-serif !important;
+        font-weight: 500 !important;
+        color: var(--text-secondary) !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    button[data-testid="stTabBarTab"][aria-selected="true"] {
+        background: #FFFFFF !important;
+        color: var(--text-color) !important;
+        font-weight: 600 !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    }
+    
+    /* Inputs background fix for readability */
+    div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="textarea"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
+        color: var(--text-color) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -185,12 +251,21 @@ def get_eia_countdown():
 # ----------------------------------------------------
 # Technical Analysis Helpers (NYMEX Proxy)
 # ----------------------------------------------------
+def clean_yf_df(df):
+    """Robust helper to flatten MultiIndex columns returned by newer yfinance versions."""
+    if df is None or df.empty:
+        return df
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df
+
 @st.cache_data(ttl=1800)
 def fetch_nymex_trends(ticker, usdinr):
     """Fetches daily NYMEX prices, converts to INR, and calculates technical indicators for swing trading."""
     try:
         df = yf.download(ticker, period="60d", interval="1d", progress=False)
-        if df.empty:
+        df = clean_yf_df(df)
+        if df is None or df.empty:
             return None
         
         # Convert prices from USD to INR
@@ -232,7 +307,9 @@ st.markdown("<p class='sub-title'>Highly optimized, tokenless energy swing dashb
 # 1. Fetch USDINR & NYMEX Live spot pricing
 try:
     usdinr_ticker = yf.Ticker("USDINR=X")
-    usdinr = float(usdinr_ticker.history(period="1d")['Close'].iloc[-1])
+    usdinr_hist = usdinr_ticker.history(period="1d")
+    usdinr_hist = clean_yf_df(usdinr_hist)
+    usdinr = float(usdinr_hist['Close'].iloc[-1])
 except Exception:
     usdinr = 83.50 # Standard fallback
 
@@ -242,7 +319,9 @@ spot_prices = {}
 for key, tick in nymex_symbols.items():
     try:
         ticker_obj = yf.Ticker(tick)
-        spot_prices[key] = float(ticker_obj.history(period="1d")['Close'].iloc[-1])
+        hist = ticker_obj.history(period="1d")
+        hist = clean_yf_df(hist)
+        spot_prices[key] = float(hist['Close'].iloc[-1])
     except Exception:
         spot_prices[key] = 75.0 if key == "CRUDEOIL" else 2.50
 
@@ -257,6 +336,7 @@ for symbol in ["CRUDEOIL", "NATURALGAS"]:
     try:
         t_obj = yf.Ticker(nymex_symbols[symbol])
         hist = t_obj.history(period="2d")
+        hist = clean_yf_df(hist)
         prev = hist['Close'].iloc[0]
         curr = hist['Close'].iloc[1]
         pct_changes[symbol] = ((curr - prev) / prev) * 100
