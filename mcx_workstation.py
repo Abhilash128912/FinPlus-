@@ -354,12 +354,51 @@ for key, tick in nymex_symbols.items():
     except Exception:
         spot_prices[key] = 75.0 if key == "CRUDEOIL" else 2.50
 
-# Apply NYMEX proxy pricing directly
+# ----------------------------------------------------
+# Real-Time Indian MCX Crawler (Economic Times)
+# ----------------------------------------------------
+def fetch_live_mcx_price_et(symbol: str) -> float:
+    """
+    Robust, token-free crawler to fetch real-time MCX pricing from Economic Times.
+    Returns float price on success, None on failure.
+    """
+    mapped_symbol = "CRUDEOIL" if symbol == "CRUDEOIL" else "NATURALGAS"
+    url = f"https://economictimes.indiatimes.com/commoditysummary/symbol-{mapped_symbol}.cms"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    }
+    try:
+        import bs4
+        r = requests.get(url, headers=headers, timeout=8)
+        if r.status_code == 200:
+            soup = bs4.BeautifulSoup(r.text, 'html.parser')
+            price_el = soup.find(class_="commodityPrice")
+            if price_el:
+                price_str = price_el.text.strip().replace(",", "")
+                return float(price_str)
+    except Exception:
+        pass
+    return None
+
+# Apply Real-Time MCX Pricing with NYMEX Proxy Fallback
 live_prices = {}
+pricing_modes = {}
+
 for symbol in ["CRUDEOIL", "NATURALGAS"]:
-    live_prices[symbol] = round(spot_prices[symbol] * usdinr, 2)
-# Map NATGASMINI to use identical spot conversion
+    # Attempt to fetch true live MCX price from Economic Times first
+    live_p = fetch_live_mcx_price_et(symbol)
+    if live_p is not None and live_p > 0:
+        live_prices[symbol] = round(live_p, 2)
+        pricing_modes[symbol] = "ET Real-Time MCX Feed"
+    else:
+        # Fallback to standard NYMEX Proxy Spot Conversion
+        live_prices[symbol] = round(spot_prices[symbol] * usdinr, 2)
+        pricing_modes[symbol] = "NYMEX Proxy (Fallback)"
+
+# Map NATGASMINI to use identical Natural Gas pricing
 live_prices["NATGASMINI"] = live_prices["NATURALGAS"]
+pricing_modes["NATGASMINI"] = pricing_modes["NATURALGAS"]
 
 # Calculate percentage changes
 pct_changes = {}
@@ -422,7 +461,7 @@ tab_dash, tab_news, tab_calc = st.tabs(["📊 Energy Swing Dashboard", "📰 Liv
 
 # Tab 1: Dashboard
 with tab_dash:
-    st.info(f"⚡ **Pricing Mode:** NYMEX Global Correlation Conversion (Token-Free) | **Live Spot Conversion Active**")
+    st.info(f"⚡ **Pricing Mode:** Crude: {pricing_modes['CRUDEOIL']} | Gas: {pricing_modes['NATURALGAS']} | **Tokenless Real-Time Monitoring Active**")
     
     col1, col2 = st.columns(2)
     
