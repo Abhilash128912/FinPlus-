@@ -3377,9 +3377,38 @@ def fetch_index_candles(index_token, access_token, lookback_days=7):
             if resp.status_code != 200:
                 last_err = f"HTTP {resp.status_code} for {scrip}: {body}"
                 continue
-            candles = body.get("data", {}).get("candles", [])
+            
+            # Correctly parse nested candles structure: body["data"][scrip]["candles"]
+            candles = []
+            data_dict = body.get("data", {})
+            if isinstance(data_dict, dict):
+                if scrip in data_dict and isinstance(data_dict[scrip], dict):
+                    candles = data_dict[scrip].get("candles", [])
+                else:
+                    # Fallback: check any key in data
+                    for k, v in data_dict.items():
+                        if isinstance(v, dict) and "candles" in v:
+                            candles = v["candles"]
+                            break
+
             if isinstance(candles, list) and candles:
-                return candles, None          # success
+                parsed_candles = []
+                for c_item in candles:
+                    if isinstance(c_item, dict):
+                        # API returns timestamp in seconds, convert to milliseconds
+                        ts = int(c_item.get("ts", 0)) * 1000
+                        parsed_candles.append([
+                            ts,
+                            float(c_item.get("o", 0)),
+                            float(c_item.get("h", 0)),
+                            float(c_item.get("l", 0)),
+                            float(c_item.get("c", 0)),
+                            int(c_item.get("v", 0))
+                        ])
+                    elif isinstance(c_item, (list, tuple)):
+                        parsed_candles.append(list(c_item))
+                if parsed_candles:
+                    return parsed_candles, None          # success
             last_err = f"{scrip} returned 0 candles — response: {body}"
         except Exception as ex:
             last_err = f"{scrip}: {ex}"
