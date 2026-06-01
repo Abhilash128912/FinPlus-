@@ -3,12 +3,11 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import requests
-import os
-import time
+import xml.etree.ElementTree as ET
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 
-# Import database settings from local database file
+# Import database settings from local database file if exists
 try:
     import database
 except ImportError:
@@ -54,7 +53,7 @@ st.markdown("""
     .sub-title {
         font-size: 1rem;
         color: #8b949e;
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
     }
     
     .premium-card {
@@ -94,119 +93,113 @@ st.markdown("""
         color: #ffc107;
         font-weight: 600;
     }
+    
+    .news-item {
+        border-bottom: 1px solid var(--border-color);
+        padding: 0.8rem 0;
+    }
+    
+    .news-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #f0f6fc;
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+    
+    .news-title:hover {
+        color: var(--primary-color);
+    }
+    
+    .news-meta {
+        font-size: 0.75rem;
+        color: #8b949e;
+        margin-top: 0.3rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# Data & Master CSV Sync Functions
+# News & Inventory Feed Functions (Free/Tokenless)
 # ----------------------------------------------------
-CACHE_FILE = "api-scrip-master.csv"
-
-@st.cache_data(ttl=86400)
-def download_dhan_scrip_master():
-    """Downloads Dhan instrument master and caches it for 24 hours."""
+@st.cache_data(ttl=900) # Cache news for 15 minutes
+def fetch_energy_news():
+    """Fetches real-time energy commodity news from OilPrice.com free RSS feed."""
     try:
-        url = "https://images.dhan.co/api-data/api-scrip-master.csv"
-        # Fast streaming download
-        r = requests.get(url, stream=True)
+        url = "https://oilprice.com/rss/main"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        r = requests.get(url, headers=headers, timeout=5)
         if r.status_code == 200:
-            with open(CACHE_FILE, "wb") as f:
-                for chunk in r.iter_content(chunk_size=1024 * 1024):
-                    if chunk:
-                        f.write(chunk)
-            return True
-    except Exception as e:
-        st.sidebar.error(f"Scrip download failed: {str(e)}")
-    return False
-
-def get_mcx_active_contracts():
-    """Parses Dhan script master to find the near-month Crude Oil and Natural Gas futures contracts."""
-    if not os.path.exists(CACHE_FILE):
-        success = download_dhan_scrip_master()
-        if not success:
-            return None
-            
-    try:
-        # Load columns we need to save memory
-        cols = ['SEM_EXM_EXCH_ID', 'SEM_SMST_SECURITY_ID', 'SEM_INSTRUMENT_NAME', 
-                'SEM_TRADING_SYMBOL', 'SEM_LOT_UNITS', 'SEM_EXPIRY_DATE', 'SM_SYMBOL_NAME']
-        df = pd.read_csv(CACHE_FILE, usecols=cols)
-        
-        # Filter for active MCX Futures
-        mcx_df = df[(df['SEM_EXM_EXCH_ID'] == 'MCX') & (df['SEM_INSTRUMENT_NAME'] == 'FUTCOM')]
-        
-        contracts = {}
-        for symbol in ['CRUDEOIL', 'NATURALGAS']:
-            sym_df = mcx_df[mcx_df['SM_SYMBOL_NAME'] == symbol].copy()
-            if not sym_df.empty:
-                # Filter out expired or invalid contracts (expiry >= today)
-                today_str = datetime.today().strftime('%Y-%m-%d')
-                sym_df = sym_df[sym_df['SEM_EXPIRY_DATE'] >= today_str]
-                if not sym_df.empty:
-                    # Sort by expiry date to get near-month
-                    sym_df = sym_df.sort_values(by='SEM_EXPIRY_DATE')
-                    near_month = sym_df.iloc[0]
-                    contracts[symbol] = {
-                        "security_id": str(near_month['SEM_SMST_SECURITY_ID']),
-                        "trading_symbol": near_month['SEM_TRADING_SYMBOL'],
-                        "lot_size": float(near_month['SEM_LOT_UNITS']),
-                        "expiry": near_month['SEM_EXPIRY_DATE']
-                    }
-        return contracts
-    except Exception as e:
-        st.sidebar.error(f"Error parsing scrip master: {str(e)}")
-        return None
-
-def fetch_dhan_ltp(client_id, access_token, security_ids):
-    """Fetches real-time LTP from Dhan's POST endpoint."""
-    url = "https://api.dhan.co/v2/marketfeed/ltp"
-    headers = {
-        "access-token": access_token,
-        "client-id": client_id,
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    }
-    
-    # Map exchange segment correctly
-    body = {
-        "instruments": [
-            {"exchange_segment": "MCX_COMM", "security_id": sec_id} for sec_id in security_ids
-        ]
-    }
-    
-    try:
-        r = requests.post(url, headers=headers, json=body, timeout=5)
-        if r.status_code == 200:
-            res_data = r.json()
-            # Standardize output: dictionary of security_id -> LTP
-            prices = {}
-            for item in res_data.get("data", []):
-                sec_id = str(item.get("security_id"))
-                prices[sec_id] = float(item.get("last_traded_price", 0.0))
-            return prices
-    except Exception as e:
+            root = ET.fromstring(r.content)
+            news_items = []
+            for item in root.findall(".//item")[:6]: # Get top 6 energy news
+                title = item.find("title").text
+                link = item.find("link").text
+                pub_date = item.find("pubDate").text
+                
+                # Standardize date output
+                try:
+                    dt = datetime.strptime(pub_date[:-6], "%a, %d %b %Y %H:%M:%S")
+                    dt_ist = dt + timedelta(hours=5, minutes=30)
+                    date_str = dt_ist.strftime("%d %b, %I:%M %p IST")
+                except Exception:
+                    date_str = pub_date
+                    
+                news_items.append({"title": title, "link": link, "date": date_str})
+            return news_items
+    except Exception:
         pass
-    return None
+    return []
+
+def get_eia_countdown():
+    """Calculates active countdown to the next weekly EIA Crude Oil & Natural Gas Reports (Wed/Thu 8:00 PM IST)."""
+    now = datetime.now()
+    
+    # Standard U.S. EIA Release is 10:30 AM Eastern = 8:00 PM IST
+    # 1. Crude Oil (Wednesdays 8:00 PM IST)
+    wed = now.replace(hour=20, minute=0, second=0, microsecond=0)
+    while wed.weekday() != 2 or wed < now:
+        wed += timedelta(days=1)
+    
+    # 2. Natural Gas (Thursdays 8:00 PM IST)
+    thu = now.replace(hour=20, minute=0, second=0, microsecond=0)
+    while thu.weekday() != 3 or thu < now:
+        thu += timedelta(days=1)
+        
+    crude_diff = wed - now
+    ng_diff = thu - now
+    
+    def format_diff(diff):
+        days = diff.days
+        hours = diff.seconds // 3600
+        mins = (diff.seconds % 3600) // 60
+        if days > 0:
+            return f"{days}d {hours}h left"
+        elif hours > 0:
+            return f"{hours}h {mins}m left"
+        else:
+            return f"{mins}m left (RELEASE IMMINENT ⚠️)"
+            
+    return format_diff(crude_diff), format_diff(ng_diff)
 
 # ----------------------------------------------------
-# Technical Analysis Helpers (NYMEX)
+# Technical Analysis Helpers (NYMEX Proxy)
 # ----------------------------------------------------
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1800)
 def fetch_nymex_trends(ticker, usdinr):
-    """Fetches daily NYMEX prices, converts to INR, and calculates technical momentum indicators."""
+    """Fetches daily NYMEX prices, converts to INR, and calculates technical indicators for swing trading."""
     try:
         df = yf.download(ticker, period="60d", interval="1d", progress=False)
         if df.empty:
             return None
         
-        # Convert prices from USD to INR using conversion multiplier
-        # WTI is quoted in USD/bbl, Henry Hub in USD/MMBtu.
+        # Convert prices from USD to INR
         df['Close_INR'] = df['Close'] * usdinr
         df['High_INR'] = df['High'] * usdinr
         df['Low_INR'] = df['Low'] * usdinr
         df['Open_INR'] = df['Open'] * usdinr
         
-        # 1. EMAs
+        # 1. EMAs for 3-5 days momentum
         df['EMA9'] = df['Close_INR'].ewm(span=9, adjust=False).mean()
         df['EMA21'] = df['Close_INR'].ewm(span=21, adjust=False).mean()
         df['SMA50'] = df['Close_INR'].rolling(window=50).mean()
@@ -230,55 +223,18 @@ def fetch_nymex_trends(ticker, usdinr):
         return None
 
 # ----------------------------------------------------
-# Core Application Flow
+# Main Application Flow
 # ----------------------------------------------------
-# 1. Main Title
+# Title Header
 st.markdown("<h1 class='main-title'>🛢️ FinPlus MCX Energy Workstation</h1>", unsafe_allow_html=True)
-st.markdown("<p class='sub-title'>Free, tokenless NYMEX Proxy + Dhan Hybrid Swing Workstation for Crude Oil & Natural Gas</p>", unsafe_allow_html=True)
+st.markdown("<p class='sub-title'>Highly optimized, tokenless energy swing dashboard powered strictly by NYMEX global benchmarks</p>", unsafe_allow_html=True)
 
-# 2. Fetch Saved Settings / Dhan Credentials
-dhan_creds = {}
-if database:
-    dhan_creds = database.get_db_settings("dhan_credentials", {})
-
-# 3. Sidebar Configuration
-st.sidebar.markdown("### ⚙️ Dhan API Settings")
-d_client_id = st.sidebar.text_input("Dhan Client ID", value=dhan_creds.get("client_id", ""), type="password")
-d_access_token = st.sidebar.text_input("Dhan Access Token", value=dhan_creds.get("access_token", ""), type="password")
-
-if st.sidebar.button("💾 Save Credentials", type="primary"):
-    if database:
-        database.save_db_setting("dhan_credentials", {"client_id": d_client_id, "access_token": d_access_token})
-        st.sidebar.success("Credentials saved securely in Database!")
-        time.sleep(1)
-        st.rerun()
-
-# Download / Sync master script manual trigger
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🔄 Scrip Master Database")
-if st.sidebar.button("🔄 Force Sync Dhan Master CSV"):
-    with st.spinner("Downloading master CSV..."):
-        if download_dhan_scrip_master():
-            st.sidebar.success("CSV synced successfully!")
-        else:
-            st.sidebar.error("Sync failed.")
-
-# Load active contracts
-mcx_contracts = get_mcx_active_contracts()
-
-# Fallback values if master CSV or API fails
-if not mcx_contracts:
-    mcx_contracts = {
-        "CRUDEOIL": {"security_id": "0", "trading_symbol": "CRUDEOIL FUT", "lot_size": 100.0, "expiry": "N/A"},
-        "NATURALGAS": {"security_id": "0", "trading_symbol": "NATURALGAS FUT", "lot_size": 1250.0, "expiry": "N/A"}
-    }
-
-# 4. Fetch USDINR & NYMEX Live data
+# 1. Fetch USDINR & NYMEX Live spot pricing
 try:
     usdinr_ticker = yf.Ticker("USDINR=X")
     usdinr = float(usdinr_ticker.history(period="1d")['Close'].iloc[-1])
 except Exception:
-    usdinr = 83.50 # Robust fallback
+    usdinr = 83.50 # Standard fallback
 
 # Fetch NYMEX Spot Estimates
 nymex_symbols = {"CRUDEOIL": "CL=F", "NATURALGAS": "NG=F"}
@@ -290,27 +246,12 @@ for key, tick in nymex_symbols.items():
     except Exception:
         spot_prices[key] = 75.0 if key == "CRUDEOIL" else 2.50
 
-# Live Price Fetching (Dhan or NYMEX Correlation proxy)
+# Apply NYMEX proxy pricing directly
 live_prices = {}
-pricing_source = "NYMEX Proxy (Correlation converted)"
-
-if d_client_id and d_access_token and mcx_contracts:
-    sec_ids = [val["security_id"] for val in mcx_contracts.values() if val["security_id"] != "0"]
-    if sec_ids:
-        dhan_prices = fetch_dhan_ltp(d_client_id, d_access_token, sec_ids)
-        if dhan_prices:
-            for symbol, details in mcx_contracts.items():
-                sec_id = details["security_id"]
-                if sec_id in dhan_prices:
-                    live_prices[symbol] = dhan_prices[sec_id]
-            pricing_source = "Live Dhan MCX API ✅"
-
-# Apply fallback proxy pricing if Dhan didn't return
 for symbol in ["CRUDEOIL", "NATURALGAS"]:
-    if symbol not in live_prices:
-        live_prices[symbol] = round(spot_prices[symbol] * usdinr, 2)
+    live_prices[symbol] = round(spot_prices[symbol] * usdinr, 2)
 
-# Calculate percentage changes (NYMEX fallback or estimated)
+# Calculate percentage changes
 pct_changes = {}
 for symbol in ["CRUDEOIL", "NATURALGAS"]:
     try:
@@ -323,24 +264,43 @@ for symbol in ["CRUDEOIL", "NATURALGAS"]:
         pct_changes[symbol] = 0.0
 
 # ----------------------------------------------------
-# Tab 1: Swing Dashboard
+# Sidebar Information Panel
 # ----------------------------------------------------
-tab_dash, tab_calc = st.tabs(["📊 Commodity Swing Dashboard", "🧮 Swing Trade Planner & Charges"])
+st.sidebar.markdown("### 📊 MCX Contract Specs")
+st.sidebar.info("""
+**🛢️ Crude Oil (1 Lot):**
+*   Lot Size: 100 Barrels
+*   Futures Symbol: CRUDEOIL
+*   Option Symbol: CRUDEOIL Strike
 
+**🔥 Natural Gas (1 Lot):**
+*   Lot Size: 1250 MMBtu
+*   Futures Symbol: NATURALGAS
+*   Option Symbol: NATURALGAS Strike
+""")
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📈 Live USDINR Exchange Rate")
+st.sidebar.metric("USD to INR Conversion", f"₹{usdinr:.2f}", help="Used to dynamically convert NYMEX WTI/Henry Hub prices to MCX INR equivalent prices in real-time.")
+
+# ----------------------------------------------------
+# Main Layout Tabs
+# ----------------------------------------------------
+tab_dash, tab_news, tab_calc = st.tabs(["📊 Energy Swing Dashboard", "📰 Live Energy News & Reports", "🧮 Swing Trade Planner"])
+
+# Tab 1: Dashboard
 with tab_dash:
-    # Display Active Pricing Source
-    st.info(f"🔌 **Pricing Feed Source:** {pricing_source} | **Live USDINR:** ₹{usdinr:.2f}")
+    st.info(f"⚡ **Pricing Mode:** NYMEX Global Correlation Conversion (Token-Free) | **Live Spot Conversion Active**")
     
     col1, col2 = st.columns(2)
     
-    # 🛢️ CRUDE OIL COLUMN
+    # Crude Oil Column
     with col1:
         st.markdown("""
         <div class='premium-card'>
-            <div class='metric-label'>🛢️ CRUDE OIL (MCX Futures)</div>
+            <div class='metric-label'>🛢️ CRUDE OIL (MCX Indicative)</div>
         """, unsafe_allow_html=True)
         
-        # Price and Change
         price = live_prices["CRUDEOIL"]
         change = pct_changes["CRUDEOIL"]
         change_class = "status-bullish" if change >= 0 else "status-bearish"
@@ -349,7 +309,7 @@ with tab_dash:
         st.markdown(f"<div class='price-value'>₹{price:,.2f}</div>", unsafe_allow_html=True)
         st.markdown(f"<p class='{change_class}'>{change_sign}{change:.2f}% (NYMEX Global Today)</p>", unsafe_allow_html=True)
         
-        # Load Technical Indicators from NYMEX data
+        # Load Indicators
         df_crude = fetch_nymex_trends("CL=F", usdinr)
         if df_crude is not None:
             last_row = df_crude.iloc[-1]
@@ -358,7 +318,6 @@ with tab_dash:
             rsi = last_row['RSI']
             atr = last_row['ATR']
             
-            # Determine momentum
             if ema9 > ema21:
                 trend_desc = "Bullish Momentum ✅"
                 trend_class = "status-bullish"
@@ -366,7 +325,6 @@ with tab_dash:
                 trend_desc = "Bearish / Sideways Crossover ⚠️"
                 trend_class = "status-bearish"
                 
-            # Support & Resistance (Pivot points from daily)
             prev_row = df_crude.iloc[-2]
             p_high = prev_row['High_INR']
             p_low = prev_row['Low_INR']
@@ -379,7 +337,7 @@ with tab_dash:
             st.markdown(f"""
             <table style='width:100%; border-collapse:collapse; margin-top:1rem;'>
                 <tr>
-                    <td style='color:#8b949e; padding:5px 0;'>Trend State:</td>
+                    <td style='color:#8b949e; padding:5px 0;'>EMA Crossover (9/21):</td>
                     <td class='{trend_class}' style='text-align:right;'>{trend_desc}</td>
                 </tr>
                 <tr>
@@ -391,7 +349,7 @@ with tab_dash:
                     <td style='text-align:right; font-weight:600;'>{atr:.2f} pts</td>
                 </tr>
                 <tr style='border-top: 1px solid var(--border-color);'>
-                    <td style='color:#8b949e; padding:8px 0 4px 0;'>Pivot Level:</td>
+                    <td style='color:#8b949e; padding:8px 0 4px 0;'>Daily Pivot Level:</td>
                     <td style='text-align:right; font-weight:600; padding:8px 0 4px 0;'>₹{pivot:,.2f}</td>
                 </tr>
                 <tr>
@@ -405,21 +363,18 @@ with tab_dash:
             </table>
             """, unsafe_allow_html=True)
             
-            # Simple Chart
-            st.markdown("<p class='metric-label' style='margin-top:1.5rem;'>30-Day Swing Trend</p>", unsafe_allow_html=True)
-            chart_df = df_crude.tail(30)[['Close_INR', 'EMA9', 'EMA21']]
-            st.line_chart(chart_df)
+            st.markdown("<p class='metric-label' style='margin-top:1.5rem;'>30-Day Daily Chart</p>", unsafe_allow_html=True)
+            st.line_chart(df_crude.tail(30)[['Close_INR', 'EMA9', 'EMA21']])
             
         st.markdown("</div>", unsafe_allow_html=True)
-
-    # 🔥 NATURAL GAS COLUMN
+        
+    # Natural Gas Column
     with col2:
         st.markdown("""
         <div class='premium-card'>
-            <div class='metric-label'>🔥 NATURAL GAS (MCX Futures)</div>
+            <div class='metric-label'>🔥 NATURAL GAS (MCX Indicative)</div>
         """, unsafe_allow_html=True)
         
-        # Price and Change
         price_ng = live_prices["NATURALGAS"]
         change_ng = pct_changes["NATURALGAS"]
         change_class_ng = "status-bullish" if change_ng >= 0 else "status-bearish"
@@ -428,7 +383,7 @@ with tab_dash:
         st.markdown(f"<div class='price-value'>₹{price_ng:,.2f}</div>", unsafe_allow_html=True)
         st.markdown(f"<p class='{change_class_ng}'>{change_sign_ng}{change_ng:.2f}% (NYMEX Global Today)</p>", unsafe_allow_html=True)
         
-        # Load Technical Indicators from NYMEX data
+        # Load Indicators
         df_ng = fetch_nymex_trends("NG=F", usdinr)
         if df_ng is not None:
             last_row_ng = df_ng.iloc[-1]
@@ -437,7 +392,6 @@ with tab_dash:
             rsi_ng = last_row_ng['RSI']
             atr_ng = last_row_ng['ATR']
             
-            # Determine momentum
             if ema9_ng > ema21_ng:
                 trend_desc_ng = "Bullish Momentum ✅"
                 trend_class_ng = "status-bullish"
@@ -445,7 +399,6 @@ with tab_dash:
                 trend_desc_ng = "Bearish / Sideways Crossover ⚠️"
                 trend_class_ng = "status-bearish"
                 
-            # Support & Resistance
             prev_row_ng = df_ng.iloc[-2]
             p_high_ng = prev_row_ng['High_INR']
             p_low_ng = prev_row_ng['Low_INR']
@@ -458,7 +411,7 @@ with tab_dash:
             st.markdown(f"""
             <table style='width:100%; border-collapse:collapse; margin-top:1rem;'>
                 <tr>
-                    <td style='color:#8b949e; padding:5px 0;'>Trend State:</td>
+                    <td style='color:#8b949e; padding:5px 0;'>EMA Crossover (9/21):</td>
                     <td class='{trend_class_ng}' style='text-align:right;'>{trend_desc_ng}</td>
                 </tr>
                 <tr>
@@ -470,7 +423,7 @@ with tab_dash:
                     <td style='text-align:right; font-weight:600;'>{atr_ng:.2f} pts</td>
                 </tr>
                 <tr style='border-top: 1px solid var(--border-color);'>
-                    <td style='color:#8b949e; padding:8px 0 4px 0;'>Pivot Level:</td>
+                    <td style='color:#8b949e; padding:8px 0 4px 0;'>Daily Pivot Level:</td>
                     <td style='text-align:right; font-weight:600; padding:8px 0 4px 0;'>₹{pivot_ng:,.2f}</td>
                 </tr>
                 <tr>
@@ -484,16 +437,78 @@ with tab_dash:
             </table>
             """, unsafe_allow_html=True)
             
-            # Simple Chart
-            st.markdown("<p class='metric-label' style='margin-top:1.5rem;'>30-Day Swing Trend</p>", unsafe_allow_html=True)
-            chart_df_ng = df_ng.tail(30)[['Close_INR', 'EMA9', 'EMA21']]
-            st.line_chart(chart_df_ng)
+            st.markdown("<p class='metric-label' style='margin-top:1.5rem;'>30-Day Daily Chart</p>", unsafe_allow_html=True)
+            st.line_chart(df_ng.tail(30)[['Close_INR', 'EMA9', 'EMA21']])
             
         st.markdown("</div>", unsafe_allow_html=True)
 
-# ----------------------------------------------------
-# Tab 2: Position Planner & Charges Calculator
-# ----------------------------------------------------
+# Tab 2: Energy News & Reports
+with tab_news:
+    st.markdown("### 📰 Energy News & High-Impact EIA Reports Tracker")
+    
+    n_col1, n_col2 = st.columns([1.2, 1])
+    
+    with n_col1:
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        st.markdown("<p class='metric-label'>🔥 Fresh Energy Market News (OilPrice.com)</p>", unsafe_allow_html=True)
+        
+        # Fetch RSS News
+        news_items = fetch_energy_news()
+        
+        if news_items:
+            for item in news_items:
+                st.markdown(f"""
+                <div class='news-item'>
+                    <a href='{item["link"]}' target='_blank' class='news-title'>{item["title"]}</a>
+                    <div class='news-meta'>⏰ {item["date"]} | Source: OilPrice.com</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.warning("⚠️ Could not load news headlines. Check your internet connection.")
+            
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    with n_col2:
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        st.markdown("<p class='metric-label'>⚡ Weekly EIA Inventory Radar (High Volatility Events)</p>", unsafe_allow_html=True)
+        
+        # Calculate Countdowns
+        crude_cnt, ng_cnt = get_eia_countdown()
+        
+        st.markdown(f"""
+        <table style='width:100%; border-collapse:collapse; margin-bottom:1.5rem;'>
+            <tr style='border-bottom:1px solid var(--border-color);'>
+                <td style='padding:10px 0; font-weight:700;'>🛢️ EIA Weekly Crude Oil Stock:</td>
+                <td style='padding:10px 0; text-align:right; font-weight:700; color:var(--primary-color);'>{crude_cnt}</td>
+            </tr>
+            <tr style='font-size:0.8rem; color:#8b949e;'>
+                <td colspan='2' style='padding-bottom:10px;'>Standard schedule: Wednesdays at 8:00 PM IST. High-impact volatility event for Crude.</td>
+            </tr>
+            <tr style='border-bottom:1px solid var(--border-color);'>
+                <td style='padding:10px 0; font-weight:700;'>🔥 EIA Weekly Natural Gas Storage:</td>
+                <td style='padding:10px 0; text-align:right; font-weight:700; color:var(--primary-color);'>{ng_cnt}</td>
+            </tr>
+            <tr style='font-size:0.8rem; color:#8b949e;'>
+                <td colspan='2' style='padding-bottom:10px;'>Standard schedule: Thursdays at 8:00 PM IST. High-impact volatility event for Gas.</td>
+            </tr>
+        </table>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<p class='metric-label'>💡 Swing Options Inventory Strategy Cheat Sheet</p>", unsafe_allow_html=True)
+        st.info("""
+**🛢️ CRUDE OIL INVENTORY PLAY:**
+*   **DRAW (Inventory Decr.):** Bullish 🟢 (Option: BUY Call/SELL Put)
+*   **BUILD (Inventory Incr.):** Bearish 🔴 (Option: BUY Put/SELL Call)
+
+**🔥 NATURAL GAS STORAGE PLAY:**
+*   **DRAW (High Winter/AC Demand):** Bullish 🟢
+*   **BUILD (Low Weather Demand):** Bearish 🔴
+
+*⚠️ **Swing Trading Note:** As an MCX swing trader holding options for 3 to 5 days, it is highly recommended to **avoid entering new options trades 1 hour before the EIA report**. Enter 1 hour after the release once the initial high-implied-volatility (IV) spike collapses and clear structural momentum asserts itself.*
+""")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# Tab 3: Planner
 with tab_calc:
     st.markdown("### 🧮 Swing Trade Position Sizer & MCX Option Charge Estimator")
     
@@ -503,10 +518,7 @@ with tab_calc:
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
         st.markdown("<p class='metric-label'>Position Planner Inputs</p>", unsafe_allow_html=True)
         
-        # User selection
         planned_symbol = st.selectbox("Asset Commodity", options=["CRUDEOIL", "NATURALGAS"], key="mcx_calc_symbol")
-        
-        # Set dynamic default prices based on selected commodity
         planned_ltp = live_prices[planned_symbol]
         
         # Default ATR values for default Stop Loss
@@ -533,36 +545,25 @@ with tab_calc:
         
     with cc2:
         # Load contract lot sizes
-        contract_lot = mcx_contracts[planned_symbol]["lot_size"]
+        contract_lot = 100.0 if planned_symbol == "CRUDEOIL" else 1250.0
         
         # Calculate Risk and Sizing
         max_risk_rupees = c_capital * (c_risk_pct / 100.0)
-        
-        # Sizing in barrels/MMBtu = Max Risk / SL Distance
         sizing_units = max_risk_rupees / c_sl_dist
         
         # Sizing in Lots
         sizing_lots = math.floor(sizing_units / contract_lot)
         if sizing_lots < 1:
-            sizing_lots = 1 # Trade at least 1 lot
+            sizing_lots = 1
             
         actual_qty = sizing_lots * contract_lot
         actual_risk_rupees = actual_qty * c_sl_dist
         
         # Calculate Option PNL
         option_gross_pnl = (c_exit_premium - c_premium) * actual_qty
-        
-        # Calculate Option premium total cost
         total_premium_cost = c_premium * actual_qty
         
         # Calculate MCX Option Taxes
-        # STT is charged on Sell Side premium = 0.05%
-        # Exchange transaction charges = 0.05% on premium (Buy + Sell)
-        # Stamp Duty is on Buy Side premium = 0.003%
-        # SEBI Fee = 0.0001% of premium turnover
-        # GST = 18% of (Exchange + SEBI + flat brokerage)
-        # Brokerage = Flat ₹40.0
-        
         c_flat_brokerage = 40.0
         opt_buy_turnover = actual_qty * c_premium
         opt_sell_turnover = actual_qty * c_exit_premium
@@ -574,7 +575,6 @@ with tab_calc:
         opt_stamp = opt_buy_turnover * 0.003 / 100.0
         
         opt_gst = (c_flat_brokerage + opt_exc + opt_sebi) * 18.0 / 100.0
-        
         opt_total_charges = c_flat_brokerage + opt_stt + opt_exc + opt_sebi + opt_stamp + opt_gst
         option_net_pnl = option_gross_pnl - opt_total_charges
         
