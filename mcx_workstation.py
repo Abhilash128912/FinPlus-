@@ -375,6 +375,23 @@ for symbol in ["CRUDEOIL", "NATURALGAS"]:
         pct_changes[symbol] = 0.0
 
 # ----------------------------------------------------
+# Price Feed Customizer & Manual Overrides
+# ----------------------------------------------------
+st.sidebar.markdown("### ⚡ Price Feed Customizer")
+enable_override = st.sidebar.checkbox(
+    "Manual MCX Price Override", 
+    help="Enable to manually input active MCX prices when NYMEX global feeds are closed or static."
+)
+if enable_override:
+    override_crude = st.sidebar.number_input("Crude Oil MCX Price (₹)", min_value=100.0, value=float(live_prices["CRUDEOIL"]), step=10.0)
+    override_ng = st.sidebar.number_input("Natural Gas MCX Price (₹)", min_value=1.0, value=float(live_prices["NATURALGAS"]), step=1.0)
+    
+    # Overwrite the feed prices
+    live_prices["CRUDEOIL"] = round(override_crude, 2)
+    live_prices["NATURALGAS"] = round(override_ng, 2)
+    live_prices["NATGASMINI"] = round(override_ng, 2)
+
+# ----------------------------------------------------
 # Sidebar Information Panel
 # ----------------------------------------------------
 st.sidebar.markdown("### 📊 MCX Contract Specs")
