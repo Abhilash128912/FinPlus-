@@ -259,6 +259,32 @@ def clean_yf_df(df):
         df.columns = df.columns.get_level_values(0)
     return df
 
+def calculate_mfi(df, period=14):
+    """Calculates Money Flow Index (MFI) to track institutional buying vs selling volume imbalance."""
+    try:
+        tp = (df['High_INR'] + df['Low_INR'] + df['Close_INR']) / 3.0
+        rmf = tp * df['Volume']
+        
+        pos_flow = pd.Series(0.0, index=df.index)
+        neg_flow = pd.Series(0.0, index=df.index)
+        
+        tp_prev = tp.shift(1)
+        
+        pos_mask = tp > tp_prev
+        neg_mask = tp < tp_prev
+        
+        pos_flow[pos_mask] = rmf[pos_mask]
+        neg_flow[neg_mask] = rmf[neg_mask]
+        
+        pos_sum = pos_flow.rolling(window=period).sum()
+        neg_sum = neg_flow.rolling(window=period).sum()
+        
+        mfr = pos_sum / (neg_sum + 1e-9)
+        mfi = 100 - (100 / (1.0 + mfr))
+        return mfi
+    except Exception:
+        return pd.Series(50.0, index=df.index)
+
 @st.cache_data(ttl=1800)
 def fetch_nymex_trends(ticker, usdinr):
     """Fetches daily NYMEX prices, converts to INR, and calculates technical indicators for swing trading."""
@@ -292,6 +318,9 @@ def fetch_nymex_trends(ticker, usdinr):
         low_cp = np.abs(df['Low_INR'] - df['Close_INR'].shift())
         tr = pd.concat([high_low, high_cp, low_cp], axis=1).max(axis=1)
         df['ATR'] = tr.rolling(14).mean()
+        
+        # 4. Money Flow Index (14)
+        df['MFI'] = calculate_mfi(df)
         
         return df
     except Exception:
@@ -397,6 +426,7 @@ with tab_dash:
             ema21 = last_row['EMA21']
             rsi = last_row['RSI']
             atr = last_row['ATR']
+            mfi = last_row['MFI']
             
             if ema9 > ema21:
                 trend_desc = "Bullish Momentum ✅"
@@ -404,6 +434,28 @@ with tab_dash:
             else:
                 trend_desc = "Bearish / Sideways Crossover ⚠️"
                 trend_class = "status-bearish"
+                
+            # Determine Money Flow Index State
+            if mfi > 80:
+                mfi_desc = "Hyper-Accumulation"
+                mfi_class = "status-bullish"
+                mfi_color = "var(--success-color)"
+            elif mfi > 60:
+                mfi_desc = "Buying Pressure"
+                mfi_class = "status-bullish"
+                mfi_color = "#10B981"
+            elif mfi > 40:
+                mfi_desc = "Neutral Money Flow"
+                mfi_class = "status-neutral"
+                mfi_color = "#d97706"
+            elif mfi > 20:
+                mfi_desc = "Selling Pressure"
+                mfi_class = "status-bearish"
+                mfi_color = "#EF4444"
+            else:
+                mfi_desc = "Selling Exhaustion"
+                mfi_class = "status-bearish"
+                mfi_color = "var(--error-color)"
                 
             prev_row = df_crude.iloc[-2]
             p_high = prev_row['High_INR']
@@ -427,6 +479,17 @@ with tab_dash:
                 <tr>
                     <td style='color:#8b949e; padding:5px 0;'>Daily ATR (14):</td>
                     <td style='text-align:right; font-weight:600;'>{atr:.2f} pts</td>
+                </tr>
+                <tr style='border-top:1px solid var(--border-color);'>
+                    <td style='color:#8b949e; padding:8px 0 4px 0;'>Money Flow Index (14):</td>
+                    <td class='{mfi_class}' style='text-align:right; font-weight:700; padding:8px 0 4px 0;'>{mfi:.1f}% ({mfi_desc})</td>
+                </tr>
+                <tr>
+                    <td colspan='2' style='padding-bottom:10px;'>
+                        <div style='background-color:#E2E8F0; border-radius:10px; width:100%; height:8px;'>
+                            <div style='background-color:{mfi_color}; width:{mfi}%; height:8px; border-radius:10px;'></div>
+                        </div>
+                    </td>
                 </tr>
                 <tr style='border-top: 1px solid var(--border-color);'>
                     <td style='color:#8b949e; padding:8px 0 4px 0;'>Daily Pivot Level:</td>
@@ -471,6 +534,7 @@ with tab_dash:
             ema21_ng = last_row_ng['EMA21']
             rsi_ng = last_row_ng['RSI']
             atr_ng = last_row_ng['ATR']
+            mfi_ng = last_row_ng['MFI']
             
             if ema9_ng > ema21_ng:
                 trend_desc_ng = "Bullish Momentum ✅"
@@ -478,6 +542,28 @@ with tab_dash:
             else:
                 trend_desc_ng = "Bearish / Sideways Crossover ⚠️"
                 trend_class_ng = "status-bearish"
+                
+            # Determine Money Flow Index State
+            if mfi_ng > 80:
+                mfi_desc_ng = "Hyper-Accumulation"
+                mfi_class_ng = "status-bullish"
+                mfi_color_ng = "var(--success-color)"
+            elif mfi_ng > 60:
+                mfi_desc_ng = "Buying Pressure"
+                mfi_class_ng = "status-bullish"
+                mfi_color_ng = "#10B981"
+            elif mfi_ng > 40:
+                mfi_desc_ng = "Neutral Money Flow"
+                mfi_class_ng = "status-neutral"
+                mfi_color_ng = "#d97706"
+            elif mfi_ng > 20:
+                mfi_desc_ng = "Selling Pressure"
+                mfi_class_ng = "status-bearish"
+                mfi_color_ng = "#EF4444"
+            else:
+                mfi_desc_ng = "Selling Exhaustion"
+                mfi_class_ng = "status-bearish"
+                mfi_color_ng = "var(--error-color)"
                 
             prev_row_ng = df_ng.iloc[-2]
             p_high_ng = prev_row_ng['High_INR']
@@ -501,6 +587,17 @@ with tab_dash:
                 <tr>
                     <td style='color:#8b949e; padding:5px 0;'>Daily ATR (14):</td>
                     <td style='text-align:right; font-weight:600;'>{atr_ng:.2f} pts</td>
+                </tr>
+                <tr style='border-top:1px solid var(--border-color);'>
+                    <td style='color:#8b949e; padding:8px 0 4px 0;'>Money Flow Index (14):</td>
+                    <td class='{mfi_class_ng}' style='text-align:right; font-weight:700; padding:8px 0 4px 0;'>{mfi_ng:.1f}% ({mfi_desc_ng})</td>
+                </tr>
+                <tr>
+                    <td colspan='2' style='padding-bottom:10px;'>
+                        <div style='background-color:#E2E8F0; border-radius:10px; width:100%; height:8px;'>
+                            <div style='background-color:{mfi_color_ng}; width:{mfi_ng}%; height:8px; border-radius:10px;'></div>
+                        </div>
+                    </td>
                 </tr>
                 <tr style='border-top: 1px solid var(--border-color);'>
                     <td style='color:#8b949e; padding:8px 0 4px 0;'>Daily Pivot Level:</td>
