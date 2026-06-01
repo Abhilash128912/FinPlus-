@@ -1354,7 +1354,7 @@ def fetch_daily_volumes_batch(
     tokens: list[str],
     access_token: str,
 ) -> dict[str, dict[str, float]]:
-    """Fetch daily volumes in batch for a list of stock tokens (up to 5).
+    """Fetch daily volumes in batch for a list of stock tokens (up to 5) with retry and individual fallback.
     
     Uses DAILY_VOLUMES_CACHE to check if already fetched. If not, fetches
     in a single batched call and updates the cache.
@@ -1373,7 +1373,9 @@ def fetch_daily_volumes_batch(
         return results
 
     data_daily = None
-    for attempt in range(1):
+    batch_success = False
+    max_attempts = 2
+    for attempt in range(max_attempts):
         try:
             end_time   = int(time.time() * 1000)
             start_time = end_time - (HISTORY_DAILY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
@@ -1386,20 +1388,47 @@ def fetch_daily_volumes_batch(
                 HISTORICAL_DAILY_URL,
                 params=params,
                 headers=auth_headers(access_token),
-                timeout=5.0,  # Fast 5.0s timeout to allow slow stocks to resolve
+                timeout=7.0,
             )
             resp.raise_for_status()
             data_daily = resp.json()
+            batch_success = True
             break
         except Exception:
-            if attempt < 1:
-                time.sleep(1.5)  # Let server cool down before retry
+            if attempt < max_attempts - 1:
+                time.sleep(1.5 * (attempt + 1))
 
     for t in tokens_to_fetch:
         candles_d = []
-        if data_daily:
+        if batch_success and data_daily:
             candles_d = extract_candles(data_daily, t)
             
+        # Fallback to individual fetch if batch failed or returned no candles for this stock
+        if not candles_d or not isinstance(candles_d, list):
+            for t_attempt in range(2):
+                try:
+                    time.sleep(0.2)
+                    end_time   = int(time.time() * 1000)
+                    start_time = end_time - (HISTORY_DAILY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
+                    resp_single = requests.get(
+                        HISTORICAL_DAILY_URL,
+                        params={
+                            "scrip-codes": f"NSE_{t}",
+                            "start_time":  start_time,
+                            "end_time":    end_time,
+                        },
+                        headers=auth_headers(access_token),
+                        timeout=5.0,
+                    )
+                    resp_single.raise_for_status()
+                    data_single = resp_single.json()
+                    candles_d = extract_candles(data_single, t)
+                    if candles_d:
+                        break
+                except Exception:
+                    if t_attempt < 1:
+                        time.sleep(1.0)
+
         if not candles_d or not isinstance(candles_d, list):
             results[t] = {}
             continue
@@ -1659,39 +1688,82 @@ def fetch_historical_metrics_batch(
     batch_tokens: list[str],
     access_token: str,
 ) -> dict[str, tuple[dict[str, float | str] | None, str | None]]:
-    """Fetch 1-min candles and daily volumes in batch (up to 5 stocks) to prevent rate limits."""
-    # Stagger sleep to prevent hitting server at the exact same millisecond
-    time.sleep(0.45)  # Spaced out to 0.45s for polite request density
+    """Fetch 1-min candles and daily volumes in batch (up to 5 stocks) with automatic retries and individual token fallback."""
+    time.sleep(0.45)  # Spaced out for polite request density
     results = {}
     
-    # ── Step 1: Batched 1-minute historical candles ────────────────────────
     candles_by_token = {}
     last_err = "Unknown error"
+    last_errs = {}
     
-    for attempt in range(1):
+    batch_success = False
+    max_attempts = 3
+    for attempt in range(max_attempts):
         try:
             resp_1min = requests.get(
                 HISTORICAL_URL,
                 params=historical_params(batch_tokens, HISTORY_LOOKBACK_DAYS),
                 headers=auth_headers(access_token),
-                timeout=5.0,  # Fast 5.0s timeout fallback
+                timeout=8.0,
             )
             resp_1min.raise_for_status()
             data_1min = resp_1min.json()
+            
+            any_extracted = False
             for t in batch_tokens:
                 c = extract_candles(data_1min, t)
                 if c:
                     candles_by_token[t] = c
-            break
+                    any_extracted = True
+            
+            if any_extracted:
+                batch_success = True
+                break
+            else:
+                raise Exception("Empty batch data returned")
         except requests.HTTPError as exc:
-            last_err = f"HTTP {exc.response.status_code}"
-            if exc.response.status_code in (400, 401, 403, 404):
+            status_code = exc.response.status_code
+            last_err = f"HTTP {status_code}"
+            if status_code in (400, 401, 403, 404):
                 break
         except Exception as exc:
             last_err = str(exc)
         
-        if attempt < 1:
-            time.sleep(1.5)  # Let server cool down before retry
+        if attempt < max_attempts - 1:
+            time.sleep(1.5 * (attempt + 1))
+            
+    # Fallback to individual token fetching if the batch completely failed
+    if not batch_success:
+        for t in batch_tokens:
+            token_success = False
+            for t_attempt in range(2):
+                try:
+                    time.sleep(0.3)  # Polite spacing
+                    resp_single = requests.get(
+                        HISTORICAL_URL,
+                        params=historical_params([t], HISTORY_LOOKBACK_DAYS),
+                        headers=auth_headers(access_token),
+                        timeout=6.0,
+                    )
+                    resp_single.raise_for_status()
+                    data_single = resp_single.json()
+                    c = extract_candles(data_single, t)
+                    if c:
+                        candles_by_token[t] = c
+                        token_success = True
+                        break
+                    else:
+                        raise Exception("No candles returned")
+                except requests.HTTPError as exc:
+                    last_errs[t] = f"HTTP {exc.response.status_code}"
+                    if exc.response.status_code in (400, 401, 403, 404):
+                        break
+                except Exception as exc:
+                    last_errs[t] = str(exc)
+                if t_attempt < 1:
+                    time.sleep(1.0)
+            if not token_success and t not in last_errs:
+                last_errs[t] = "Failed to load individual history"
 
     # ── Step 2: Batched Daily volumes ─────────────────────────────────────
     daily_vol_by_token = {}
@@ -1704,7 +1776,8 @@ def fetch_historical_metrics_batch(
     for t in batch_tokens:
         candles_1min = candles_by_token.get(t)
         if not candles_1min:
-            results[t] = (None, last_err or "No 1-min candles returned")
+            err_msg = last_errs.get(t, last_err)
+            results[t] = (None, err_msg)
             continue
             
         daily_vol_data = daily_vol_by_token.get(t)
@@ -3051,14 +3124,13 @@ def render_index_chart(name, index_token, access_token):
     import warnings
     sys.modules['warnings'] = warnings
 
-    """Render intraday candlestick chart for a NIFTY index.
-
-    Data priority:
-      1. Live WS-accumulated candles  (_idx_ws_candles_<token>)  — updated every fragment tick
-      2. INDmoney REST seed candles   (_idx_rest_candles_<token>) — fetched once per session at
-         startup to backfill history before the WS connected (today's pre-connection candles)
-    Yahoo Finance is not used.
-    """
+    # Render intraday candlestick chart for a NIFTY index.
+    #
+    # Data priority:
+    #   1. Live WS-accumulated candles  (_idx_ws_candles_<token>)  — updated every fragment tick
+    #   2. INDmoney REST seed candles   (_idx_rest_candles_<token>) — fetched once per session at
+    #      startup to backfill history before the WS connected (today's pre-connection candles)
+    # Yahoo Finance is not used.
     ws_key   = f"_idx_ws_candles_{index_token}"
     rest_key = f"_idx_rest_candles_{index_token}"
     rest_ts  = f"_idx_rest_ts_{index_token}"
