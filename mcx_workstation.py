@@ -357,10 +357,10 @@ for key, tick in nymex_symbols.items():
 # ----------------------------------------------------
 # Real-Time Indian MCX Crawler (Economic Times)
 # ----------------------------------------------------
-def fetch_live_mcx_price_et(symbol: str) -> float:
+def fetch_live_mcx_data_et(symbol: str):
     """
-    Robust, token-free crawler to fetch real-time MCX pricing from Economic Times.
-    Returns float price on success, None on failure.
+    Robust, token-free crawler to fetch real-time MCX pricing and daily percentage change from Economic Times.
+    Returns (price_float, pct_change_float) on success, (None, None) on failure.
     """
     mapped_symbol = "CRUDEOIL" if symbol == "CRUDEOIL" else "NATURALGAS"
     url = f"https://economictimes.indiatimes.com/commoditysummary/symbol-{mapped_symbol}.cms"
@@ -373,45 +373,62 @@ def fetch_live_mcx_price_et(symbol: str) -> float:
         r = requests.get(url, headers=headers, timeout=8)
         if r.status_code == 200:
             soup = bs4.BeautifulSoup(r.text, 'html.parser')
+            # 1. Price
             price_el = soup.find(class_="commodityPrice")
+            price = None
             if price_el:
                 price_str = price_el.text.strip().replace(",", "")
-                return float(price_str)
+                price = float(price_str)
+            # 2. Percentage Change
+            pct_el = soup.find(class_="IntraDayPercentChange")
+            pct = None
+            if pct_el:
+                pct_str = pct_el.text.strip().replace("%", "")
+                pct = float(pct_str)
+                parent_text = pct_el.parent.get_text()
+                if "-" in parent_text or "down" in str(pct_el.get('class', '')).lower() or "-" in pct_str:
+                    if pct > 0:
+                        pct = -pct
+            return price, pct
     except Exception:
         pass
-    return None
+    return None, None
 
 # Apply Real-Time MCX Pricing with NYMEX Proxy Fallback
 live_prices = {}
+pct_changes = {}
 pricing_modes = {}
 
 for symbol in ["CRUDEOIL", "NATURALGAS"]:
-    # Attempt to fetch true live MCX price from Economic Times first
-    live_p = fetch_live_mcx_price_et(symbol)
+    # Attempt to fetch true live MCX price and change from Economic Times first
+    live_p, live_c = fetch_live_mcx_data_et(symbol)
     if live_p is not None and live_p > 0:
         live_prices[symbol] = round(live_p, 2)
+        pct_changes[symbol] = round(live_c, 2) if live_c is not None else 0.0
         pricing_modes[symbol] = "ET Real-Time MCX Feed"
     else:
         # Fallback to standard NYMEX Proxy Spot Conversion
         live_prices[symbol] = round(spot_prices[symbol] * usdinr, 2)
+        pct_changes[symbol] = 0.0  # Will be calculated from yfinance next
         pricing_modes[symbol] = "NYMEX Proxy (Fallback)"
 
 # Map NATGASMINI to use identical Natural Gas pricing
 live_prices["NATGASMINI"] = live_prices["NATURALGAS"]
+pct_changes["NATGASMINI"] = pct_changes["NATURALGAS"]
 pricing_modes["NATGASMINI"] = pricing_modes["NATURALGAS"]
 
-# Calculate percentage changes
-pct_changes = {}
+# Calculate percentage changes from yfinance ONLY for Fallback symbols
 for symbol in ["CRUDEOIL", "NATURALGAS"]:
-    try:
-        t_obj = yf.Ticker(nymex_symbols[symbol])
-        hist = t_obj.history(period="2d")
-        hist = clean_yf_df(hist)
-        prev = hist['Close'].iloc[0]
-        curr = hist['Close'].iloc[1]
-        pct_changes[symbol] = ((curr - prev) / prev) * 100
-    except Exception:
-        pct_changes[symbol] = 0.0
+    if pricing_modes[symbol] == "NYMEX Proxy (Fallback)":
+        try:
+            t_obj = yf.Ticker(nymex_symbols[symbol])
+            hist = t_obj.history(period="2d")
+            hist = clean_yf_df(hist)
+            prev = hist['Close'].iloc[0]
+            curr = hist['Close'].iloc[1]
+            pct_changes[symbol] = ((curr - prev) / prev) * 100
+        except Exception:
+            pass
 
 # ----------------------------------------------------
 # Price Feed Customizer & Manual Overrides
@@ -478,7 +495,8 @@ with tab_dash:
         change_sign = "+" if change >= 0 else ""
         
         st.markdown(f"<div class='price-value'>₹{price:,.2f}</div>", unsafe_allow_html=True)
-        st.markdown(f"<p class='{change_class}'>{change_sign}{change:.2f}% (NYMEX Global Today)</p>", unsafe_allow_html=True)
+        feed_label = "MCX India Today" if pricing_modes["CRUDEOIL"] == "ET Real-Time MCX Feed" else "NYMEX Global Today"
+        st.markdown(f"<p class='{change_class}'>{change_sign}{change:.2f}% ({feed_label})</p>", unsafe_allow_html=True)
         
         # Load Indicators
         df_crude = fetch_nymex_trends("CL=F", usdinr)
@@ -586,7 +604,8 @@ with tab_dash:
         change_sign_ng = "+" if change_ng >= 0 else ""
         
         st.markdown(f"<div class='price-value'>₹{price_ng:,.2f}</div>", unsafe_allow_html=True)
-        st.markdown(f"<p class='{change_class_ng}'>{change_sign_ng}{change_ng:.2f}% (NYMEX Global Today)</p>", unsafe_allow_html=True)
+        feed_label_ng = "MCX India Today" if pricing_modes["NATURALGAS"] == "ET Real-Time MCX Feed" else "NYMEX Global Today"
+        st.markdown(f"<p class='{change_class_ng}'>{change_sign_ng}{change_ng:.2f}% ({feed_label_ng})</p>", unsafe_allow_html=True)
         
         # Load Indicators
         df_ng = fetch_nymex_trends("NG=F", usdinr)
