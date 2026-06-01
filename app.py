@@ -771,6 +771,9 @@ with tab_add:
             key=f"add_brokerage_{st.session_state['add_form_id']}"
         )
         
+        if t_base_lot > 0 and t_base_lot < 5.0 and t_qty > 10.0:
+            st.warning("⚠️ **Warning: Brokerage scaling is active with a small lot size.** This multiplies your brokerage (currently scaled by the number of lots). If you want standard flat brokerage, set **Base Lot Size** to **0**.")
+        
     # Fetch Screener Context from Database Link (Visual Accessibility Integration)
     if t_symbol:
         render_quantamental_health_card(t_symbol, key_suffix="add")
@@ -997,6 +1000,9 @@ with tab_logs:
                     key=f"edit_brokerage_display_{selected_trade_id}",
                     help="Automatically loaded based on segment settings and lot scaling."
                 )
+                
+                if e_base_lot > 0 and e_base_lot < 5.0 and e_qty > 10.0:
+                    st.warning("⚠️ **Warning: Brokerage scaling is active with a small lot size.** This multiplies your brokerage (currently scaled by the number of lots). If you want standard flat brokerage, set **Base Lot Size** to **0**.")
             # Fetch Screener Context from Database Link (Visual Accessibility Integration)
             if e_symbol:
                 render_quantamental_health_card(e_symbol, key_suffix=f"edit_{selected_trade_id}")

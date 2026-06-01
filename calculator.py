@@ -48,13 +48,13 @@ def calculate_trade_metrics(
         stt = sell_turnover * stt_sell_rate
     elif segment in ["F&O - Index Options", "F&O - Stock Options"]:
         # Options (0.0625% on sell premium)
-        stt_sell_rate = tax_rates.get("stt_sell_options_pct", 0.0625) / 100.0
+        stt_sell_rate = tax_rates.get("stt_sell_options_pct", tax_rates.get("stt_sell_pct", 0.0625)) / 100.0
         stt = sell_turnover * stt_sell_rate
 
     # 4. Exchange Transaction Charges
     exc_rate = 0.0
     if segment in ["F&O - Index Options", "F&O - Stock Options"]:
-        exc_rate = tax_rates.get("exc_charge_options_pct", 0.05) / 100.0
+        exc_rate = tax_rates.get("exc_charge_options_pct", tax_rates.get("exc_charge_pct", 0.05)) / 100.0
     elif segment == "F&O - Index Futures":
         exc_rate = tax_rates.get("exc_charge_pct", 0.0019) / 100.0
     else:
@@ -69,9 +69,9 @@ def calculate_trade_metrics(
     # 6. Stamp Duty (Charged on BUY side turnover only)
     stamp_rate = 0.0
     if segment in ["F&O - Index Options", "F&O - Stock Options"]:
-        stamp_rate = tax_rates.get("stamp_buy_options_pct", 0.003) / 100.0
+        stamp_rate = tax_rates.get("stamp_buy_options_pct", tax_rates.get("stamp_buy_pct", 0.003)) / 100.0
     elif segment == "F&O - Index Futures":
-        stamp_rate = tax_rates.get("stamp_buy_futures_pct", 0.002) / 100.0
+        stamp_rate = tax_rates.get("stamp_buy_futures_pct", tax_rates.get("stamp_buy_pct", 0.002)) / 100.0
     else:
         stamp_rate = tax_rates.get("stamp_buy_pct", 0.0) / 100.0
         
