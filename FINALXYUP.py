@@ -3245,43 +3245,55 @@ def get_index_tile_quote(index_token, index_snapshot):
     """Read LTP + day change from the latest WS tick or fall back to accumulated / REST candles."""
     q = index_snapshot.get(index_token, {})
     ltp = q.get("ltp") or q.get("last_price") or q.get("live_price") or q.get("close") or q.get("c")
-    chg     = q.get("day_change") or q.get("change") or 0
-    chg_pct = q.get("day_change_percentage") or q.get("change_percentage") or 0
     
-    if ltp is not None:
-        # If the live quote doesn't provide change/change_pct (which is normal for bare index WS ticks),
-        # dynamically calculate it against the day's open price.
-        if not chg or not chg_pct:
-            day_open = None
-            ws_candles = st.session_state.get(f"_idx_ws_candles_{index_token}", [])
-            if ws_candles:
-                day_open = float(ws_candles[0][1])
-            else:
-                rest_candles = st.session_state.get(f"_idx_rest_candles_{index_token}", [])
-                if rest_candles:
-                    day_open = float(rest_candles[0][1])
-            
-            if day_open:
-                chg = ltp - day_open
-                chg_pct = (chg / day_open * 100) if day_open else 0
-    else:
+    if ltp is None:
         # Fall back to last accumulated WS candle close
         ws_candles = st.session_state.get(f"_idx_ws_candles_{index_token}", [])
         if ws_candles:
             ltp = float(ws_candles[-1][4])
-            day_open = float(ws_candles[0][1])
-            chg = ltp - day_open
-            chg_pct = (chg / day_open * 100) if day_open else 0
         else:
             # Fall back to last REST candle close
             rest_candles = st.session_state.get(f"_idx_rest_candles_{index_token}", [])
             if rest_candles:
                 ltp = float(rest_candles[-1][4])
-                day_open = float(rest_candles[0][1])
-                chg = ltp - day_open
-                chg_pct = (chg / day_open * 100) if day_open else 0
             else:
                 return {}
+
+    # ── Daily Change Calculation ──────────────────────────────────────────────
+    # Daily change must be calculated against the Previous Session Close (yesterday's close)
+    # to match real-time broker terminals, Google Finance, and TV channels.
+    # If yesterday's close is not found, we fall back to today's opening price.
+    prev_close = None
+    rest_candles = st.session_state.get(f"_idx_rest_candles_{index_token}", [])
+    if rest_candles:
+        from datetime import datetime, timezone, timedelta
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+        today_ist = datetime.now(ist_tz).date()
+        for c in reversed(rest_candles):
+            c_date = datetime.fromtimestamp(c[0] / 1000, ist_tz).date()
+            if c_date < today_ist:
+                prev_close = float(c[4])
+                break
+
+    if prev_close:
+        chg = ltp - prev_close
+        chg_pct = (chg / prev_close * 100) if prev_close else 0
+    else:
+        # Fall back to today's open price
+        day_open = None
+        ws_candles = st.session_state.get(f"_idx_ws_candles_{index_token}", [])
+        if ws_candles:
+            day_open = float(ws_candles[0][1])
+        else:
+            if rest_candles:
+                day_open = float(rest_candles[0][1])
+        
+        if day_open:
+            chg = ltp - day_open
+            chg_pct = (chg / day_open * 100) if day_open else 0
+        else:
+            chg = 0
+            chg_pct = 0
                 
     return {"ltp": ltp,
             "day_change": round(float(chg), 2),
