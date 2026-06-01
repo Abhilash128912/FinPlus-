@@ -745,8 +745,22 @@ with tab_add:
         t_entry = st.number_input("Entry Price", min_value=0.0, step=0.05, value=default_price, key=f"add_entry_{st.session_state['add_form_id']}")
         t_exit = st.number_input("Exit Price", min_value=0.0, step=0.05, value=0.0, key=f"add_exit_{st.session_state['add_form_id']}")
         
+        # Determine default base lot size dynamically based on segment and symbol to automate lot calculation
+        default_base_lot = 0.0
+        if t_segment in ["F&O - Index Options", "F&O - Stock Options", "F&O - Index Futures"]:
+            sym_upper = t_symbol.upper().strip()
+            if "NIFTY" in sym_upper:
+                if "BANK" in sym_upper:
+                    default_base_lot = 15.0
+                elif "FIN" in sym_upper:
+                    default_base_lot = 40.0
+                else:
+                    default_base_lot = 65.0  # As specified by the user!
+            else:
+                default_base_lot = 65.0  # Default fallback for options to represent 1 lot
+
         # Base Lot Size input field
-        t_base_lot = st.number_input("Base Lot Size (0 for flat)", min_value=0.0, step=1.0, value=0.0, help="Set to minimum lot size (e.g. 65 or 75) to scale brokerage per lot automatically (Brokerage = Rate * Lots). Set to 0 to disable scaling.", key=f"add_base_lot_{st.session_state['add_form_id']}")
+        t_base_lot = st.number_input("Base Lot Size (0 for flat)", min_value=0.0, step=1.0, value=float(default_base_lot), help="Set to minimum lot size (e.g. 65 or 75) to scale brokerage per lot automatically (Brokerage = Rate * Lots). Set to 0 to disable scaling.", key=f"add_base_lot_{st.session_state['add_form_id']}")
         
         # Fetch default brokerage per buy + sell for selected segment
         def_brokerage_buy = brokerage_rates[t_segment]["buy"]
@@ -964,12 +978,26 @@ with tab_logs:
                 e_entry = st.number_input("Entry Price", min_value=0.01, step=0.05, value=float(trade_row['entry_price']), key=f"edit_entry_{selected_trade_id}")
                 e_exit = st.number_input("Exit Price", min_value=0.01, step=0.05, value=float(trade_row['exit_price']), key=f"edit_exit_{selected_trade_id}")
                 
+                # Determine default edit base lot size dynamically based on segment and symbol to automate lot calculation
+                default_edit_base_lot = 0.0
+                if e_segment in ["F&O - Index Options", "F&O - Stock Options", "F&O - Index Futures"]:
+                    sym_upper = e_symbol.upper().strip()
+                    if "NIFTY" in sym_upper:
+                        if "BANK" in sym_upper:
+                            default_edit_base_lot = 15.0
+                        elif "FIN" in sym_upper:
+                            default_edit_base_lot = 40.0
+                        else:
+                            default_edit_base_lot = 65.0  # As specified by the user!
+                    else:
+                        default_edit_base_lot = 65.0  # Default fallback for options to represent 1 lot
+
                 # Base Lot Size input field for scaling brokerage during edits
                 e_base_lot = st.number_input(
                     "Base Lot Size (0 for flat)", 
                     min_value=0.0, 
                     step=1.0, 
-                    value=0.0, 
+                    value=float(default_edit_base_lot), 
                     help="Set to minimum lot size (e.g. 65 or 75) to scale brokerage per lot automatically (Brokerage = Rate * Lots). Set to 0 to disable scaling.", 
                     key=f"edit_base_lot_{selected_trade_id}"
                 )
