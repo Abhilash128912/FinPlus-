@@ -3246,6 +3246,36 @@ if stop_feed_clicked:
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+def get_index_tile_quote(index_token, index_snapshot):
+    """Read LTP + day change from the latest WS tick or fall back to accumulated / REST candles."""
+    q = index_snapshot.get(index_token, {})
+    ltp = q.get("ltp") or q.get("last_price") or q.get("live_price")
+    chg     = q.get("day_change") or q.get("change") or 0
+    chg_pct = q.get("day_change_percentage") or q.get("change_percentage") or 0
+    
+    if ltp is None:
+        # Fall back to last accumulated WS candle close
+        ws_candles = st.session_state.get(f"_idx_ws_candles_{index_token}", [])
+        if ws_candles:
+            ltp = float(ws_candles[-1][4])
+            day_open = float(ws_candles[0][1])
+            chg = ltp - day_open
+            chg_pct = (chg / day_open * 100) if day_open else 0
+        else:
+            # Fall back to last REST candle close
+            rest_candles = st.session_state.get(f"_idx_rest_candles_{index_token}", [])
+            if rest_candles:
+                ltp = float(rest_candles[-1][4])
+                day_open = float(rest_candles[0][1])
+                chg = ltp - day_open
+                chg_pct = (chg / day_open * 100) if day_open else 0
+            else:
+                return {}
+                
+    return {"ltp": ltp,
+            "day_change": round(float(chg), 2),
+            "day_change_percentage": round(float(chg_pct), 2)}
+
 def _build_index_tile_html(name, quote):
     # WS quote format per docs: data.ltp = live price
     live = (
@@ -3272,12 +3302,21 @@ def _build_index_tile_html(name, quote):
             f'{extra_label}<div style="font-size:1.25rem;font-weight:700;color:#0f172a;line-height:1.2;margin-top:2px;">{price_val}</div>'
             f'<div style="font-size:0.78rem;color:{sub_color};font-weight:600;">{sub_text}</div></div>')
 
-def _render_header(nifty_data, bnifty_data):
+def update_index_header():
+    """Globally render and update the top header index and market status cards."""
     _ph = st.session_state.get("_header_placeholder")
     if not _ph:
         return
-    _nifty_html  = _build_index_tile_html("NIFTY 50",   nifty_data)
-    _bnifty_html = _build_index_tile_html("BANK NIFTY", bnifty_data)
+        
+    fs = get_feed_state()
+    with fs.lock:
+        index_snapshot = dict(fs.index_data)
+        
+    _nifty_q  = get_index_tile_quote("NIDX:40000001", index_snapshot)
+    _bnifty_q = get_index_tile_quote("NIDX:40000003", index_snapshot)
+    
+    _nifty_html  = _build_index_tile_html("NIFTY 50",   _nifty_q)
+    _bnifty_html = _build_index_tile_html("BANK NIFTY", _bnifty_q)
     
     # Dynamic Broad Market Status computation
     bms = calculate_broad_market_status()
@@ -3298,7 +3337,7 @@ def _render_header(nifty_data, bnifty_data):
         unsafe_allow_html=True,
     )
 
-_render_header({}, {})
+update_index_header()
 
 # ── Index candle accumulator ────────────────────────────────────────────────
 # Aggregates live LTP ticks from the WebSocket into 1-min OHLCV candles.
@@ -3874,6 +3913,9 @@ def feed_status_fragment(access_token: str) -> None:
     for _ik2, _iq2 in _idx_ticks.items():
         accumulate_index_tick(_ik2, _iq2)
 
+    # Globally render and update the top header index tiles (updates every 3 s across all tabs)
+    update_index_header()
+
 
 # â”€â”€ INDEX CHARTS FRAGMENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Dedicated fragment for NIFTY 50 + BANK NIFTY intraday charts.
@@ -3917,35 +3959,8 @@ def index_charts_fragment(access_token: str) -> None:
             st.session_state.pop(f"_idx_rest_candles_{_ik}", None)
             st.session_state.pop(f"_idx_rest_ts_{_ik}", None)
 
-    # ── Live tile quotes from WS index_data ──────────────────────────────────
-    def _ws_quote_for_tile(index_token):
-        """Read LTP + day change directly from the latest WS tick."""
-        q = _idx_snapshot.get(index_token, {})
-        ltp = q.get("ltp") or q.get("last_price") or q.get("live_price")
-        if ltp is None:
-            # Fall back to last accumulated WS candle close
-            ws_candles = st.session_state.get(f"_idx_ws_candles_{index_token}", [])
-            if ws_candles:
-                ltp = float(ws_candles[-1][4])
-            else:
-                return {}
-        ltp = float(ltp)
-        chg     = q.get("day_change") or q.get("change") or 0
-        chg_pct = q.get("day_change_percentage") or q.get("change_percentage") or 0
-        # If broker doesn't send day_change, compute from accumulated candles
-        if not chg:
-            ws_c = st.session_state.get(f"_idx_ws_candles_{index_token}", [])
-            if ws_c:
-                day_open = float(ws_c[0][1])
-                chg      = ltp - day_open
-                chg_pct  = (chg / day_open * 100) if day_open else 0
-        return {"ltp": ltp,
-                "day_change": round(float(chg), 2),
-                "day_change_percentage": round(float(chg_pct), 2)}
-
-    _nifty_q  = _ws_quote_for_tile("NIDX:40000001")
-    _bnifty_q = _ws_quote_for_tile("NIDX:40000003")
-    _render_header(_nifty_q, _bnifty_q)
+    # Globally render and update the top header index tiles
+    update_index_header()
 
     # -- WS Feed diagnostics (collapsible) --
     with st.expander("Index WS Feed Diagnostics", expanded=False):
