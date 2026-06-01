@@ -809,7 +809,7 @@ with tab_add:
                 quantity=t_qty,
                 entry_price=t_entry,
                 exit_price=t_exit,
-                brokerage_input=t_brokerage
+                brokerage_input=computed_brokerage
             )
             
             trade_to_save = {
@@ -1057,7 +1057,7 @@ with tab_logs:
                         quantity=e_qty,
                         entry_price=e_entry,
                         exit_price=e_exit,
-                        brokerage_input=e_brokerage
+                        brokerage_input=e_computed_brokerage
                     )
                     
                     updated_trade_to_save = {
