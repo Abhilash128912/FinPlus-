@@ -3246,29 +3246,53 @@ def get_index_tile_quote(index_token, index_snapshot):
     q = index_snapshot.get(index_token, {})
     ltp = q.get("ltp") or q.get("last_price") or q.get("live_price") or q.get("close") or q.get("c")
     
+    # ── On-Demand Synchronous REST Seeding ─────────────────────────────────────
+    rest_key = f"_idx_rest_candles_{index_token}"
+    rest_candles = st.session_state.get(rest_key, [])
+    rest_ts_key = f"_idx_rest_ts_{index_token}"
+    last_rest = st.session_state.get(rest_ts_key, 0)
+    
+    from datetime import datetime, timezone, timedelta
+    ist_tz = timezone(timedelta(hours=5, minutes=30))
+    today_ist = datetime.now(ist_tz).date()
+    
+    _ms_rc = market_status()
+    now_ts = time.time()
+    rest_stale = (now_ts - last_rest) > (86400 if not _ms_rc["is_open"] else 300)
+    
+    if not rest_candles or rest_stale:
+        access_token = st.session_state.get("accepted_token", "")
+        last_attempt_key = f"_idx_rest_attempt_{index_token}"
+        last_attempt = st.session_state.get(last_attempt_key, 0)
+        
+        if access_token and (now_ts - last_attempt > 60):  # limit retry to once per 60s
+            st.session_state[last_attempt_key] = now_ts
+            try:
+                # fetch_index_candles is defined below, it will resolve correctly at runtime
+                _res = fetch_index_candles(index_token, access_token, lookback_days=7)
+                seed, err = (_res if isinstance(_res, tuple) else (_res, None))
+                if not err and seed:
+                    st.session_state[rest_key] = seed
+                    st.session_state[rest_ts_key] = now_ts
+                    rest_candles = seed
+                    st.session_state.pop(f"_idx_rest_err_{index_token}", None)
+            except Exception:
+                pass
+
     if ltp is None:
         # Fall back to last accumulated WS candle close
         ws_candles = st.session_state.get(f"_idx_ws_candles_{index_token}", [])
         if ws_candles:
             ltp = float(ws_candles[-1][4])
         else:
-            # Fall back to last REST candle close
-            rest_candles = st.session_state.get(f"_idx_rest_candles_{index_token}", [])
             if rest_candles:
                 ltp = float(rest_candles[-1][4])
             else:
                 return {}
 
     # ── Daily Change Calculation ──────────────────────────────────────────────
-    # Daily change must be calculated against the Previous Session Close (yesterday's close)
-    # to match real-time broker terminals, Google Finance, and TV channels.
-    # If yesterday's close is not found, we fall back to today's opening price.
     prev_close = None
-    rest_candles = st.session_state.get(f"_idx_rest_candles_{index_token}", [])
     if rest_candles:
-        from datetime import datetime, timezone, timedelta
-        ist_tz = timezone(timedelta(hours=5, minutes=30))
-        today_ist = datetime.now(ist_tz).date()
         for c in reversed(rest_candles):
             c_date = datetime.fromtimestamp(c[0] / 1000, ist_tz).date()
             if c_date < today_ist:
@@ -3279,14 +3303,22 @@ def get_index_tile_quote(index_token, index_snapshot):
         chg = ltp - prev_close
         chg_pct = (chg / prev_close * 100) if prev_close else 0
     else:
-        # Fall back to today's open price
+        # Fall back specifically to TODAY's opening price
         day_open = None
         ws_candles = st.session_state.get(f"_idx_ws_candles_{index_token}", [])
         if ws_candles:
-            day_open = float(ws_candles[0][1])
-        else:
-            if rest_candles:
-                day_open = float(rest_candles[0][1])
+            for c in ws_candles:
+                c_date = datetime.fromtimestamp(c[0] / 1000, ist_tz).date()
+                if c_date == today_ist:
+                    day_open = float(c[1])
+                    break
+        
+        if not day_open and rest_candles:
+            for c in rest_candles:
+                c_date = datetime.fromtimestamp(c[0] / 1000, ist_tz).date()
+                if c_date == today_ist:
+                    day_open = float(c[1])
+                    break
         
         if day_open:
             chg = ltp - day_open
