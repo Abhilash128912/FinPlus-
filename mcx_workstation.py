@@ -358,6 +358,8 @@ for key, tick in nymex_symbols.items():
 live_prices = {}
 for symbol in ["CRUDEOIL", "NATURALGAS"]:
     live_prices[symbol] = round(spot_prices[symbol] * usdinr, 2)
+# Map NATGASMINI to use identical spot conversion
+live_prices["NATGASMINI"] = live_prices["NATURALGAS"]
 
 # Calculate percentage changes
 pct_changes = {}
@@ -382,10 +384,14 @@ st.sidebar.info("""
 *   Futures Symbol: CRUDEOIL
 *   Option Symbol: CRUDEOIL Strike
 
-**🔥 Natural Gas (1 Lot):**
+**🔥 Natural Gas Mega (1 Lot):**
 *   Lot Size: 1250 MMBtu
 *   Futures Symbol: NATURALGAS
 *   Option Symbol: NATURALGAS Strike
+
+**🔥 Natural Gas Mini (1 Lot):**
+*   Lot Size: 250 MMBtu
+*   Futures Symbol: NATGASMINI
 """)
 
 st.sidebar.markdown("---")
@@ -515,7 +521,7 @@ with tab_dash:
     with col2:
         st.markdown("""
         <div class='premium-card'>
-            <div class='metric-label'>🔥 NATURAL GAS (MCX Indicative)</div>
+            <div class='metric-label'>🔥 NATURAL GAS / NG MINI (MCX Indicative)</div>
         """, unsafe_allow_html=True)
         
         price_ng = live_prices["NATURALGAS"]
@@ -695,14 +701,14 @@ with tab_calc:
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
         st.markdown("<p class='metric-label'>Position Planner Inputs</p>", unsafe_allow_html=True)
         
-        planned_symbol = st.selectbox("Asset Commodity", options=["CRUDEOIL", "NATURALGAS"], key="mcx_calc_symbol")
+        planned_symbol = st.selectbox("Asset Commodity", options=["CRUDEOIL", "NATURALGAS", "NATGASMINI"], key="mcx_calc_symbol")
         planned_ltp = live_prices[planned_symbol]
         
         # Default ATR values for default Stop Loss
         default_sl_distance = 150.0 if planned_symbol == "CRUDEOIL" else 15.0
         if planned_symbol == "CRUDEOIL" and df_crude is not None:
             default_sl_distance = round(float(df_crude.iloc[-1]['ATR']) * 1.5, 1)
-        elif planned_symbol == "NATURALGAS" and df_ng is not None:
+        elif planned_symbol in ["NATURALGAS", "NATGASMINI"] and df_ng is not None:
             default_sl_distance = round(float(df_ng.iloc[-1]['ATR']) * 1.5, 1)
             
         c_capital = st.number_input("Account Capital (₹)", min_value=1000.0, step=10000.0, value=200000.0)
@@ -722,7 +728,12 @@ with tab_calc:
         
     with cc2:
         # Load contract lot sizes
-        contract_lot = 100.0 if planned_symbol == "CRUDEOIL" else 1250.0
+        if planned_symbol == "CRUDEOIL":
+            contract_lot = 100.0
+        elif planned_symbol == "NATURALGAS":
+            contract_lot = 1250.0
+        else:
+            contract_lot = 250.0
         
         # Calculate Risk and Sizing
         max_risk_rupees = c_capital * (c_risk_pct / 100.0)

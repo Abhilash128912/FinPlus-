@@ -29,7 +29,7 @@ def fetch_live_stock_news(symbol: str) -> list:
     if not ticker_symbol.endswith(".NS") and not ticker_symbol.endswith(".BO") and len(ticker_symbol) <= 10:
         index_keywords = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"]
         is_index = any(k in ticker_symbol for k in index_keywords)
-        commodity_keywords = ["GOLD", "SILVER", "CRUDEOIL", "NATURALGAS"]
+        commodity_keywords = ["GOLD", "SILVER", "CRUDEOIL", "NATURALGAS", "NATGASMINI", "NATGAS"]
         is_commodity = any(k in ticker_symbol for k in commodity_keywords)
         if not is_index and not is_commodity:
             ticker_symbol = f"{ticker_symbol}.NS"

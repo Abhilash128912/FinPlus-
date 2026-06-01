@@ -37,7 +37,7 @@ def get_quote_mismatch_warning(symbol: str, segment: str) -> str:
     is_option_contract = sym.endswith("CE") or sym.endswith("PE") or bool(re.search(r'\d+[CP]$', sym))
     
     # Commodities keywords
-    commodity_keywords = ["GOLD", "SILVER", "CRUDEOIL", "NATURALGAS", "COPPER", "ZINC", "ALUMINIUM", "LEAD", "MCX"]
+    commodity_keywords = ["GOLD", "SILVER", "CRUDEOIL", "NATURALGAS", "NATGASMINI", "NATGAS", "COPPER", "ZINC", "ALUMINIUM", "LEAD", "MCX"]
     is_commodity = any(keyword in sym for keyword in commodity_keywords)
     
     # 1. Index Ticker mismatch
@@ -125,7 +125,7 @@ def fetch_live_market_stats(symbol: str) -> dict:
     if not ticker_symbol.endswith(".NS") and not ticker_symbol.endswith(".BO") and len(ticker_symbol) <= 10:
         index_keywords = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"]
         is_index = any(k in ticker_symbol for k in index_keywords)
-        commodity_keywords = ["GOLD", "SILVER", "CRUDEOIL", "NATURALGAS"]
+        commodity_keywords = ["GOLD", "SILVER", "CRUDEOIL", "NATURALGAS", "NATGASMINI", "NATGAS"]
         is_commodity = any(k in ticker_symbol for k in commodity_keywords)
         if not is_index and not is_commodity:
             ticker_symbol = f"{ticker_symbol}.NS"
@@ -166,7 +166,7 @@ def fetch_live_stock_news(symbol: str) -> list:
     if not ticker_symbol.endswith(".NS") and not ticker_symbol.endswith(".BO") and len(ticker_symbol) <= 10:
         index_keywords = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"]
         is_index = any(k in ticker_symbol for k in index_keywords)
-        commodity_keywords = ["GOLD", "SILVER", "CRUDEOIL", "NATURALGAS"]
+        commodity_keywords = ["GOLD", "SILVER", "CRUDEOIL", "NATURALGAS", "NATGASMINI", "NATGAS"]
         is_commodity = any(k in ticker_symbol for k in commodity_keywords)
         if not is_index and not is_commodity:
             ticker_symbol = f"{ticker_symbol}.NS"
