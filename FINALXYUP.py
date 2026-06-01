@@ -824,6 +824,229 @@ def auth_headers(access_token: str) -> dict[str, str]:
     return {"Authorization": clean_token(access_token)}
 
 
+def get_telegram_config() -> tuple[str, str, bool]:
+    """Retrieve Telegram configuration. Prioritizes st.secrets (cloud) then database (local)."""
+    # 1. Streamlit Secrets (ideal for Cloud)
+    try:
+        if "TELEGRAM_BOT_TOKEN" in st.secrets and "TELEGRAM_CHAT_ID" in st.secrets:
+            return (
+                st.secrets["TELEGRAM_BOT_TOKEN"],
+                st.secrets["TELEGRAM_CHAT_ID"],
+                st.secrets.get("TELEGRAM_NOTIFICATIONS_ENABLED", True)
+            )
+    except Exception:
+        pass
+
+    # 2. Database fallback (ideal for Local / Laptop)
+    try:
+        from database import get_db_settings
+        token = get_db_settings("telegram_bot_token", "")
+        chat_id = get_db_settings("telegram_chat_id", "")
+        enabled = get_db_settings("telegram_notifications_enabled", False)
+        return token, chat_id, enabled
+    except Exception:
+        pass
+
+    return "", "", False
+
+
+def send_telegram_picks_message(
+    intraday_pick: dict | None,
+    option_pick: dict | None,
+    swing_pick: dict | None,
+    total_cap: float,
+    intra_pct: float,
+    opt_pct: float,
+    swing_pct: float,
+    intra_lev: int,
+    max_trades: int,
+) -> bool:
+    """Format and send the Command Center Alpha Picks of the Day to Telegram Bot API."""
+    token, chat_id, enabled = get_telegram_config()
+    if not token or not chat_id:
+        st.error("Telegram is not configured. Add Bot Token and Chat ID to Streamlit Secrets or Settings.")
+        return False
+
+    now_ist = datetime.now(_IST_TZ)
+    date_str = now_ist.strftime("%a, %d %b %Y")
+
+    msg = f"🎯 <b>Fin+ Workstation — Alpha Picks of the Day</b>\n"
+    msg += f"📅 <i>Date: {date_str} (IST)</i>\n\n"
+
+    # 1. INTRADAY
+    if intraday_pick:
+        _stk = intraday_pick["Stock"]
+        _ltp = float(intraday_pick["LTP"])
+        _sig = intraday_pick["Signal"]
+        _chg = float(intraday_pick["Change %"])
+        _is_long = _sig in ("LONG", "BREAKOUT")
+        _sl_dist = _ltp * 0.015
+        _sl = _ltp - _sl_dist if _is_long else _ltp + _sl_dist
+        _tgt = _ltp + (_sl_dist * 2.0) if _is_long else _ltp - (_sl_dist * 2.0)
+        
+        allocated_cap = total_cap * (intra_pct / 100.0)
+        cap_per_trade = allocated_cap / max_trades
+        buying_power = cap_per_trade * intra_lev
+        _qty = int(buying_power / _ltp) if _ltp > 0 else 0
+        _trade_val = _qty * _ltp
+        _max_risk = _qty * _sl_dist
+        
+        direction = "BUY (Long)" if _is_long else "SELL (Short)"
+        msg += f"⚡ <b>INTRADAY SNIPER PLAY</b>\n"
+        msg += f"Stock: <b>{_stk}</b> (Signal: {_sig})\n"
+        msg += f"• Entry Limit: ₹{_ltp:.2f} ({_chg:+.2f}%)\n"
+        msg += f"• Stop Loss: ₹{_sl:.2f} (1.5%)\n"
+        msg += f"• Target Net: ₹{_tgt:.2f} (3.0%)\n"
+        msg += f"👉 <b>ACTION:</b> {direction} EXACTLY <b>{_qty}</b> SHARES\n"
+        msg += f"💰 Margin: ₹{cap_per_trade:.2f} (BP: ₹{_trade_val:.2f})\n"
+        msg += f"⚠️ Max Risk: ₹{_max_risk:.2f} ({_max_risk/total_cap*100:.2f}% of Cap)\n\n"
+    else:
+        msg += f"⚡ <b>INTRADAY SNIPER PLAY</b>\n"
+        msg += f"<i>No intraday breakout setup active at present.</i>\n\n"
+
+    # 2. OPTION
+    if option_pick:
+        _stk = option_pick["Stock"]
+        _ltp = float(option_pick["LTP"])
+        _sig = option_pick["Signal"]
+        _is_long = _sig in ("LONG", "BREAKOUT")
+        
+        FO_LOT_SIZES_LOCAL = {
+            "RELIANCE": 250, "TCS": 175, "INFY": 400, "TATASTEEL": 5500, "SBIN": 1500,
+            "BHARTIARTL": 950, "ICICIBANK": 700, "HDFCBANK": 550, "AXISBANK": 625, "ITC": 1600,
+            "LT": 300, "HINDUNILVR": 300, "M&M": 350, "SUNPHARMA": 700, "MARUTI": 50,
+            "ONGC": 3850, "JSWSTEEL": 675, "ADANIENT": 300, "COALINDIA": 4200, "NTPC": 1500,
+            "POWERGRID": 3600, "KOTAKBANK": 400
+        }
+        
+        def calculate_atm_strike_local(stock: str, price: float) -> int:
+            if price > 5000:
+                interval = 100
+            elif price > 2000:
+                interval = 50
+            elif price > 800:
+                interval = 20
+            elif price > 300:
+                interval = 10
+            else:
+                interval = 5
+            return int(round(price / interval) * interval)
+            
+        _strike = calculate_atm_strike_local(_stk, _ltp)
+        _option_type = "CE" if _is_long else "PE"
+        _contract = f"{_stk} {_strike} {_option_type}"
+        
+        allocated_opt_cap = total_cap * (opt_pct / 100.0)
+        lot_size = FO_LOT_SIZES_LOCAL.get(_stk, 100)
+        est_premium = _ltp * 0.03
+        cost_per_lot = lot_size * est_premium
+        max_trade_exposure = allocated_opt_cap * 0.20
+        _lots = int(max_trade_exposure / cost_per_lot) if cost_per_lot > 0 else 0
+        if _lots == 0:
+            _lots = 1
+        _total_premium_val = _lots * lot_size * est_premium
+        _max_risk = _total_premium_val * 0.35
+        
+        msg += f"📦 <b>STOCK OPTION SNIPER</b>\n"
+        msg += f"Contract: <b>{_contract}</b> (ATM Option)\n"
+        msg += f"• Under. LTP: ₹{_ltp:.2f} (Est Prem: ₹{est_premium:.2f})\n"
+        msg += f"• Stop Loss: Premium -35%\n"
+        msg += f"• Target Net: Premium +70%\n"
+        msg += f"👉 <b>ACTION:</b> BUY <b>{_lots}</b> LOTS ({_lots * lot_size} shares)\n"
+        msg += f"💰 Premium Margin: ₹{_total_premium_val:.2f}\n"
+        msg += f"⚠️ Max Risk: ₹{_max_risk:.2f} ({_max_risk/total_cap*100:.2f}% of Cap)\n\n"
+    else:
+        msg += f"📦 <b>STOCK OPTION SNIPER</b>\n"
+        msg += f"<i>Waiting for highly liquid F&O signals...</i>\n\n"
+
+    # 3. SWING
+    if swing_pick:
+        _stk = swing_pick["Stock"]
+        _company = swing_pick["Company"]
+        _total = swing_pick["Total"]
+        _funda = swing_pick["Funda"]
+        _mntm = swing_pick["Mntm"]
+        _ltp = swing_pick["LTP"]
+        _sl = _ltp * 0.95
+        _tgt = _ltp * 1.12
+        allocated_swing_cap = total_cap * (swing_pct / 100.0)
+        _swing_cap_per_trade = allocated_swing_cap / 2.0
+        _qty = int(_swing_cap_per_trade / _ltp) if _ltp > 0 else 0
+        _deployed = _qty * _ltp
+        _max_risk = _qty * (_ltp - _sl)
+        
+        msg += f"📈 <b>SWING ALPHA PICK</b>\n"
+        msg += f"Stock: <b>{_stk}</b> ({_company})\n"
+        msg += f"• Entry Limit: ₹{_ltp:.2f} (Score: {_total}/100, F:{_funda} M:{_mntm})\n"
+        msg += f"• Stop Loss: ₹{_sl:.2f} (5%)\n"
+        msg += f"• Target Net: ₹{_tgt:.2f} (12%)\n"
+        msg += f"👉 <b>ACTION:</b> BUY EXACTLY <b>{_qty}</b> SHARES\n"
+        msg += f"💰 Capital Deployed: ₹{_deployed:.2f} (10% of Cap)\n"
+        msg += f"⚠️ Max Risk: ₹{_max_risk:.2f} ({_max_risk/total_cap*100:.2f}% of Cap)\n\n"
+    else:
+        msg += f"📈 <b>SWING ALPHA PICK</b>\n"
+        msg += f"<i>Connecting to Nifty Screener SQLite DB...</i>\n\n"
+
+    msg += f"<i>🤖 Generated by Fin+ Cloud Workstation</i>"
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": msg,
+        "parse_mode": "HTML"
+    }
+    try:
+        resp = requests.post(url, json=payload, timeout=12.0)
+        resp.raise_for_status()
+        return True
+    except Exception as e:
+        st.error(f"Failed to send Telegram message: {e}")
+        return False
+
+
+def trigger_telegram_picks_if_needed(
+    intraday_pick: dict | None,
+    option_pick: dict | None,
+    swing_pick: dict | None,
+    total_cap: float,
+    intra_pct: float,
+    opt_pct: float,
+    swing_pct: float,
+    intra_lev: int,
+    max_trades: int,
+) -> None:
+    """Check once-per-day duplicate guard and send picks automatically if needed."""
+    token, chat_id, enabled = get_telegram_config()
+    if not enabled or not token or not chat_id:
+        return
+
+    if not intraday_pick and not option_pick and not swing_pick:
+        return
+
+    try:
+        from database import get_db_settings, save_db_setting
+        today_str = datetime.now(_IST_TZ).strftime("%Y-%m-%d")
+        last_sent = get_db_settings("telegram_last_sent_date", "")
+
+        if last_sent != today_str:
+            success = send_telegram_picks_message(
+                intraday_pick=intraday_pick,
+                option_pick=option_pick,
+                swing_pick=swing_pick,
+                total_cap=total_cap,
+                intra_pct=intra_pct,
+                opt_pct=opt_pct,
+                swing_pct=swing_pct,
+                intra_lev=intra_lev,
+                max_trades=max_trades,
+            )
+            if success:
+                save_db_setting("telegram_last_sent_date", today_str)
+                st.toast("📢 Alpha Picks automatically sent to Telegram!", icon="📨")
+    except Exception:
+        pass
+
+
 def compact_error(error: str | None) -> str:
     if not error:
         return "Unknown error"
@@ -2865,6 +3088,26 @@ with st.sidebar:
         st.warning("Volume Premium Max should be above Min.")
     historical_workers = st.slider("Historical Workers", 4, 16, HISTORICAL_WORKERS, 1)
 
+    st.header("📢 Telegram Alerts")
+    try:
+        from database import get_db_settings, save_db_setting
+        db_tg_token = get_db_settings("telegram_bot_token", "")
+        db_tg_chat_id = get_db_settings("telegram_chat_id", "")
+        db_tg_enabled = get_db_settings("telegram_notifications_enabled", False)
+
+        tg_enabled = st.checkbox("Enable Telegram Alerts", value=db_tg_enabled, key="tg_sidebar_enabled")
+        tg_token = st.text_input("Bot Token", value=db_tg_token, type="password", key="tg_sidebar_token")
+        tg_chat_id = st.text_input("Chat ID", value=db_tg_chat_id, key="tg_sidebar_chat_id")
+
+        if tg_enabled != db_tg_enabled or tg_token.strip() != db_tg_token or tg_chat_id.strip() != db_tg_chat_id:
+            save_db_setting("telegram_bot_token", tg_token.strip())
+            save_db_setting("telegram_chat_id", tg_chat_id.strip())
+            save_db_setting("telegram_notifications_enabled", tg_enabled)
+            st.toast("Telegram settings saved successfully!", icon="💾")
+            st.rerun()
+    except Exception as e:
+        st.caption(f"Error loading Telegram DB settings: {e}")
+
     st.header("🔗 Feed Controls")
     load_history      = st.button("📥 Load History", use_container_width=True, disabled=not st.session_state.token_accepted)
     connect_feed      = st.button("🟢 Connect Feed", use_container_width=True, disabled=not st.session_state.token_accepted)
@@ -4262,6 +4505,57 @@ def live_scanner_fragment(
                 )
                 
         st.markdown('</div>', unsafe_allow_html=True)
+
+        # ── Telegram Notification Control Center ───────────────────────────────────
+        trigger_telegram_picks_if_needed(
+            intraday_pick=intraday_pick,
+            option_pick=option_pick,
+            swing_pick=swing_pick,
+            total_cap=total_cap,
+            intra_pct=intra_pct,
+            opt_pct=opt_pct,
+            swing_pct=swing_pct,
+            intra_lev=intra_lev,
+            max_trades=max_trades,
+        )
+
+        tb_col1, tb_col2 = st.columns([5, 2])
+        with tb_col1:
+            token, chat_id, enabled = get_telegram_config()
+            if enabled and token and chat_id:
+                # Mask token for security
+                masked_token = f"{token[:8]}...{token[-4:]}" if len(token) > 12 else "Configured"
+                st.markdown(
+                    f'<div style="font-size:0.8rem;color:#059669;font-weight:600;margin-top:0.4rem;">'
+                    f'🟢 Telegram Notifications Enabled (Bot: <code>{masked_token}</code>, Chat ID: <code>{chat_id}</code>)'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f'<div style="font-size:0.8rem;color:#64748b;margin-top:0.4rem;">'
+                    f'⚪ Telegram Bot not configured. Add credentials in Settings / Secrets to receive mobile alerts.'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        with tb_col2:
+            if st.button("📢 Send Picks to Telegram", key="tg_manual_send_btn", use_container_width=True):
+                with st.spinner("Dispatching Alpha Picks to Telegram Bot..."):
+                    success = send_telegram_picks_message(
+                        intraday_pick=intraday_pick,
+                        option_pick=option_pick,
+                        swing_pick=swing_pick,
+                        total_cap=total_cap,
+                        intra_pct=intra_pct,
+                        opt_pct=opt_pct,
+                        swing_pct=swing_pct,
+                        intra_lev=intra_lev,
+                        max_trades=max_trades,
+                    )
+                    if success:
+                        st.toast("🚀 Command Center Alpha Picks sent to Telegram successfully!", icon="✅")
+                    else:
+                        st.toast("❌ Failed to send picks. Check Telegram Bot settings.", icon="⚠️")
 
         _closed = not _ms2["is_open"] and not _ms2["is_pre_open"]
         _sig_label   = "Watchlist Setups" if _closed else "Total Signals"
