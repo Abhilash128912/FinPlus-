@@ -751,11 +751,13 @@ with tab_add:
             sym_upper = t_symbol.upper().strip()
             if "NIFTY" in sym_upper:
                 if "BANK" in sym_upper:
-                    default_base_lot = 15.0
+                    default_base_lot = 30.0  # NSE updated lot size as of 2026
                 elif "FIN" in sym_upper:
-                    default_base_lot = 40.0
+                    default_base_lot = 60.0  # NSE updated lot size as of 2026
+                elif "MIDCP" in sym_upper or "MID CAP" in sym_upper:
+                    default_base_lot = 120.0 # NSE updated lot size as of 2026
                 else:
-                    default_base_lot = 65.0  # As specified by the user!
+                    default_base_lot = 65.0  # Nifty 50 lot size
             else:
                 default_base_lot = 65.0  # Default fallback for options to represent 1 lot
 
@@ -984,11 +986,13 @@ with tab_logs:
                     sym_upper = e_symbol.upper().strip()
                     if "NIFTY" in sym_upper:
                         if "BANK" in sym_upper:
-                            default_edit_base_lot = 15.0
+                            default_edit_base_lot = 30.0  # NSE updated lot size as of 2026
                         elif "FIN" in sym_upper:
-                            default_edit_base_lot = 40.0
+                            default_edit_base_lot = 60.0  # NSE updated lot size as of 2026
+                        elif "MIDCP" in sym_upper or "MID CAP" in sym_upper:
+                            default_edit_base_lot = 120.0 # NSE updated lot size as of 2026
                         else:
-                            default_edit_base_lot = 65.0  # As specified by the user!
+                            default_edit_base_lot = 65.0  # Nifty 50 lot size
                     else:
                         default_edit_base_lot = 65.0  # Default fallback for options to represent 1 lot
 
