@@ -997,7 +997,13 @@ def send_telegram_picks_message(
     }
     try:
         resp = requests.post(url, json=payload, timeout=12.0)
-        resp.raise_for_status()
+        if resp.status_code != 200:
+            try:
+                err_desc = resp.json().get("description", resp.text)
+            except Exception:
+                err_desc = resp.text
+            st.error(f"Telegram API Error: {err_desc}")
+            return False
         return True
     except Exception as e:
         st.error(f"Failed to send Telegram message: {e}")
@@ -3111,8 +3117,14 @@ with st.sidebar:
                     try:
                         import requests
                         resp = requests.post(url, json=payload, timeout=8.0)
-                        resp.raise_for_status()
-                        st.toast("✅ Test message sent successfully!", icon="✅")
+                        if resp.status_code != 200:
+                            try:
+                                err_desc = resp.json().get("description", resp.text)
+                            except Exception:
+                                err_desc = resp.text
+                            st.error(f"Telegram API Error: {err_desc}")
+                        else:
+                            st.toast("✅ Test message sent successfully!", icon="✅")
                     except Exception as e:
                         st.error(f"Failed to send test message: {e}")
 
