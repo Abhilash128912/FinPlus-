@@ -230,23 +230,15 @@ def render_quantamental_health_card(symbol: str, key_suffix: str = ""):
     # Build News HTML block
     news_html = ""
     if news_items:
-        news_html += """
-        <hr style="border-top: 1px dashed #CBD5E1; margin: 14px 0 8px 0;">
-        <div style="font-size: 0.85rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">📰 Latest Stock News Insights</div>
-        """
+        news_html += '<hr style="border-top: 1px dashed #CBD5E1; margin: 14px 0 8px 0;">\n'
+        news_html += '<div style="font-size: 0.85rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">📰 Latest Stock News Insights</div>\n'
         for item in news_items:
-            news_html += f"""
-            <div style="font-size: 0.95rem; margin-bottom: 5px; line-height: 1.35;">
-                <span style="color: #64748B; font-weight: 600;">[{item['publisher']}]</span> 
-                <a href="{item['link']}" target="_blank" style="color: #1D4ED8; font-weight: 700; text-decoration: none;">{item['title']}</a>
-            </div>
-            """
+            news_html += f'<div style="font-size: 0.95rem; margin-bottom: 5px; line-height: 1.35;"><span style="color: #64748B; font-weight: 600;">[{item["publisher"]}]</span> <a href="{item["link"]}" target="_blank" style="color: #1D4ED8; font-weight: 700; text-decoration: none;">{item["title"]}</a></div>\n'
     else:
-        news_html += """
-        <hr style="border-top: 1px dashed #CBD5E1; margin: 14px 0 8px 0;">
-        <div style="font-size: 0.85rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">📰 Latest Stock News Insights</div>
-        <div style="font-size: 0.95rem; color: #64748B; font-style: italic;">No recent news found for this ticker.</div>
-        """
+        news_html += '<hr style="border-top: 1px dashed #CBD5E1; margin: 14px 0 8px 0;">\n'
+        news_html += '<div style="font-size: 0.85rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">📰 Latest Stock News Insights</div>\n'
+        news_html += '<div style="font-size: 0.95rem; color: #64748B; font-style: italic;">No recent news found for this ticker.</div>\n'
+
         
     if is_nifty500:
         st.markdown(
