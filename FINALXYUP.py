@@ -1831,14 +1831,14 @@ def _bg_hist_worker(access_token: str, workers: int, state: dict, universe: dict
                 "count":     count,
                 "total":     len(stock_toks),
                 "failures":  failure_list,
-                "loaded_at": time.time() if count else None,
+                "loaded_at": time.time(),
             }
     except Exception as exc:
         with state["lock"]:
             state["result"] = {
                 "data": {}, "count": 0, "total": 0,
                 "failures": [f"BG loader failed: {exc}"],
-                "loaded_at": None,
+                "loaded_at": time.time(),
             }
     finally:
         with state["lock"]:
@@ -1909,6 +1909,11 @@ def apply_bg_hist_results() -> bool:
         else:
             # We already have good data! Keep it, but update failures for diagnostics
             st.session_state.history_errors    = res["failures"]
+            st.session_state.history_started_at = None
+            st.session_state.history_status = "Auto-refresh failed"
+        
+        # Throttling fix: Update auto_history_last_load to prevent thread-spamming retry loop
+        st.session_state.auto_history_last_load = time.time()
 
     st.session_state["_frag_last_applied_hist_time"] = loaded_at if loaded_at > 0.0 else last_applied
     return True
@@ -3960,6 +3965,34 @@ def live_scanner_fragment(
     # Apply any completed background-refresh results
     apply_bg_hist_results()
 
+    # ── 15-Minute Stable Latching (Locking) Initialization & Auto-Reset ──
+    if "locked_intraday_stock" not in st.session_state:
+        st.session_state.locked_intraday_stock = None
+    if "locked_option_stock" not in st.session_state:
+        st.session_state.locked_option_stock = None
+    if "locked_swing_stock" not in st.session_state:
+        st.session_state.locked_swing_stock = None
+    if "locked_at_time" not in st.session_state:
+        st.session_state.locked_at_time = 0.0
+    if "last_applied_hist_time_for_lock" not in st.session_state:
+        st.session_state.last_applied_hist_time_for_lock = 0.0
+
+    # Auto-reset lock if new history data was applied
+    current_hist_time = st.session_state.get("history_loaded_at") or 0.0
+    if current_hist_time != st.session_state.last_applied_hist_time_for_lock:
+        st.session_state.locked_intraday_stock = None
+        st.session_state.locked_option_stock = None
+        st.session_state.locked_swing_stock = None
+        st.session_state.locked_at_time = 0.0
+        st.session_state.last_applied_hist_time_for_lock = current_hist_time
+
+    # Auto-reset lock if 15 minutes (900 seconds) have elapsed
+    if st.session_state.locked_at_time > 0.0 and (time.time() - st.session_state.locked_at_time) >= 900:
+        st.session_state.locked_intraday_stock = None
+        st.session_state.locked_option_stock = None
+        st.session_state.locked_swing_stock = None
+        st.session_state.locked_at_time = 0.0
+
     _token_ok   = st.session_state.token_accepted and bool(clean_token(access_token))
     _bg_running = _get_bg_hist_state()["running"]
 
@@ -4243,7 +4276,12 @@ def live_scanner_fragment(
 
         # 1. Intraday Pick Selection
         intraday_pick = None
-        if not df.empty:
+        if st.session_state.locked_intraday_stock and not df.empty:
+            match_df = df[df["Stock"] == st.session_state.locked_intraday_stock]
+            if not match_df.empty:
+                intraday_pick = match_df.iloc[0].to_dict()
+
+        if not intraday_pick and not df.empty:
             # Low-chasing gate: only consider technical signals where Change % is < 3.0% (for upside) or > -3.0% (for downside)
             # This catches breakouts EXACTLY at the moment of inception (early stage) rather than at extended peaks!
             candidates_bo = df[((df["Signal"] == "BREAKOUT") | (df["Signal"] == "LONG")) & (df["Change %"] < 3.0) & (df["Change %"] > 0.4)]
@@ -4254,10 +4292,18 @@ def live_scanner_fragment(
             if not candidates.empty:
                 candidates = candidates.sort_values(by=["Score", "RVOL"], ascending=[False, False])
                 intraday_pick = candidates.iloc[0].to_dict()
+                st.session_state.locked_intraday_stock = intraday_pick["Stock"]
+                if st.session_state.locked_at_time == 0.0:
+                    st.session_state.locked_at_time = time.time()
                 
         # 2. Stock Option Pick Selection
         option_pick = None
-        if not df.empty:
+        if st.session_state.locked_option_stock and not df.empty:
+            match_df = df[df["Stock"] == st.session_state.locked_option_stock]
+            if not match_df.empty:
+                option_pick = match_df.iloc[0].to_dict()
+
+        if not option_pick and not df.empty:
             # Option trades require extreme liquidity: filter from highly liquid large-cap NSE 50 candidates
             liquid_fo = list(FO_LOT_SIZES.keys())
             fo_candidates = df[df["Stock"].isin(liquid_fo)]
@@ -4267,6 +4313,9 @@ def live_scanner_fragment(
             else:
                 # fallback to any top liquid symbol if no strict F&O list matches
                 option_pick = df.sort_values(by=["RVOL"], ascending=False).iloc[0].to_dict()
+            st.session_state.locked_option_stock = option_pick["Stock"]
+            if st.session_state.locked_at_time == 0.0:
+                st.session_state.locked_at_time = time.time()
 
         # Helper function to dynamically round to standard option strike intervals
         def calculate_atm_strike(stock: str, price: float) -> int:
@@ -4284,35 +4333,80 @@ def live_scanner_fragment(
 
         # 3. Swing Pick Selection
         swing_pick = None
-        # Connect to screener database to find the absolute highest quantamental rating stock
-        # that has positive technical momentum (Change % > 0)
-        import sqlite3
-        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Finance", "nifty_scanner", "nifty500_scanner.db")
-        if not os.path.exists(db_path):
-            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nifty_scanner", "nifty500_scanner.db")
-        if os.path.exists(db_path):
-            try:
-                conn = sqlite3.connect(db_path)
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT ticker, company_name, total_score, fundamental_score, momentum_score, last_price "
-                    "FROM nifty500_cache "
-                    "WHERE total_score >= 60 AND last_price > 50 AND market_cap_cr > 2000 "
-                    "ORDER BY total_score DESC, momentum_score DESC LIMIT 1"
-                )
-                row = cursor.fetchone()
-                conn.close()
-                if row:
-                    swing_pick = {
-                        "Stock": row[0].replace(".NS", ""),
-                        "Company": row[1],
-                        "Total": int(row[2]),
-                        "Funda": int(row[3]),
-                        "Mntm": int(row[4]),
-                        "LTP": float(row[5]),
-                    }
-            except Exception:
-                pass
+        if st.session_state.locked_swing_stock:
+            import sqlite3
+            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Finance", "nifty_scanner", "nifty500_scanner.db")
+            if not os.path.exists(db_path):
+                db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nifty_scanner", "nifty500_scanner.db")
+            if os.path.exists(db_path):
+                try:
+                    conn = sqlite3.connect(db_path)
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "SELECT ticker, company_name, total_score, fundamental_score, momentum_score, last_price "
+                        "FROM nifty500_cache WHERE ticker = ? OR ticker = ? LIMIT 1",
+                        (st.session_state.locked_swing_stock, f"{st.session_state.locked_swing_stock}.NS")
+                    )
+                    row = cursor.fetchone()
+                    conn.close()
+                    if row:
+                        swing_pick = {
+                            "Stock": row[0].replace(".NS", ""),
+                            "Company": row[1],
+                            "Total": int(row[2]),
+                            "Funda": int(row[3]),
+                            "Mntm": int(row[4]),
+                            "LTP": float(row[5]),
+                        }
+                        if not df.empty:
+                            match_df = df[df["Stock"] == st.session_state.locked_swing_stock]
+                            if not match_df.empty:
+                                swing_pick["LTP"] = float(match_df.iloc[0]["LTP"])
+                except Exception:
+                    pass
+
+        if not swing_pick:
+            import sqlite3
+            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Finance", "nifty_scanner", "nifty500_scanner.db")
+            if not os.path.exists(db_path):
+                db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nifty_scanner", "nifty500_scanner.db")
+            if os.path.exists(db_path):
+                try:
+                    conn = sqlite3.connect(db_path)
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "SELECT ticker, company_name, total_score, fundamental_score, momentum_score, last_price "
+                        "FROM nifty500_cache "
+                        "WHERE total_score >= 60 AND last_price > 50 AND market_cap_cr > 2000 "
+                        "ORDER BY total_score DESC, momentum_score DESC LIMIT 1"
+                    )
+                    row = cursor.fetchone()
+                    conn.close()
+                    if row:
+                        swing_pick = {
+                            "Stock": row[0].replace(".NS", ""),
+                            "Company": row[1],
+                            "Total": int(row[2]),
+                            "Funda": int(row[3]),
+                            "Mntm": int(row[4]),
+                            "LTP": float(row[5]),
+                        }
+                        st.session_state.locked_swing_stock = swing_pick["Stock"]
+                        if st.session_state.locked_at_time == 0.0:
+                            st.session_state.locked_at_time = time.time()
+                except Exception:
+                    pass
+
+        # Calculate time remaining on the 15-minute lock
+        time_rem_str = ""
+        if st.session_state.locked_at_time > 0.0:
+            elapsed = time.time() - st.session_state.locked_at_time
+            remaining = max(0, int(900 - elapsed))
+            mins = remaining // 60
+            secs = remaining % 60
+            time_rem_str = f"🔒 Tickers Locked (Auto-refresh in {mins:02d}:{secs:02d})"
+        else:
+            time_rem_str = "🔓 Scanning Live Breakouts"
 
         # Render Command Center Layout
         st.markdown(
@@ -4322,7 +4416,7 @@ def live_scanner_fragment(
             f'display:flex;align-items:center;gap:8px;margin-bottom:1rem;">'
             f'🎯 COMMAND CENTER \u2014 ALPHA PICKS OF THE DAY'
             f'<span style="font-size:0.75rem;font-weight:700;background:#d1fae5;color:#065f46;'
-            f'padding:2px 8px;border-radius:20px;border:1px solid #10b981;">No-Chasing Sniper Mode Active</span>'
+            f'padding:2px 8px;border-radius:20px;border:1px solid #10b981;">{time_rem_str}</span>'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -4548,7 +4642,7 @@ def live_scanner_fragment(
             max_trades=max_trades,
         )
 
-        tb_col1, tb_col2 = st.columns([5, 2])
+        tb_col1, tb_col2, tb_col3 = st.columns([4, 2, 2])
         with tb_col1:
             token, chat_id, enabled = get_telegram_config()
             if enabled and token and chat_id:
@@ -4568,7 +4662,15 @@ def live_scanner_fragment(
                     unsafe_allow_html=True,
                 )
         with tb_col2:
-            if st.button("📢 Send Picks to Telegram", key="tg_manual_send_btn", use_container_width=True):
+            if st.button("🔄 Recalculate Picks", key="btn_recalc_alpha_picks", use_container_width=True):
+                st.session_state.locked_intraday_stock = None
+                st.session_state.locked_option_stock = None
+                st.session_state.locked_swing_stock = None
+                st.session_state.locked_at_time = 0.0
+                st.toast("🔄 Tickers unlocked! Recalculating fresh picks...", icon="🔄")
+                st.rerun()
+        with tb_col3:
+            if st.button("📢 Send to Telegram", key="tg_manual_send_btn", use_container_width=True):
                 with st.spinner("Dispatching Alpha Picks to Telegram Bot..."):
                     success = send_telegram_picks_message(
                         intraday_pick=intraday_pick,
