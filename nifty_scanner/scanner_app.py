@@ -150,17 +150,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Sidebar Theme Customization
-st.sidebar.markdown('<h3 style="margin-top:0; color: var(--text-primary);">🎨 Workstation Theme</h3>', unsafe_allow_html=True)
-st.sidebar.markdown(
-    """
-    <div style="background-color: #ECFDF5; border: 1.5px solid #A7F3D0; border-radius: 8px; padding: 10px; margin-bottom: 20px;">
-        <span style="color: #065F46; font-weight: 700; font-size: 0.9rem;">🟢 Emerald Light Active</span>
-        <div style="color: #047857; font-size: 0.8rem; margin-top: 3px;">Optimized for visual health, eye comfort, and high tactile 3D contrast.</div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+
 
 variables_css = """
 :root {
@@ -459,12 +449,16 @@ if url_focus:
         st.session_state["global_focus_ticker"] = f"{url_focus}.NS"
 
 if "global_focus_ticker" not in st.session_state:
-    st.session_state["global_focus_ticker"] = "BSE.NS" if "BSE.NS" in ticker_options else ticker_options[0]
+    st.session_state["global_focus_ticker"] = ""
 
 # Synchronize widget session state keys safely on every run
 current_focus = st.session_state["global_focus_ticker"]
-st.session_state["sidebar_active_stock_focus_dropdown"] = current_focus
-st.session_state["tab1_select_focus"] = current_focus
+if current_focus and current_focus in ticker_options:
+    st.session_state["sidebar_active_stock_focus_dropdown"] = current_focus
+    st.session_state["tab1_select_focus"] = current_focus
+else:
+    st.session_state["sidebar_active_stock_focus_dropdown"] = None
+    st.session_state["tab1_select_focus"] = None
 
 st.sidebar.markdown('<h3 style="margin-top:0; color: var(--text-primary);">🎯 Stock Focus</h3>', unsafe_allow_html=True)
 
@@ -487,6 +481,8 @@ st.sidebar.text_input(
 st.sidebar.selectbox(
     "Active Stock Focus Dropdown", 
     options=ticker_options, 
+    index=None if not current_focus or current_focus not in ticker_options else ticker_options.index(current_focus),
+    placeholder="Select stock to focus...",
     key="sidebar_active_stock_focus_dropdown",
     on_change=update_focus_from_sidebar
 )
@@ -495,13 +491,12 @@ st.sidebar.selectbox(
 global_focus_ticker = st.session_state["global_focus_ticker"]
 
 # 4. Tab Layout
-tab_overview, tab_screener, tab_charting, tab_pe_valuation, tab_fno, tab_settings = st.tabs([
+tab_overview, tab_screener, tab_charting, tab_pe_valuation, tab_fno = st.tabs([
     "📊 Market Overview",
     "🔍 Quantamental Screener",
     "📈 Candlestick Analytics",
     "⚖️ P/E Valuation Bands",
-    "🚀 F&O Derivatives & Heatmap",
-    "⚙️ Database Utility"
+    "🚀 F&O Derivatives & Heatmap"
 ])
 
 # ==========================================
@@ -526,6 +521,8 @@ with tab_overview:
         st.selectbox(
             "🎯 Select Stock from Constituency List", 
             options=ticker_options, 
+            index=None if not current_focus or current_focus not in ticker_options else ticker_options.index(current_focus),
+            placeholder="Select stock to focus...",
             key="tab1_select_focus",
             on_change=update_focus_from_tab1
         )
@@ -763,6 +760,9 @@ with tab_overview:
             else:
                 st.warning(f"⚠️ Spot price connection offline for non-constituent stock '{display_ticker}'. Please check your network connection.")
             st.markdown("<hr style='border-color: var(--border-color); margin: 25px 0;'>", unsafe_allow_html=True)
+    else:
+        st.info("🔍 Select a stock or use Quick Search/Constituency List to activate deep-dive analysis.")
+        st.markdown("<hr style='border-color: var(--border-color); margin: 25px 0;'>", unsafe_allow_html=True)
 
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     with m_col1:
@@ -814,6 +814,61 @@ with tab_overview:
             hide_index=True
         )
         st.markdown('</div>', unsafe_allow_html=True)
+        
+    # ⚙️ Collapsible Scanner Database Cache & Sync Utility at bottom of Tab 1
+    st.markdown("<br>", unsafe_allow_html=True)
+    with st.expander("⚙️ Scanner Database Diagnostics & Caching Management"):
+        st.markdown(f"**Local SQLite Database Path**: `{os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nifty500_scanner.db')}`")
+        st.markdown(f"**Last Completed Scan Update**: `{last_refresh_date}`")
+        
+        st.markdown("<hr style='border-color: var(--border-color); margin: 20px 0;'>", unsafe_allow_html=True)
+        
+        u_col1, u_col2 = st.columns(2)
+        
+        with u_col1:
+            st.markdown("##### Update & Synchronize Data Pipeline")
+            st.markdown("<p style='color: var(--text-secondary); font-size: 0.9rem;'>Updates price feeds, technical moving averages, RSI indexes, and recent fundamental ratios for the Nifty 500 space. You can initiate a manual synchronization at any time, or enable the automatic background sync below.</p>", unsafe_allow_html=True)
+            
+            if st.button("🔄 Scan & Synchronize Nifty 500 Market Data", use_container_width=True):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                def progress_update(current, total, ticker):
+                    pct = int((current / total) * 100)
+                    progress_bar.progress(pct)
+                    status_text.markdown(f"Fetching Ticker **{current}/{total}** // `{ticker}`... Please wait.")
+                    
+                success_count = run_nifty500_scanner_pipeline(progress_callback=progress_update)
+                st.success(f"Audit successfully refreshed! Analyzed {success_count} Nifty 500 stock scores successfully!")
+                st.rerun()
+                
+            st.markdown("<hr style='border-color: var(--border-color); margin: 15px 0;'>", unsafe_allow_html=True)
+            st.markdown("##### ⚙️ Automatic Background Synchronization")
+            st.markdown("<p style='color: var(--text-secondary); font-size: 0.9rem;'>Automatically fetch and update Nifty 500 data silently in the background without freezing your workspace.</p>", unsafe_allow_html=True)
+            
+            interval_opts = ["Manual Only", "30 Minutes", "1 Hour", "2 Hours"]
+            default_interval_idx = interval_opts.index(st.session_state["auto_refresh_interval"])
+            
+            selected_interval = st.selectbox(
+                "Background Synchronization Frequency", 
+                options=interval_opts, 
+                index=default_interval_idx,
+                key="auto_sync_interval_selector"
+            )
+            if selected_interval != st.session_state["auto_refresh_interval"]:
+                st.session_state["auto_refresh_interval"] = selected_interval
+                st.rerun()
+                
+        with u_col2:
+            st.markdown("##### Maintenance & Data Erasure")
+            st.markdown("<p style='color: var(--accent-red); font-weight: 600; font-size: 0.9rem;'>Warning: Clearing the cache database deletes all scored Nifty 500 entries. A full pipeline audit scan will be required afterwards.</p>", unsafe_allow_html=True)
+            
+            confirm_wipe = st.checkbox("I verify I want to clear all cached scanner database records")
+            
+            if st.button("Wipe Scanner Cache Database Records", disabled=not confirm_wipe, type="secondary"):
+                clear_scanner_cache()
+                st.success("Scanner cache successfully cleared.")
+                st.rerun()
 
 # ==========================================
 # TAB 2: QUANTAMENTAL SCREENER
@@ -822,6 +877,14 @@ with tab_screener:
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.markdown("### Multi-Criteria Screener Interface", unsafe_allow_html=True)
     st.markdown("<p style='color: var(--text-secondary); margin-top:-10px; margin-bottom: 20px;'>Filter the Nifty 500 space reactively using sliders based on the composite 100-point algorithm.</p>", unsafe_allow_html=True)
+    
+    screener_mode = st.radio(
+        "Screener Mode Selection", 
+        options=["Standard Scanner", "🏆 Top 5 Scoring Scrips"], 
+        index=0,
+        horizontal=True,
+        key="screener_mode_radio_widget"
+    )
     
     # Screener Controls
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns(3)
@@ -832,15 +895,17 @@ with tab_screener:
     with ctrl_col3:
         min_momentum_score = st.slider("Minimum Momentum Intensity (/50)", min_value=0.0, max_value=50.0, value=20.0, step=5.0)
         
-    ctrl_col4, ctrl_col5, ctrl_col6, ctrl_col7 = st.columns([2, 2, 1, 1])
+    ctrl_col4, ctrl_col5, ctrl_col6, ctrl_col7, ctrl_col8 = st.columns([2, 2, 1.5, 1, 1])
     with ctrl_col4:
         all_sectors = sorted(list(df_stocks["sector"].dropna().unique()))
         selected_sectors = st.multiselect("Filter by Sector", options=all_sectors, default=[])
     with ctrl_col5:
         search_symbol = st.text_input("Search Ticker Symbol / Company Name", placeholder="e.g. INFY").upper()
     with ctrl_col6:
-        fno_filter = st.selectbox("F&O Segment", options=["All Stocks", "F&O Eligible", "Non-F&O"], index=0)
+        min_volume_lakhs = st.slider("Min 5-Day Avg Volume (Lakh shares)", min_value=0.0, max_value=100.0, value=0.0, step=1.0)
     with ctrl_col7:
+        fno_filter = st.selectbox("F&O Segment", options=["All Stocks", "F&O Eligible", "Non-F&O"], index=0)
+    with ctrl_col8:
         min_ltp_price = st.number_input("Min Price (₹)", min_value=0.0, value=0.0, step=100.0, key="screener_min_ltp_price")
         
     # Filtering Data
@@ -873,6 +938,14 @@ with tab_screener:
         
     if min_ltp_price > 0:
         df_filtered = df_filtered[df_filtered["last_price"] >= min_ltp_price]
+        
+    # Apply 5-Day average volume parameter filter if present
+    if "avg_volume_5d" in df_filtered.columns and min_volume_lakhs > 0:
+        df_filtered = df_filtered[df_filtered["avg_volume_5d"] >= (min_volume_lakhs * 100000)]
+        
+    # Apply Top 5 Scoring Scrips filter mode if active
+    if screener_mode == "🏆 Top 5 Scoring Scrips":
+        df_filtered = df_filtered.sort_values(by="total_score", ascending=False).head(5)
         
     total_matches = len(df_filtered)
     st.markdown(f"<p style='color: var(--text-secondary); font-size: 0.85rem;'>Matching Stocks: <strong>{total_matches}</strong> of {total_scored_stocks} constituents</p>", unsafe_allow_html=True)
@@ -954,17 +1027,17 @@ with tab_screener:
         matched_tickers = sorted(list(df_display["ticker"].unique()))
         if matched_tickers:
             # Safely sync the widget state inside the matched list
-            current_focus = st.session_state["global_focus_ticker"]
-            if current_focus in matched_tickers:
+            current_focus = st.session_state.get("global_focus_ticker", "")
+            if current_focus and current_focus in matched_tickers:
                 st.session_state["screener_quick_focus_selectbox_widget"] = current_focus
             else:
-                st.session_state["screener_quick_focus_selectbox_widget"] = matched_tickers[0]
-                # Update the global focus to match it
-                st.session_state["global_focus_ticker"] = matched_tickers[0]
+                st.session_state["screener_quick_focus_selectbox_widget"] = None
                 
             st.selectbox(
                 "Select stock to view technicals:", 
                 options=matched_tickers, 
+                index=None if not current_focus or current_focus not in matched_tickers else matched_tickers.index(current_focus),
+                placeholder="Select stock to focus...",
                 key="screener_quick_focus_selectbox_widget",
                 on_change=update_focus_from_tab2
             )
@@ -1505,63 +1578,4 @@ with tab_fno:
                 
         st.markdown('</div>', unsafe_allow_html=True)
 
-# ==========================================
-# TAB 6: DATABASE UTILITY
-# ==========================================
-with tab_settings:
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown("### Scanner Database Diagnostics & Caching Management", unsafe_allow_html=True)
-    
-    st.markdown(f"**Local SQLite Database Path**: `{os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nifty500_scanner.db')}`")
-    st.markdown(f"**Last Completed Scan Update**: `{last_refresh_date}`")
-    
-    st.markdown("<hr style='border-color: var(--border-color); margin: 20px 0;'>", unsafe_allow_html=True)
-    
-    u_col1, u_col2 = st.columns(2)
-    
-    with u_col1:
-        st.markdown("##### Update & Synchronize Data Pipeline")
-        st.markdown("<p style='color: var(--text-secondary); font-size: 0.9rem;'>Updates price feeds, technical moving averages, RSI indexes, and recent fundamental ratios for the Nifty 500 space. You can initiate a manual synchronization at any time, or enable the automatic background sync below.</p>", unsafe_allow_html=True)
-        
-        if st.button("🔄 Scan & Synchronize Nifty 500 Market Data", use_container_width=True):
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            def progress_update(current, total, ticker):
-                pct = int((current / total) * 100)
-                progress_bar.progress(pct)
-                status_text.markdown(f"Fetching Ticker **{current}/{total}** // `{ticker}`... Please wait.")
-                
-            success_count = run_nifty500_scanner_pipeline(progress_callback=progress_update)
-            st.success(f"Audit successfully refreshed! Analyzed {success_count} Nifty 500 stock scores successfully!")
-            st.rerun()
-            
-        st.markdown("<hr style='border-color: var(--border-color); margin: 15px 0;'>", unsafe_allow_html=True)
-        st.markdown("##### ⚙️ Automatic Background Synchronization")
-        st.markdown("<p style='color: var(--text-secondary); font-size: 0.9rem;'>Automatically fetch and update Nifty 500 data silently in the background without freezing your workspace.</p>", unsafe_allow_html=True)
-        
-        interval_opts = ["Manual Only", "30 Minutes", "1 Hour", "2 Hours"]
-        default_interval_idx = interval_opts.index(st.session_state["auto_refresh_interval"])
-        
-        selected_interval = st.selectbox(
-            "Background Synchronization Frequency", 
-            options=interval_opts, 
-            index=default_interval_idx,
-            key="auto_sync_interval_selector"
-        )
-        if selected_interval != st.session_state["auto_refresh_interval"]:
-            st.session_state["auto_refresh_interval"] = selected_interval
-            st.rerun()
-            
-    with u_col2:
-        st.markdown("##### Maintenance & Data Erasure")
-        st.markdown("<p style='color: var(--accent-red); font-weight: 600; font-size: 0.9rem;'>Warning: Clearing the cache database deletes all scored Nifty 500 entries. A full pipeline audit scan will be required afterwards.</p>", unsafe_allow_html=True)
-        
-        confirm_wipe = st.checkbox("I verify I want to clear all cached scanner database records")
-        
-        if st.button("Wipe Scanner Cache Database Records", disabled=not confirm_wipe, type="secondary"):
-            clear_scanner_cache()
-            st.success("Scanner cache successfully cleared.")
-            st.rerun()
-            
-    st.markdown('</div>', unsafe_allow_html=True)
+

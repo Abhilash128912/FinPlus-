@@ -181,6 +181,7 @@ def fetch_single_stock_metrics(ticker: str, nifty_df_3m: float) -> dict:
             "price_vs_200sma": round(price_vs_200sma, 2),
             "rel_strength_3m": round(rel_strength_3m, 2),
             "vol_ratio_5d_20d": round(vol_ratio, 2),
+            "avg_volume_5d": round(vol_5d, 2),
             "fundamental_score": f_score,
             "momentum_score": m_score,
             "total_score": total_score,

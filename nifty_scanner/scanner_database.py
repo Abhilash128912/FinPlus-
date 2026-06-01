@@ -37,6 +37,7 @@ def init_scanner_db():
         price_vs_200sma REAL,
         rel_strength_3m REAL,
         vol_ratio_5d_20d REAL,
+        avg_volume_5d REAL,
         fundamental_score REAL,
         momentum_score REAL,
         total_score REAL,
@@ -44,6 +45,12 @@ def init_scanner_db():
     )
     """)
     
+    # Self-healing: alter existing table if avg_volume_5d column is missing
+    try:
+        cursor.execute("ALTER TABLE nifty500_cache ADD COLUMN avg_volume_5d REAL")
+    except sqlite3.OperationalError:
+        pass  # Column already exists or table doesn't exist yet
+        
     conn.commit()
     conn.close()
 
@@ -60,13 +67,13 @@ def save_stock_to_cache(stock_data: dict):
         pe_ratio, industry_pe, pb_ratio, dividend_yield, debt_to_equity,
         roe, roce, eps_growth_yoy, rsi_14, price_vs_20ema,
         price_vs_50ema, price_vs_200sma, rel_strength_3m, vol_ratio_5d_20d,
-        fundamental_score, momentum_score, total_score, last_updated
+        avg_volume_5d, fundamental_score, momentum_score, total_score, last_updated
     ) VALUES (
         :ticker, :company_name, :sector, :last_price, :market_cap_cr,
         :pe_ratio, :industry_pe, :pb_ratio, :dividend_yield, :debt_to_equity,
         :roe, :roce, :eps_growth_yoy, :rsi_14, :price_vs_20ema,
         :price_vs_50ema, :price_vs_200sma, :rel_strength_3m, :vol_ratio_5d_20d,
-        :fundamental_score, :momentum_score, :total_score, :last_updated
+        :avg_volume_5d, :fundamental_score, :momentum_score, :total_score, :last_updated
     )
     """, stock_data)
     
