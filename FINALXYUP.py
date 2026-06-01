@@ -3099,6 +3099,23 @@ with st.sidebar:
         tg_token = st.text_input("Bot Token", value=db_tg_token, type="password", key="tg_sidebar_token")
         tg_chat_id = st.text_input("Chat ID", value=db_tg_chat_id, key="tg_sidebar_chat_id")
 
+        if tg_token.strip() and tg_chat_id.strip():
+            if st.button("🧪 Test Telegram Connection", key="tg_sidebar_test_btn", use_container_width=True):
+                with st.spinner("Sending test message..."):
+                    url = f"https://api.telegram.org/bot{tg_token.strip()}/sendMessage"
+                    payload = {
+                        "chat_id": tg_chat_id.strip(),
+                        "text": "<b>Fin+ Workstation Connection Test</b>\n\n🟢 Your Telegram Bot is successfully connected and authorized to send alerts! 🚀",
+                        "parse_mode": "HTML"
+                    }
+                    try:
+                        import requests
+                        resp = requests.post(url, json=payload, timeout=8.0)
+                        resp.raise_for_status()
+                        st.toast("✅ Test message sent successfully!", icon="✅")
+                    except Exception as e:
+                        st.error(f"Failed to send test message: {e}")
+
         if tg_enabled != db_tg_enabled or tg_token.strip() != db_tg_token or tg_chat_id.strip() != db_tg_chat_id:
             save_db_setting("telegram_bot_token", tg_token.strip())
             save_db_setting("telegram_chat_id", tg_chat_id.strip())
