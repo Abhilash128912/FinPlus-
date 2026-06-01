@@ -2380,9 +2380,12 @@ def handle_message(feed_state: FeedState, message: str) -> None:
                 quote = dict(quote)
                 quote["timestamp"] = ts_from_item
 
+            # Extract bare number if it has a prefix (handles NSE:, NIDX:, NSE_, NIDX_, or bare number)
+            bare_num = token_str.split(":")[-1].split("_")[-1]
+
             # ── Route: index vs equity ──────────────────────────────────────
-            if token_str in INDEX_BARE_TOKENS or token_str in INDEX_INSTRUMENTS:
-                full_key = f"NIDX:{token_str}" if token_str in INDEX_BARE_TOKENS else token_str
+            if bare_num in INDEX_BARE_TOKENS:
+                full_key = f"NIDX:{bare_num}"
                 feed_state.index_data[full_key] = quote
             else:
                 stock_token = (
@@ -2429,19 +2432,24 @@ def websocket_worker(
                     "mode":        "quote",
                     "instruments": instruments,   # e.g. ["NSE:2885", "NSE:1594", ...]
                 }))
-                # ── Subscribe indices in LTP mode ────────────────────────────────
-                # Docs show only LTP mode example for NIDX tokens. Quote mode for
-                # indices may be silently ignored by the server. Subscribe both so
-                # whichever the server supports will deliver data.
+                # ── Subscribe indices in LTP and Quote mode with all token formats ─
+                # Different account tiers or server clusters may require different formats
+                # (e.g. "NIDX:40000001", bare "40000001", or "NSE:40000001").
+                # Subscribing to all formats in both ltp and quote modes ensures maximum compatibility.
+                all_index_formats = []
+                for t in INDEX_TOKENS: # e.g. "NIDX:40000001"
+                    num = t.split(":")[-1]
+                    all_index_formats.extend([t, num, f"NSE:{num}"])
+
                 ws.send(json.dumps({
                     "action":      "subscribe",
                     "mode":        "ltp",
-                    "instruments": INDEX_TOKENS,  # ["NIDX:40000001", "NIDX:40000003"]
+                    "instruments": all_index_formats,
                 }))
                 ws.send(json.dumps({
                     "action":      "subscribe",
                     "mode":        "quote",
-                    "instruments": INDEX_TOKENS,
+                    "instruments": all_index_formats,
                 }))
                 # Mark as connected — data flow will update status to "Live"
                 with feed_state.lock:
@@ -3415,15 +3423,19 @@ def render_index_chart(name, index_token, access_token):
     ws_candles   = st.session_state.get(ws_key, [])
     rest_candles = st.session_state.get(rest_key, [])
 
-    # Fetch REST seed once per session (or if cache is stale > 1 h when market is closed)
+    # Fetch REST seed once per session (or if cache is stale > 5 min when market is open / > 24 h when closed)
     _ms_rc = market_status()
     now_ts = time.time()
     last_rest = st.session_state.get(rest_ts, 0)
-    rest_stale = (now_ts - last_rest) > (3600 if not _ms_rc["is_open"] else 86400)
+    rest_stale = (now_ts - last_rest) > (86400 if not _ms_rc["is_open"] else 300)
     if not rest_candles and rest_stale:
         with st.spinner(f"Seeding {name} history from INDmoney..."):
             _res = fetch_index_candles(index_token, access_token, lookback_days=7)
-            seed, _ = (_res if isinstance(_res, tuple) else (_res, None))
+            seed, err = (_res if isinstance(_res, tuple) else (_res, None))
+            if err:
+                st.session_state[f"_idx_rest_err_{index_token}"] = err
+            else:
+                st.session_state.pop(f"_idx_rest_err_{index_token}", None)
         if seed:
             st.session_state[rest_key] = seed
             st.session_state[rest_ts]  = now_ts
@@ -3442,14 +3454,22 @@ def render_index_chart(name, index_token, access_token):
 
     if not candles:
         source_hint = "Waiting for live WS ticks" if _ms_rc["is_open"] else "No candles available (market closed)"
+        err_msg = st.session_state.get(f"_idx_rest_err_{index_token}")
+        border_col = "#059669" if not err_msg else "#ef4444"
+        title_col = "#059669" if not err_msg else "#ef4444"
+        title_text = f"📊 {name}" if not err_msg else f"📊 {name} — Offline"
+        err_html = f"<br><span style='color:#dc2626;font-size:0.75rem;font-weight:600;'>⚠️ Error: {err_msg}</span>" if err_msg else ""
+        
         st.markdown(
-            f'<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:3.5px solid #059669;'
+            f'<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:3.5px solid {border_col};'
             f'border-bottom:3.5px solid #cbd5e1;border-radius:8px;padding:1rem 1.2rem;margin:0.5rem 0;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-            f'<div style="color:#059669;font-size:0.75rem;font-weight:600;letter-spacing:.06em;'
-            f'text-transform:uppercase;margin-bottom:4px;">📊 {name}</div>'
+            f'<div style="color:{title_col};font-size:0.75rem;font-weight:600;letter-spacing:.06em;'
+            f'text-transform:uppercase;margin-bottom:4px;">{title_text}</div>'
             f'<div style="color:#0f172a;font-size:0.82rem;font-weight:500;">{source_hint}<br>'
             f'<span style="color:#64748b;font-size:0.75rem;">'
-            f'WS ticks will appear within 3 s of connecting.</span></div></div>',
+            f'WS ticks will appear within 3 s of connecting.</span>'
+            f'{err_html}'
+            f'</div></div>',
             unsafe_allow_html=True,
         )
         return
