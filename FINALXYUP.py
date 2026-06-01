@@ -2386,7 +2386,8 @@ def handle_message(feed_state: FeedState, message: str) -> None:
             # ── Route: index vs equity ──────────────────────────────────────
             if bare_num in INDEX_BARE_TOKENS:
                 full_key = f"NIDX:{bare_num}"
-                feed_state.index_data[full_key] = quote
+                existing = feed_state.index_data.get(full_key, {})
+                feed_state.index_data[full_key] = {**existing, **quote}
             else:
                 stock_token = (
                     token_str
@@ -2394,7 +2395,8 @@ def handle_message(feed_state: FeedState, message: str) -> None:
                     .replace("NSE:", "")
                     .replace("BSE:", "")
                 )
-                feed_state.market_data[stock_token] = quote
+                existing = feed_state.market_data.get(stock_token, {})
+                feed_state.market_data[stock_token] = {**existing, **quote}
 
             feed_state.last_update = time.time()
             data_received = True
@@ -2424,32 +2426,25 @@ def websocket_worker(
                     feed_state.last_error = None
                     instruments = list(feed_state.instruments_snapshot)
 
-                # ── Subscribe equities in quote mode ─────────────────────────────
-                # Docs: {"action":"subscribe","mode":"quote","instruments":["NSE:2885"]}
-                # Instruments are in "SEGMENT:TOKEN" format per docs (NSE:, NIDX: etc.)
-                ws.send(json.dumps({
-                    "action":      "subscribe",
-                    "mode":        "quote",
-                    "instruments": instruments,   # e.g. ["NSE:2885", "NSE:1594", ...]
-                }))
-                # ── Subscribe indices in LTP and Quote mode with all token formats ─
-                # Different account tiers or server clusters may require different formats
-                # (e.g. "NIDX:40000001", bare "40000001", or "NSE:40000001").
-                # Subscribing to all formats in both ltp and quote modes ensures maximum compatibility.
+                # Combine equities with all variations of index token formats
                 all_index_formats = []
                 for t in INDEX_TOKENS: # e.g. "NIDX:40000001"
                     num = t.split(":")[-1]
                     all_index_formats.extend([t, num, f"NSE:{num}"])
 
+                combined_instruments = instruments + all_index_formats
+
+                # Subscribe all instruments in both LTP and Quote modes
+                # This ensures both equities and index live quotes stream reliably in a single batch
                 ws.send(json.dumps({
                     "action":      "subscribe",
                     "mode":        "ltp",
-                    "instruments": all_index_formats,
+                    "instruments": combined_instruments,
                 }))
                 ws.send(json.dumps({
                     "action":      "subscribe",
                     "mode":        "quote",
-                    "instruments": all_index_formats,
+                    "instruments": combined_instruments,
                 }))
                 # Mark as connected — data flow will update status to "Live"
                 with feed_state.lock:
@@ -3249,11 +3244,27 @@ from plotly.subplots import make_subplots
 def get_index_tile_quote(index_token, index_snapshot):
     """Read LTP + day change from the latest WS tick or fall back to accumulated / REST candles."""
     q = index_snapshot.get(index_token, {})
-    ltp = q.get("ltp") or q.get("last_price") or q.get("live_price")
+    ltp = q.get("ltp") or q.get("last_price") or q.get("live_price") or q.get("close") or q.get("c")
     chg     = q.get("day_change") or q.get("change") or 0
     chg_pct = q.get("day_change_percentage") or q.get("change_percentage") or 0
     
-    if ltp is None:
+    if ltp is not None:
+        # If the live quote doesn't provide change/change_pct (which is normal for bare index WS ticks),
+        # dynamically calculate it against the day's open price.
+        if not chg or not chg_pct:
+            day_open = None
+            ws_candles = st.session_state.get(f"_idx_ws_candles_{index_token}", [])
+            if ws_candles:
+                day_open = float(ws_candles[0][1])
+            else:
+                rest_candles = st.session_state.get(f"_idx_rest_candles_{index_token}", [])
+                if rest_candles:
+                    day_open = float(rest_candles[0][1])
+            
+            if day_open:
+                chg = ltp - day_open
+                chg_pct = (chg / day_open * 100) if day_open else 0
+    else:
         # Fall back to last accumulated WS candle close
         ws_candles = st.session_state.get(f"_idx_ws_candles_{index_token}", [])
         if ws_candles:
@@ -3496,7 +3507,7 @@ def render_index_chart(name, index_token, access_token):
     now_ts = time.time()
     last_rest = st.session_state.get(rest_ts, 0)
     rest_stale = (now_ts - last_rest) > (86400 if not _ms_rc["is_open"] else 300)
-    if not rest_candles and rest_stale:
+    if not rest_candles or rest_stale:
         with st.spinner(f"Seeding {name} history from INDmoney..."):
             _res = fetch_index_candles(index_token, access_token, lookback_days=7)
             seed, err = (_res if isinstance(_res, tuple) else (_res, None))
