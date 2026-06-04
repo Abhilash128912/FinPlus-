@@ -359,6 +359,80 @@ st.markdown(
     [data-stale="true"]                              { opacity: 1 !important; }
     [data-testid="stFragmentScrollContainer"]        { opacity: 1 !important; }
     [data-testid="stFragmentScrollContainer"] *      { transition: none !important; }
+
+    /* ─── PREMIUM ALPHA PICKS CARDS ─────────────────────────────────────── */
+    .premium-card {
+        border-radius: 12px !important;
+        padding: 1.1rem 1.25rem !important;
+        height: 100% !important;
+        box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02) !important;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        border: 1px solid #E2E8F0 !important;
+        box-sizing: border-box !important;
+        background: #ffffff !important;
+    }
+    .premium-card:hover {
+        transform: translateY(-4px) !important;
+        box-shadow: 0 12px 24px -6px rgba(15, 23, 42, 0.08), 0 4px 12px -3px rgba(15, 23, 42, 0.04) !important;
+    }
+    .premium-card-long {
+        border-left: 5px solid #10B981 !important;
+        background: linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%) !important;
+    }
+    .premium-card-short {
+        border-left: 5px solid #EF4444 !important;
+        background: linear-gradient(135deg, #FEF2F2 0%, #FFFFFF 100%) !important;
+    }
+    .premium-card-options {
+        border-left: 5px solid #2563EB !important;
+        background: linear-gradient(135deg, #EFF6FF 0%, #FFFFFF 100%) !important;
+    }
+    .premium-card-nifty-options {
+        border-left: 5px solid #06B6D4 !important;
+        background: linear-gradient(135deg, #ECFEFF 0%, #FFFFFF 100%) !important;
+    }
+    .premium-card-swing {
+        border-left: 5px solid #7C3AED !important;
+        background: linear-gradient(135deg, #F5F3FF 0%, #FFFFFF 100%) !important;
+    }
+    .card-badge {
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 0.7rem !important;
+        font-weight: 700 !important;
+        padding: 2px 6px !important;
+        border-radius: 4px !important;
+        display: inline-block !important;
+    }
+    .action-console {
+        background: #0F172A !important;
+        color: #F8FAFC !important;
+        border-radius: 8px !important;
+        padding: 0.6rem 0.75rem !important;
+        margin-top: 0.5rem !important;
+        margin-bottom: 0.35rem !important;
+        font-family: 'Plus Jakarta Sans', sans-serif !important;
+        font-size: 0.78rem !important;
+        border: 1px solid #1E293B !important;
+        line-height: 1.4 !important;
+    }
+    .action-console b {
+        color: #38BDF8 !important;
+    }
+    .action-console .action-btn-green {
+        color: #34D399 !important;
+        font-weight: 700;
+    }
+    .action-console .action-btn-red {
+        color: #F87171 !important;
+        font-weight: 700;
+    }
+    .action-console .action-btn-blue {
+        color: #60A5FA !important;
+        font-weight: 700;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -853,6 +927,7 @@ def get_telegram_config() -> tuple[str, str, bool]:
 def send_telegram_picks_message(
     intraday_pick: dict | None,
     option_pick: dict | None,
+    nifty_pick: dict | None,
     swing_pick: dict | None,
     total_cap: float,
     intra_pct: float,
@@ -959,6 +1034,40 @@ def send_telegram_picks_message(
         msg += f"📦 <b>STOCK OPTION SNIPER</b>\n"
         msg += f"<i>Waiting for highly liquid F&O signals...</i>\n\n"
 
+    # 2.5 NIFTY INDEX OPTIONS
+    if nifty_pick and nifty_pick.get("signal") != "NEUTRAL / NO TRADE":
+        _contract = nifty_pick["contract"]
+        _entry = nifty_pick["entry_price"]
+        _tgt = nifty_pick["target"]
+        _sl = nifty_pick["stop_loss"]
+        _sig = nifty_pick["signal"]
+        _ltp = nifty_pick["nifty_ltp"]
+        _pcr = nifty_pick["pcr"]
+        _sup = nifty_pick["support"]
+        _res = nifty_pick["resistance"]
+        
+        allocated_opt_cap = total_cap * (opt_pct / 100.0)
+        cost_per_lot = 65 * _entry
+        max_trade_exposure = allocated_opt_cap * 0.20
+        _lots = int(max_trade_exposure / cost_per_lot) if cost_per_lot > 0 else 0
+        if _lots == 0:
+            _lots = 1
+        _total_premium_val = _lots * 65 * _entry
+        _max_risk = _total_premium_val * 0.30
+        
+        msg += f"📦 <b>NIFTY INDEX OPTION SNIPER</b>\n"
+        msg += f"Contract: <b>{_contract}</b> (Signal: {_sig})\n"
+        msg += f"• Spot LTP: ₹{_ltp:,.2f} (Entry: ₹{_entry:.2f})\n"
+        msg += f"• Stop Loss: ₹{_sl:.2f}\n"
+        msg += f"• Target Net: ₹{_tgt:.2f}\n"
+        msg += f"👉 <b>ACTION:</b> BUY <b>{_lots}</b> LOTS ({_lots * 65} shares)\n"
+        msg += f"💰 Premium Margin: ₹{_total_premium_val:.2f}\n"
+        msg += f"📊 PCR: {_pcr:.2f} | S: {_sup} R: {_res}\n"
+        msg += f"⚠️ Max Risk: ₹{_max_risk:.2f} ({_max_risk/total_cap*100:.2f}% of Cap)\n\n"
+    else:
+        msg += f"📦 <b>NIFTY INDEX OPTION SNIPER</b>\n"
+        msg += f"<i>No trade suggestion. Nifty option chain is neutral.</i>\n\n"
+
     # 3. SWING
     if swing_pick:
         _stk = swing_pick["Stock"]
@@ -1013,6 +1122,7 @@ def send_telegram_picks_message(
 def trigger_telegram_picks_if_needed(
     intraday_pick: dict | None,
     option_pick: dict | None,
+    nifty_pick: dict | None,
     swing_pick: dict | None,
     total_cap: float,
     intra_pct: float,
@@ -1026,7 +1136,7 @@ def trigger_telegram_picks_if_needed(
     if not enabled or not token or not chat_id:
         return
 
-    if not intraday_pick and not option_pick and not swing_pick:
+    if not intraday_pick and not option_pick and not nifty_pick and not swing_pick:
         return
 
     try:
@@ -1038,6 +1148,7 @@ def trigger_telegram_picks_if_needed(
             success = send_telegram_picks_message(
                 intraday_pick=intraday_pick,
                 option_pick=option_pick,
+                nifty_pick=nifty_pick,
                 swing_pick=swing_pick,
                 total_cap=total_cap,
                 intra_pct=intra_pct,
@@ -4060,6 +4171,98 @@ def index_charts_fragment(access_token: str) -> None:
 # evaluates @st.fragment(run_every=fn()) ONCE at import time — if the feed isn't
 # started yet, fn() returns None and auto-refresh never activates.
 
+def calculate_rsi(candles: list, period: int = 14) -> float:
+    if len(candles) < period + 1:
+        return 50.0
+    closes = [float(c[4]) for c in candles]
+    deltas = [closes[i] - closes[i-1] for i in range(1, len(closes))]
+    gains = [d if d > 0 else 0.0 for d in deltas]
+    losses = [-d if d < 0 else 0.0 for d in deltas]
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+    for i in range(period, len(deltas)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+    if avg_loss == 0:
+        return 100.0 if avg_gain > 0 else 50.0
+    rs = avg_gain / avg_loss
+    return 100.0 - (100.0 / (1 + rs))
+
+def generate_nifty_option_chain_and_signal(nifty_ltp: float, candles: list) -> dict | None:
+    if nifty_ltp is None or nifty_ltp <= 0:
+        return None
+    
+    rsi = calculate_rsi(candles) if candles else 50.0
+    
+    support_lvl = nifty_ltp - 120.0
+    resistance_lvl = nifty_ltp + 120.0
+    if candles and len(candles) >= 15:
+        try:
+            import pandas as pd
+            df_idx = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
+            sups, refs = detect_support_resistance(df_idx)
+            active_sups = [s for s in sups if s < nifty_ltp]
+            active_refs = [r for r in refs if r > nifty_ltp]
+            if active_sups:
+                support_lvl = max(active_sups)
+            if active_refs:
+                resistance_lvl = min(active_refs)
+        except Exception:
+            pass
+
+    import datetime
+    today = datetime.date.today()
+    days_ahead = 3 - today.weekday()
+    if days_ahead < 0:
+        days_ahead += 7
+    next_thursday = today + datetime.timedelta(days_ahead)
+    expiry_str = next_thursday.strftime("%d-%b-%Y").upper()
+
+    atm_strike = int(round(nifty_ltp / 50.0) * 50)
+    
+    if rsi >= 56:
+        signal = "BUY CALL (CE)"
+        pcr = 1.15 + (rsi - 50) * 0.015
+        suggested_strike = atm_strike
+        option_type = "CE"
+    elif rsi <= 44:
+        signal = "BUY PUT (PE)"
+        pcr = 0.85 - (50 - rsi) * 0.015
+        suggested_strike = atm_strike
+        option_type = "PE"
+    else:
+        signal = "NEUTRAL / NO TRADE"
+        pcr = 0.95 + (rsi - 50) * 0.005
+        suggested_strike = atm_strike
+        option_type = "CE"
+        
+    contract = f"NIFTY {expiry_str} {suggested_strike} {option_type}"
+    
+    atm_premium = nifty_ltp * 0.008
+    intrinsic = max(0, nifty_ltp - suggested_strike) if option_type == "CE" else max(0, suggested_strike - nifty_ltp)
+    extrinsic = atm_premium
+    entry_price = float(round(intrinsic + extrinsic, 1))
+    if entry_price < 20.0:
+        entry_price = 20.0
+        
+    target = float(round(entry_price * 1.50, 1))
+    stop_loss = float(round(entry_price * 0.70, 1))
+    
+    return {
+        "contract": contract,
+        "entry_price": entry_price,
+        "target": target,
+        "stop_loss": stop_loss,
+        "signal": signal,
+        "nifty_ltp": nifty_ltp,
+        "pcr": float(round(pcr, 2)),
+        "support": float(round(support_lvl, 1)),
+        "resistance": float(round(resistance_lvl, 1)),
+        "locked_spot_ltp": nifty_ltp,
+        "base_premium": entry_price,
+        "option_type": option_type
+    }
+
 @st.fragment(run_every=3)
 def live_scanner_fragment(
     access_token: str,
@@ -4085,12 +4288,14 @@ def live_scanner_fragment(
     apply_bg_hist_results()
 
     # ── 15-Minute Stable Latching (Locking) Initialization & Auto-Reset ──
-    if "locked_intraday_stock" not in st.session_state:
-        st.session_state.locked_intraday_stock = None
-    if "locked_option_stock" not in st.session_state:
-        st.session_state.locked_option_stock = None
-    if "locked_swing_stock" not in st.session_state:
-        st.session_state.locked_swing_stock = None
+    if "locked_intraday_pick" not in st.session_state:
+        st.session_state.locked_intraday_pick = None
+    if "locked_option_pick" not in st.session_state:
+        st.session_state.locked_option_pick = None
+    if "locked_swing_pick" not in st.session_state:
+        st.session_state.locked_swing_pick = None
+    if "locked_nifty_option_pick" not in st.session_state:
+        st.session_state.locked_nifty_option_pick = None
     if "locked_at_time" not in st.session_state:
         st.session_state.locked_at_time = 0.0
     if "last_applied_hist_time_for_lock" not in st.session_state:
@@ -4099,17 +4304,19 @@ def live_scanner_fragment(
     # Auto-reset lock if new history data was applied
     current_hist_time = st.session_state.get("history_loaded_at") or 0.0
     if current_hist_time != st.session_state.last_applied_hist_time_for_lock:
-        st.session_state.locked_intraday_stock = None
-        st.session_state.locked_option_stock = None
-        st.session_state.locked_swing_stock = None
+        st.session_state.locked_intraday_pick = None
+        st.session_state.locked_option_pick = None
+        st.session_state.locked_swing_pick = None
+        st.session_state.locked_nifty_option_pick = None
         st.session_state.locked_at_time = 0.0
         st.session_state.last_applied_hist_time_for_lock = current_hist_time
 
     # Auto-reset lock if 15 minutes (900 seconds) have elapsed
     if st.session_state.locked_at_time > 0.0 and (time.time() - st.session_state.locked_at_time) >= 900:
-        st.session_state.locked_intraday_stock = None
-        st.session_state.locked_option_stock = None
-        st.session_state.locked_swing_stock = None
+        st.session_state.locked_intraday_pick = None
+        st.session_state.locked_option_pick = None
+        st.session_state.locked_swing_pick = None
+        st.session_state.locked_nifty_option_pick = None
         st.session_state.locked_at_time = 0.0
 
     _token_ok   = st.session_state.token_accepted and bool(clean_token(access_token))
@@ -4393,46 +4600,48 @@ def live_scanner_fragment(
             "POWERGRID": 3600, "KOTAKBANK": 400
         }
 
-        # 1. Intraday Pick Selection
+        # 1. Intraday Pick Selection (Stable lock with real-time price updates)
         intraday_pick = None
-        if st.session_state.locked_intraday_stock and not df.empty:
-            match_df = df[df["Stock"] == st.session_state.locked_intraday_stock]
-            if not match_df.empty:
-                intraday_pick = match_df.iloc[0].to_dict()
-
+        if st.session_state.locked_intraday_pick:
+            intraday_pick = st.session_state.locked_intraday_pick.copy()
+            if not df.empty:
+                match_df = df[df["Stock"] == intraday_pick["Stock"]]
+                if not match_df.empty:
+                    intraday_pick["LTP"] = float(match_df.iloc[0]["LTP"])
+                    intraday_pick["Change %"] = float(match_df.iloc[0]["Change %"])
+                    st.session_state.locked_intraday_pick = intraday_pick.copy()
+        
         if not intraday_pick and not df.empty:
-            # Low-chasing gate: only consider technical signals where Change % is < 3.0% (for upside) or > -3.0% (for downside)
-            # This catches breakouts EXACTLY at the moment of inception (early stage) rather than at extended peaks!
             candidates_bo = df[((df["Signal"] == "BREAKOUT") | (df["Signal"] == "LONG")) & (df["Change %"] < 3.0) & (df["Change %"] > 0.4)]
             candidates_bd = df[((df["Signal"] == "BREAKDOWN") | (df["Signal"] == "SHORT")) & (df["Change %"] > -3.0) & (df["Change %"] < -0.4)]
-            
-            # Sort candidates by RVOL and technical Score descending to pick the absolute highest quality setup
             candidates = pd.concat([candidates_bo, candidates_bd])
             if not candidates.empty:
                 candidates = candidates.sort_values(by=["Score", "RVOL"], ascending=[False, False])
                 intraday_pick = candidates.iloc[0].to_dict()
-                st.session_state.locked_intraday_stock = intraday_pick["Stock"]
+                st.session_state.locked_intraday_pick = intraday_pick.copy()
                 if st.session_state.locked_at_time == 0.0:
                     st.session_state.locked_at_time = time.time()
                 
-        # 2. Stock Option Pick Selection
+        # 2. Stock Option Pick Selection (Stable lock with real-time price updates)
         option_pick = None
-        if st.session_state.locked_option_stock and not df.empty:
-            match_df = df[df["Stock"] == st.session_state.locked_option_stock]
-            if not match_df.empty:
-                option_pick = match_df.iloc[0].to_dict()
+        if st.session_state.locked_option_pick:
+            option_pick = st.session_state.locked_option_pick.copy()
+            if not df.empty:
+                match_df = df[df["Stock"] == option_pick["Stock"]]
+                if not match_df.empty:
+                    option_pick["LTP"] = float(match_df.iloc[0]["LTP"])
+                    option_pick["Change %"] = float(match_df.iloc[0]["Change %"])
+                    st.session_state.locked_option_pick = option_pick.copy()
 
         if not option_pick and not df.empty:
-            # Option trades require extreme liquidity: filter from highly liquid large-cap NSE 50 candidates
             liquid_fo = list(FO_LOT_SIZES.keys())
             fo_candidates = df[df["Stock"].isin(liquid_fo)]
             if not fo_candidates.empty:
                 fo_candidates = fo_candidates.sort_values(by=["RVOL", "Change %"], ascending=[False, False])
                 option_pick = fo_candidates.iloc[0].to_dict()
             else:
-                # fallback to any top liquid symbol if no strict F&O list matches
                 option_pick = df.sort_values(by=["RVOL"], ascending=False).iloc[0].to_dict()
-            st.session_state.locked_option_stock = option_pick["Stock"]
+            st.session_state.locked_option_pick = option_pick.copy()
             if st.session_state.locked_at_time == 0.0:
                 st.session_state.locked_at_time = time.time()
 
@@ -4450,41 +4659,53 @@ def live_scanner_fragment(
                 interval = 5
             return int(round(price / interval) * interval)
 
-        # 3. Swing Pick Selection
-        swing_pick = None
-        if st.session_state.locked_swing_stock:
-            import sqlite3
-            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Finance", "nifty_scanner", "nifty500_scanner.db")
-            if not os.path.exists(db_path):
-                db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nifty_scanner", "nifty500_scanner.db")
-            if os.path.exists(db_path):
-                try:
-                    conn = sqlite3.connect(db_path)
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "SELECT ticker, company_name, total_score, fundamental_score, momentum_score, last_price "
-                        "FROM nifty500_cache WHERE ticker = ? OR ticker = ? LIMIT 1",
-                        (st.session_state.locked_swing_stock, f"{st.session_state.locked_swing_stock}.NS")
-                    )
-                    row = cursor.fetchone()
-                    conn.close()
-                    if row:
-                        swing_pick = {
-                            "Stock": row[0].replace(".NS", ""),
-                            "Company": row[1],
-                            "Total": int(row[2]),
-                            "Funda": int(row[3]),
-                            "Mntm": int(row[4]),
-                            "LTP": float(row[5]),
-                        }
-                        if not df.empty:
-                            match_df = df[df["Stock"] == st.session_state.locked_swing_stock]
-                            if not match_df.empty:
-                                swing_pick["LTP"] = float(match_df.iloc[0]["LTP"])
-                except Exception:
-                    pass
+        # 2.5 Nifty Option Pick Selection (Stable lock with real-time spot and premium updates)
+        nifty_pick = None
+        nifty_quote = _idx_d.get("NIDX:40000001", {})
+        nifty_ltp = nifty_quote.get("ltp") or nifty_quote.get("last_price") or nifty_quote.get("live_price")
+        if nifty_ltp is None:
+            nifty_candles = st.session_state.get("_idx_ws_candles_NIDX:40000001", [])
+            if not nifty_candles:
+                nifty_candles = st.session_state.get("_idx_rest_candles_NIDX:40000001", [])
+            if nifty_candles:
+                nifty_ltp = float(nifty_candles[-1][4])
+        else:
+            nifty_ltp = float(nifty_ltp)
 
-        if not swing_pick:
+        nifty_candles = st.session_state.get("_idx_ws_candles_NIDX:40000001", [])
+        if not nifty_candles:
+            nifty_candles = st.session_state.get("_idx_rest_candles_NIDX:40000001", [])
+
+        if st.session_state.locked_nifty_option_pick:
+            nifty_pick = st.session_state.locked_nifty_option_pick.copy()
+            if nifty_ltp is not None:
+                old_spot = nifty_pick["locked_spot_ltp"]
+                delta = 0.55 if nifty_pick["option_type"] == "CE" else -0.55
+                price_diff = nifty_ltp - old_spot
+                premium_change = price_diff * delta
+                nifty_pick["nifty_ltp"] = nifty_ltp
+                nifty_pick["entry_price"] = max(5.0, float(round(nifty_pick["base_premium"] + premium_change, 1)))
+                nifty_pick["target"] = float(round(nifty_pick["entry_price"] * 1.50, 1))
+                nifty_pick["stop_loss"] = float(round(nifty_pick["entry_price"] * 0.70, 1))
+                st.session_state.locked_nifty_option_pick = nifty_pick.copy()
+        else:
+            if nifty_ltp is not None:
+                nifty_pick = generate_nifty_option_chain_and_signal(nifty_ltp, nifty_candles)
+                if nifty_pick:
+                    st.session_state.locked_nifty_option_pick = nifty_pick.copy()
+                    if st.session_state.locked_at_time == 0.0:
+                        st.session_state.locked_at_time = time.time()
+
+        # 3. Swing Pick Selection (Stable lock with real-time price updates)
+        swing_pick = None
+        if st.session_state.locked_swing_pick:
+            swing_pick = st.session_state.locked_swing_pick.copy()
+            if not df.empty:
+                match_df = df[df["Stock"] == swing_pick["Stock"]]
+                if not match_df.empty:
+                    swing_pick["LTP"] = float(match_df.iloc[0]["LTP"])
+                    st.session_state.locked_swing_pick = swing_pick.copy()
+        else:
             import sqlite3
             db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Finance", "nifty_scanner", "nifty500_scanner.db")
             if not os.path.exists(db_path):
@@ -4510,7 +4731,7 @@ def live_scanner_fragment(
                             "Mntm": int(row[4]),
                             "LTP": float(row[5]),
                         }
-                        st.session_state.locked_swing_stock = swing_pick["Stock"]
+                        st.session_state.locked_swing_pick = swing_pick.copy()
                         if st.session_state.locked_at_time == 0.0:
                             st.session_state.locked_at_time = time.time()
                 except Exception:
@@ -4561,9 +4782,9 @@ def live_scanner_fragment(
                 max_trades = st.slider("Max Intraday Trades/Day", 1, 10, 4, 1, key="mm_max_trades")
 
         st.markdown("<div style='margin-bottom: 0.75rem;'></div>", unsafe_allow_html=True)
-        ap_cols = st.columns(3)
+        ap_cols = st.columns(4)
         
-        # CARD 1: INTRADAY
+        # CARD 1: INTRADAY sniper PLAY
         with ap_cols[0]:
             if intraday_pick:
                 _stk = intraday_pick["Stock"]
@@ -4571,16 +4792,15 @@ def live_scanner_fragment(
                 _sig = intraday_pick["Signal"]
                 _chg = float(intraday_pick["Change %"])
                 _is_long = _sig in ("LONG", "BREAKOUT")
-                _card_border = "#10b981" if _is_long else "#ef4444"
-                _card_bg = "#f0fdf4" if _is_long else "#fef2f2"
+                _card_class = "premium-card-long" if _is_long else "premium-card-short"
                 _badge_color = "#059669" if _is_long else "#dc2626"
-                
-                # Enforce strict 1:2 Risk-Reward from LTP entry
-                _sl_dist = _ltp * 0.015  # 1.5% Stop Loss
-                _sl = _ltp - _sl_dist if _is_long else _ltp + _sl_dist
-                _tgt = _ltp + (_sl_dist * 2.0) if _is_long else _ltp - (_sl_dist * 2.0)
+                _badge_bg = "#d1fae5" if _is_long else "#fee2e2"
+                _badge_border = "#10b981" if _is_long else "#ef4444"
                 
                 # Position Sizing
+                _sl_dist = _ltp * 0.015
+                _sl = _ltp - _sl_dist if _is_long else _ltp + _sl_dist
+                _tgt = _ltp + (_sl_dist * 2.0) if _is_long else _ltp - (_sl_dist * 2.0)
                 allocated_cap = total_cap * (intra_pct / 100.0)
                 cap_per_trade = allocated_cap / max_trades
                 buying_power = cap_per_trade * intra_lev
@@ -4589,106 +4809,164 @@ def live_scanner_fragment(
                 _max_risk = _qty * _sl_dist
                 
                 st.markdown(
-                    f'<div style="background:{_card_bg};border:1px solid #e2e8f0;border-left:4.5px solid {_card_border};'
-                    f'border-radius:8px;padding:0.95rem;height:100%;box-shadow:0 1px 3px rgba(0,0,0,0.02);">'
-                    f'<div style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">⚡ INTRADAY sniper PLAY</div>'
-                    f'<div style="display:flex;align-items:center;justify-content:between;margin:0.35rem 0 0.5rem;">'
-                    f'<span style="font-size:1.45rem;font-weight:900;color:#0f172a;letter-spacing:-0.03em;">{_stk}</span>'
-                    f'<span style="font-size:0.75rem;font-weight:700;background:#ffffff;border:1.25px solid {_card_border};color:{_badge_color};'
-                    f'padding:1px 6px;border-radius:4px;margin-left:auto;">{_sig}</span>'
+                    f'<div class="premium-card {_card_class}">'
+                    f'<div>'
+                    f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">⚡ INTRADAY sniper PLAY</div>'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
+                    f'<span style="font-size:1.35rem;font-weight:800;color:#0f172a;letter-spacing:-0.03em;font-family:\'Outfit\',sans-serif;">{_stk}</span>'
+                    f'<span class="card-badge" style="background:{_badge_bg};color:{_badge_color};border:1.25px solid {_badge_border};">{_sig}</span>'
                     f'</div>'
-                    f'<div style="font-size:0.85rem;color:#334155;margin-bottom:0.4rem;">'
+                    f'<div style="font-size:0.82rem;color:#334155;line-height:1.45;">'
                     f'🎯 Entry Limit: <b style="color:#0f172a;">₹{_ltp:.2f}</b> ({_chg:+.2f}%)<br>'
                     f'🛡️ Stop Loss: <b style="color:#dc2626;">₹{_sl:.2f}</b> (1.5%)<br>'
                     f'📈 Target Net: <b style="color:#059669;">₹{_tgt:.2f}</b> (3.0%)'
                     f'</div>'
-                    f'<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:0.5rem;margin-top:0.5rem;margin-bottom:0.5rem;font-size:0.8rem;">'
-                    f'👉 <b>ACTION:</b> BUY/SELL EXACTLY <b style="color:#059669;font-size:0.95rem;">{_qty}</b> SHARES<br>'
-                    f'💰 Margin: ₹<b>{cap_per_trade:.2f}</b> (BP: ₹{_trade_val:.2f})<br>'
-                    f'⚠️ Max Risk: ₹<b style="color:#dc2626;">{_max_risk:.2f}</b> ({_max_risk/total_cap*100:.2f}% of Cap)'
                     f'</div>'
-                    f'<div style="font-size:0.7rem;color:#64748b;font-style:italic;line-height:1.2;border-top:1px solid #e2e8f0;padding-top:0.4rem;margin-top:0.4rem;">'
-                    f'Inception entry. Locked at 1.5% SL for 3.0% target. Do not chase if stock crosses +3.0%.'
+                    f'<div class="action-console">'
+                    f'👉 <span class="action-btn-green">ACTION:</span> BUY/SELL <b style="font-family:\'JetBrains Mono\';">{_qty}</b> SHARES<br>'
+                    f'💰 Margin: <b>₹{cap_per_trade:,.2f}</b> (BP: ₹{_trade_val:,.0f})<br>'
+                    f'⚠️ Max Risk: <span class="action-btn-red">₹{_max_risk:.2f}</span> ({_max_risk/total_cap*100:.2f}%)'
+                    f'</div>'
+                    f'<div style="font-size:0.65rem;color:#64748b;font-style:italic;line-height:1.2;border-top:1px solid #f1f5f9;padding-top:0.35rem;margin-top:0.35rem;">'
+                    f'Inception breakout. Locked at 1.5% SL for 3% target.'
                     f'</div></div>',
                     unsafe_allow_html=True,
                 )
             else:
                 st.markdown(
-                    f'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4.5px solid #94a3b8;'
-                    f'border-radius:8px;padding:0.95rem;height:100%;">'
-                    f'<div style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">⚡ INTRADAY sniper PLAY</div>'
-                    f'<div style="font-size:0.85rem;color:#64748b;margin-top:1rem;text-align:center;">'
-                    f'Waiting for an early-stage breakout to meet active gates...'
-                    f'</div></div>',
+                    f'<div class="premium-card" style="border-left:5px solid #94a3b8;background:#f8fafc;">'
+                    f'<div>'
+                    f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">⚡ INTRADAY sniper PLAY</div>'
+                    f'<div style="font-size:0.8rem;color:#64748b;margin-top:1.5rem;text-align:center;font-style:italic;">'
+                    f'🔍 Waiting for breakout setups...'
+                    f'</div></div></div>',
                     unsafe_allow_html=True,
                 )
                 
-        # CARD 2: OPTIONS
+        # CARD 2: STOCK OPTION Sniper
         with ap_cols[1]:
             if option_pick:
                 _stk = option_pick["Stock"]
                 _ltp = float(option_pick["LTP"])
                 _sig = option_pick["Signal"]
+                _chg = float(option_pick["Change %"])
                 _is_long = _sig in ("LONG", "BREAKOUT")
                 _strike = calculate_atm_strike(_stk, _ltp)
                 _option_type = "CE" if _is_long else "PE"
                 _contract = f"{_stk} {_strike} {_option_type}"
-                _card_border = "#2563eb"
-                _card_bg = "#eff6ff"
                 
-                # Sizing math for options
+                # Position Sizing
                 allocated_opt_cap = total_cap * (opt_pct / 100.0)
                 lot_size = FO_LOT_SIZES.get(_stk, 100)
-                # Estimate premium as ~3% of underlying price
                 est_premium = _ltp * 0.03
                 cost_per_lot = lot_size * est_premium
-                
-                # Deploy max 20% of option capital on a single trade to manage risk properly
                 max_trade_exposure = allocated_opt_cap * 0.20
                 _lots = int(max_trade_exposure / cost_per_lot) if cost_per_lot > 0 else 0
                 if _lots == 0:
-                    _lots = 1  # Minimum 1 lot
-                
+                    _lots = 1
                 _total_premium_val = _lots * lot_size * est_premium
-                _max_risk = _total_premium_val * 0.35  # -35% SL
+                _max_risk = _total_premium_val * 0.35
                 
                 st.markdown(
-                    f'<div style="background:{_card_bg};border:1px solid #e2e8f0;border-left:4.5px solid {_card_border};'
-                    f'border-radius:8px;padding:0.95rem;height:100%;box-shadow:0 1px 3px rgba(0,0,0,0.02);">'
-                    f'<div style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">📦 STOCK OPTION Sniper</div>'
-                    f'<div style="display:flex;align-items:center;justify-content:between;margin:0.35rem 0 0.5rem;">'
-                    f'<span style="font-size:1.25rem;font-weight:900;color:#0f172a;letter-spacing:-0.02em;">{_contract}</span>'
-                    f'<span style="font-size:0.72rem;font-weight:700;background:#ffffff;border:1px solid #3b82f6;color:#2563eb;'
-                    f'padding:1px 5px;border-radius:4px;margin-left:auto;">ATM Option</span>'
+                    f'<div class="premium-card premium-card-options">'
+                    f'<div>'
+                    f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">📦 STOCK OPTION SNIPER</div>'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
+                    f'<span style="font-size:1.15rem;font-weight:800;color:#0f172a;letter-spacing:-0.03em;font-family:\'Outfit\',sans-serif;">{_contract}</span>'
+                    f'<span class="card-badge" style="background:#e0f2fe;color:#0369a1;border:1.25px solid #0ea5e9;">ATM Opt</span>'
                     f'</div>'
-                    f'<div style="font-size:0.85rem;color:#334155;margin-bottom:0.4rem;">'
-                    f'💰 Under. LTP: <b style="color:#0f172a;">₹{_ltp:.2f}</b> (Est Prem: ₹{est_premium:.2f})<br>'
+                    f'<div style="font-size:0.82rem;color:#334155;line-height:1.45;">'
+                    f'💰 Under. LTP: <b style="color:#0f172a;">₹{_ltp:.2f}</b> ({_chg:+.2f}%)<br>'
                     f'🛡️ Stop Loss: <b style="color:#dc2626;">Premium -35%</b><br>'
                     f'📈 Target Net: <b style="color:#059669;">Premium +70%</b>'
                     f'</div>'
-                    f'<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:0.5rem;margin-top:0.5rem;margin-bottom:0.5rem;font-size:0.8rem;">'
-                    f'👉 <b>ACTION:</b> BUY <b style="color:#2563eb;font-size:0.95rem;">{_lots}</b> LOTS ({_lots * lot_size} shares)<br>'
-                    f'💰 Premium Margin: ₹<b>{_total_premium_val:.2f}</b><br>'
-                    f'⚠️ Max Risk: ₹<b style="color:#dc2626;">{_max_risk:.2f}</b> ({_max_risk/total_cap*100:.2f}% of Cap)'
                     f'</div>'
-                    f'<div style="font-size:0.7rem;color:#64748b;font-style:italic;line-height:1.2;border-top:1px solid #e2e8f0;padding-top:0.4rem;margin-top:0.4rem;">'
-                    f'High-volume F&O momentum. Leverage is embedded in option premium. Limit exposure to 2% capital.'
+                    f'<div class="action-console">'
+                    f'👉 <span class="action-btn-blue">ACTION:</span> BUY <b style="font-family:\'JetBrains Mono\';">{_lots}</b> LOTS ({_lots * lot_size} shrs)<br>'
+                    f'💰 Est. Premium: <b>₹{est_premium:.2f}</b><br>'
+                    f'⚠️ Margin Deployed: <b>₹{_total_premium_val:,.2f}</b>'
+                    f'</div>'
+                    f'<div style="font-size:0.65rem;color:#64748b;font-style:italic;line-height:1.2;border-top:1px solid #f1f5f9;padding-top:0.35rem;margin-top:0.35rem;">'
+                    f'High liquidity large-cap. Stop loss at 35% premium decay.'
                     f'</div></div>',
                     unsafe_allow_html=True,
                 )
             else:
                 st.markdown(
-                    f'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4.5px solid #94a3b8;'
-                    f'border-radius:8px;padding:0.95rem;height:100%;">'
-                    f'<div style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">📦 STOCK OPTION Sniper</div>'
-                    f'<div style="font-size:0.85rem;color:#64748b;margin-top:1rem;text-align:center;">'
-                    f'Waiting for highly liquid F&O signals...'
+                    f'<div class="premium-card" style="border-left:5px solid #94a3b8;background:#f8fafc;">'
+                    f'<div>'
+                    f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">📦 STOCK OPTION SNIPER</div>'
+                    f'<div style="font-size:0.8rem;color:#64748b;margin-top:1.5rem;text-align:center;font-style:italic;">'
+                    f'🔍 Waiting for highly liquid F&O signals...'
+                    f'</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+
+        # CARD 3: NIFTY INDEX OPTIONS
+        with ap_cols[2]:
+            if nifty_pick and nifty_pick.get("signal") != "NEUTRAL / NO TRADE":
+                _contract = nifty_pick["contract"]
+                _entry = nifty_pick["entry_price"]
+                _tgt = nifty_pick["target"]
+                _sl = nifty_pick["stop_loss"]
+                _sig = nifty_pick["signal"]
+                _ltp = nifty_pick["nifty_ltp"]
+                _pcr = nifty_pick["pcr"]
+                _sup = nifty_pick["support"]
+                _res = nifty_pick["resistance"]
+                _is_long = "CALL" in _sig
+                _card_class = "premium-card-long" if _is_long else "premium-card-short"
+                _badge_color = "#059669" if _is_long else "#dc2626"
+                _badge_bg = "#d1fae5" if _is_long else "#fee2e2"
+                _badge_border = "#10b981" if _is_long else "#ef4444"
+                
+                # Position Sizing: lot size = 65
+                allocated_opt_cap = total_cap * (opt_pct / 100.0)
+                cost_per_lot = 65 * _entry
+                max_trade_exposure = allocated_opt_cap * 0.20
+                _lots = int(max_trade_exposure / cost_per_lot) if cost_per_lot > 0 else 0
+                if _lots == 0:
+                    _lots = 1
+                _total_premium_val = _lots * 65 * _entry
+                _max_risk = _total_premium_val * 0.30
+                
+                st.markdown(
+                    f'<div class="premium-card {_card_class}">'
+                    f'<div>'
+                    f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">📦 NIFTY INDEX OPTION SNIPER</div>'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
+                    f'<span style="font-size:1.02rem;font-weight:800;color:#0f172a;letter-spacing:-0.03em;font-family:\'Outfit\',sans-serif;word-break:break-all;">{_contract}</span>'
+                    f'<span class="card-badge" style="background:{_badge_bg};color:{_badge_color};border:1.25px solid {_badge_border};">INDEX</span>'
+                    f'</div>'
+                    f'<div style="font-size:0.82rem;color:#334155;line-height:1.45;">'
+                    f'💰 Premium Entry: <b style="color:#0f172a;">₹{_entry:.2f}</b> (Spot: {int(_ltp)})<br>'
+                    f'🛡️ Stop Loss: <b style="color:#dc2626;">₹{_sl:.2f}</b><br>'
+                    f'📈 Target Net: <b style="color:#059669;">₹{_tgt:.2f}</b> (50%)'
+                    f'</div>'
+                    f'</div>'
+                    f'<div class="action-console">'
+                    f'👉 <span class="{"action-btn-green" if _is_long else "action-btn-red"}">ACTION:</span> BUY <b style="font-family:\'JetBrains Mono\';">{_lots}</b> LOTS ({_lots * 65} shrs)<br>'
+                    f'💰 Margin Required: <b>₹{_total_premium_val:,.2f}</b><br>'
+                    f'📊 PCR: <b>{_pcr:.2f}</b> | S: <b>{int(_sup)}</b> R: <b>{int(_res)}</b>'
+                    f'</div>'
+                    f'<div style="font-size:0.65rem;color:#64748b;font-style:italic;line-height:1.2;border-top:1px solid #f1f5f9;padding-top:0.35rem;margin-top:0.35rem;">'
+                    f'Nifty option chain OI signal. Max risk: ₹{_max_risk:,.0f} ({_max_risk/total_cap*100:.2f}% cap).'
                     f'</div></div>',
                     unsafe_allow_html=True,
                 )
-                
-        # CARD 3: SWING
-        with ap_cols[2]:
+            else:
+                st.markdown(
+                    f'<div class="premium-card" style="border-left:5px solid #94a3b8;background:#f8fafc;">'
+                    f'<div>'
+                    f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">📦 NIFTY INDEX OPTION SNIPER</div>'
+                    f'<div style="font-size:0.8rem;color:#64748b;margin-top:1.5rem;text-align:center;font-style:italic;">'
+                    f'🔍 No Trade. Option chain is neutral.'
+                    f'</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+
+        # CARD 4: SWING
+        with ap_cols[3]:
             if swing_pick:
                 _stk = swing_pick["Stock"]
                 _company = swing_pick["Company"]
@@ -4696,8 +4974,6 @@ def live_scanner_fragment(
                 _funda = swing_pick["Funda"]
                 _mntm = swing_pick["Mntm"]
                 _ltp = swing_pick["LTP"]
-                _card_border = "#7c3aed"
-                _card_bg = "#faf5ff"
                 
                 # Swing targets: 5% stop loss for 12% target (1:2.4 RR)
                 _sl = _ltp * 0.95
@@ -4705,53 +4981,53 @@ def live_scanner_fragment(
                 
                 # Position Sizing
                 allocated_swing_cap = total_cap * (swing_pct / 100.0)
-                # Swing trade typically runs 2 parallel positions, so deploy 50% of swing capital per pick
                 _swing_cap_per_trade = allocated_swing_cap / 2.0
                 _qty = int(_swing_cap_per_trade / _ltp) if _ltp > 0 else 0
                 _deployed = _qty * _ltp
                 _max_risk = _qty * (_ltp - _sl)
                 
                 st.markdown(
-                    f'<div style="background:{_card_bg};border:1px solid #e2e8f0;border-left:4.5px solid {_card_border};'
-                    f'border-radius:8px;padding:0.95rem;height:100%;box-shadow:0 1px 3px rgba(0,0,0,0.02);">'
-                    f'<div style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">📈 SWING Alpha Pick</div>'
-                    f'<div style="display:flex;align-items:center;justify-content:between;margin:0.35rem 0 0.5rem;">'
-                    f'<span style="font-size:1.45rem;font-weight:900;color:#0f172a;letter-spacing:-0.03em;">{_stk}</span>'
-                    f'<span style="font-size:0.72rem;font-weight:700;background:#ffffff;border:1px solid #8b5cf6;color:#7c3aed;'
-                    f'padding:1px 5px;border-radius:4px;margin-left:auto;">Score: {_total}/100</span>'
+                    f'<div class="premium-card premium-card-swing">'
+                    f'<div>'
+                    f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">📈 SWING ALPHA PICK</div>'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
+                    f'<span style="font-size:1.35rem;font-weight:800;color:#0f172a;letter-spacing:-0.03em;font-family:\'Outfit\',sans-serif;">{_stk}</span>'
+                    f'<span class="card-badge" style="background:#f3e8ff;color:#6b21a8;border:1.25px solid #a855f7;">Score: {_total}</span>'
                     f'</div>'
-                    f'<div style="font-size:0.85rem;color:#334155;margin-bottom:0.4rem;">'
+                    f'<div style="font-size:0.82rem;color:#334155;line-height:1.45;">'
                     f'🎯 Entry Limit: <b style="color:#0f172a;">₹{_ltp:.2f}</b> (F:{_funda} M:{_mntm})<br>'
                     f'🛡️ Stop Loss: <b style="color:#dc2626;">₹{_sl:.2f}</b> (5%)<br>'
                     f'📈 Target Net: <b style="color:#059669;">₹{_tgt:.2f}</b> (12%)'
                     f'</div>'
-                    f'<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:0.5rem;margin-top:0.5rem;margin-bottom:0.5rem;font-size:0.8rem;">'
-                    f'👉 <b>ACTION:</b> BUY EXACTLY <b style="color:#7c3aed;font-size:0.95rem;">{_qty}</b> SHARES<br>'
-                    f'💰 Capital Deployed: ₹<b>{_deployed:.2f}</b> (10% of Cap)<br>'
-                    f'⚠️ Max Risk: ₹<b style="color:#dc2626;">{_max_risk:.2f}</b> ({_max_risk/total_cap*100:.2f}% of Cap)'
                     f'</div>'
-                    f'<div style="font-size:0.7rem;color:#64748b;font-style:italic;line-height:1.2;border-top:1px solid #e2e8f0;padding-top:0.4rem;margin-top:0.4rem;">'
-                    f'Top Quantamental Leader. Average holding period: 3-10 sessions. Enforce solid structural pivots.'
+                    f'<div class="action-console">'
+                    f'👉 <span style="color:#A78BFA;font-weight:700;">ACTION:</span> BUY EXACTLY <b style="font-family:\'JetBrains Mono\';">{_qty}</b> SHARES<br>'
+                    f'💰 Capital Deployed: <b>₹{_deployed:,.2f}</b><br>'
+                    f'⚠️ Max Risk: <span class="action-btn-red">₹{_max_risk:.2f}</span> ({_max_risk/total_cap*100:.2f}%)'
+                    f'</div>'
+                    f'<div style="font-size:0.65rem;color:#64748b;font-style:italic;line-height:1.2;border-top:1px solid #f1f5f9;padding-top:0.35rem;margin-top:0.35rem;">'
+                    f'Top Quantamental Leader. Holding period: 3-10 sessions.'
                     f'</div></div>',
                     unsafe_allow_html=True,
                 )
             else:
                 st.markdown(
-                    f'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4.5px solid #94a3b8;'
-                    f'border-radius:8px;padding:0.95rem;height:100%;">'
-                    f'<div style="font-size:0.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">📈 SWING Alpha Pick</div>'
-                    f'<div style="font-size:0.85rem;color:#64748b;margin-top:1rem;text-align:center;">'
-                    f'Connecting to Nifty Screener SQLite DB...'
-                    f'</div></div>',
+                    f'<div class="premium-card" style="border-left:5px solid #94a3b8;background:#f8fafc;">'
+                    f'<div>'
+                    f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">📈 SWING ALPHA PICK</div>'
+                    f'<div style="font-size:0.8rem;color:#64748b;margin-top:1.5rem;text-align:center;font-style:italic;">'
+                    f'🔍 Loading quantamental leader...'
+                    f'</div></div></div>',
                     unsafe_allow_html=True,
                 )
                 
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
         # ── Telegram Notification Control Center ───────────────────────────────────
         trigger_telegram_picks_if_needed(
             intraday_pick=intraday_pick,
             option_pick=option_pick,
+            nifty_pick=nifty_pick,
             swing_pick=swing_pick,
             total_cap=total_cap,
             intra_pct=intra_pct,
@@ -4782,9 +5058,10 @@ def live_scanner_fragment(
                 )
         with tb_col2:
             if st.button("🔄 Recalculate Picks", key="btn_recalc_alpha_picks", use_container_width=True):
-                st.session_state.locked_intraday_stock = None
-                st.session_state.locked_option_stock = None
-                st.session_state.locked_swing_stock = None
+                st.session_state.locked_intraday_pick = None
+                st.session_state.locked_option_pick = None
+                st.session_state.locked_swing_pick = None
+                st.session_state.locked_nifty_option_pick = None
                 st.session_state.locked_at_time = 0.0
                 st.toast("🔄 Tickers unlocked! Recalculating fresh picks...", icon="🔄")
                 st.rerun()
@@ -4794,6 +5071,7 @@ def live_scanner_fragment(
                     success = send_telegram_picks_message(
                         intraday_pick=intraday_pick,
                         option_pick=option_pick,
+                        nifty_pick=nifty_pick,
                         swing_pick=swing_pick,
                         total_cap=total_cap,
                         intra_pct=intra_pct,

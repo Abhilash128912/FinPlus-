@@ -48,6 +48,17 @@ def init_db():
         value TEXT NOT NULL
     )
     """)
+
+    # Create capital movements table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS capital_movements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        movement_date TEXT NOT NULL,
+        type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        notes TEXT
+    )
+    """)
     
     conn.commit()
     conn.close()
@@ -154,6 +165,42 @@ def clear_all_trades():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM trades")
+    conn.commit()
+    conn.close()
+
+def add_capital_movement(movement_date: str, type_str: str, amount: float, notes: str) -> int:
+    """Inserts a capital movement record and returns its row ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO capital_movements (movement_date, type, amount, notes)
+    VALUES (?, ?, ?, ?)
+    """, (movement_date, type_str, float(amount), notes))
+    row_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return row_id
+
+def fetch_capital_movements_df() -> pd.DataFrame:
+    """Fetches all capital movements as a pandas DataFrame."""
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT * FROM capital_movements ORDER BY movement_date DESC, id DESC", conn)
+    conn.close()
+    return df
+
+def delete_capital_movement(movement_id: int):
+    """Deletes a capital movement record by ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM capital_movements WHERE id = ?", (int(movement_id),))
+    conn.commit()
+    conn.close()
+
+def clear_all_capital_movements():
+    """Deletes all capital movement records."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM capital_movements")
     conn.commit()
     conn.close()
 

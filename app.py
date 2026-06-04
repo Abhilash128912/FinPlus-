@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from datetime import datetime, date
 import calendar
 import os
+import base64
 
 # Import our modular components
 from config import DEFAULT_STRATEGIES, DEFAULT_MISTAKES
@@ -18,7 +19,10 @@ from database import (
     fetch_trades_df,
     clear_all_trades,
     get_db_settings,
-    save_db_setting
+    save_db_setting,
+    add_capital_movement,
+    fetch_capital_movements_df,
+    delete_capital_movement
 )
 from calculator import calculate_trade_metrics
 
@@ -51,14 +55,18 @@ def get_quote_mismatch_warning(symbol: str, segment: str) -> str:
             
     # 2. Option Contract mismatch
     if is_option_contract:
-        if segment not in ["F&O - Index Options", "F&O - Stock Options"]:
-            return f"⚠️ Warning: The symbol **{symbol}** appears to be an Option contract (ends with C/P/CE/PE), but the selected segment is **{segment}**. Options should typically be classified under **F&O - Index Options** or **F&O - Stock Options**."
-        
-        # Check stock option vs index option classification
-        if is_index and segment == "F&O - Stock Options":
-            return f"⚠️ Warning: The symbol **{symbol}** contains an Index name, but the segment is **F&O - Stock Options**. Please select **F&O - Index Options** to apply the correct index tax rates."
-        if not is_index and segment == "F&O - Index Options":
-            return f"⚠️ Warning: The symbol **{symbol}** appears to be a Stock Option, but the segment is **F&O - Index Options**. Please select **F&O - Stock Options** to apply the correct stock tax rates."
+        if is_commodity:
+            if segment != "Commodities":
+                return f"⚠️ Warning: The symbol **{symbol}** appears to be a Commodity Option contract, but the selected segment is **{segment}**. Please select **Commodities** to ensure MCX transaction charges are computed correctly."
+        else:
+            if segment not in ["F&O - Index Options", "F&O - Stock Options"]:
+                return f"⚠️ Warning: The symbol **{symbol}** appears to be an Option contract (ends with C/P/CE/PE), but the selected segment is **{segment}**. Options should typically be classified under **F&O - Index Options** or **F&O - Stock Options**."
+            
+            # Check stock option vs index option classification
+            if is_index and segment == "F&O - Stock Options":
+                return f"⚠️ Warning: The symbol **{symbol}** contains an Index name, but the segment is **F&O - Stock Options**. Please select **F&O - Index Options** to apply the correct index tax rates."
+            if not is_index and segment == "F&O - Index Options":
+                return f"⚠️ Warning: The symbol **{symbol}** appears to be a Stock Option, but the segment is **F&O - Index Options**. Please select **F&O - Stock Options** to apply the correct stock tax rates."
 
     # 3. Commodity mismatch
     if is_commodity:
@@ -71,6 +79,22 @@ def get_quote_mismatch_warning(symbol: str, segment: str) -> str:
         if segment in ["F&O - Index Options", "F&O - Stock Options"]:
             return f"⚠️ Warning: You selected an Option segment (**{segment}**), but the symbol **{symbol}** does not look like an option contract (typically ends with C, P, CE, or PE with strike price). Please double-check."
     return ""
+
+def get_monthly_segment_pnl() -> dict:
+    """
+    Computes the net P&L for each segment in the current calendar month dynamically.
+    """
+    df = fetch_trades_df()
+    if df.empty:
+        return {}
+    now = datetime.now()
+    df['parsed_date'] = pd.to_datetime(df['trade_date'])
+    df_current_month = df[
+        (df['parsed_date'].dt.year == now.year) & 
+        (df['parsed_date'].dt.month == now.month)
+    ]
+    segment_pnl = df_current_month.groupby('segment')['net_pnl'].sum().to_dict()
+    return segment_pnl
 
 def fetch_screener_scores(symbol: str) -> dict:
     """
@@ -329,6 +353,7 @@ def check_and_perform_rollover() -> bool:
     # If this is the very first run and last_rollover_date is empty, initialize it
     if not last_rollover_date:
         save_db_setting("capital_last_rollover_date", current_date_str)
+        add_capital_movement(current_date_str, "Opening", stored_opening, "Initial startup capital state")
         return False
         
     # Check if a new day has arrived and local time is past 6:00 AM
@@ -353,13 +378,21 @@ def check_and_perform_rollover() -> bool:
         # Update last rollover date to current date
         save_db_setting("capital_last_rollover_date", current_date_str)
         
+        # Log rollover history
+        add_capital_movement(
+            last_rollover_date, 
+            "Rollover", 
+            closing_capital, 
+            f"Daily Rollover. Prev Opening: {stored_opening}, Added: {stored_added}, Withdrawn: {stored_withdrawn}, P&L: {last_day_pnl}, Adj: {stored_adjustment}"
+        )
+        
         return True
         
     return False
 
 # 1. Page Configuration and Theme Skinning
 st.set_page_config(
-    page_title="Fin+ // Professional Trading Journal",
+    page_title="FinPlus // Professional Trading Workstation",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -400,9 +433,41 @@ if os.path.exists(css_path):
 else:
     st.markdown(f"<style>{variables_css}</style>", unsafe_allow_html=True)
 
-# App Header
-st.markdown('<h1 class="glowing-header">Fin+ // ANALYTICS</h1>', unsafe_allow_html=True)
-st.markdown('<p style="color: var(--text-secondary); margin-top:-15px; margin-bottom: 25px;">Institutional Grade Performance Tracking & Psychology Audit</p>', unsafe_allow_html=True)
+# App Header with Brand Logo
+brand_img_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "finplus_brand_image.png")
+brand_img_base64 = ""
+if os.path.exists(brand_img_path):
+    try:
+        with open(brand_img_path, "rb") as f:
+            brand_img_base64 = base64.b64encode(f.read()).decode()
+    except Exception:
+        pass
+
+if brand_img_base64:
+    brand_logo_html = f"""
+    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 20px; margin-bottom: 25px; gap: 20px;">
+      <div style="display: flex; align-items: center; gap: 24px;">
+        <div class="brand-container" style="margin-bottom: 0;">
+          <img src="data:image/png;base64,{brand_img_base64}" class="brand-image" alt="FinPlus Illustration" />
+          <div class="brand-text-group">
+            <div class="brand-logo">
+              <span class="brand-logo-text">FinPlus</span><span class="brand-logo-plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"><line x1="12" y1="3" x2="12" y2="21"></line><line x1="3" y1="12" x2="21" y2="12"></line></svg></span>
+            </div>
+            <p class="header-subtitle">Institutional Grade Performance Tracking & Psychology Audit</p>
+          </div>
+        </div>
+        <div class="header-divider"></div>
+        <div>
+          <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.08em; display: block;">Active View</span>
+          <h1 class="glowing-header" style="font-size: 24px; margin: 0; line-height: 1.2;">ANALYTICS</h1>
+        </div>
+      </div>
+    </div>
+    """
+    st.markdown(brand_logo_html, unsafe_allow_html=True)
+else:
+    st.markdown('<h1 class="glowing-header">FinPlus // ANALYTICS</h1>', unsafe_allow_html=True)
+    st.markdown('<p style="color: var(--text-secondary); margin-top:-15px; margin-bottom: 25px;">Institutional Grade Performance Tracking & Psychology Audit</p>', unsafe_allow_html=True)
 
 # Initialize session state for add trade form reset
 if "add_form_id" not in st.session_state:
@@ -445,7 +510,7 @@ with tab_dash:
         st.markdown(
             """
             <div class="glass-card" style="text-align: center; padding: 50px 20px;">
-                <h3 style="color: #3B82F6; margin-bottom: 10px;">Welcome to Fin+</h3>
+                <h3 style="color: #3B82F6; margin-bottom: 10px;">Welcome to FinPlus</h3>
                 <p style="color: var(--text-secondary); margin-bottom: 20px;">Your trading journal is currently empty. Head over to the 'Log a Trade' tab or import a sample CSV in 'System Settings' to get started!</p>
             </div>
             """, 
@@ -506,6 +571,74 @@ with tab_dash:
                 value=str(total_trades)
             )
             
+        # Monthly Capital Preservation Circuit Breaker Status
+        st.markdown("<hr style='border-color: var(--border-color); margin: 15px 0;'>", unsafe_allow_html=True)
+        st.markdown("<h3 style='margin-top:0;'>🛡️ Capital Preservation & Risk Circuit Breakers</h3>", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <p style="color: var(--text-secondary); margin-top:-10px; margin-bottom: 20px;">
+                Monthly risk tolerance limits are set at <strong>{currency_sym} {float(get_db_settings("monthly_risk_limit", 3000.0)):,.2f}</strong> per segment. 
+                If a segment's net loss for the current calendar month exceeds this threshold, the segment is locked automatically (Circuit Breaker Tripped) to prevent further losses. Limits reinstate automatically at the start of next month.
+            </p>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # Calculate monthly PNL for key segments
+        monthly_pnls = get_monthly_segment_pnl()
+        risk_limit = float(get_db_settings("monthly_risk_limit", 3000.0))
+        
+        target_segments = [
+            "Commodities",
+            "F&O - Index Options",
+            "Equity - Intraday",
+            "F&O - Stock Options"
+        ]
+        
+        card_cols = st.columns(4)
+        for idx, seg in enumerate(target_segments):
+            with card_cols[idx]:
+                seg_pnl = monthly_pnls.get(seg, 0.0)
+                
+                # Check status
+                if seg_pnl <= -risk_limit:
+                    status_text = "🔴 LOCKED (Breaker Tripped)"
+                    card_border = "border: 1.5px solid #EF4444;"
+                    card_bg = "background-color: #FEF2F2;"
+                    text_color = "#991B1B"
+                    progress_val = 1.0
+                elif seg_pnl < 0:
+                    status_text = "🟡 ACTIVE (Risk Warning)"
+                    card_border = "border: 1.5px solid #FCD34D;"
+                    card_bg = "background-color: #FFFBEB;"
+                    text_color = "#92400E"
+                    progress_val = abs(seg_pnl) / risk_limit
+                else:
+                    status_text = "🟢 SAFE (In Profit / Inactive)"
+                    card_border = "border: 1.5px solid #A7F3D0;"
+                    card_bg = "background-color: #ECFDF5;"
+                    text_color = "#065F46"
+                    progress_val = 0.0
+                
+                # Render beautiful custom card
+                pnl_formatted = f"+{currency_sym}{seg_pnl:,.2f}" if seg_pnl >= 0 else f"-{currency_sym}{abs(seg_pnl):,.2f}"
+                st.markdown(
+                    f"""
+                    <div style="{card_bg} {card_border} border-radius: 8px; padding: 15px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05); height: 100%;">
+                        <div style="font-weight: 700; font-size: 0.95rem; color: #0F172A; margin-bottom: 5px;">{seg}</div>
+                        <div style="font-weight: 800; font-size: 1.4rem; color: {text_color}; margin-bottom: 5px;">{pnl_formatted}</div>
+                        <div style="font-weight: 700; font-size: 0.75rem; color: {text_color}; text-transform: uppercase; letter-spacing: 0.03em;">{status_text}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                
+                # We can also add a progress bar for losses
+                if seg_pnl < 0:
+                    st.progress(min(progress_val, 1.0))
+                else:
+                    st.progress(0.0)
+                    
         st.markdown("<br>", unsafe_allow_html=True)
         
         # Row 2: Charts and Calendars
@@ -803,13 +936,44 @@ with tab_add:
         
     t_notes = st.text_area("Trade Notes / Psychological Context", placeholder="Describe entry trigger, plan validity, and exit management...", height=80, key=f"add_notes_{st.session_state['add_form_id']}")
     
+    # Circuit Breaker Validation
+    monthly_pnls = get_monthly_segment_pnl()
+    risk_limit = float(get_db_settings("monthly_risk_limit", 3000.0))
+    is_blocked = False
+    
+    if t_segment in ["Commodities", "F&O - Index Options", "Equity - Intraday", "F&O - Stock Options"]:
+        seg_pnl = monthly_pnls.get(t_segment, 0.0)
+        if seg_pnl <= -risk_limit:
+            # Enforce lock only starting from tomorrow, June 4th, 2026
+            is_locking_active = date.today() >= date(2026, 6, 4)
+            if is_locking_active:
+                is_blocked = True
+                st.error(
+                    f"🛑 **Circuit Breaker Active for {t_segment}!** "
+                    f"Your net P&L for this segment in the current calendar month is **{currency_sym} {seg_pnl:,.2f}**, "
+                    f"which exceeds the monthly risk tolerance limit of **{currency_sym} {risk_limit:,.2f}**. "
+                    f"New trades are locked for this segment to preserve capital."
+                )
+            else:
+                st.warning(
+                    f"⚠️ **Circuit Breaker Warning for {t_segment}!** "
+                    f"Your net P&L for this segment in the current calendar month is **{currency_sym} {seg_pnl:,.2f}**, "
+                    f"which exceeds the monthly risk tolerance limit of **{currency_sym} {risk_limit:,.2f}**. "
+                    f"Locking will be enforced starting tomorrow. You may record your outstanding trades today."
+                )
+
     # Dynamic quote mismatch warning
     warning_msg = get_quote_mismatch_warning(t_symbol, t_segment)
     if warning_msg:
         st.warning(warning_msg)
         
     # Submit button
-    submit_trade = st.button("Lock & Save Trade", type="primary", key=f"add_submit_{st.session_state['add_form_id']}")
+    submit_trade = st.button(
+        "Lock & Save Trade", 
+        type="primary", 
+        key=f"add_submit_{st.session_state['add_form_id']}",
+        disabled=is_blocked
+    )
     
     if submit_trade:
         if not t_symbol.strip():
@@ -1058,6 +1222,18 @@ with tab_logs:
                 
             e_notes = st.text_area("Trade Notes / Psychological Context", value=trade_row['notes'] if trade_row['notes'] else "", height=80, key=f"edit_notes_{selected_trade_id}")
             
+            # Circuit Breaker Warning for Editing
+            e_monthly_pnls = get_monthly_segment_pnl()
+            e_risk_limit = float(get_db_settings("monthly_risk_limit", 3000.0))
+            if e_segment in ["Commodities", "F&O - Index Options", "Equity - Intraday", "F&O - Stock Options"]:
+                e_seg_pnl = e_monthly_pnls.get(e_segment, 0.0)
+                if e_seg_pnl <= -e_risk_limit:
+                    st.error(
+                        f"⚠️ **Circuit Breaker Active for {e_segment}!** "
+                        f"This segment's monthly net P&L is **{currency_sym} {e_seg_pnl:,.2f}** (exceeding **{currency_sym} {e_risk_limit:,.2f}** limit). "
+                        f"You can still save edits to existing trades, but logging *new* trades in this segment is blocked."
+                    )
+
             # Dynamic quote mismatch warning
             warning_msg = get_quote_mismatch_warning(e_symbol, e_segment)
             if warning_msg:
@@ -1691,6 +1867,108 @@ with tab_capital:
             
         st.markdown('</div>', unsafe_allow_html=True)
 
+        st.markdown("<hr style='border-color: var(--border-color); margin: 30px 0;'>", unsafe_allow_html=True)
+        st.markdown("<h3 style='margin-top:0;'>📊 Capital Movement Register</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='color: var(--text-secondary); margin-top:-10px; margin-bottom: 25px;'>Log cash transactions (Deposits, Withdrawals, manual corrections) and view the historical audit log of daily rollovers.</p>", unsafe_allow_html=True)
+
+        reg_col1, reg_col2 = st.columns([2, 3])
+
+        with reg_col1:
+            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+            st.markdown("<h5>Log Capital Transaction</h5>", unsafe_allow_html=True)
+            
+            with st.form("log_capital_form", clear_on_submit=True):
+                t_date = st.date_input("Transaction Date", value=date.today())
+                t_type = st.selectbox("Transaction Type", options=["Deposit", "Withdrawal", "Adjustment"])
+                t_amount = st.number_input(f"Amount ({currency_sym})", min_value=0.01, step=100.0)
+                t_notes = st.text_input("Notes / Description", placeholder="e.g. Bank transfer to equity ledger")
+                
+                submit_t = st.form_submit_button("Record Transaction")
+                
+                if submit_t:
+                    t_date_str = t_date.strftime("%Y-%m-%d")
+                    # Add to DB table
+                    add_capital_movement(t_date_str, t_type, t_amount, t_notes)
+                    
+                    # Synchronize with today's daily manager settings if transaction is for today
+                    if t_date_str == today_str:
+                        if t_type == "Deposit":
+                            save_db_setting("capital_added", str(stored_added + t_amount))
+                        elif t_type == "Withdrawal":
+                            save_db_setting("capital_withdrawn", str(stored_withdrawn + t_amount))
+                        elif t_type == "Adjustment":
+                            save_db_setting("capital_adjustment", str(stored_adjustment + t_amount))
+                            
+                    st.success("Capital transaction recorded successfully!")
+                    st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with reg_col2:
+            st.markdown('<div class="glass-card" style="height: 100%;">', unsafe_allow_html=True)
+            st.markdown("<h5>Capital Movement History Log</h5>", unsafe_allow_html=True)
+            
+            df_movements = fetch_capital_movements_df()
+            if df_movements.empty:
+                st.info("No capital movements logged yet.")
+            else:
+                for _, row in df_movements.iterrows():
+                    m_id = row['id']
+                    m_date = row['movement_date']
+                    m_type = row['type']
+                    m_amount = float(row['amount'])
+                    m_notes = row['notes'] or ""
+                    
+                    # Color code based on type
+                    if m_type in ["Deposit", "Opening"]:
+                        badge_style = "background-color: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem;"
+                        amount_prefix = "+"
+                        amount_color = "color: var(--accent-green);"
+                    elif m_type == "Withdrawal":
+                        badge_style = "background-color: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem;"
+                        amount_prefix = "-"
+                        amount_color = "color: var(--accent-red);"
+                    elif m_type == "Rollover":
+                        badge_style = "background-color: #EFF6FF; color: #1E3A8A; border: 1px solid #BFDBFE; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem;"
+                        amount_prefix = ""
+                        amount_color = "color: var(--accent-blue);"
+                    else: # Adjustment
+                        badge_style = "background-color: #FFFBEB; color: #92400E; border: 1px solid #FCD34D; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem;"
+                        amount_prefix = "+" if m_amount >= 0 else ""
+                        amount_color = f"color: {'var(--accent-green)' if m_amount >= 0 else 'var(--accent-red)'};"
+                    
+                    # Render row with columns
+                    m_col_date, m_col_type, m_col_amt, m_col_action = st.columns([1.2, 1.2, 2.5, 0.8])
+                    
+                    with m_col_date:
+                        st.markdown(f"<span style='font-size:0.85rem; font-weight: 600; color: var(--text-secondary);'>{m_date}</span>", unsafe_allow_html=True)
+                    with m_col_type:
+                        st.markdown(f"<span style='{badge_style}'>{m_type}</span>", unsafe_allow_html=True)
+                    with m_col_amt:
+                        st.markdown(
+                            f"<span style='font-size:0.9rem; font-weight: 700; {amount_color}'>{amount_prefix}{currency_sym}{m_amount:,.2f}</span><br>"
+                            f"<span style='font-size:0.75rem; color: var(--text-secondary); font-style: italic;'>{m_notes}</span>",
+                            unsafe_allow_html=True
+                        )
+                    with m_col_action:
+                        # Allow deleting non-rollover transactions
+                        if m_type != "Rollover":
+                            if st.button("🗑️", key=f"del_m_{m_id}", help="Delete transaction record"):
+                                # Delete from DB
+                                delete_capital_movement(m_id)
+                                # Synchronize today's settings if deletion is for today
+                                if m_date == today_str:
+                                    if m_type == "Deposit":
+                                        save_db_setting("capital_added", str(max(0.0, stored_added - m_amount)))
+                                    elif m_type == "Withdrawal":
+                                        save_db_setting("capital_withdrawn", str(max(0.0, stored_withdrawn - m_amount)))
+                                    elif m_type == "Adjustment":
+                                        save_db_setting("capital_adjustment", str(stored_adjustment - m_amount))
+                                st.success("Transaction deleted!")
+                                st.rerun()
+                    
+                    st.markdown("<hr style='border-top: 1px solid rgba(0,0,0,0.03); margin: 6px 0;'>", unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
 # TAB 7: SYSTEM SETTINGS
 # ==========================================
 with tab_settings:
@@ -1744,6 +2022,23 @@ with tab_settings:
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # Monthly Risk Tolerance Settings
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.markdown('<h3 style="margin-top:0;">Monthly Segment Risk Limits</h3>', unsafe_allow_html=True)
+    st.markdown('<p style="color: var(--text-secondary); margin-top:-10px;">Configure the maximum acceptable net loss per segment for a calendar month. If a segment\'s monthly net loss exceeds this limit, trading on that segment will be blocked for capital preservation.</p>', unsafe_allow_html=True)
+    
+    current_limit = float(get_db_settings("monthly_risk_limit", 3000.0))
+    
+    lim_col1, lim_col2 = st.columns(2)
+    with lim_col1:
+        new_limit = st.number_input(f"Monthly Risk Limit per Segment ({currency_sym})", min_value=1.0, step=100.0, value=current_limit, help="Default is ₹ 3,000.00.")
+        
+    if st.button("Save Risk Limit Configuration"):
+        save_db_setting("monthly_risk_limit", new_limit)
+        st.success("Risk limit configuration updated successfully!")
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
     # Data Operations / Backup
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.markdown('<h3 style="margin-top:0;">Data Utility & Maintenance</h3>', unsafe_allow_html=True)
@@ -1773,6 +2068,7 @@ with tab_settings:
         
         if st.button("Wipe All Trading Database Records", disabled=not confirm_clear):
             clear_all_trades()
+            clear_all_capital_movements()
             st.success("Database fully wiped. All logs cleared.")
             st.rerun()
         

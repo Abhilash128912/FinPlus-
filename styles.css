@@ -296,3 +296,79 @@ div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="textare
 .calendar-day-pnl.red {
     color: var(--accent-red);
 }
+
+/* --- Brand Header Styles --- */
+.brand-container {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 25px;
+}
+
+.brand-image {
+    height: 56px;
+    width: 56px;
+    object-fit: cover;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+    border: 1.5px solid var(--border-color);
+    background: #ffffff;
+}
+
+.brand-text-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1.2;
+}
+
+.brand-logo-text {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    font-family: 'Outfit', sans-serif !important;
+    color: var(--text-primary);
+    background: linear-gradient(135deg, #0F172A 30%, #334155 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.brand-logo-plus {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: #10b981; /* Premium success green */
+    color: #ffffff; /* White + sign */
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.25);
+    transform: translateY(-2px);
+    padding: 0;
+    overflow: hidden;
+}
+
+.brand-logo-plus svg {
+    width: 24px;
+    height: 24px;
+    display: block;
+}
+
+.header-subtitle {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-top: 2px;
+    letter-spacing: -0.01em;
+}
+
+.header-divider {
+    width: 1px;
+    height: 48px;
+    background-color: var(--border-color);
+}
