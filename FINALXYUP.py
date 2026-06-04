@@ -4955,12 +4955,15 @@ def live_scanner_fragment(
                     unsafe_allow_html=True,
                 )
             else:
+                diag_rsi = rsi if 'rsi' in locals() else 50.0
+                diag_candles = len(nifty_candles) if 'nifty_candles' in locals() else 0
                 st.markdown(
                     f'<div class="premium-card" style="border-left:5px solid #94a3b8;background:#f8fafc;">'
                     f'<div>'
                     f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">📦 NIFTY INDEX OPTION SNIPER</div>'
-                    f'<div style="font-size:0.8rem;color:#64748b;margin-top:1.5rem;text-align:center;font-style:italic;">'
-                    f'🔍 No Trade. Option chain is neutral.'
+                    f'<div style="font-size:0.8rem;color:#64748b;margin-top:1.25rem;text-align:center;font-style:italic;">'
+                    f'🔍 No Trade. Option chain is neutral.<br>'
+                    f'<span style="font-size:0.72rem;color:#94a3b8;font-style:normal;">(Nifty RSI: {diag_rsi:.1f} | Bars: {diag_candles})</span>'
                     f'</div></div></div>',
                     unsafe_allow_html=True,
                 )
