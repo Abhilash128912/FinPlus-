@@ -4809,7 +4809,7 @@ def live_scanner_fragment(
             if not candidates.empty:
                 candidates = candidates.sort_values(by=["Score", "RVOL"], ascending=[False, False])
                 intraday_pick = candidates.iloc[0].to_dict()
-                intraday_pick["Suggested_At"] = datetime.now(_IST_TZ).strftime("%I:%M:%S %p")
+                intraday_pick["Suggested_At"] = datetime.now(_IST_TZ).strftime("%I:%M:%S %p") if _ms2["is_open"] else "EOD (03:30 PM)"
                 st.session_state.locked_intraday_pick = intraday_pick.copy()
                 if st.session_state.locked_at_time == 0.0:
                     st.session_state.locked_at_time = time.time()
@@ -4833,7 +4833,7 @@ def live_scanner_fragment(
                 option_pick = fo_candidates.iloc[0].to_dict()
             else:
                 option_pick = df.sort_values(by=["RVOL"], ascending=False).iloc[0].to_dict()
-            option_pick["Suggested_At"] = datetime.now(_IST_TZ).strftime("%I:%M:%S %p")
+            option_pick["Suggested_At"] = datetime.now(_IST_TZ).strftime("%I:%M:%S %p") if _ms2["is_open"] else "EOD (03:30 PM)"
             st.session_state.locked_option_pick = option_pick.copy()
             if st.session_state.locked_at_time == 0.0:
                 st.session_state.locked_at_time = time.time()
@@ -4889,7 +4889,7 @@ def live_scanner_fragment(
             if nifty_ltp is not None:
                 nifty_pick = generate_nifty_option_chain_and_signal(nifty_ltp, nifty_candles)
                 if nifty_pick:
-                    nifty_pick["Suggested_At"] = datetime.now(_IST_TZ).strftime("%I:%M:%S %p")
+                    nifty_pick["Suggested_At"] = datetime.now(_IST_TZ).strftime("%I:%M:%S %p") if _ms2["is_open"] else "EOD (03:30 PM)"
                     st.session_state.locked_nifty_option_pick = nifty_pick.copy()
                     if st.session_state.locked_at_time == 0.0:
                         st.session_state.locked_at_time = time.time()
@@ -4928,7 +4928,7 @@ def live_scanner_fragment(
                             "Funda": int(row[3]),
                             "Mntm": int(row[4]),
                             "LTP": float(row[5]),
-                            "Suggested_At": datetime.now(_IST_TZ).strftime("%I:%M:%S %p")
+                            "Suggested_At": datetime.now(_IST_TZ).strftime("%I:%M:%S %p") if _ms2["is_open"] else "EOD (03:30 PM)"
                         }
                         st.session_state.locked_swing_pick = swing_pick.copy()
                         if st.session_state.locked_at_time == 0.0:
@@ -5016,11 +5016,12 @@ def live_scanner_fragment(
                 else:
                     _news_color = "#64748b"
                 
+                _title_label = "⚡ INTRADAY sniper PLAY" if _ms2["is_open"] else "📋 EOD WATCHLIST PLAY"
                 st.markdown(
                     f'<div class="premium-card {_card_class}">'
                     f'<div>'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.25rem;">'
-                    f'<span style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">⚡ INTRADAY sniper PLAY</span>'
+                    f'<span style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">{_title_label}</span>'
                     f'<span style="font-size:0.65rem;color:#64748b;font-family:\'JetBrains Mono\';">{intraday_pick.get("Suggested_At", "")}</span>'
                     f'</div>'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
@@ -5088,11 +5089,12 @@ def live_scanner_fragment(
                 else:
                     _news_color = "#64748b"
                 
+                _title_label = "📦 STOCK OPTION SNIPER" if _ms2["is_open"] else "📋 EOD OPTION WATCHLIST"
                 st.markdown(
                     f'<div class="premium-card premium-card-options">'
                     f'<div>'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.25rem;">'
-                    f'<span style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">📦 STOCK OPTION SNIPER</span>'
+                    f'<span style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">{_title_label}</span>'
                     f'<span style="font-size:0.65rem;color:#64748b;font-family:\'JetBrains Mono\';">{option_pick.get("Suggested_At", "")}</span>'
                     f'</div>'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
@@ -5155,11 +5157,12 @@ def live_scanner_fragment(
                 _total_premium_val = _lots * 65 * _entry
                 _max_risk = _total_premium_val * 0.30
                 
+                _title_label = "📦 NIFTY INDEX OPTION SNIPER" if _ms2["is_open"] else "📋 EOD NIFTY WATCHLIST"
                 st.markdown(
                     f'<div class="premium-card {_card_class}">'
                     f'<div>'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.25rem;">'
-                    f'<span style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">📦 NIFTY INDEX OPTION SNIPER</span>'
+                    f'<span style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">{_title_label}</span>'
                     f'<span style="font-size:0.65rem;color:#64748b;font-family:\'JetBrains Mono\';">{nifty_pick.get("Suggested_At", "")}</span>'
                     f'</div>'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
@@ -5226,11 +5229,12 @@ def live_scanner_fragment(
                 else:
                     _news_color = "#64748b"
                 
+                _title_label = "📈 SWING ALPHA PICK" if _ms2["is_open"] else "📋 EOD SWING WATCHLIST"
                 st.markdown(
                     f'<div class="premium-card premium-card-swing">'
                     f'<div>'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.25rem;">'
-                    f'<span style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">📈 SWING ALPHA PICK</span>'
+                    f'<span style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">{_title_label}</span>'
                     f'<span style="font-size:0.65rem;color:#64748b;font-family:\'JetBrains Mono\';">{swing_pick.get("Suggested_At", "")}</span>'
                     f'</div>'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
