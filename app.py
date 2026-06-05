@@ -22,7 +22,13 @@ from database import (
     save_db_setting,
     add_capital_movement,
     fetch_capital_movements_df,
-    delete_capital_movement
+    delete_capital_movement,
+    clear_all_capital_movements,
+    add_pair_trade,
+    update_pair_trade,
+    delete_pair_trade,
+    fetch_pair_trades_df,
+    clear_all_pair_trades
 )
 from calculator import calculate_trade_metrics
 
@@ -491,15 +497,62 @@ else:
 # Load regional currency settings globally
 currency_sym = get_db_settings("currency_symbol", "₹")
 
+# --- GLOBAL CIRCUIT BREAKER LOGIC ---
+df_pair_trades_kpi = fetch_pair_trades_df()
+
+def check_system_lock(df_t, df_p):
+    import math
+    from datetime import datetime, timedelta
+    
+    now = datetime.now()
+    current_month_str = now.strftime("%Y-%m")
+    
+    t1 = df_t[['trade_date', 'net_pnl']].copy() if not df_t.empty else pd.DataFrame(columns=['trade_date', 'net_pnl'])
+    t2 = df_p[['trade_date', 'net_pnl']].copy() if not df_p.empty else pd.DataFrame(columns=['trade_date', 'net_pnl'])
+    
+    df_all = pd.concat([t1, t2])
+    if df_all.empty:
+        return False, ""
+        
+    daily_pnl = df_all.groupby('trade_date')['net_pnl'].sum().to_dict()
+    
+    max_lock_date = now.date() - timedelta(days=1)
+    
+    for t_date_str, pnl in daily_pnl.items():
+        if pnl < -250:
+            penalty_days = math.ceil(abs(pnl) / 250)
+            t_date = datetime.strptime(t_date_str, "%Y-%m-%d").date()
+            lock_expiration = t_date + timedelta(days=penalty_days)
+            if lock_expiration > max_lock_date:
+                max_lock_date = lock_expiration
+                
+    if now.date() < max_lock_date:
+        return True, f"🔴 **Daily Penalty Box Active**: Trading is locked until {max_lock_date.strftime('%B %d, %Y')} due to exceeding the ₹250 daily risk limit."
+        
+    current_month_pnl = sum(pnl for d_str, pnl in daily_pnl.items() if d_str.startswith(current_month_str))
+            
+    if current_month_str == "2026-06":
+        if current_month_pnl <= -12000:
+            return True, "🔴 **June Exception Active**: Monthly hard stop of ₹12,000 reached. Trading locked until July 1st, 2026."
+    else:
+        if current_month_pnl <= -7500:
+            next_month = (now.replace(day=1) + timedelta(days=32)).replace(day=1)
+            return True, f"🔴 **Monthly Hard Stop Active**: You have reached the ₹7,500 monthly risk limit. Trading locked until {next_month.strftime('%B 1st, %Y')}."
+            
+    return False, ""
+
+is_system_locked, lock_reason = check_system_lock(df_trades, df_pair_trades_kpi)
+
 # 2. Main Tabs Layout
-tab_dash, tab_add, tab_logs, tab_psych, tab_risk, tab_capital, tab_settings = st.tabs([
+tab_dash, tab_add, tab_logs, tab_psych, tab_risk, tab_capital, tab_settings, tab_pair = st.tabs([
     "📊 Performance Dashboard",
     "📝 Log a Trade",
     "🔍 Search & Edit Logs",
     "🧠 Psychology & Strategy",
     "🧮 Position Size Planner",
     "💳 Capital Manager",
-    "⚙️ System Settings"
+    "⚙️ System Settings",
+    "🔀 Nifty Pair Trading"
 ])
 
 # ==========================================
@@ -518,21 +571,29 @@ with tab_dash:
         )
     else:
         # Calculate Key Performance Indicators (KPIs)
-        total_trades = len(df_trades)
+        df_pair_trades_kpi = fetch_pair_trades_df()
+        
+        total_trades = len(df_trades) + len(df_pair_trades_kpi)
+        
         gross_profit = df_trades[df_trades['net_pnl'] > 0]['net_pnl'].sum()
         gross_loss = df_trades[df_trades['net_pnl'] < 0]['net_pnl'].sum()
-        
         winning_trades = len(df_trades[df_trades['net_pnl'] > 0])
         losing_trades = len(df_trades[df_trades['net_pnl'] < 0])
+        
+        if not df_pair_trades_kpi.empty:
+            gross_profit += df_pair_trades_kpi[df_pair_trades_kpi['net_pnl'] > 0]['net_pnl'].sum()
+            gross_loss += df_pair_trades_kpi[df_pair_trades_kpi['net_pnl'] < 0]['net_pnl'].sum()
+            winning_trades += len(df_pair_trades_kpi[df_pair_trades_kpi['net_pnl'] > 0])
+            losing_trades += len(df_pair_trades_kpi[df_pair_trades_kpi['net_pnl'] < 0])
         
         win_rate = (winning_trades / total_trades) * 100 if total_trades > 0 else 0
         profit_factor = abs(gross_profit / gross_loss) if gross_loss != 0 else (gross_profit if gross_profit > 0 else 1.0)
         
-        net_pnl = df_trades['net_pnl'].sum()
-        total_charges = df_trades['total_charges'].sum()
+        net_pnl = df_trades['net_pnl'].sum() + (df_pair_trades_kpi['net_pnl'].sum() if not df_pair_trades_kpi.empty else 0.0)
+        total_charges = df_trades['total_charges'].sum() + (df_pair_trades_kpi['total_charges'].sum() if not df_pair_trades_kpi.empty else 0.0)
         
-        avg_win = df_trades[df_trades['net_pnl'] > 0]['net_pnl'].mean() if winning_trades > 0 else 0.0
-        avg_loss = df_trades[df_trades['net_pnl'] < 0]['net_pnl'].mean() if losing_trades > 0 else 0.0
+        avg_win = gross_profit / winning_trades if winning_trades > 0 else 0.0
+        avg_loss = gross_loss / losing_trades if losing_trades > 0 else 0.0
         
         expectancy = ( (win_rate/100) * avg_win ) + ( (1 - win_rate/100) * avg_loss )
         
@@ -592,13 +653,20 @@ with tab_dash:
             "Commodities",
             "F&O - Index Options",
             "Equity - Intraday",
-            "F&O - Stock Options"
+            "F&O - Stock Options",
+            "Nifty Pair Trading"
         ]
         
-        card_cols = st.columns(4)
+        df_pair_trades = fetch_pair_trades_df()
+        pair_total_pnl = float(df_pair_trades["net_pnl"].sum()) if not df_pair_trades.empty else 0.0
+
+        card_cols = st.columns(5)
         for idx, seg in enumerate(target_segments):
             with card_cols[idx]:
-                seg_pnl = monthly_pnls.get(seg, 0.0)
+                if seg == "Nifty Pair Trading":
+                    seg_pnl = pair_total_pnl
+                else:
+                    seg_pnl = monthly_pnls.get(seg, 0.0)
                 
                 # Check status
                 if seg_pnl <= -risk_limit:
@@ -740,6 +808,16 @@ with tab_dash:
         ]
         
         daily_pnl = df_month.groupby(df_month['parsed_date'].dt.day)['net_pnl'].sum().to_dict()
+
+        if not df_pair_trades_kpi.empty:
+            df_pair_trades_kpi['parsed_date'] = pd.to_datetime(df_pair_trades_kpi['trade_date'])
+            df_pair_month = df_pair_trades_kpi[
+                (df_pair_trades_kpi['parsed_date'].dt.year == selected_year) & 
+                (df_pair_trades_kpi['parsed_date'].dt.month == month_idx)
+            ]
+            pair_daily_pnl = df_pair_month.groupby(df_pair_month['parsed_date'].dt.day)['net_pnl'].sum().to_dict()
+            for day, pnl in pair_daily_pnl.items():
+                daily_pnl[day] = daily_pnl.get(day, 0.0) + pnl
         
         # Draw Calendar Grid
         cal = calendar.Calendar(firstweekday=calendar.MONDAY)
@@ -833,6 +911,18 @@ with tab_add:
     st.markdown('<h3>Record Completed Trade</h3>', unsafe_allow_html=True)
     st.markdown('<p style="color: var(--text-secondary); margin-top:-10px;">Select your asset segment and parameters. The engine will auto-calculate taxes based on your configured global rates.</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
+    if is_system_locked:
+        clean_reason = lock_reason.replace('🔴 **', '').replace('**: ', ': ')
+        st.markdown(
+            f"""
+            <div style="background-color: rgba(239, 68, 68, 0.15); border: 2px solid rgba(239, 68, 68, 0.6); border-radius: 12px; padding: 25px; margin-bottom: 20px; text-align: center;">
+                <h2 style="color: #ef4444; margin-top: 0; margin-bottom: 10px;">🔒 SYSTEM LOCKED</h2>
+                <p style="font-size: 1.15rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0;">{clean_reason}</p>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
     
     # Initialize form ID if not present
     if "add_form_id" not in st.session_state:
@@ -969,10 +1059,11 @@ with tab_add:
         
     # Submit button
     submit_trade = st.button(
-        "Lock & Save Trade", 
+        "Log Trade & Update Capital", 
         type="primary", 
-        key=f"add_submit_{st.session_state['add_form_id']}",
-        disabled=is_blocked
+        use_container_width=True,
+        disabled=is_system_locked or is_blocked,
+        key=f"add_submit_{st.session_state['add_form_id']}"
     )
     
     if submit_trade:
@@ -1725,24 +1816,27 @@ with tab_capital:
         stored_withdrawn = 0.0
         stored_adjustment = 0.0
         
-    # Get today's net P&L from logged trades
-    today_str = date.today().strftime("%Y-%m-%d")
+    # Get total net P&L from all logged trades
     if not df_trades.empty:
-        df_today_trades = df_trades[df_trades['trade_date'] == today_str]
-        auto_pnl = float(df_today_trades['net_pnl'].sum())
+        lifetime_pnl = float(df_trades['net_pnl'].sum())
     else:
-        auto_pnl = 0.0
+        lifetime_pnl = 0.0
         
+    df_pair_trades_cap = fetch_pair_trades_df()
+    if not df_pair_trades_cap.empty:
+        lifetime_pair_pnl = float(df_pair_trades_cap['net_pnl'].sum())
+    else:
+        lifetime_pair_pnl = 0.0
+
     # Callback to handle discrepancy calculations and update widget states before instantiation
     def apply_adjustment_callback():
         c_open = float(st.session_state.get("cap_open_input", stored_opening))
         c_add = float(st.session_state.get("cap_add_input", stored_added))
         c_with = float(st.session_state.get("cap_with_input", stored_withdrawn))
-        c_pnl_val = float(st.session_state.get("cap_pnl_input", auto_pnl))
         broker_val = float(st.session_state.get("calc_broker_input", 0.0))
         
         if broker_val > 0:
-            system_before_adj = c_open + c_add - c_with + c_pnl_val
+            system_before_adj = c_open + c_add - c_with + lifetime_pnl + lifetime_pair_pnl
             diff_val = broker_val - system_before_adj
             st.session_state["cap_adj_input"] = float(diff_val)
         
@@ -1750,13 +1844,33 @@ with tab_capital:
     
     with cap_col1:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown("<h5>Daily Capital Adjustments</h5>", unsafe_allow_html=True)
+        st.markdown("<h5>Lifetime Capital Ledger</h5>", unsafe_allow_html=True)
         
-        c_opening = st.number_input("Opening Capital (₹)", min_value=0.0, step=100.0, value=stored_opening, key="cap_open_input")
-        c_added = st.number_input("Add Capital (₹) - Deposit", min_value=0.0, step=100.0, value=stored_added, key="cap_add_input")
-        c_withdrawn = st.number_input("Withdraw Capital (₹)", min_value=0.0, step=100.0, value=stored_withdrawn, key="cap_with_input")
-        c_pnl = st.number_input("Today's Net Profit / Loss (₹)", step=50.0, value=auto_pnl, help="Pre-populated from today's logged trades but fully editable.", key="cap_pnl_input")
-        c_adjust = st.number_input("Manual Adjustment (₹)", step=10.0, value=stored_adjustment, help="Use positive/negative values to match broker discrepancy.", key="cap_adj_input")
+        c_opening = st.number_input("Initial Capital Day One (₹)", min_value=0.0, step=100.0, value=stored_opening, key="cap_open_input")
+        c_added = st.number_input("Lifetime Capital Added (₹)", min_value=0.0, step=100.0, value=stored_added, key="cap_add_input")
+        c_withdrawn = st.number_input("Lifetime Capital Withdrawn (₹)", min_value=0.0, step=100.0, value=stored_withdrawn, key="cap_with_input")
+        
+        st.markdown(
+            f"""
+            <div style="margin-top: 15px; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary);">
+                <div style="display:flex; justify-content:space-between; gap:12px; margin-bottom: 8px;">
+                    <span style="color:var(--text-secondary);">Lifetime Trade P&L</span>
+                    <strong style="color:{'var(--accent-green)' if lifetime_pnl >= 0 else 'var(--accent-red)'};">{currency_sym}{lifetime_pnl:,.2f}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; gap:12px; margin-bottom: 8px;">
+                    <span style="color:var(--text-secondary);">Lifetime Pair P&L</span>
+                    <strong style="color:{'var(--accent-green)' if lifetime_pair_pnl >= 0 else 'var(--accent-red)'};">{currency_sym}{lifetime_pair_pnl:,.2f}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; gap:12px; font-size:1.05rem; margin-top:6px; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 8px;">
+                    <span>Total Lifetime P&L</span>
+                    <strong style="color:{'var(--accent-green)' if (lifetime_pnl + lifetime_pair_pnl) >= 0 else 'var(--accent-red)'};">{currency_sym}{(lifetime_pnl + lifetime_pair_pnl):,.2f}</strong>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        c_adjust = st.number_input("Lifetime Manual Adjustments (₹)", step=10.0, value=stored_adjustment, help="Use positive/negative values to match broker discrepancy.", key="cap_adj_input")
         
         # Discrepancy Helper Expandable Calculator
         with st.expander("⚖️ Broker Discrepancy Calculator"):
@@ -1772,7 +1886,7 @@ with tab_capital:
             )
             
             # System closing capital before manual adjustment
-            system_before_adj = c_opening + c_added - c_withdrawn + c_pnl
+            system_before_adj = c_opening + c_added - c_withdrawn + lifetime_pnl + lifetime_pair_pnl
             
             diff = c_calc_broker - system_before_adj if c_calc_broker > 0 else 0.0
             
@@ -1809,46 +1923,41 @@ with tab_capital:
         st.markdown('</div>', unsafe_allow_html=True)
         
     with cap_col2:
-        st.markdown('<div class="glass-card" style="height: 100%;">', unsafe_allow_html=True)
-        st.markdown('<h3 style="margin-top:0; color: var(--accent-blue);">Capital Allocation Summary</h3>', unsafe_allow_html=True)
+        # 3. Capital Allocation Summary Table
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown("<h5>Capital Ledger Summary</h5>", unsafe_allow_html=True)
         
-        # Calculations
         total_available = c_opening + c_added
-        closing_capital = total_available - c_withdrawn + c_pnl + c_adjust
-        
-        pnl_color_class = "green" if c_pnl >= 0 else "red"
+        closing_capital = total_available - c_withdrawn + lifetime_pnl + lifetime_pair_pnl + c_adjust
+        pnl_color_class = "green" if (lifetime_pnl + lifetime_pair_pnl) >= 0 else "red"
         adj_color_class = "green" if c_adjust >= 0 else ("red" if c_adjust < 0 else "")
         
         st.markdown(
             f"""
             <table style="width:100%; border-collapse: collapse; font-size: 0.95rem;">
                 <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); height: 40px;">
-                    <td style="color: var(--text-secondary);">Opening Capital</td>
+                    <td style="color: var(--text-secondary);">Initial Capital Day One</td>
                     <td style="text-align: right; font-weight: 700; color: var(--text-primary);">{currency_sym}{c_opening:,.2f}</td>
                 </tr>
                 <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); height: 40px;">
-                    <td style="color: var(--text-secondary);">Capital Added (Deposit)</td>
+                    <td style="color: var(--text-secondary);">Lifetime Capital Added</td>
                     <td style="text-align: right; font-weight: 700; color: var(--accent-green);">+{currency_sym}{c_added:,.2f}</td>
                 </tr>
-                <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); height: 40px; font-weight: 600;">
-                    <td style="color: var(--text-primary);">Total Capital Available Today</td>
-                    <td style="text-align: right; font-weight: 800; color: var(--text-primary);">{currency_sym}{total_available:,.2f}</td>
-                </tr>
                 <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); height: 40px;">
-                    <td style="color: var(--text-secondary);">Capital Withdrawn</td>
+                    <td style="color: var(--text-secondary);">Lifetime Capital Withdrawn</td>
                     <td style="text-align: right; font-weight: 700; color: var(--accent-red);">-{currency_sym}{c_withdrawn:,.2f}</td>
                 </tr>
                 <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); height: 40px;">
-                    <td style="color: var(--text-secondary);">Today's Net P&L</td>
-                    <td style="text-align: right; font-weight: 700;" class="{pnl_color_class}">{currency_sym}{c_pnl:,.2f}</td>
+                    <td style="color: var(--text-secondary);">Lifetime Net P&L</td>
+                    <td style="text-align: right; font-weight: 700;" class="{pnl_color_class}">{currency_sym}{(lifetime_pnl + lifetime_pair_pnl):,.2f}</td>
                 </tr>
                 <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); height: 40px;">
-                    <td style="color: var(--text-secondary);">Manual Adjustment</td>
-                    <td style="text-align: right; font-weight: 700;" class="{adj_color_class}">{currency_sym}{c_adjust:,.2f}</td>
+                    <td style="color: var(--text-secondary);">Lifetime Adjustments</td>
+                    <td style="text-align: right; font-weight: 700;" class="{adj_color_class}">{'+' if c_adjust > 0 else ''}{currency_sym}{c_adjust:,.2f}</td>
                 </tr>
-                <tr style="border-bottom: 1px solid rgba(0,0,0,0.1); height: 45px; font-size: 1.1rem; font-weight: 700; background-color: rgba(59, 130, 246, 0.03);">
-                    <td style="color: var(--accent-blue); padding-left: 5px;">Closing Capital (COB)</td>
-                    <td style="text-align: right; color: var(--accent-blue); padding-right: 5px;">{currency_sym}{closing_capital:,.2f}</td>
+                <tr style="height: 48px; background-color: var(--bg-secondary);">
+                    <td style="color: var(--text-primary); font-weight: 800; font-size: 1.05rem; padding-left: 8px; border-radius: 6px 0 0 6px;">Current Total Capital</td>
+                    <td style="text-align: right; font-weight: 800; font-size: 1.05rem; color: var(--text-primary); padding-right: 8px; border-radius: 0 6px 6px 0;">{currency_sym}{closing_capital:,.2f}</td>
                 </tr>
             </table>
             """, 
@@ -1867,107 +1976,6 @@ with tab_capital:
             
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown("<hr style='border-color: var(--border-color); margin: 30px 0;'>", unsafe_allow_html=True)
-        st.markdown("<h3 style='margin-top:0;'>📊 Capital Movement Register</h3>", unsafe_allow_html=True)
-        st.markdown("<p style='color: var(--text-secondary); margin-top:-10px; margin-bottom: 25px;'>Log cash transactions (Deposits, Withdrawals, manual corrections) and view the historical audit log of daily rollovers.</p>", unsafe_allow_html=True)
-
-        reg_col1, reg_col2 = st.columns([2, 3])
-
-        with reg_col1:
-            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            st.markdown("<h5>Log Capital Transaction</h5>", unsafe_allow_html=True)
-            
-            with st.form("log_capital_form", clear_on_submit=True):
-                t_date = st.date_input("Transaction Date", value=date.today())
-                t_type = st.selectbox("Transaction Type", options=["Deposit", "Withdrawal", "Adjustment"])
-                t_amount = st.number_input(f"Amount ({currency_sym})", min_value=0.01, step=100.0)
-                t_notes = st.text_input("Notes / Description", placeholder="e.g. Bank transfer to equity ledger")
-                
-                submit_t = st.form_submit_button("Record Transaction")
-                
-                if submit_t:
-                    t_date_str = t_date.strftime("%Y-%m-%d")
-                    # Add to DB table
-                    add_capital_movement(t_date_str, t_type, t_amount, t_notes)
-                    
-                    # Synchronize with today's daily manager settings if transaction is for today
-                    if t_date_str == today_str:
-                        if t_type == "Deposit":
-                            save_db_setting("capital_added", str(stored_added + t_amount))
-                        elif t_type == "Withdrawal":
-                            save_db_setting("capital_withdrawn", str(stored_withdrawn + t_amount))
-                        elif t_type == "Adjustment":
-                            save_db_setting("capital_adjustment", str(stored_adjustment + t_amount))
-                            
-                    st.success("Capital transaction recorded successfully!")
-                    st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with reg_col2:
-            st.markdown('<div class="glass-card" style="height: 100%;">', unsafe_allow_html=True)
-            st.markdown("<h5>Capital Movement History Log</h5>", unsafe_allow_html=True)
-            
-            df_movements = fetch_capital_movements_df()
-            if df_movements.empty:
-                st.info("No capital movements logged yet.")
-            else:
-                for _, row in df_movements.iterrows():
-                    m_id = row['id']
-                    m_date = row['movement_date']
-                    m_type = row['type']
-                    m_amount = float(row['amount'])
-                    m_notes = row['notes'] or ""
-                    
-                    # Color code based on type
-                    if m_type in ["Deposit", "Opening"]:
-                        badge_style = "background-color: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem;"
-                        amount_prefix = "+"
-                        amount_color = "color: var(--accent-green);"
-                    elif m_type == "Withdrawal":
-                        badge_style = "background-color: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem;"
-                        amount_prefix = "-"
-                        amount_color = "color: var(--accent-red);"
-                    elif m_type == "Rollover":
-                        badge_style = "background-color: #EFF6FF; color: #1E3A8A; border: 1px solid #BFDBFE; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem;"
-                        amount_prefix = ""
-                        amount_color = "color: var(--accent-blue);"
-                    else: # Adjustment
-                        badge_style = "background-color: #FFFBEB; color: #92400E; border: 1px solid #FCD34D; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.75rem;"
-                        amount_prefix = "+" if m_amount >= 0 else ""
-                        amount_color = f"color: {'var(--accent-green)' if m_amount >= 0 else 'var(--accent-red)'};"
-                    
-                    # Render row with columns
-                    m_col_date, m_col_type, m_col_amt, m_col_action = st.columns([1.2, 1.2, 2.5, 0.8])
-                    
-                    with m_col_date:
-                        st.markdown(f"<span style='font-size:0.85rem; font-weight: 600; color: var(--text-secondary);'>{m_date}</span>", unsafe_allow_html=True)
-                    with m_col_type:
-                        st.markdown(f"<span style='{badge_style}'>{m_type}</span>", unsafe_allow_html=True)
-                    with m_col_amt:
-                        st.markdown(
-                            f"<span style='font-size:0.9rem; font-weight: 700; {amount_color}'>{amount_prefix}{currency_sym}{m_amount:,.2f}</span><br>"
-                            f"<span style='font-size:0.75rem; color: var(--text-secondary); font-style: italic;'>{m_notes}</span>",
-                            unsafe_allow_html=True
-                        )
-                    with m_col_action:
-                        # Allow deleting non-rollover transactions
-                        if m_type != "Rollover":
-                            if st.button("🗑️", key=f"del_m_{m_id}", help="Delete transaction record"):
-                                # Delete from DB
-                                delete_capital_movement(m_id)
-                                # Synchronize today's settings if deletion is for today
-                                if m_date == today_str:
-                                    if m_type == "Deposit":
-                                        save_db_setting("capital_added", str(max(0.0, stored_added - m_amount)))
-                                    elif m_type == "Withdrawal":
-                                        save_db_setting("capital_withdrawn", str(max(0.0, stored_withdrawn - m_amount)))
-                                    elif m_type == "Adjustment":
-                                        save_db_setting("capital_adjustment", str(stored_adjustment - m_amount))
-                                st.success("Transaction deleted!")
-                                st.rerun()
-                    
-                    st.markdown("<hr style='border-top: 1px solid rgba(0,0,0,0.03); margin: 6px 0;'>", unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
 
 # TAB 7: SYSTEM SETTINGS
 # ==========================================
@@ -2069,7 +2077,518 @@ with tab_settings:
         if st.button("Wipe All Trading Database Records", disabled=not confirm_clear):
             clear_all_trades()
             clear_all_capital_movements()
+            clear_all_pair_trades()
             st.success("Database fully wiped. All logs cleared.")
             st.rerun()
         
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ==========================================
+# TAB 8: NIFTY INDEX OPTION PAIR TRADING
+# ==========================================
+with tab_pair:
+    st.markdown('<div class="glass-card preview-card">', unsafe_allow_html=True)
+    st.markdown('<h3 style="margin-top:0; color: var(--text-primary);">Nifty Index Option Pair Trading</h3>', unsafe_allow_html=True)
+    st.markdown('<p style="color: var(--text-secondary); margin-top:-10px;">Track two-leg Nifty index option pair trades with a dedicated capital book. These trades stay separate from the main journal, dashboard totals, and capital manager.</p>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if is_system_locked:
+        clean_reason = lock_reason.replace('🔴 **', '').replace('**: ', ': ')
+        st.markdown(
+            f"""
+            <div style="background-color: rgba(239, 68, 68, 0.15); border: 2px solid rgba(239, 68, 68, 0.6); border-radius: 12px; padding: 25px; margin-bottom: 20px; text-align: center;">
+                <h2 style="color: #ef4444; margin-top: 0; margin-bottom: 10px;">🔒 SYSTEM LOCKED</h2>
+                <p style="font-size: 1.15rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0;">{clean_reason}</p>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+
+    df_pair_trades = fetch_pair_trades_df()
+    today_str = date.today().strftime("%Y-%m-%d")
+    if not df_pair_trades.empty:
+        df_pair_today = df_pair_trades[df_pair_trades["trade_date"] == today_str]
+        pair_today_pnl = float(df_pair_today["net_pnl"].sum())
+        pair_total_pnl = float(df_pair_trades["net_pnl"].sum())
+        pair_total_charges = float(df_pair_trades["total_charges"].sum())
+        pair_trade_count = len(df_pair_trades)
+    else:
+        pair_today_pnl = 0.0
+        pair_total_pnl = 0.0
+        pair_total_charges = 0.0
+        pair_trade_count = 0
+
+    try:
+        pair_opening = float(get_db_settings("nifty_pair_capital_opening", "0.0"))
+        pair_added = float(get_db_settings("nifty_pair_capital_added", "0.0"))
+        pair_withdrawn = float(get_db_settings("nifty_pair_capital_withdrawn", "0.0"))
+        pair_adjustment = float(get_db_settings("nifty_pair_capital_adjustment", "0.0"))
+    except Exception:
+        pair_opening = 0.0
+        pair_added = 0.0
+        pair_withdrawn = 0.0
+        pair_adjustment = 0.0
+
+    pair_closing_capital = pair_opening + pair_added - pair_withdrawn + pair_total_pnl + pair_adjustment
+
+    pm1, pm2, pm3, pm4 = st.columns(4)
+    with pm1:
+        st.metric("Pair Book Net P&L", f"{currency_sym} {pair_total_pnl:,.2f}", delta=f"After {currency_sym}{pair_total_charges:,.2f} charges", delta_color="off")
+    with pm2:
+        st.metric("Today's Pair P&L", f"{currency_sym} {pair_today_pnl:,.2f}")
+    with pm3:
+        st.metric("Pair Trades Logged", str(pair_trade_count))
+    with pm4:
+        st.metric("Pair Closing Capital", f"{currency_sym} {pair_closing_capital:,.2f}", delta="Separate from main capital", delta_color="off")
+
+    pair_cap_col, pair_log_col = st.columns([2, 3])
+
+    with pair_cap_col:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown("<h5>Dedicated Pair Capital</h5>", unsafe_allow_html=True)
+
+        p_opening = st.number_input("Pair Initial Capital Day One (₹)", min_value=0.0, step=100.0, value=pair_opening, key="pair_cap_open_input")
+        p_added = st.number_input("Pair Lifetime Added (₹)", min_value=0.0, step=100.0, value=pair_added, key="pair_cap_add_input")
+        p_withdrawn = st.number_input("Pair Lifetime Withdrawn (₹)", min_value=0.0, step=100.0, value=pair_withdrawn, key="pair_cap_with_input")
+        p_adjust = st.number_input("Pair Lifetime Manual Adjustment (₹)", step=10.0, value=pair_adjustment, key="pair_cap_adj_input")
+
+        if st.button("Save Pair Capital State", key="save_pair_cap_btn"):
+            save_db_setting("nifty_pair_capital_opening", str(p_opening))
+            save_db_setting("nifty_pair_capital_added", str(p_added))
+            save_db_setting("nifty_pair_capital_withdrawn", str(p_withdrawn))
+            save_db_setting("nifty_pair_capital_adjustment", str(p_adjust))
+            st.success("Nifty pair capital state saved separately.")
+            st.rerun()
+
+        p_total_available = p_opening + p_added
+        p_closing = p_total_available - p_withdrawn + pair_total_pnl + p_adjust
+        p_pnl_class = "green" if pair_total_pnl >= 0 else "red"
+        p_adj_class = "green" if p_adjust >= 0 else ("red" if p_adjust < 0 else "")
+
+        st.markdown(
+            f"""
+            <table style="width:100%; border-collapse: collapse; font-size: 0.95rem; margin-top: 18px;">
+                <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); height: 38px;">
+                    <td style="color: var(--text-secondary);">Initial Capital Day One</td>
+                    <td style="text-align: right; font-weight: 700; color: var(--text-primary);">{currency_sym}{p_opening:,.2f}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); height: 38px;">
+                    <td style="color: var(--text-secondary);">Lifetime Capital Added</td>
+                    <td style="text-align: right; font-weight: 700; color: var(--accent-green);">+{currency_sym}{p_added:,.2f}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); height: 38px;">
+                    <td style="color: var(--text-secondary);">Lifetime Capital Withdrawn</td>
+                    <td style="text-align: right; font-weight: 700; color: var(--accent-red);">-{currency_sym}{p_withdrawn:,.2f}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); height: 38px;">
+                    <td style="color: var(--text-secondary);">Lifetime Pair P&L</td>
+                    <td style="text-align: right; font-weight: 700;" class="{p_pnl_class}">{currency_sym}{pair_total_pnl:,.2f}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid rgba(0,0,0,0.05); height: 38px;">
+                    <td style="color: var(--text-secondary);">Lifetime Manual Adjustment</td>
+                    <td style="text-align: right; font-weight: 700;" class="{p_adj_class}">{currency_sym}{p_adjust:,.2f}</td>
+                </tr>
+                <tr style="height: 44px; font-size: 1.05rem; font-weight: 800; background-color: rgba(16, 185, 129, 0.06);">
+                    <td style="color: var(--accent-blue); padding-left: 5px;">Pair Closing Capital</td>
+                    <td style="text-align: right; color: var(--accent-blue); padding-right: 5px;">{currency_sym}{p_closing:,.2f}</td>
+                </tr>
+            </table>
+            """,
+            unsafe_allow_html=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with pair_log_col:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown("<h5>Log Completed Option Pair</h5>", unsafe_allow_html=True)
+
+        index_option_rates = brokerage_rates.get("F&O - Index Options", {"buy": 20.0, "sell": 20.0})
+        index_option_buy_brokerage = float(index_option_rates.get("buy", 20.0))
+        index_option_sell_brokerage = float(index_option_rates.get("sell", 20.0))
+        nifty_lot_size = 65.0
+
+        def is_nifty_lot_multiple(quantity: float) -> bool:
+            if quantity <= 0:
+                return False
+            return abs((quantity / nifty_lot_size) - round(quantity / nifty_lot_size)) < 1e-9
+
+        with st.form("nifty_pair_trade_form", clear_on_submit=True):
+            pair_date = st.date_input("Trade Date", value=date.today(), key="pair_trade_date")
+            pair_name = st.text_input("Pair Name", value="NIFTY CE/PE Pair", placeholder="e.g. NIFTY Weekly Straddle", key="pair_name")
+
+            leg_header_cols = st.columns([1.4, 0.8, 0.8, 0.8, 0.8])
+            leg_header_cols[0].markdown("**Leg Symbol**")
+            leg_header_cols[1].markdown("**Action**")
+            leg_header_cols[2].markdown("**Qty**")
+            leg_header_cols[3].markdown("**Entry**")
+            leg_header_cols[4].markdown("**Exit**")
+
+            l1c1, l1c2, l1c3, l1c4, l1c5 = st.columns([1.4, 0.8, 0.8, 0.8, 0.8])
+            with l1c1:
+                leg1_symbol = st.text_input("Leg 1 Symbol", placeholder="NIFTY26JUN23000CE", label_visibility="collapsed", key="pair_leg1_symbol").upper()
+            with l1c2:
+                leg1_action = st.selectbox("Leg 1 Action", ["BUY", "SELL"], label_visibility="collapsed", key="pair_leg1_action")
+            with l1c3:
+                leg1_qty = st.number_input("Leg 1 Qty", min_value=nifty_lot_size, step=nifty_lot_size, value=nifty_lot_size, label_visibility="collapsed", key="pair_leg1_qty")
+            with l1c4:
+                leg1_entry = st.number_input("Leg 1 Entry", min_value=0.0, step=0.05, value=0.0, format="%.2f", label_visibility="collapsed", key="pair_leg1_entry")
+            with l1c5:
+                leg1_exit = st.number_input("Leg 1 Exit", min_value=0.0, step=0.05, value=0.0, format="%.2f", label_visibility="collapsed", key="pair_leg1_exit")
+
+            l2c1, l2c2, l2c3, l2c4, l2c5 = st.columns([1.4, 0.8, 0.8, 0.8, 0.8])
+            with l2c1:
+                leg2_symbol = st.text_input("Leg 2 Symbol", placeholder="NIFTY26JUN23000PE", label_visibility="collapsed", key="pair_leg2_symbol").upper()
+            with l2c2:
+                leg2_action = st.selectbox("Leg 2 Action", ["BUY", "SELL"], label_visibility="collapsed", key="pair_leg2_action")
+            with l2c3:
+                leg2_qty = st.number_input("Leg 2 Qty", min_value=nifty_lot_size, step=nifty_lot_size, value=nifty_lot_size, label_visibility="collapsed", key="pair_leg2_qty")
+            with l2c4:
+                leg2_entry = st.number_input("Leg 2 Entry", min_value=0.0, step=0.05, value=0.0, format="%.2f", label_visibility="collapsed", key="pair_leg2_entry")
+            with l2c5:
+                leg2_exit = st.number_input("Leg 2 Exit", min_value=0.0, step=0.05, value=0.0, format="%.2f", label_visibility="collapsed", key="pair_leg2_exit")
+
+            brokerage_cols = st.columns([1, 1, 1])
+            with brokerage_cols[0]:
+                st.number_input(
+                    "Index Option Buy Brokerage (₹)",
+                    min_value=0.0,
+                    step=1.0,
+                    value=float(index_option_buy_brokerage),
+                    disabled=True,
+                    key="pair_index_option_buy_brokerage",
+                    help="Saved F&O - Index Options buy-side brokerage from System Settings."
+                )
+            with brokerage_cols[1]:
+                st.number_input(
+                    "Index Option Sell Brokerage (₹)",
+                    min_value=0.0,
+                    step=1.0,
+                    value=float(index_option_sell_brokerage),
+                    disabled=True,
+                    key="pair_index_option_sell_brokerage",
+                    help="Saved F&O - Index Options sell-side brokerage from System Settings."
+                )
+
+            leg1_brokerage = index_option_buy_brokerage if leg1_action == "BUY" else index_option_sell_brokerage
+            leg2_brokerage = index_option_buy_brokerage if leg2_action == "BUY" else index_option_sell_brokerage
+            pair_brokerage = leg1_brokerage + leg2_brokerage
+
+            with brokerage_cols[2]:
+                st.number_input(
+                    "Pair Brokerage (₹)",
+                    min_value=0.0,
+                    step=1.0,
+                    value=float(pair_brokerage),
+                    disabled=True,
+                    key="pair_total_brokerage",
+                    help="Uses the saved F&O - Index Options buy brokerage for BUY legs and sell brokerage for SELL legs."
+                )
+
+            pair_other_charges = 0.0
+            st.number_input(
+                "Manual Extra Charges (₹)",
+                min_value=0.0,
+                step=1.0,
+                value=0.0,
+                disabled=True,
+                help="Charges are calculated automatically. This is locked to prevent manual overrides.",
+                key="pair_other_charges_locked"
+            )
+
+            leg1_metrics = calculate_trade_metrics(
+                segment="F&O - Index Options",
+                action=leg1_action,
+                quantity=leg1_qty,
+                entry_price=leg1_entry,
+                exit_price=leg1_exit,
+                brokerage_input=leg1_brokerage
+            )
+            leg2_metrics = calculate_trade_metrics(
+                segment="F&O - Index Options",
+                action=leg2_action,
+                quantity=leg2_qty,
+                entry_price=leg2_entry,
+                exit_price=leg2_exit,
+                brokerage_input=leg2_brokerage
+            )
+
+            pair_gross_pnl = leg1_metrics["gross_pnl"] + leg2_metrics["gross_pnl"]
+            pair_statutory_charges = leg1_metrics["total_charges"] + leg2_metrics["total_charges"]
+            pair_total_trade_charges = pair_statutory_charges + pair_other_charges
+            pair_net_trade_pnl = pair_gross_pnl - pair_total_trade_charges
+
+            pair_charge_breakdown = {
+                "Brokerage": leg1_metrics["brokerage"] + leg2_metrics["brokerage"],
+                "STT": leg1_metrics["stt"] + leg2_metrics["stt"],
+                "Exchange Charges": leg1_metrics["exchange_charges"] + leg2_metrics["exchange_charges"],
+                "SEBI Charges": leg1_metrics["sebi_charges"] + leg2_metrics["sebi_charges"],
+                "Stamp Duty": leg1_metrics["stamp_duty"] + leg2_metrics["stamp_duty"],
+                "GST": leg1_metrics["gst"] + leg2_metrics["gst"],
+                "Manual Extra Charges": pair_other_charges
+            }
+
+            st.markdown(
+                f"""
+                <div style="margin-top: 12px; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary);">
+                    <div style="font-weight: 800; color: var(--text-primary); margin-bottom: 8px;">Charges & Taxes Preview</div>
+                    <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; font-size: 0.86rem;">
+                        <div><span style="color:var(--text-secondary);">Brokerage</span><br><strong>{currency_sym}{pair_charge_breakdown["Brokerage"]:,.2f}</strong></div>
+                        <div><span style="color:var(--text-secondary);">STT</span><br><strong>{currency_sym}{pair_charge_breakdown["STT"]:,.2f}</strong></div>
+                        <div><span style="color:var(--text-secondary);">Exchange</span><br><strong>{currency_sym}{pair_charge_breakdown["Exchange Charges"]:,.2f}</strong></div>
+                        <div><span style="color:var(--text-secondary);">SEBI</span><br><strong>{currency_sym}{pair_charge_breakdown["SEBI Charges"]:,.2f}</strong></div>
+                        <div><span style="color:var(--text-secondary);">Stamp Duty</span><br><strong>{currency_sym}{pair_charge_breakdown["Stamp Duty"]:,.2f}</strong></div>
+                        <div><span style="color:var(--text-secondary);">GST</span><br><strong>{currency_sym}{pair_charge_breakdown["GST"]:,.2f}</strong></div>
+                        <div><span style="color:var(--text-secondary);">Manual Extra</span><br><strong>{currency_sym}{pair_charge_breakdown["Manual Extra Charges"]:,.2f}</strong></div>
+                        <div><span style="color:var(--text-secondary);">Total Charges</span><br><strong style="color:var(--accent-red);">{currency_sym}{pair_total_trade_charges:,.2f}</strong></div>
+                    </div>
+                    <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.06);">
+                        <div><span style="color:var(--text-secondary);">Leg 1 Gross</span><br><strong>{currency_sym}{leg1_metrics["gross_pnl"]:,.2f}</strong></div>
+                        <div><span style="color:var(--text-secondary);">Leg 2 Gross</span><br><strong>{currency_sym}{leg2_metrics["gross_pnl"]:,.2f}</strong></div>
+                        <div><span style="color:var(--text-secondary);">Pair Net P&L</span><br><strong style="color:{'var(--accent-green)' if pair_net_trade_pnl >= 0 else 'var(--accent-red)'};">{currency_sym}{pair_net_trade_pnl:,.2f}</strong></div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            pair_notes = st.text_area("Notes", placeholder="Setup, expiry, hedge reason, execution notes", key="pair_notes")
+            save_pair_trade = st.form_submit_button("Save Nifty Pair Trade", disabled=is_system_locked)
+
+            if save_pair_trade:
+                if not leg1_symbol or not leg2_symbol:
+                    st.error("Please enter both option leg symbols.")
+                elif leg1_qty <= 0 or leg2_qty <= 0:
+                    st.error("Please enter a valid quantity for both legs.")
+                elif not is_nifty_lot_multiple(leg1_qty) or not is_nifty_lot_multiple(leg2_qty):
+                    st.error("Nifty quantities must be 65 or multiples of 65, such as 65, 130, 195, 260.")
+                else:
+                    add_pair_trade({
+                        "trade_date": pair_date.strftime("%Y-%m-%d"),
+                        "pair_name": pair_name.strip() or "NIFTY Option Pair",
+                        "leg1_symbol": leg1_symbol,
+                        "leg1_action": leg1_action,
+                        "leg1_qty": leg1_qty,
+                        "leg1_entry": leg1_entry,
+                        "leg1_exit": leg1_exit,
+                        "leg2_symbol": leg2_symbol,
+                        "leg2_action": leg2_action,
+                        "leg2_qty": leg2_qty,
+                        "leg2_entry": leg2_entry,
+                        "leg2_exit": leg2_exit,
+                        "brokerage": pair_brokerage,
+                        "other_charges": pair_other_charges,
+                        "total_charges": pair_total_trade_charges,
+                        "gross_pnl": pair_gross_pnl,
+                        "net_pnl": pair_net_trade_pnl,
+                        "notes": pair_notes
+                    })
+                    st.success(f"Nifty pair trade saved. Net P&L: {currency_sym}{pair_net_trade_pnl:,.2f}")
+                    st.rerun()
+
+        preview_gross = pair_gross_pnl
+        preview_charges = pair_total_trade_charges
+        preview_net = preview_gross - preview_charges
+        st.markdown(
+            f"""
+            <div style="margin-top: 14px; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary);">
+                <div style="display:flex; justify-content:space-between; gap:12px;"><span>Preview Gross P&L</span><strong>{currency_sym}{preview_gross:,.2f}</strong></div>
+                <div style="display:flex; justify-content:space-between; gap:12px;"><span>Total Charges</span><strong>{currency_sym}{preview_charges:,.2f}</strong></div>
+                <div style="display:flex; justify-content:space-between; gap:12px; font-size:1.05rem; margin-top:6px;"><span>Preview Net P&L</span><strong style="color:{'var(--accent-green)' if preview_net >= 0 else 'var(--accent-red)'};">{currency_sym}{preview_net:,.2f}</strong></div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.markdown("<h5>Nifty Pair Trade Register</h5>", unsafe_allow_html=True)
+    if df_pair_trades.empty:
+        st.info("No Nifty pair trades logged yet.")
+    else:
+        pair_display = df_pair_trades.copy()
+        pair_display["brokerage"] = pair_display["brokerage"].map(lambda x: f"{currency_sym}{x:,.2f}")
+        pair_display["other_charges"] = pair_display["other_charges"].map(lambda x: f"{currency_sym}{x:,.2f}")
+        pair_display["gross_pnl"] = pair_display["gross_pnl"].map(lambda x: f"{currency_sym}{x:,.2f}")
+        pair_display["total_charges"] = pair_display["total_charges"].map(lambda x: f"{currency_sym}{x:,.2f}")
+        pair_display["net_pnl"] = pair_display["net_pnl"].map(lambda x: f"{currency_sym}{x:,.2f}")
+        pair_display = pair_display.rename(columns={
+            "trade_date": "Date",
+            "pair_name": "Pair",
+            "leg1_symbol": "Leg 1",
+            "leg1_action": "L1 Action",
+            "leg1_qty": "L1 Qty",
+            "leg1_entry": "L1 Entry",
+            "leg1_exit": "L1 Exit",
+            "leg2_symbol": "Leg 2",
+            "leg2_action": "L2 Action",
+            "leg2_qty": "L2 Qty",
+            "leg2_entry": "L2 Entry",
+            "leg2_exit": "L2 Exit",
+            "brokerage": "Brokerage",
+            "other_charges": "Manual Extra",
+            "gross_pnl": "Gross P&L",
+            "total_charges": "Charges",
+            "net_pnl": "Net P&L",
+            "notes": "Notes"
+        })
+        st.dataframe(
+            pair_display[[
+                "id", "Date", "Pair", "Leg 1", "L1 Action", "L1 Qty", "L1 Entry", "L1 Exit",
+                "Leg 2", "L2 Action", "L2 Qty", "L2 Entry", "L2 Exit", "Brokerage", "Manual Extra",
+                "Gross P&L", "Charges", "Net P&L", "Notes"
+            ]],
+            use_container_width=True,
+            hide_index=True
+        )
+
+        with st.expander("Edit Saved Pair Trade", expanded=False):
+            edit_pair_id = st.selectbox(
+                "Select Pair Trade to Edit",
+                options=["-- Select Trade --"] + [int(x) for x in df_pair_trades["id"].tolist()],
+                key="edit_pair_trade_select"
+            )
+
+            if edit_pair_id != "-- Select Trade --":
+                edit_row = df_pair_trades[df_pair_trades["id"] == int(edit_pair_id)].iloc[0]
+                edit_key = f"edit_pair_{int(edit_pair_id)}"
+                edit_option_rates = brokerage_rates.get("F&O - Index Options", {"buy": 20.0, "sell": 20.0})
+                edit_buy_brokerage = float(edit_option_rates.get("buy", 20.0))
+                edit_sell_brokerage = float(edit_option_rates.get("sell", 20.0))
+
+                try:
+                    edit_date_default = datetime.strptime(str(edit_row["trade_date"]), "%Y-%m-%d").date()
+                except Exception:
+                    edit_date_default = date.today()
+
+                with st.form(f"{edit_key}_form"):
+                    edit_date = st.date_input("Trade Date", value=edit_date_default, key=f"{edit_key}_date")
+                    edit_pair_name = st.text_input("Pair Name", value=str(edit_row["pair_name"]), key=f"{edit_key}_name")
+
+                    e_header_cols = st.columns([1.4, 0.8, 0.8, 0.8, 0.8])
+                    e_header_cols[0].markdown("**Leg Symbol**")
+                    e_header_cols[1].markdown("**Action**")
+                    e_header_cols[2].markdown("**Qty**")
+                    e_header_cols[3].markdown("**Entry**")
+                    e_header_cols[4].markdown("**Exit**")
+
+                    e1c1, e1c2, e1c3, e1c4, e1c5 = st.columns([1.4, 0.8, 0.8, 0.8, 0.8])
+                    with e1c1:
+                        edit_leg1_symbol = st.text_input("Edit Leg 1 Symbol", value=str(edit_row["leg1_symbol"]), label_visibility="collapsed", key=f"{edit_key}_leg1_symbol").upper()
+                    with e1c2:
+                        edit_leg1_action = st.selectbox("Edit Leg 1 Action", ["BUY", "SELL"], index=0 if edit_row["leg1_action"] == "BUY" else 1, label_visibility="collapsed", key=f"{edit_key}_leg1_action")
+                    with e1c3:
+                        edit_leg1_qty = st.number_input("Edit Leg 1 Qty", min_value=nifty_lot_size, step=nifty_lot_size, value=float(edit_row["leg1_qty"]), label_visibility="collapsed", key=f"{edit_key}_leg1_qty")
+                    with e1c4:
+                        edit_leg1_entry = st.number_input("Edit Leg 1 Entry", min_value=0.0, step=0.05, value=float(edit_row["leg1_entry"]), format="%.2f", label_visibility="collapsed", key=f"{edit_key}_leg1_entry")
+                    with e1c5:
+                        edit_leg1_exit = st.number_input("Edit Leg 1 Exit", min_value=0.0, step=0.05, value=float(edit_row["leg1_exit"]), format="%.2f", label_visibility="collapsed", key=f"{edit_key}_leg1_exit")
+
+                    e2c1, e2c2, e2c3, e2c4, e2c5 = st.columns([1.4, 0.8, 0.8, 0.8, 0.8])
+                    with e2c1:
+                        edit_leg2_symbol = st.text_input("Edit Leg 2 Symbol", value=str(edit_row["leg2_symbol"]), label_visibility="collapsed", key=f"{edit_key}_leg2_symbol").upper()
+                    with e2c2:
+                        edit_leg2_action = st.selectbox("Edit Leg 2 Action", ["BUY", "SELL"], index=0 if edit_row["leg2_action"] == "BUY" else 1, label_visibility="collapsed", key=f"{edit_key}_leg2_action")
+                    with e2c3:
+                        edit_leg2_qty = st.number_input("Edit Leg 2 Qty", min_value=nifty_lot_size, step=nifty_lot_size, value=float(edit_row["leg2_qty"]), label_visibility="collapsed", key=f"{edit_key}_leg2_qty")
+                    with e2c4:
+                        edit_leg2_entry = st.number_input("Edit Leg 2 Entry", min_value=0.0, step=0.05, value=float(edit_row["leg2_entry"]), format="%.2f", label_visibility="collapsed", key=f"{edit_key}_leg2_entry")
+                    with e2c5:
+                        edit_leg2_exit = st.number_input("Edit Leg 2 Exit", min_value=0.0, step=0.05, value=float(edit_row["leg2_exit"]), format="%.2f", label_visibility="collapsed", key=f"{edit_key}_leg2_exit")
+
+                    edit_leg1_brokerage = edit_buy_brokerage if edit_leg1_action == "BUY" else edit_sell_brokerage
+                    edit_leg2_brokerage = edit_buy_brokerage if edit_leg2_action == "BUY" else edit_sell_brokerage
+                    edit_pair_brokerage = edit_leg1_brokerage + edit_leg2_brokerage
+
+                    eb1, eb2, eb3 = st.columns(3)
+                    with eb1:
+                        st.number_input("Index Option Buy Brokerage (₹)", min_value=0.0, step=1.0, value=float(edit_buy_brokerage), disabled=True, key=f"{edit_key}_buy_brokerage")
+                    with eb2:
+                        st.number_input("Index Option Sell Brokerage (₹)", min_value=0.0, step=1.0, value=float(edit_sell_brokerage), disabled=True, key=f"{edit_key}_sell_brokerage")
+                    with eb3:
+                        st.number_input("Pair Brokerage (₹)", min_value=0.0, step=1.0, value=float(edit_pair_brokerage), disabled=True, key=f"{edit_key}_pair_brokerage")
+
+                    edit_other_charges = st.number_input(
+                        "Other Charges (Slippage / Auto-squared off)",
+                        min_value=0.0,
+                        step=5.0,
+                        value=float(edit_row.get("other_charges", 0.0)),
+                        key=f"{edit_key}_other_charges"
+                    )
+                    edit_notes = st.text_area("Notes", value=str(edit_row["notes"] or ""), key=f"{edit_key}_notes")
+
+                    edit_leg1_metrics = calculate_trade_metrics(
+                        segment="F&O - Index Options",
+                        action=edit_leg1_action,
+                        quantity=edit_leg1_qty,
+                        entry_price=edit_leg1_entry,
+                        exit_price=edit_leg1_exit,
+                        brokerage_input=edit_leg1_brokerage
+                    )
+                    edit_leg2_metrics = calculate_trade_metrics(
+                        segment="F&O - Index Options",
+                        action=edit_leg2_action,
+                        quantity=edit_leg2_qty,
+                        entry_price=edit_leg2_entry,
+                        exit_price=edit_leg2_exit,
+                        brokerage_input=edit_leg2_brokerage
+                    )
+                    edit_gross_pnl = edit_leg1_metrics["gross_pnl"] + edit_leg2_metrics["gross_pnl"]
+                    edit_total_charges = edit_leg1_metrics["total_charges"] + edit_leg2_metrics["total_charges"] + edit_other_charges
+                    edit_net_pnl = edit_gross_pnl - edit_total_charges
+
+                    st.markdown(
+                        f"""
+                        <div style="margin: 10px 0 14px; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary);">
+                            <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+                                <div><span style="color:var(--text-secondary);">Gross P&L</span><br><strong>{currency_sym}{edit_gross_pnl:,.2f}</strong></div>
+                                <div><span style="color:var(--text-secondary);">Total Charges</span><br><strong style="color:var(--accent-red);">{currency_sym}{edit_total_charges:,.2f}</strong></div>
+                                <div><span style="color:var(--text-secondary);">Net P&L</span><br><strong style="color:{'var(--accent-green)' if edit_net_pnl >= 0 else 'var(--accent-red)'};">{currency_sym}{edit_net_pnl:,.2f}</strong></div>
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                    save_edit_pair = st.form_submit_button("Update Pair Trade")
+
+                    if save_edit_pair:
+                        if not edit_leg1_symbol or not edit_leg2_symbol:
+                            st.error("Please enter both option leg symbols.")
+                        elif edit_leg1_qty <= 0 or edit_leg2_qty <= 0:
+                            st.error("Please enter a valid quantity for both legs.")
+                        elif not is_nifty_lot_multiple(edit_leg1_qty) or not is_nifty_lot_multiple(edit_leg2_qty):
+                            st.error("Nifty quantities must be 65 or multiples of 65, such as 65, 130, 195, 260.")
+                        else:
+                            update_pair_trade(int(edit_pair_id), {
+                                "trade_date": edit_date.strftime("%Y-%m-%d"),
+                                "pair_name": edit_pair_name.strip() or "NIFTY Option Pair",
+                                "leg1_symbol": edit_leg1_symbol,
+                                "leg1_action": edit_leg1_action,
+                                "leg1_qty": edit_leg1_qty,
+                                "leg1_entry": edit_leg1_entry,
+                                "leg1_exit": edit_leg1_exit,
+                                "leg2_symbol": edit_leg2_symbol,
+                                "leg2_action": edit_leg2_action,
+                                "leg2_qty": edit_leg2_qty,
+                                "leg2_entry": edit_leg2_entry,
+                                "leg2_exit": edit_leg2_exit,
+                                "brokerage": edit_pair_brokerage,
+                                "other_charges": edit_other_charges,
+                                "total_charges": edit_total_charges,
+                                "gross_pnl": edit_gross_pnl,
+                                "net_pnl": edit_net_pnl,
+                                "notes": edit_notes
+                            })
+                            st.success("Pair trade updated.")
+                            st.rerun()
+
+        delete_pair_id = st.selectbox(
+            "Delete Pair Trade",
+            options=["-- Select Trade --"] + [int(x) for x in df_pair_trades["id"].tolist()],
+            key="delete_pair_trade_select"
+        )
+        if st.button("Delete Selected Pair Trade", disabled=delete_pair_id == "-- Select Trade --", key="delete_pair_trade_btn"):
+            delete_pair_trade(int(delete_pair_id))
+            st.success("Pair trade deleted.")
+            st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)

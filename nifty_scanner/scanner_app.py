@@ -320,6 +320,103 @@ st.markdown(
         color: var(--accent-red);
         border: 1px solid #FCA5A5;
     }}
+    
+    /* Top Stock Cards styling */
+    .top-stock-card {{
+        background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
+        border: 1px solid #E2E8F0;
+        border-bottom: 5px solid #CBD5E1;
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 12px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }}
+    .top-stock-card:hover {{
+        transform: translateY(-6px);
+        border-color: #A7F3D0;
+        border-bottom-color: #10B981;
+        box-shadow: 0 15px 25px -5px rgba(16, 185, 129, 0.12), 0 8px 12px -4px rgba(0, 0, 0, 0.03);
+    }}
+    .top-stock-card .rank-badge {{
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        color: #FFFFFF;
+        font-family: 'Outfit', sans-serif;
+        font-weight: 800;
+        font-size: 0.8rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+    }}
+    .top-stock-card .ticker-name {{
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #064E3B;
+        margin-top: 4px;
+        margin-bottom: 0px;
+        line-height: 1.2;
+    }}
+    .top-stock-card .company-name {{
+        font-size: 0.78rem;
+        color: #64748B;
+        margin-bottom: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 500;
+    }}
+    .top-stock-card .score-wrap {{
+        display: flex;
+        align-items: baseline;
+        margin-bottom: 10px;
+    }}
+    .top-stock-card .total-score {{
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.8rem;
+        font-weight: 900;
+        color: #059669;
+        line-height: 1;
+    }}
+    .top-stock-card .score-max {{
+        font-size: 0.85rem;
+        color: #64748B;
+        font-weight: 500;
+        margin-left: 1px;
+    }}
+    .top-stock-card .sub-scores {{
+        font-size: 0.78rem;
+        color: #475569;
+        background: #F1F5F9;
+        padding: 6px 10px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        font-weight: 600;
+        text-align: center;
+        border: 1px solid #E2E8F0;
+    }}
+    .top-stock-card .price-row {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #0F172A;
+    }}
+    .top-stock-card .sector-badge {{
+        font-size: 0.72rem;
+        background: #E0F2FE;
+        color: #0369A1;
+        padding: 2px 6px;
+        border-radius: 4px;
+        max-width: 90px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }}
     </style>
     """,
     unsafe_allow_html=True
@@ -776,6 +873,68 @@ with tab_overview:
     with m_col4:
         avg_rsi = df_stocks["rsi_14"].mean()
         st.metric("Average RSI (14d)", f"{avg_rsi:.1f}")
+        
+    # Top 5 Scored Stocks Cards Showcase
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("### 🏆 Top 5 Quantamental Leaders")
+    st.markdown("<p style='color: var(--text-secondary); margin-top:-10px; margin-bottom: 20px;'>The highest-rated equities in the Nifty 500 space based on fundamental strength and price momentum.</p>", unsafe_allow_html=True)
+    
+    df_top_5 = df_stocks.sort_values(
+        by=["total_score", "fundamental_score", "momentum_score", "roe"],
+        ascending=[False, False, False, False]
+    ).head(5)
+    
+    top5_cols = st.columns(5)
+    for idx, (index, row) in enumerate(df_top_5.iterrows()):
+        rank = idx + 1
+        ticker_raw = row["ticker"]
+        ticker_clean = ticker_raw.replace(".NS", "")
+        company = row["company_name"]
+        total_sc = int(row["total_score"])
+        fund_sc = int(row["fundamental_score"])
+        mom_sc = int(row["momentum_score"])
+        price = row["last_price"]
+        sector = row["sector"]
+        
+        # Determine badge color based on rank
+        if rank == 1:
+            badge_style = "background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); box-shadow: 0 2px 4px rgba(217, 119, 6, 0.3);"
+            rank_label = "🥇 #1"
+        elif rank == 2:
+            badge_style = "background: linear-gradient(135deg, #94A3B8 0%, #475569 100%); box-shadow: 0 2px 4px rgba(71, 85, 105, 0.3);"
+            rank_label = "🥈 #2"
+        elif rank == 3:
+            badge_style = "background: linear-gradient(135deg, #CD7F32 0%, #B45309 100%); box-shadow: 0 2px 4px rgba(180, 83, 9, 0.3);"
+            rank_label = "🥉 #3"
+        else:
+            badge_style = "background: linear-gradient(135deg, #10B981 0%, #059669 100%); box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2);"
+            rank_label = f"#{rank}"
+            
+        card_html = f"""
+        <div class="top-stock-card">
+            <span class="rank-badge" style="{badge_style}">{rank_label}</span>
+            <div class="ticker-name">{ticker_clean}</div>
+            <div class="company-name" title="{company}">{company}</div>
+            <div class="score-wrap">
+                <span class="total-score">{total_sc}</span>
+                <span class="score-max">/100</span>
+            </div>
+            <div class="sub-scores">
+                F: {fund_sc}/50 &bull; M: {mom_sc}/50
+            </div>
+            <div class="price-row">
+                <span>₹{price:,.1f}</span>
+                <span class="sector-badge" title="{sector}">{sector}</span>
+            </div>
+        </div>
+        """
+        with top5_cols[idx]:
+            st.markdown(card_html, unsafe_allow_html=True)
+            if st.button("🎯 Focus Ticker", key=f"focus_top5_{ticker_clean}", use_container_width=True):
+                st.session_state["global_focus_ticker"] = ticker_raw
+                st.rerun()
+                
+    st.markdown("<br><hr style='border-color: var(--border-color); margin: 15px 0;'>", unsafe_allow_html=True)
         
     g_col1, g_col2 = st.columns(2)
     

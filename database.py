@@ -60,6 +60,31 @@ def init_db():
     )
     """)
     
+    # Create pair_trades table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS pair_trades (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trade_date TEXT NOT NULL,
+        pair_name TEXT NOT NULL,
+        leg1_symbol TEXT NOT NULL,
+        leg1_action TEXT NOT NULL,
+        leg1_qty REAL NOT NULL,
+        leg1_entry REAL NOT NULL,
+        leg1_exit REAL NOT NULL,
+        leg2_symbol TEXT NOT NULL,
+        leg2_action TEXT NOT NULL,
+        leg2_qty REAL NOT NULL,
+        leg2_entry REAL NOT NULL,
+        leg2_exit REAL NOT NULL,
+        brokerage REAL NOT NULL,
+        other_charges REAL NOT NULL,
+        total_charges REAL NOT NULL,
+        gross_pnl REAL NOT NULL,
+        net_pnl REAL NOT NULL,
+        notes TEXT
+    )
+    """)
+    
     conn.commit()
     conn.close()
 
@@ -201,6 +226,75 @@ def clear_all_capital_movements():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM capital_movements")
+    conn.commit()
+    conn.close()
+
+def add_pair_trade(trade_data: Dict[str, Any]) -> int:
+    """Inserts a completed pair trade into the database and returns its row ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    columns = [
+        "trade_date", "pair_name",
+        "leg1_symbol", "leg1_action", "leg1_qty", "leg1_entry", "leg1_exit",
+        "leg2_symbol", "leg2_action", "leg2_qty", "leg2_entry", "leg2_exit",
+        "brokerage", "other_charges", "total_charges", "gross_pnl", "net_pnl", "notes"
+    ]
+    
+    placeholders = ", ".join(["?"] * len(columns))
+    sql = f"INSERT INTO pair_trades ({', '.join(columns)}) VALUES ({placeholders})"
+    
+    values = [trade_data.get(col) for col in columns]
+    cursor.execute(sql, values)
+    trade_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return trade_id
+
+def update_pair_trade(trade_id: int, trade_data: Dict[str, Any]):
+    """Updates an existing pair trade in the database."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    trade_id = int(trade_id)
+    
+    columns = [
+        "trade_date", "pair_name",
+        "leg1_symbol", "leg1_action", "leg1_qty", "leg1_entry", "leg1_exit",
+        "leg2_symbol", "leg2_action", "leg2_qty", "leg2_entry", "leg2_exit",
+        "brokerage", "other_charges", "total_charges", "gross_pnl", "net_pnl", "notes"
+    ]
+    
+    set_clause = ", ".join([f"{col} = ?" for col in columns])
+    sql = f"UPDATE pair_trades SET {set_clause} WHERE id = ?"
+    
+    values = [trade_data.get(col) for col in columns] + [trade_id]
+    cursor.execute(sql, values)
+    conn.commit()
+    conn.close()
+
+def delete_pair_trade(trade_id: int):
+    """Deletes a pair trade from the database by its ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    trade_id = int(trade_id)
+    cursor.execute("DELETE FROM pair_trades WHERE id = ?", (trade_id,))
+    conn.commit()
+    conn.close()
+
+def fetch_pair_trades_df() -> pd.DataFrame:
+    """Fetches all pair trades and returns them as a pandas DataFrame."""
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT * FROM pair_trades ORDER BY trade_date DESC, id DESC", conn)
+    conn.close()
+    return df
+
+def clear_all_pair_trades():
+    """Deletes all pair trades from the database."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM pair_trades")
     conn.commit()
     conn.close()
 
