@@ -4918,6 +4918,12 @@ def live_scanner_fragment(
     _now2 = _ms2["now_ist"]
     _AUTO = 15 * 60
 
+    # Initialize variables to avoid UnboundLocalError when data has not changed
+    db_meta = load_db_metadata()
+    reg_info = calculate_market_regime()
+    edge = calculate_edge_index()
+
+
     # â”€â”€ Auto historical refresh INSIDE fragment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # Apply any completed background-refresh results
     apply_bg_hist_results()
