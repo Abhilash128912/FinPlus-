@@ -3100,59 +3100,9 @@ def calculate_broad_market_status() -> dict[str, Any]:
     }
 
 
-def calculate_market_regime() -> dict[str, Any]:
-    """Determine the current market regime based on index price action and market breadth."""
-    bms = calculate_broad_market_status()
-    fs = get_feed_state()
-    with fs.lock:
-        nifty_quote = fs.index_data.get("NIDX:40000001", {})
-    
-    nifty_chg_pct = float(nifty_quote.get("day_change_percentage") or nifty_quote.get("change_percentage") or 0.0)
-    advances = bms["advances"]
-    declines = bms["declines"]
-    total = advances + declines
-    adr = advances / declines if declines > 0 else (advances if advances > 0 else 1.0)
-    
-    adv_ratio = advances / total if total > 0 else 0.5
-    
-    if nifty_chg_pct > 0.4 and adv_ratio > 0.58:
-        regime = "Bull Trend"
-        color = "#059669"  # Emerald
-        desc = "Strong broad-market buying pressure"
-    elif nifty_chg_pct <= 0.4 and nifty_chg_pct > 0.02 and adv_ratio > 0.51:
-        regime = "Bull Pullback"
-        color = "#10B981"  # Mint Green
-        desc = "Quiet consolidation or mild pullback in uptrend"
-    elif nifty_chg_pct < -0.4 and adv_ratio < 0.42:
-        regime = "Bear Trend"
-        color = "#ef4444"  # Red
-        desc = "Broad distribution with heavy selling"
-    elif nifty_chg_pct >= -0.4 and nifty_chg_pct < -0.02 and adv_ratio < 0.49:
-        regime = "Bear Rally"
-        color = "#f59e0b"  # Orange
-        desc = "Oversold bounce or short-covering rally in downtrend"
-    elif abs(nifty_chg_pct) <= 0.15 and 0.45 <= adv_ratio <= 0.55:
-        regime = "Range Bound"
-        color = "#6366f1"  # Indigo
-        desc = "Symmetric sideways range, trendless consolidation"
-    else:
-        regime = "Volatile"
-        color = "#8b5cf6"  # Purple
-        desc = "High intraday swings and choppy breadth indicators"
-        
-    return {
-        "regime": regime,
-        "color": color,
-        "desc": desc,
-        "adv_ratio": adv_ratio,
-        "adr": adr
-    }
-
-
 def calculate_edge_index() -> dict[str, Any]:
     """Calculate the Edge Index (0-100) combining trend strength, breadth, momentum, liquidity, and stability."""
     bms = calculate_broad_market_status()
-    reg = calculate_market_regime()
     
     fs = get_feed_state()
     with fs.lock:
@@ -3223,15 +3173,53 @@ def calculate_edge_index() -> dict[str, Any]:
         vol_score = 20.0
         
     total_edge = int(trend_score + breadth_score + momentum_score + liq_score + vol_score)
+    score = min(100, max(0, total_edge))
     
+    # Aligned classifications based on Edge Index Score
+    if score >= 80:
+        state = "HIGH CONVICTION"
+        color = "#059669"  # Emerald Green
+        desc = "High-probability breakout environment. Scale up sizes."
+    elif score >= 65:
+        state = "TRENDING"
+        color = "#10B981"  # Mint Green
+        desc = "Trending structures active. Favor momentum plays."
+    elif score >= 50:
+        state = "MIXED"
+        color = "#f59e0b"  # Orange
+        desc = "Mixed indices. Seek short target scalps."
+    elif score >= 35:
+        state = "CHOPPY"
+        color = "#8b5cf6"  # Purple
+        desc = "Sideways chop. Reduce sizes & prevent churn."
+    else:
+        state = "DEFENSIVE"
+        color = "#ef4444"  # Red
+        desc = "Negative edge. Conserve capital, step aside."
+        
     return {
-        "score": min(100, max(0, total_edge)),
+        "score": score,
+        "state": state,
+        "color": color,
+        "desc": desc,
         "trend": int(trend_score * 5),
         "breadth": int(breadth_score * 5),
         "momentum": int(momentum_score * 5),
         "liquidity": int(liq_score * 5),
         "volatility": int(vol_score * 5)
     }
+
+
+def calculate_market_regime() -> dict[str, Any]:
+    """Wrapper to map regime to Edge State dynamically."""
+    edge = calculate_edge_index()
+    return {
+        "regime": edge["state"],
+        "color": edge["color"],
+        "desc": edge["desc"],
+        "score": edge["score"]
+    }
+
 
 
 def build_history_snapshot() -> pd.DataFrame:
