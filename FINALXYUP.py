@@ -4723,8 +4723,10 @@ def calculate_sector_performance() -> dict[str, float]:
     with fs.lock:
         market_data = dict(fs.market_data)
         
+    eu = effective_universe()
     for symbol, metrics in st.session_state.historical_data.items():
-        symbol_clean = symbol.replace(".NS", "")
+        stock_name = eu.get(symbol) or STOCK_NAMES.get(symbol) or symbol
+        symbol_clean = stock_name.replace(".NS", "")
         sector = meta.get(symbol_clean, {}).get("sector", "Other")
         
         day_chg = metrics.get("day_change_pct", 0.0)
@@ -5156,9 +5158,11 @@ def live_scanner_fragment(
         if nifty_quote:
             nifty_chg = float(nifty_quote.get("day_change_percentage") or nifty_quote.get("change_percentage") or 0.0)
             
+        eu = effective_universe()
         stock_changes = {}
         for instrument, quote in scan_data.items():
-            symbol_clean = instrument.replace(".NS", "")
+            stock_name = eu.get(instrument) or STOCK_NAMES.get(instrument) or instrument
+            symbol_clean = stock_name.replace(".NS", "")
             day_chg = 0.0
             hist = st.session_state.historical_data.get(instrument, {})
             if hist:
