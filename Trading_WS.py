@@ -5157,8 +5157,8 @@ def live_scanner_fragment(
         mkt_trend = bms["trend"]
         
         nifty_chg = 0.0
-        with fs.lock:
-            nifty_quote = fs.index_data.get("NIDX:40000001", {})
+        with _fs.lock:
+            nifty_quote = _fs.index_data.get("NIDX:40000001", {})
         if nifty_quote:
             nifty_chg = float(nifty_quote.get("day_change_percentage") or nifty_quote.get("change_percentage") or 0.0)
             
