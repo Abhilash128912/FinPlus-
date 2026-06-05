@@ -4312,6 +4312,70 @@ def calculate_rsi(candles: list, period: int = 14) -> float:
     rs = avg_gain / avg_loss
     return 100.0 - (100.0 / (1 + rs))
 
+
+@st.cache_data(ttl=300)
+def fetch_news_sentiment(stock_name: str) -> str:
+    """Fetch recent news headlines from Google News RSS and determine sentiment (Positive/Negative/Neutral)."""
+    import urllib.request
+    import xml.etree.ElementTree as ET
+    import urllib.parse
+    
+    # Heuristic sentiment keywords
+    POS_WORDS = {
+        'buy', 'positive', 'raise', 'target', 'growth', 'jump', 'surge', 'bullish', 
+        'record', 'profit', 'double', 'up', 'gain', 'beats', 'expansion', 'high', 
+        'acquisition', 'deal', 'order', 'upgrade', 'strong', 'soars', 'climb', 'outperform'
+    }
+    NEG_WORDS = {
+        'sell', 'negative', 'cut', 'loss', 'fall', 'drop', 'plunge', 'bearish', 
+        'debt', 'decline', 'down', 'hit', 'miss', 'downgrade', 'probe', 'fine', 
+        'warning', 'low', 'crash', 'slump', 'tumbles', 'weak', 'lower', 'underperform'
+    }
+    
+    try:
+        # Build search query: e.g. "TATASTEEL Stock News"
+        query = f"{stock_name} Stock News"
+        url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=en-IN&gl=IN&ceid=IN:en"
+        
+        req = urllib.request.Request(
+            url, 
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        )
+        with urllib.request.urlopen(req, timeout=3) as response:
+            xml_data = response.read()
+        
+        root = ET.fromstring(xml_data)
+        items = root.findall('.//item')
+        if not items:
+            return "Neutral"
+            
+        pos_count = 0
+        neg_count = 0
+        
+        # Look at the top 5 recent headlines
+        for item in items[:5]:
+            title = item.find('title')
+            if title is not None and title.text:
+                title_lower = title.text.lower()
+                words = title_lower.split()
+                for w in words:
+                    w_clean = w.strip('.,!?;:"\'()[]{}')
+                    if w_clean in POS_WORDS:
+                        pos_count += 1
+                    elif w_clean in NEG_WORDS:
+                        neg_count += 1
+                        
+        if pos_count > neg_count + 1:
+            return "Positive"
+        elif neg_count > pos_count + 1:
+            return "Negative"
+        else:
+            return "Neutral"
+            
+    except Exception:
+        return "Neutral"
+
+
 def generate_nifty_option_chain_and_signal(nifty_ltp: float, candles: list) -> dict | None:
     if nifty_ltp is None or nifty_ltp <= 0:
         return None
@@ -4939,6 +5003,15 @@ def live_scanner_fragment(
                 _trade_val = _qty * _ltp
                 _max_risk = _qty * _sl_dist
                 
+                # Fetch news sentiment dynamically (cached for 5 minutes)
+                _news_sent = fetch_news_sentiment(_stk)
+                if _news_sent == "Positive":
+                    _news_color = "#059669"
+                elif _news_sent == "Negative":
+                    _news_color = "#dc2626"
+                else:
+                    _news_color = "#64748b"
+                
                 st.markdown(
                     f'<div class="premium-card {_card_class}">'
                     f'<div>'
@@ -4950,7 +5023,8 @@ def live_scanner_fragment(
                     f'<div style="font-size:0.82rem;color:#334155;line-height:1.45;">'
                     f'🎯 Entry Limit: <b style="color:#0f172a;">₹{_ltp:.2f}</b> ({_chg:+.2f}%)<br>'
                     f'🛡️ Stop Loss: <b style="color:#dc2626;">₹{_sl:.2f}</b> (1.5%)<br>'
-                    f'📈 Target Net: <b style="color:#059669;">₹{_tgt:.2f}</b> (3.0%)'
+                    f'📈 Target Net: <b style="color:#059669;">₹{_tgt:.2f}</b> (3.0%)<br>'
+                    f'📰 News: <span style="color:{_news_color};font-weight:700;">{_news_sent}</span>'
                     f'</div>'
                     f'</div>'
                     f'<div class="action-console">'
@@ -4998,6 +5072,15 @@ def live_scanner_fragment(
                 _total_premium_val = _lots * lot_size * est_premium
                 _max_risk = _total_premium_val * 0.35
                 
+                # Fetch news sentiment dynamically (cached for 5 minutes)
+                _news_sent = fetch_news_sentiment(_stk)
+                if _news_sent == "Positive":
+                    _news_color = "#059669"
+                elif _news_sent == "Negative":
+                    _news_color = "#dc2626"
+                else:
+                    _news_color = "#64748b"
+                
                 st.markdown(
                     f'<div class="premium-card premium-card-options">'
                     f'<div>'
@@ -5009,7 +5092,8 @@ def live_scanner_fragment(
                     f'<div style="font-size:0.82rem;color:#334155;line-height:1.45;">'
                     f'💰 Under. LTP: <b style="color:#0f172a;">₹{_ltp:.2f}</b> ({_chg:+.2f}%)<br>'
                     f'🛡️ Stop Loss: <b style="color:#dc2626;">Premium -35%</b><br>'
-                    f'📈 Target Net: <b style="color:#059669;">Premium +70%</b>'
+                    f'📈 Target Net: <b style="color:#059669;">Premium +70%</b><br>'
+                    f'📰 News: <span style="color:{_news_color};font-weight:700;">{_news_sent}</span>'
                     f'</div>'
                     f'</div>'
                     f'<div class="action-console">'
@@ -5120,6 +5204,15 @@ def live_scanner_fragment(
                 _deployed = _qty * _ltp
                 _max_risk = _qty * (_ltp - _sl)
                 
+                # Fetch news sentiment dynamically (cached for 5 minutes)
+                _news_sent = fetch_news_sentiment(_stk)
+                if _news_sent == "Positive":
+                    _news_color = "#059669"
+                elif _news_sent == "Negative":
+                    _news_color = "#dc2626"
+                else:
+                    _news_color = "#64748b"
+                
                 st.markdown(
                     f'<div class="premium-card premium-card-swing">'
                     f'<div>'
@@ -5131,7 +5224,8 @@ def live_scanner_fragment(
                     f'<div style="font-size:0.82rem;color:#334155;line-height:1.45;">'
                     f'🎯 Entry Limit: <b style="color:#0f172a;">₹{_ltp:.2f}</b> (F:{_funda} M:{_mntm})<br>'
                     f'🛡️ Stop Loss: <b style="color:#dc2626;">₹{_sl:.2f}</b> (5%)<br>'
-                    f'📈 Target Net: <b style="color:#059669;">₹{_tgt:.2f}</b> (12%)'
+                    f'📈 Target Net: <b style="color:#059669;">₹{_tgt:.2f}</b> (12%)<br>'
+                    f'📰 News: <span style="color:{_news_color};font-weight:700;">{_news_sent}</span>'
                     f'</div>'
                     f'</div>'
                     f'<div class="action-console">'
