@@ -3839,16 +3839,22 @@ def render_index_chart(name, index_token, access_token, sr_pivot_type: str = "No
         marker_color=bar_colors, marker_opacity=0.45,
         name="Volume", showlegend=False), row=2, col=1)
         
+    # Core indicators added as interactive Scatter lines
     for label, val, col, dash in [("VWAP", latest_vwap, "#1d4ed8", "dash"),
-                                    ("ORB H", orb_h, "#059669", "dashdot"),
-                                    ("ORB L", orb_l, "#dc2626", "dashdot")]:
+                                  ("ORB H", orb_h, "#059669", "dashdot"),
+                                  ("ORB L", orb_l, "#dc2626", "dashdot")]:
         if val > 0:
-            fig.add_hline(y=val, row=1, col=1, line_dash=dash, line_color=col, line_width=1.3,
-                annotation_text=f" {label} {val:,.2f}",
-                annotation_font=dict(color=col, size=10, family="JetBrains Mono, monospace"),
-                annotation_position="right")
+            fig.add_trace(go.Scatter(
+                x=[today_df["dt"].iloc[0], today_df["dt"].iloc[-1]],
+                y=[val, val],
+                mode="lines",
+                line=dict(color=col, width=1.3, dash=dash),
+                name=label,
+                hoverinfo="y+name",
+                showlegend=True
+            ), row=1, col=1)
                 
-    # Add TradingView Daily Pivot lines
+    # Add TradingView Daily Pivot lines as hoverable Scatter traces
     if daily_pivots:
         for lvl_name, lvl_val in daily_pivots.items():
             if lvl_val <= 0:
@@ -3859,24 +3865,39 @@ def render_index_chart(name, index_token, access_token, sr_pivot_type: str = "No
                 color = "#7c3aed"
             else:
                 color = "#b45309"
-            fig.add_hline(
-                y=lvl_val, row=1, col=1,
-                line_dash="dot", line_color=color, line_width=1.1,
-                annotation_text=f" {lvl_name} {lvl_val:,.1f}",
-                annotation_font=dict(color=color, size=9, family="JetBrains Mono, monospace"),
-                annotation_position="left"
-            )
+            fig.add_trace(go.Scatter(
+                x=[today_df["dt"].iloc[0], today_df["dt"].iloc[-1]],
+                y=[lvl_val, lvl_val],
+                mode="lines",
+                line=dict(color=color, width=1.1, dash="dot"),
+                name=lvl_name,
+                hoverinfo="y+name",
+                showlegend=False
+            ), row=1, col=1)
             
+    # Resistance levels
     for r in sorted([v for v in resistance if v > ltp]):
-        fig.add_hline(y=r, row=1, col=1, line_dash="dot", line_color="#7c3aed", line_width=1.0,
-            annotation_text=f" R {r:,.2f}",
-            annotation_font=dict(color="#7c3aed", size=9, family="JetBrains Mono, monospace"),
-            annotation_position="right")
+        fig.add_trace(go.Scatter(
+            x=[today_df["dt"].iloc[0], today_df["dt"].iloc[-1]],
+            y=[r, r],
+            mode="lines",
+            line=dict(color="#7c3aed", width=1.0, dash="dot"),
+            name="Resist",
+            hoverinfo="y+name",
+            showlegend=False
+        ), row=1, col=1)
+
+    # Support levels
     for s in sorted([v for v in support if v < ltp], reverse=True):
-        fig.add_hline(y=s, row=1, col=1, line_dash="dot", line_color="#b45309", line_width=1.0,
-            annotation_text=f" S {s:,.2f}",
-            annotation_font=dict(color="#b45309", size=9, family="JetBrains Mono, monospace"),
-            annotation_position="right")
+        fig.add_trace(go.Scatter(
+            x=[today_df["dt"].iloc[0], today_df["dt"].iloc[-1]],
+            y=[s, s],
+            mode="lines",
+            line=dict(color="#b45309", width=1.0, dash="dot"),
+            name="Support",
+            hoverinfo="y+name",
+            showlegend=False
+        ), row=1, col=1)
     arrow_sym = "up" if is_up else "dn"
     fig.add_annotation(xref="paper", x=1.0, y=ltp, yref="y", text=f" > {ltp:,.2f}",
         showarrow=False, xanchor="left",
@@ -3888,7 +3909,8 @@ def render_index_chart(name, index_token, access_token, sr_pivot_type: str = "No
             f"<span style='font-size:9px;color:#475569;margin-left:14px'>  S/R from {n_days}d pivot clustering</span>"),
             x=0.01, y=0.97, xanchor="left"),
         paper_bgcolor="#ffffff", plot_bgcolor="#f8fafc", height=440,
-        margin=dict(l=8, r=140, t=46, b=8),
+        margin=dict(l=8, r=60, t=46, b=8),
+        legend=dict(orientation="h", yanchor="top", y=-0.08, xanchor="center", x=0.5, font=dict(size=9, family="Outfit, sans-serif")),
         xaxis=dict(showgrid=False, zeroline=False, color="#64748b",
             tickfont=dict(size=10, color="#64748b"), rangeslider=dict(visible=False)),
         xaxis2=dict(showgrid=False, zeroline=False, color="#64748b",
@@ -4023,6 +4045,7 @@ def render_candlestick_chart(stock_name: str, stock_token: str, signal_type: str
         name="Volume", showlegend=False,
     ), row=2, col=1)
 
+    # Core indicators added as interactive Scatter lines
     for label, val, colour, dash in [
         ("VWAP",   vwap,  "#1d4ed8", "dash"),
         ("EMA 20", ema20, "#7c3aed", "dot"),
@@ -4030,15 +4053,17 @@ def render_candlestick_chart(stock_name: str, stock_token: str, signal_type: str
         ("ORB L",  orb_l, "#dc2626", "dashdot"),
     ]:
         if val > 0:
-            fig.add_hline(
-                y=val, row=1, col=1,
-                line_dash=dash, line_color=colour, line_width=1.3,
-                annotation_text=f" {label} {val:.2f}",
-                annotation_font=dict(color=colour, size=11, family="JetBrains Mono, monospace"),
-                annotation_position="right",
-            )
+            fig.add_trace(go.Scatter(
+                x=[cdf["dt"].iloc[0], cdf["dt"].iloc[-1]],
+                y=[val, val],
+                mode="lines",
+                line=dict(color=colour, width=1.3, dash=dash),
+                name=label,
+                hoverinfo="y+name",
+                showlegend=True
+            ), row=1, col=1)
 
-    # Add TradingView Daily Pivot lines
+    # Add TradingView Daily Pivot lines as hoverable Scatter traces
     if daily_pivots:
         for lvl_name, lvl_val in daily_pivots.items():
             if lvl_val <= 0:
@@ -4049,27 +4074,39 @@ def render_candlestick_chart(stock_name: str, stock_token: str, signal_type: str
                 color = "#7c3aed"
             else:
                 color = "#b45309"
-            fig.add_hline(
-                y=lvl_val, row=1, col=1,
-                line_dash="dot", line_color=color, line_width=1.1,
-                annotation_text=f" {lvl_name} {lvl_val:,.1f}",
-                annotation_font=dict(color=color, size=9, family="JetBrains Mono, monospace"),
-                annotation_position="left"
-            )
+            fig.add_trace(go.Scatter(
+                x=[cdf["dt"].iloc[0], cdf["dt"].iloc[-1]],
+                y=[lvl_val, lvl_val],
+                mode="lines",
+                line=dict(color=color, width=1.1, dash="dot"),
+                name=lvl_name,
+                hoverinfo="y+name",
+                showlegend=False
+            ), row=1, col=1)
 
-    # Resistance levels — purple dotted
+    # Resistance levels
     for r in sorted([v for v in resistance if v > ltp]):
-        fig.add_hline(y=r, row=1, col=1, line_dash="dot", line_color="#7c3aed", line_width=1.0,
-                      annotation_text=f" R {r:,.2f}",
-                      annotation_font=dict(color="#7c3aed", size=9, family="JetBrains Mono, monospace"),
-                      annotation_position="right")
+        fig.add_trace(go.Scatter(
+            x=[cdf["dt"].iloc[0], cdf["dt"].iloc[-1]],
+            y=[r, r],
+            mode="lines",
+            line=dict(color="#7c3aed", width=1.0, dash="dot"),
+            name="Resist",
+            hoverinfo="y+name",
+            showlegend=False
+        ), row=1, col=1)
 
-    # Support levels — amber dotted
+    # Support levels
     for s in sorted([v for v in support if v < ltp], reverse=True):
-        fig.add_hline(y=s, row=1, col=1, line_dash="dot", line_color="#b45309", line_width=1.0,
-                      annotation_text=f" S {s:,.2f}",
-                      annotation_font=dict(color="#b45309", size=9, family="JetBrains Mono, monospace"),
-                      annotation_position="right")
+        fig.add_trace(go.Scatter(
+            x=[cdf["dt"].iloc[0], cdf["dt"].iloc[-1]],
+            y=[s, s],
+            mode="lines",
+            line=dict(color="#b45309", width=1.0, dash="dot"),
+            name="Support",
+            hoverinfo="y+name",
+            showlegend=False
+        ), row=1, col=1)
 
     fig.add_annotation(
         xref="paper", x=1.0, y=ltp, yref="y",
@@ -4085,7 +4122,8 @@ def render_candlestick_chart(stock_name: str, stock_token: str, signal_type: str
             x=0.01, y=0.97, xanchor="left",
         ),
         paper_bgcolor="#ffffff", plot_bgcolor="#f8fafc",
-        height=380, margin=dict(l=8, r=130, t=42, b=8),
+        height=380, margin=dict(l=8, r=60, t=42, b=8),
+        legend=dict(orientation="h", yanchor="top", y=-0.08, xanchor="center", x=0.5, font=dict(size=9, family="Outfit, sans-serif")),
         xaxis=dict(showgrid=False, zeroline=False, color="#64748b",
                    tickfont=dict(size=10, color="#64748b"), rangeslider=dict(visible=False)),
         xaxis2=dict(showgrid=False, zeroline=False, color="#64748b",
