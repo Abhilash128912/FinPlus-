@@ -4809,6 +4809,7 @@ def live_scanner_fragment(
             if not candidates.empty:
                 candidates = candidates.sort_values(by=["Score", "RVOL"], ascending=[False, False])
                 intraday_pick = candidates.iloc[0].to_dict()
+                intraday_pick["Suggested_At"] = datetime.now(_IST_TZ).strftime("%I:%M:%S %p")
                 st.session_state.locked_intraday_pick = intraday_pick.copy()
                 if st.session_state.locked_at_time == 0.0:
                     st.session_state.locked_at_time = time.time()
@@ -4832,6 +4833,7 @@ def live_scanner_fragment(
                 option_pick = fo_candidates.iloc[0].to_dict()
             else:
                 option_pick = df.sort_values(by=["RVOL"], ascending=False).iloc[0].to_dict()
+            option_pick["Suggested_At"] = datetime.now(_IST_TZ).strftime("%I:%M:%S %p")
             st.session_state.locked_option_pick = option_pick.copy()
             if st.session_state.locked_at_time == 0.0:
                 st.session_state.locked_at_time = time.time()
@@ -4887,6 +4889,7 @@ def live_scanner_fragment(
             if nifty_ltp is not None:
                 nifty_pick = generate_nifty_option_chain_and_signal(nifty_ltp, nifty_candles)
                 if nifty_pick:
+                    nifty_pick["Suggested_At"] = datetime.now(_IST_TZ).strftime("%I:%M:%S %p")
                     st.session_state.locked_nifty_option_pick = nifty_pick.copy()
                     if st.session_state.locked_at_time == 0.0:
                         st.session_state.locked_at_time = time.time()
@@ -4925,6 +4928,7 @@ def live_scanner_fragment(
                             "Funda": int(row[3]),
                             "Mntm": int(row[4]),
                             "LTP": float(row[5]),
+                            "Suggested_At": datetime.now(_IST_TZ).strftime("%I:%M:%S %p")
                         }
                         st.session_state.locked_swing_pick = swing_pick.copy()
                         if st.session_state.locked_at_time == 0.0:
@@ -5015,7 +5019,10 @@ def live_scanner_fragment(
                 st.markdown(
                     f'<div class="premium-card {_card_class}">'
                     f'<div>'
-                    f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">⚡ INTRADAY sniper PLAY</div>'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.25rem;">'
+                    f'<span style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">⚡ INTRADAY sniper PLAY</span>'
+                    f'<span style="font-size:0.65rem;color:#64748b;font-family:\'JetBrains Mono\';">{intraday_pick.get("Suggested_At", "")}</span>'
+                    f'</div>'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
                     f'<span style="font-size:1.35rem;font-weight:800;color:#0f172a;letter-spacing:-0.03em;font-family:\'Outfit\',sans-serif;">{_stk}</span>'
                     f'<span class="card-badge" style="background:{_badge_bg};color:{_badge_color};border:1.25px solid {_badge_border};">{_sig}</span>'
@@ -5084,7 +5091,10 @@ def live_scanner_fragment(
                 st.markdown(
                     f'<div class="premium-card premium-card-options">'
                     f'<div>'
-                    f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">📦 STOCK OPTION SNIPER</div>'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.25rem;">'
+                    f'<span style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">📦 STOCK OPTION SNIPER</span>'
+                    f'<span style="font-size:0.65rem;color:#64748b;font-family:\'JetBrains Mono\';">{option_pick.get("Suggested_At", "")}</span>'
+                    f'</div>'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
                     f'<span style="font-size:1.15rem;font-weight:800;color:#0f172a;letter-spacing:-0.03em;font-family:\'Outfit\',sans-serif;">{_contract}</span>'
                     f'<span class="card-badge" style="background:#e0f2fe;color:#0369a1;border:1.25px solid #0ea5e9;">ATM Opt</span>'
@@ -5148,7 +5158,10 @@ def live_scanner_fragment(
                 st.markdown(
                     f'<div class="premium-card {_card_class}">'
                     f'<div>'
-                    f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">📦 NIFTY INDEX OPTION SNIPER</div>'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.25rem;">'
+                    f'<span style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">📦 NIFTY INDEX OPTION SNIPER</span>'
+                    f'<span style="font-size:0.65rem;color:#64748b;font-family:\'JetBrains Mono\';">{nifty_pick.get("Suggested_At", "")}</span>'
+                    f'</div>'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
                     f'<span style="font-size:1.02rem;font-weight:800;color:#0f172a;letter-spacing:-0.03em;font-family:\'Outfit\',sans-serif;word-break:break-all;">{_contract}</span>'
                     f'<span class="card-badge" style="background:{_badge_bg};color:{_badge_color};border:1.25px solid {_badge_border};">INDEX</span>'
@@ -5216,7 +5229,10 @@ def live_scanner_fragment(
                 st.markdown(
                     f'<div class="premium-card premium-card-swing">'
                     f'<div>'
-                    f'<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:0.25rem;">📈 SWING ALPHA PICK</div>'
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.25rem;">'
+                    f'<span style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">📈 SWING ALPHA PICK</span>'
+                    f'<span style="font-size:0.65rem;color:#64748b;font-family:\'JetBrains Mono\';">{swing_pick.get("Suggested_At", "")}</span>'
+                    f'</div>'
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
                     f'<span style="font-size:1.35rem;font-weight:800;color:#0f172a;letter-spacing:-0.03em;font-family:\'Outfit\',sans-serif;">{_stk}</span>'
                     f'<span class="card-badge" style="background:#f3e8ff;color:#6b21a8;border:1.25px solid #a855f7;">Score: {_total}</span>'
