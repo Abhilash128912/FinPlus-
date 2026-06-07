@@ -66,9 +66,38 @@ html, body, [class*="css"] {
 }
 
 /* ─── MOBILE ACCENTS & INPUTS ───────────────────────────────────────── */
+.stTextInput input,
+.stNumberInput input,
+.stDateInput input,
+textarea {
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 10px !important;
+}
+div[data-baseweb="base-input"],
+.stNumberInput div[data-baseweb="input"] {
+    background: #FFFFFF !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 10px !important;
+}
+div[data-baseweb="select"] > div,
+div[data-baseweb="select"] > div > div {
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 10px !important;
+}
+div[data-baseweb="select"] * { color: #0F172A !important; }
+div[data-baseweb="select"] svg { fill: #64748B !important; }
+input::placeholder { color: #94A3B8 !important; opacity: 1 !important; }
+
+.stButton > button,
+.stButton > button * {
+    color: #FFFFFF !important;
+}
 .stButton > button {
     background: linear-gradient(to bottom, #059669, #047857) !important;
-    color: #FFFFFF !important;
     border: 1px solid #065F46 !important;
     border-bottom: 4px solid #064E3B !important;
     border-radius: 12px !important;
@@ -91,12 +120,6 @@ html, body, [class*="css"] {
     transform: translateY(3px) !important;
 }
 
-.stTextInput input, .stNumberInput input, .stDateInput input, div[data-baseweb="select"] > div {
-    border-radius: 10px !important;
-    border: 1px solid #CBD5E1 !important;
-    background: #FFFFFF !important;
-}
-
 /* Headers */
 h2, h3, h5 {
     font-family: 'Outfit', sans-serif !important;
@@ -105,6 +128,51 @@ h2, h3, h5 {
 }
 </style>
 """, unsafe_allow_html=True)
+
+DEFAULT_COA = {
+    "Cash": "Asset",
+    "Punjab National Bank": "Asset",
+    "Jio Payment Bank": "Asset",
+    "Stock Market Asset": "Asset",
+    "Gold Asset": "Asset",
+    "BlinkX Account": "Asset",
+    "INDmoney Account": "Asset",
+    "Mutual Fund": "Asset",
+    "KSFE Sugama Account 004000010006313": "Asset",
+    "Bajaj Loan": "Liability",
+    "PNB Gold Loan": "Liability",
+    "KSFE Gold Loan": "Liability",
+    "Chitty Liability": "Liability",
+    "Credit Card": "Liability",
+    "KSFE GOLD LOAN 00400120052099": "Liability",
+    "KSFE GOLD LOAN 00400120052097": "Liability",
+    "KSFE GOLD LOAN 00400120052100": "Liability",
+    "Accrued Interest(KSFE Gold Loan)": "Liability",
+    "Accrued Interest(PNB Gold Loan)": "Liability",
+    "Retained Earnings": "Equity",
+    "Opening Balance Equity": "Equity",
+    "Salary": "Revenue",
+    "Stock Market Gains": "Revenue",
+    "Bank Interest Received": "Revenue",
+    "Trading Income": "Revenue",
+    "Gold Loan PNB Interest": "Expense",
+    "Chitty": "Expense",
+    "KSFE Interest Tiers": "Expense",
+    "Innamma": "Expense",
+    "Other Expenses": "Expense",
+    "Stock Market Loss": "Expense",
+    "Groceries": "Expense",
+    "Refershment": "Expense",
+    "Travelling Expense(Petrol)": "Expense",
+    "Travelling Expense(Radhu)": "Expense",
+    "Shopping": "Expense",
+    "Mobile Expenses": "Expense",
+    "Bank Charges": "Expense",
+    "Bank Interest": "Expense",
+    "Trading Loss": "Expense",
+    "Subscription": "Expense",
+    "KSFE Gold Loan Interest": "Expense"
+}
 
 # -----------------------------
 # CLOUD BACKEND SYNC HELPERS
@@ -123,10 +191,10 @@ def load_from_cloud(url, secret):
             
         response = requests.get(fetch_url, params=params, timeout=8)
         if response.status_code == 200:
-            return response.json()
+            return response.json(), True
     except Exception:
         pass
-    return None
+    return None, False
 
 def save_to_cloud(payload, url, secret):
     try:
@@ -161,10 +229,32 @@ if "adv_form_version" not in st.session_state:
     st.session_state.adv_form_version = 0
 
 # Try to auto-load credentials from Streamlit Secrets if available
-if not st.session_state.cloud_url and "FIREBASE_URL" in st.secrets:
-    st.session_state.cloud_url = st.secrets["FIREBASE_URL"]
-if not st.session_state.cloud_secret and "FIREBASE_SECRET" in st.secrets:
-    st.session_state.cloud_secret = st.secrets["FIREBASE_SECRET"]
+try:
+    if not st.session_state.cloud_url and "FIREBASE_URL" in st.secrets:
+        st.session_state.cloud_url = st.secrets["FIREBASE_URL"]
+    if not st.session_state.cloud_secret and "FIREBASE_SECRET" in st.secrets:
+        st.session_state.cloud_secret = st.secrets["FIREBASE_SECRET"]
+except Exception:
+    pass
+
+# Try to auto-load credentials from local finance_data.json if available
+if not st.session_state.cloud_url:
+    possible_paths = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "finance_data.json"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "finance_data.json"),
+        os.path.join("C:\\Users\\AbhilashBabu", "finance_data.json")
+    ]
+    for p in possible_paths:
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    local_data = json.load(f)
+                    if local_data.get("cloud_sync_enabled", False) and local_data.get("cloud_url", ""):
+                        st.session_state.cloud_url = local_data["cloud_url"]
+                        st.session_state.cloud_secret = local_data.get("cloud_secret", "")
+                        break
+            except Exception:
+                pass
 
 # -----------------------------
 # CONFIGURATION SCREEN
@@ -181,10 +271,25 @@ if not st.session_state.cloud_url:
         if url_input.strip():
             url_clean = url_input.strip()
             secret_clean = secret_input.strip()
-            data = load_from_cloud(url_clean, secret_clean)
-            if data:
+            data, success = load_from_cloud(url_clean, secret_clean)
+            if success:
                 st.session_state.cloud_url = url_clean
                 st.session_state.cloud_secret = secret_clean
+                if data is None:
+                    # Initialize default database structure since it was empty
+                    data = {
+                        "owner_name": "Abhilash",
+                        "accounts": {name: {"type": typ, "parent": None} for name, typ in DEFAULT_COA.items()},
+                        "journal_entries": [],
+                        "gold_qty": 177.0,
+                        "password": "finance@2026",
+                        "security_question": "What is the owner name of this finance ledger?",
+                        "security_answer": "Abhilash",
+                        "cloud_sync_enabled": True,
+                        "cloud_url": url_clean,
+                        "cloud_secret": secret_clean
+                    }
+                    save_to_cloud(data, url_clean, secret_clean)
                 st.session_state.ledger_data = data
                 st.success("✅ Successfully linked to database!")
                 st.rerun()
@@ -198,8 +303,22 @@ if not st.session_state.cloud_url:
 # FETCH/REFRESH LEDGER
 # -----------------------------
 if st.session_state.ledger_data is None:
-    data = load_from_cloud(st.session_state.cloud_url, st.session_state.cloud_secret)
-    if data:
+    data, success = load_from_cloud(st.session_state.cloud_url, st.session_state.cloud_secret)
+    if success:
+        if data is None:
+            data = {
+                "owner_name": "Abhilash",
+                "accounts": {name: {"type": typ, "parent": None} for name, typ in DEFAULT_COA.items()},
+                "journal_entries": [],
+                "gold_qty": 177.0,
+                "password": "finance@2026",
+                "security_question": "What is the owner name of this finance ledger?",
+                "security_answer": "Abhilash",
+                "cloud_sync_enabled": True,
+                "cloud_url": st.session_state.cloud_url,
+                "cloud_secret": st.session_state.cloud_secret
+            }
+            save_to_cloud(data, st.session_state.cloud_url, st.session_state.cloud_secret)
         st.session_state.ledger_data = data
     else:
         st.error("❌ Failed to load cloud data. Verify settings or retry.")
@@ -354,8 +473,14 @@ with tab_q:
     st.markdown("##### Quick Double-Entry transaction")
     
     v = st.session_state.qe_form_version
-    qe_date = st.date_input("📅 Date", value=datetime.now().date(), key=f"qe_date_{v}")
+    raw_date = st.date_input("📅 Date", value=datetime.now().date(), key=f"qe_date_{v}")
     
+    # Handle range date input robustly
+    if isinstance(raw_date, (list, tuple)):
+        qe_date = raw_date[0] if len(raw_date) > 0 else datetime.now().date()
+    else:
+        qe_date = raw_date
+        
     # Suggestion / Narration
     unique_narrations = sorted(list(set([jv.get("narration", "").strip() for jv in d.get("journal_entries", []) if jv.get("narration", "").strip()])))
     if "-- Custom --" not in unique_narrations:
@@ -397,7 +522,7 @@ with tab_q:
     )
 
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    qe_submit = st.button("Post Transaction", key="btn_quick_post")
+    qe_submit = st.button("💾 Record Entry", key="btn_quick_post")
 
     if qe_submit:
         if not qe_narration.strip():
@@ -427,16 +552,20 @@ with tab_q:
                 st.success(f"✅ Posted Transaction {next_id} successfully!")
                 st.rerun()
             else:
-                st.error("❌ Failed to push data to cloud database. Try again.")
-
-# ─────────────────────────────────────────────────────────────────────────────
+                st.error("❌ Failed to push data to cloud database. Try again.")# ─────────────────────────────────────────────────────────────────────────────
 # TAB 2 — ADVANCED JV SPLITS EDITOR
 # ─────────────────────────────────────────────────────────────────────────────
 with tab_a:
     st.markdown("##### Advanced Journal Voucher Splits")
     
     v_adv = st.session_state.adv_form_version
-    jv_date = st.date_input("JV Date", value=datetime.now().date(), key=f"jv_new_date_{v_adv}")
+    raw_jv_date = st.date_input("JV Date", value=datetime.now().date(), key=f"jv_new_date_{v_adv}")
+    
+    # Handle range date input robustly
+    if isinstance(raw_jv_date, (list, tuple)):
+        jv_date = raw_jv_date[0] if len(raw_jv_date) > 0 else datetime.now().date()
+    else:
+        jv_date = raw_jv_date
     
     unique_narrations = sorted(list(set([jv.get("narration", "").strip() for jv in d.get("journal_entries", []) if jv.get("narration", "").strip()])))
     if "-- Custom --" not in unique_narrations:
@@ -533,7 +662,7 @@ with tab_a:
         if has_empty_account:
             st.warning("⚠️ Select account names for all non-zero amounts.")
             
-        if st.button("💾 Post Journal Voucher", disabled=has_empty_account, key="btn_post_jv"):
+        if st.button("💾 Record Journal Voucher", disabled=has_empty_account, key="btn_post_jv"):
             next_id = f"JV-{len(d.get('journal_entries', [])) + 1:05d}"
             
             d["journal_entries"].append({
