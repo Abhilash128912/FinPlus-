@@ -2128,12 +2128,12 @@ const styles = StyleSheet.create({
 
   // Bottom Custom Navigation bar
   tabBar: {
-    height: 60,
+    height: 72,
     flexDirection: 'row',
     backgroundColor: '#0c0f1d',
     borderTopWidth: 1,
     borderTopColor: '#1e293b',
-    paddingBottom: 4,
+    paddingBottom: 14,
   },
   tabItem: {
     flex: 1,
