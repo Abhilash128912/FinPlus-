@@ -85,6 +85,31 @@ def init_db():
     )
     """)
     
+    # Create paper_trades table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS paper_trades (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trade_date TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        segment TEXT NOT NULL,
+        action TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        entry_price REAL NOT NULL,
+        exit_price REAL NOT NULL,
+        brokerage REAL NOT NULL,
+        stt REAL NOT NULL,
+        exchange_charges REAL NOT NULL,
+        sebi_charges REAL NOT NULL,
+        stamp_duty REAL NOT NULL,
+        gst REAL NOT NULL,
+        total_charges REAL NOT NULL,
+        gross_pnl REAL NOT NULL,
+        net_pnl REAL NOT NULL,
+        source_screener TEXT NOT NULL,
+        notes TEXT
+    )
+    """)
+    
     conn.commit()
     conn.close()
 
@@ -295,6 +320,75 @@ def clear_all_pair_trades():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM pair_trades")
+    conn.commit()
+    conn.close()
+
+def add_paper_trade(trade_data: Dict[str, Any]) -> int:
+    """Inserts a completed paper trade into the database and returns its row ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    columns = [
+        "trade_date", "symbol", "segment", "action", "quantity", 
+        "entry_price", "exit_price", "brokerage", "stt", 
+        "exchange_charges", "sebi_charges", "stamp_duty", "gst", 
+        "total_charges", "gross_pnl", "net_pnl", "source_screener", "notes"
+    ]
+    
+    placeholders = ", ".join(["?"] * len(columns))
+    sql = f"INSERT INTO paper_trades ({', '.join(columns)}) VALUES ({placeholders})"
+    
+    values = [trade_data.get(col) for col in columns]
+    cursor.execute(sql, values)
+    trade_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return trade_id
+
+def update_paper_trade(trade_id: int, trade_data: Dict[str, Any]):
+    """Updates an existing paper trade in the database."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    trade_id = int(trade_id)
+    
+    columns = [
+        "trade_date", "symbol", "segment", "action", "quantity", 
+        "entry_price", "exit_price", "brokerage", "stt", 
+        "exchange_charges", "sebi_charges", "stamp_duty", "gst", 
+        "total_charges", "gross_pnl", "net_pnl", "source_screener", "notes"
+    ]
+    
+    set_clause = ", ".join([f"{col} = ?" for col in columns])
+    sql = f"UPDATE paper_trades SET {set_clause} WHERE id = ?"
+    
+    values = [trade_data.get(col) for col in columns] + [trade_id]
+    cursor.execute(sql, values)
+    conn.commit()
+    conn.close()
+
+def delete_paper_trade(trade_id: int):
+    """Deletes a paper trade from the database by its ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    trade_id = int(trade_id)
+    cursor.execute("DELETE FROM paper_trades WHERE id = ?", (trade_id,))
+    conn.commit()
+    conn.close()
+
+def fetch_paper_trades_df() -> pd.DataFrame:
+    """Fetches all paper trades and returns them as a pandas DataFrame."""
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT * FROM paper_trades ORDER BY trade_date DESC, id DESC", conn)
+    conn.close()
+    return df
+
+def clear_all_paper_trades():
+    """Deletes all paper trades from the database."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM paper_trades")
     conn.commit()
     conn.close()
 
