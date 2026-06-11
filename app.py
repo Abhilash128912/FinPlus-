@@ -1339,6 +1339,28 @@ with tab_logs:
     filtered_count = len(df_filtered)
     st.markdown(f"<p style='color: var(--text-secondary); font-size: 0.85rem;'>Showing {filtered_count} of {total_db_count} logs</p>", unsafe_allow_html=True)
     
+    if not df_filtered.empty:
+        filtered_gross_pnl = df_filtered['gross_pnl'].sum()
+        filtered_total_charges = df_filtered['total_charges'].sum()
+        filtered_net_pnl = df_filtered['net_pnl'].sum()
+        
+        gross_color = "var(--accent-green)" if filtered_gross_pnl >= 0 else "#EA580C"
+        net_color = "var(--accent-green)" if filtered_net_pnl >= 0 else "#EA580C"
+        gross_sign = "+" if filtered_gross_pnl > 0 else ""
+        net_sign = "+" if filtered_net_pnl > 0 else ""
+        
+        st.markdown(
+            f"""
+            <div style="background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 15px; display: flex; gap: 30px; align-items: center; flex-wrap: wrap;">
+                <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary);">Filtered Totals:</span>
+                <div><span style="color: var(--text-secondary); font-size: 0.82rem;">Gross P&L:</span> <strong style="color: {gross_color};">{gross_sign}{currency_sym}{filtered_gross_pnl:,.2f}</strong></div>
+                <div><span style="color: var(--text-secondary); font-size: 0.82rem;">Total Charges:</span> <strong style="color: var(--text-primary);">{currency_sym}{filtered_total_charges:,.2f}</strong></div>
+                <div><span style="color: var(--text-secondary); font-size: 0.82rem;">Net P&L:</span> <strong style="color: {net_color};">{net_sign}{currency_sym}{filtered_net_pnl:,.2f}</strong></div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
     # Display styled table
     df_display = df_filtered.copy()
     if not df_display.empty:
@@ -2963,6 +2985,41 @@ with tab_rules:
                 st.success("Savings levels updated successfully!")
                 st.rerun()
                 
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Form to add lumpsum savings
+        with st.form("lumpsum_savings_form"):
+            st.markdown("<h5>💰 Add Lump Sum Savings</h5>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size:0.85rem; color: var(--text-secondary); margin-top:-10px; margin-bottom:15px;'>Distribute a lump sum savings addition across all segments according to their current allocation percentage.</p>", unsafe_allow_html=True)
+            
+            lumpsum_amount = st.number_input("Lump Sum Amount to Add (₹)", min_value=0.0, step=100.0, value=0.0, key="lumpsum_amount_input")
+            
+            # Show live distribution preview
+            preview_cols = st.columns(2)
+            preview_idx = 0
+            for seg_key, seg_data in rules["rules"].items():
+                alloc_pct = float(seg_data.get("allocation_pct", 15.0))
+                share = lumpsum_amount * (alloc_pct / 100.0)
+                col_to_use = preview_cols[preview_idx % 2]
+                col_to_use.markdown(f"<span style='font-size:0.85rem; color: var(--text-secondary);'>{display_names.get(seg_key, seg_key)} ({alloc_pct}%):</span><br><strong style='color: var(--text-primary);'>₹ {share:,.2f}</strong>", unsafe_allow_html=True)
+                preview_idx += 1
+                
+            st.markdown("<br>", unsafe_allow_html=True)
+            add_lumpsum = st.form_submit_button("Distribute & Add Lump Sum")
+            if add_lumpsum:
+                if lumpsum_amount <= 0:
+                    st.error("Please enter an amount greater than 0.")
+                else:
+                    for seg_key, seg_data in rules["rules"].items():
+                        alloc_pct = float(seg_data.get("allocation_pct", 15.0))
+                        addition = lumpsum_amount * (alloc_pct / 100.0)
+                        # Update manual adjustment
+                        current_adj = float(seg_data.get("manual_adjustment", 0.0))
+                        rules["rules"][seg_key]["manual_adjustment"] = current_adj + addition
+                    save_segment_rules(rules)
+                    st.success(f"Successfully added and distributed ₹{lumpsum_amount:,.2f} across all segments!")
+                    st.rerun()
+                    
         st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -3264,6 +3321,28 @@ with tab_paper:
     filtered_paper_count = len(df_paper_filtered)
     st.markdown(f"<p style='color: var(--text-secondary); font-size: 0.85rem;'>Showing {filtered_paper_count} of {total_paper_count} paper trades</p>", unsafe_allow_html=True)
     
+    if not df_paper_filtered.empty:
+        filtered_gross_pnl = df_paper_filtered['gross_pnl'].sum()
+        filtered_total_charges = df_paper_filtered['total_charges'].sum()
+        filtered_net_pnl = df_paper_filtered['net_pnl'].sum()
+        
+        gross_color = "var(--accent-green)" if filtered_gross_pnl >= 0 else "#EA580C"
+        net_color = "var(--accent-green)" if filtered_net_pnl >= 0 else "#EA580C"
+        gross_sign = "+" if filtered_gross_pnl > 0 else ""
+        net_sign = "+" if filtered_net_pnl > 0 else ""
+        
+        st.markdown(
+            f"""
+            <div style="background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 15px; display: flex; gap: 30px; align-items: center; flex-wrap: wrap;">
+                <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary);">Filtered Totals:</span>
+                <div><span style="color: var(--text-secondary); font-size: 0.82rem;">Gross P&L:</span> <strong style="color: {gross_color};">{gross_sign}{currency_sym}{filtered_gross_pnl:,.2f}</strong></div>
+                <div><span style="color: var(--text-secondary); font-size: 0.82rem;">Total Charges:</span> <strong style="color: var(--text-primary);">{currency_sym}{filtered_total_charges:,.2f}</strong></div>
+                <div><span style="color: var(--text-secondary); font-size: 0.82rem;">Net P&L:</span> <strong style="color: {net_color};">{net_sign}{currency_sym}{filtered_net_pnl:,.2f}</strong></div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
     df_paper_display = df_paper_filtered.copy()
     if not df_paper_display.empty:
         df_paper_display = df_paper_display.rename(columns={"s_no": "Trade #"})

@@ -404,23 +404,23 @@ st.markdown(
     }
     .card-badge {
         font-family: 'JetBrains Mono', monospace !important;
-        font-size: 0.7rem !important;
-        font-weight: 700 !important;
-        padding: 2px 6px !important;
-        border-radius: 4px !important;
+        font-size: 0.88rem !important;
+        font-weight: 800 !important;
+        padding: 4px 8px !important;
+        border-radius: 6px !important;
         display: inline-block !important;
     }
     .action-console {
         background: #F8FAFC !important;
-        color: #334155 !important;
+        color: #1E293B !important;
         border-radius: 8px !important;
-        padding: 0.6rem 0.75rem !important;
-        margin-top: 0.5rem !important;
-        margin-bottom: 0.35rem !important;
+        padding: 0.8rem 1.0rem !important;
+        margin-top: 0.6rem !important;
+        margin-bottom: 0.45rem !important;
         font-family: 'Plus Jakarta Sans', sans-serif !important;
-        font-size: 0.78rem !important;
-        border: 1px solid #E2E8F0 !important;
-        line-height: 1.4 !important;
+        font-size: 0.95rem !important;
+        border: 1.5px solid #CBD5E1 !important;
+        line-height: 1.5 !important;
     }
     .action-console b {
         color: #0F172A !important;
@@ -6297,7 +6297,7 @@ def live_scanner_fragment(
 
         # Engine 2 permission badge helper
         def _perm_badge(p):
-            return f'<span style="font-size:0.65rem;font-weight:700;color:{p["color"]};white-space:nowrap;">{p["icon"]} {p["level"]}</span>'
+            return f'<span style="font-size:0.85rem;font-weight:800;color:{p["color"]};white-space:nowrap;">{p["icon"]} {p["level"]}</span>'
 
         _ce_badge   = _perm_badge(_ip["stock_ce"])
         _pe_badge   = _perm_badge(_ip["stock_pe"])
@@ -6306,14 +6306,14 @@ def live_scanner_fragment(
         _cash_badge = _perm_badge(_ip["cash_equity"])
 
         # Engine 5 funnel arrow string
-        def _arrow(n): return f'<b style="color:#34d399;">{n}</b>'
+        def _arrow(n): return f'<b style="color:#4ade80;font-size:0.95rem;">{n}</b>'
         _funnel_str = (
             f'{_arrow(_fn["s0"])} stocks '
             f'&#8594; {_arrow(_fn["s1"])} signals '
             f'&#8594; {_arrow(_fn["s2"])} aligned '
             f'&#8594; {_arrow(_fn["s3"])} flow-confirmed '
             f'&#8594; {_arrow(_fn["s4"])} A/A+ '
-            f'&#8594; <b style="color:#fbbf24;">{_fn["s5"]} picks</b> ✅'
+            f'&#8594; <b style="color:#fbbf24;font-size:0.95rem;">{_fn["s5"]} picks</b> ✅'
         )
 
         # Permission gate for option card hard-block (used below)
@@ -6323,39 +6323,39 @@ def live_scanner_fragment(
         _nifty_pe_ok  = _ip["nifty_pe"]["ok"]
 
         st.markdown(
-            f'<div style="background:linear-gradient(135deg,#1e3a5f 0%,#1a3355 100%);border-radius:16px;padding:1.1rem 1.4rem;margin:0.5rem 0 1rem 0;'
-            f'box-shadow:0 4px 24px rgba(0,0,0,0.22);border:1.5px solid #2d5a8a;">'
+            f'<div style="background:linear-gradient(135deg,#132845 0%,#0c1b30 100%);border-radius:16px;padding:1.4rem 1.6rem;margin:0.5rem 0 1rem 0;'
+            f'box-shadow:0 4px 24px rgba(0,0,0,0.22);border:2px solid #2d5a8a;">'
 
             # ── Header
-            f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.85rem;">'
-            f'<span style="font-size:0.95rem;font-weight:800;color:#f8fafc;letter-spacing:0.05em;">⚙️ 5-ENGINE TRADING SYSTEM</span>'
-            f'<span style="font-size:0.72rem;font-weight:700;background:{_mkt_color};color:#fff;padding:3px 12px;border-radius:20px;">'
+            f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.0rem;">'
+            f'<span style="font-size:1.35rem;font-weight:900;color:#ffffff;letter-spacing:0.05em;">⚙️ 5-ENGINE TRADING SYSTEM</span>'
+            f'<span style="font-size:0.95rem;font-weight:800;background:{_mkt_color};color:#ffffff;padding:4px 14px;border-radius:20px;">'
             f'{_mkt_icon} {_mkt_state} — Edge {_mkt_score}/100</span>'
             f'</div>'
 
             # ── Engine row layout: 5 engines in 2 rows
             # Row 1: Engine 1 + Engine 2
-            f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:0.6rem;">'
+            f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-bottom:0.8rem;">'
 
             # Engine 1 — Market State
-            f'<div style="background:#264a6e;border-radius:10px;padding:0.55rem 0.75rem;">'
-            f'<div style="font-size:0.6rem;font-weight:800;color:#8fb4d8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:0.3rem;">ENGINE 1 — MARKET STATE</div>'
-            f'<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;">'
-            f'<span style="font-size:0.85rem;font-weight:800;color:{_mkt_color};">{_mkt_icon} {_mkt_state}</span>'
+            f'<div style="background:#1e354e;border-radius:12px;padding:0.8rem 1.0rem;border:1px solid #2d5a8a;">'
+            f'<div style="font-size:0.85rem;font-weight:800;color:#93c5fd;text-transform:uppercase;letter-spacing:.1em;margin-bottom:0.4rem;">ENGINE 1 — MARKET STATE</div>'
+            f'<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">'
+            f'<span style="font-size:1.25rem;font-weight:900;color:{_mkt_color};">{_mkt_icon} {_mkt_state}</span>'
             f'</div>'
-            f'<div style="font-size:0.62rem;color:#94a3b8;margin-bottom:0.35rem;">'
-            f'▲ {_up_n}/{_tot_n} Up &nbsp; ▼ {_dn_n}/{_tot_n} Dn &nbsp; ◀▶ {_neu_n}/{_tot_n} Neutral</div>'
-            f'<div style="display:flex;gap:2px;height:6px;">'
-            f'<div style="background:#059669;width:{_up_pct}%;border-radius:3px 0 0 3px;transition:width 0.4s;"></div>'
+            f'<div style="font-size:0.85rem;font-weight:700;color:#ffffff;margin-bottom:0.45rem;">'
+            f'▲ {_up_n}/{_tot_n} Up &nbsp;&bull;&nbsp; ▼ {_dn_n}/{_tot_n} Dn &nbsp;&bull;&nbsp; ◀▶ {_neu_n}/{_tot_n} Neutral</div>'
+            f'<div style="display:flex;gap:3px;height:10px;">'
+            f'<div style="background:#059669;width:{_up_pct}%;border-radius:4px 0 0 4px;transition:width 0.4s;"></div>'
             f'<div style="background:#dc2626;width:{_dn_pct}%;transition:width 0.4s;"></div>'
-            f'<div style="background:#475569;flex:1;border-radius:0 3px 3px 0;"></div>'
+            f'<div style="background:#475569;flex:1;border-radius:0 4px 4px 0;"></div>'
             f'</div>'
             f'</div>'
 
             # Engine 2 — Trade Permissions
-            f'<div style="background:#264a6e;border-radius:10px;padding:0.55rem 0.75rem;">'
-            f'<div style="font-size:0.6rem;font-weight:800;color:#8fb4d8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:0.3rem;">ENGINE 2 — TRADE PERMISSIONS</div>'
-            f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 0.5rem;font-size:0.62rem;color:#94a3b8;">'
+            f'<div style="background:#1e354e;border-radius:12px;padding:0.8rem 1.0rem;border:1px solid #2d5a8a;">'
+            f'<div style="font-size:0.85rem;font-weight:800;color:#93c5fd;text-transform:uppercase;letter-spacing:.1em;margin-bottom:0.4rem;">ENGINE 2 — TRADE PERMISSIONS</div>'
+            f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 0.6rem;font-size:0.85rem;font-weight:700;color:#ffffff;">'
             f'<span>Cash Equity: {_cash_badge}</span>'
             f'<span>Stock CE: {_ce_badge}</span>'
             f'<span>Stock PE: {_pe_badge}</span>'
@@ -6367,33 +6367,33 @@ def live_scanner_fragment(
             f'</div>'  # end row 1
 
             # Row 2: Engine 3 + Engine 4 + Engine 5
-            f'<div style="display:grid;grid-template-columns:1.2fr 1fr 1.8fr;gap:0.6rem;">'
+            f'<div style="display:grid;grid-template-columns:1.2fr 1fr 1.8fr;gap:0.8rem;">'
 
             # Engine 3 — Order Flow
-            f'<div style="background:#264a6e;border-radius:10px;padding:0.55rem 0.75rem;">'
-            f'<div style="font-size:0.6rem;font-weight:800;color:#8fb4d8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:0.3rem;">ENGINE 3 — ORDER FLOW</div>'
-            f'<div style="font-size:0.78rem;font-weight:800;color:{_of_color};margin-bottom:0.35rem;">{_of_label}</div>'
-            f'<div style="background:#1a3050;border-radius:3px;height:6px;overflow:hidden;margin-bottom:0.25rem;">'
+            f'<div style="background:#1e354e;border-radius:12px;padding:0.8rem 1.0rem;border:1px solid #2d5a8a;">'
+            f'<div style="font-size:0.85rem;font-weight:800;color:#93c5fd;text-transform:uppercase;letter-spacing:.1em;margin-bottom:0.4rem;">ENGINE 3 — ORDER FLOW</div>'
+            f'<div style="font-size:1.2rem;font-weight:900;color:{_of_color};margin-bottom:0.5rem;">{_of_label}</div>'
+            f'<div style="background:#1a3050;border-radius:4px;height:10px;overflow:hidden;margin-bottom:0.4rem;">'
             f'<div style="background:linear-gradient(90deg,#059669 {_of_buy:.0f}%,#dc2626 {_of_buy:.0f}%);width:100%;height:100%;"></div></div>'
-            f'<div style="font-size:0.6rem;color:#64748b;">Buy {_of_buy:.0f}% &nbsp;/&nbsp; Sell {_of_sell:.0f}%</div>'
+            f'<div style="font-size:0.85rem;font-weight:700;color:#e2e8f0;">Buy {_of_buy:.0f}% &nbsp;/&nbsp; Sell {_of_sell:.0f}%</div>'
             f'</div>'
 
             # Engine 4 — Signal Grades
-            f'<div style="background:#264a6e;border-radius:10px;padding:0.55rem 0.75rem;">'
-            f'<div style="font-size:0.6rem;font-weight:800;color:#8fb4d8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:0.3rem;">ENGINE 4 — GRADES</div>'
-            f'<div style="font-size:0.65rem;line-height:1.6;color:#94a3b8;">'
-            f'<span style="color:#fbbf24;font-weight:800;">A+</span> {_grade_ap} &nbsp;'
-            f'<span style="color:#34d399;font-weight:800;">A</span> {_grade_a} &nbsp;'
-            f'<span style="color:#f59e0b;font-weight:800;">B</span> {_grade_b} &nbsp;'
-            f'<span style="color:#ef4444;font-weight:800;">✗</span> {_grade_rj}'
+            f'<div style="background:#1e354e;border-radius:12px;padding:0.8rem 1.0rem;border:1px solid #2d5a8a;">'
+            f'<div style="font-size:0.85rem;font-weight:800;color:#93c5fd;text-transform:uppercase;letter-spacing:.1em;margin-bottom:0.4rem;">ENGINE 4 — GRADES</div>'
+            f'<div style="font-size:0.9rem;font-weight:700;color:#ffffff;line-height:1.8;">'
+            f'<span style="color:#fbbf24;font-weight:900;">A+</span> {_grade_ap} &nbsp;'
+            f'<span style="color:#4ade80;font-weight:900;">A</span> {_grade_a} &nbsp;'
+            f'<span style="color:#f59e0b;font-weight:900;">B</span> {_grade_b} &nbsp;'
+            f'<span style="color:#f87171;font-weight:900;">✗</span> {_grade_rj}'
             f'</div>'
-            f'<div style="font-size:0.6rem;color:#475569;margin-top:0.25rem;">Reject = below edge</div>'
+            f'<div style="font-size:0.8rem;color:#cbd5e1;font-weight:600;margin-top:0.35rem;">Reject = below edge</div>'
             f'</div>'
 
             # Engine 5 — Funnel
-            f'<div style="background:#264a6e;border-radius:10px;padding:0.55rem 0.75rem;">'
-            f'<div style="font-size:0.6rem;font-weight:800;color:#8fb4d8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:0.3rem;">ENGINE 5 — PRO FILTER</div>'
-            f'<div style="font-size:0.63rem;color:#94a3b8;line-height:1.7;">{_funnel_str}</div>'
+            f'<div style="background:#1e354e;border-radius:12px;padding:0.8rem 1.0rem;border:1px solid #2d5a8a;">'
+            f'<div style="font-size:0.85rem;font-weight:800;color:#93c5fd;text-transform:uppercase;letter-spacing:.1em;margin-bottom:0.4rem;">ENGINE 5 — PRO FILTER</div>'
+            f'<div style="font-size:0.85rem;font-weight:700;color:#ffffff;line-height:1.8;">{_funnel_str}</div>'
             f'</div>'
 
             f'</div>'  # end row 2
@@ -6421,7 +6421,7 @@ def live_scanner_fragment(
         def _bar(pct, color_on, color_off="#264a6e"):
             """Render a simple percentage fill bar."""
             return (
-                f'<div style="background:{color_off};border-radius:3px;height:6px;overflow:hidden;flex:1;">'
+                f'<div style="background:{color_off};border-radius:3px;height:10px;overflow:hidden;flex:1;">'
                 f'<div style="background:{color_on};width:{min(100,pct):.0f}%;height:100%;border-radius:3px;transition:width 0.5s;"></div>'
                 f'</div>'
             )
@@ -6439,63 +6439,63 @@ def live_scanner_fragment(
         )
 
         st.markdown(
-            f'<div style="background:linear-gradient(135deg,#1e3a5f 0%,#1a3355 100%);border-radius:14px;padding:0.9rem 1.4rem;margin:0.5rem 0 0.75rem 0;'
-            f'border:1.5px solid #2d5a8a;box-shadow:0 2px 12px rgba(0,0,0,0.18);">'
+            f'<div style="background:linear-gradient(135deg,#132845 0%,#0c1b30 100%);border-radius:14px;padding:1.1rem 1.4rem;margin:0.5rem 0 0.75rem 0;'
+            f'border:2px solid #2d5a8a;box-shadow:0 2px 12px rgba(0,0,0,0.18);">'
 
             # Header
-            f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.7rem;">'
-            f'<span style="font-size:0.85rem;font-weight:800;color:#f8fafc;letter-spacing:0.04em;">💰 MARKET INTERNALS — MONEY FLOW & ORDER FLOW</span>'
-            f'<span style="font-size:0.68rem;font-weight:700;color:{_sm_color};">{_sm_label} &nbsp; {_dot_html} &nbsp; {_sm_score}/100</span>'
+            f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.85rem;">'
+            f'<span style="font-size:1.15rem;font-weight:900;color:#ffffff;letter-spacing:0.04em;">💰 MARKET INTERNALS — MONEY FLOW & ORDER FLOW</span>'
+            f'<span style="font-size:0.95rem;font-weight:800;color:{_sm_color};">{_sm_label} &nbsp; {_dot_html} &nbsp; {_sm_score}/100</span>'
             f'</div>'
 
             # 5-column metric grid
-            f'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.6rem;">'
+            f'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.8rem;">'
 
             # MFI
-            f'<div>'
-            f'<div style="font-size:0.58rem;font-weight:700;color:#8fb4d8;text-transform:uppercase;margin-bottom:0.25rem;">MFI(14) &gt; 50</div>'
-            f'<div style="display:flex;align-items:center;gap:0.4rem;">'
+            f'<div style="background:#1e354e;border-radius:10px;padding:0.6rem 0.8rem;border:1px solid #2d5a8a;">'
+            f'<div style="font-size:0.8rem;font-weight:800;color:#93c5fd;text-transform:uppercase;margin-bottom:0.35rem;">MFI(14) &gt; 50</div>'
+            f'<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.35rem;">'
             f'{_bar(_mfi50, "#059669")}'
-            f'<span style="font-size:0.62rem;font-weight:700;color:#34d399;white-space:nowrap;">{_mfi50:.0f}%</span>'
+            f'<span style="font-size:0.95rem;font-weight:800;color:#4ade80;white-space:nowrap;">{_mfi50:.0f}%</span>'
             f'</div>'
-            f'<div style="font-size:0.58rem;color:#475569;margin-top:2px;">OB {_mfi_ob:.0f}% / OS {_mfi_os:.0f}%</div>'
+            f'<div style="font-size:0.75rem;color:#cbd5e1;font-weight:600;margin-top:2px;">OB {_mfi_ob:.0f}% / OS {_mfi_os:.0f}%</div>'
             f'</div>'
 
             # CMF
-            f'<div>'
-            f'<div style="font-size:0.58rem;font-weight:700;color:#8fb4d8;text-transform:uppercase;margin-bottom:0.25rem;">CMF(20) &gt; 0</div>'
-            f'<div style="display:flex;align-items:center;gap:0.4rem;">'
+            f'<div style="background:#1e354e;border-radius:10px;padding:0.6rem 0.8rem;border:1px solid #2d5a8a;">'
+            f'<div style="font-size:0.8rem;font-weight:800;color:#93c5fd;text-transform:uppercase;margin-bottom:0.35rem;">CMF(20) &gt; 0</div>'
+            f'<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.35rem;">'
             f'{_bar(_cmf_pos, "#10b981")}'
-            f'<span style="font-size:0.62rem;font-weight:700;color:#34d399;white-space:nowrap;">{_cmf_pos:.0f}%</span>'
+            f'<span style="font-size:0.95rem;font-weight:800;color:#4ade80;white-space:nowrap;">{_cmf_pos:.0f}%</span>'
             f'</div>'
-            f'<div style="font-size:0.58rem;color:#475569;margin-top:2px;">Dist {_cmf_neg:.0f}% stocks</div>'
+            f'<div style="font-size:0.75rem;color:#cbd5e1;font-weight:600;margin-top:2px;">Dist {_cmf_neg:.0f}% stocks</div>'
             f'</div>'
 
             # OBV
-            f'<div>'
-            f'<div style="font-size:0.58rem;font-weight:700;color:#8fb4d8;text-transform:uppercase;margin-bottom:0.25rem;">OBV Rising</div>'
-            f'<div style="display:flex;align-items:center;gap:0.4rem;">'
+            f'<div style="background:#1e354e;border-radius:10px;padding:0.6rem 0.8rem;border:1px solid #2d5a8a;">'
+            f'<div style="font-size:0.8rem;font-weight:800;color:#93c5fd;text-transform:uppercase;margin-bottom:0.35rem;">OBV Rising</div>'
+            f'<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.35rem;">'
             f'{_bar(_obv_up, "#6366f1")}'
-            f'<span style="font-size:0.62rem;font-weight:700;color:#a5b4fc;white-space:nowrap;">{_obv_up:.0f}%</span>'
+            f'<span style="font-size:0.95rem;font-weight:800;color:#a5b4fc;white-space:nowrap;">{_obv_up:.0f}%</span>'
             f'</div>'
-            f'<div style="font-size:0.58rem;color:#475569;margin-top:2px;">Smart money trend</div>'
+            f'<div style="font-size:0.75rem;color:#cbd5e1;font-weight:600;margin-top:2px;">Smart money trend</div>'
             f'</div>'
 
             # Delta
-            f'<div>'
-            f'<div style="font-size:0.58rem;font-weight:700;color:#8fb4d8;text-transform:uppercase;margin-bottom:0.25rem;">Candle Delta</div>'
-            f'<div style="display:flex;align-items:center;gap:0.4rem;">'
+            f'<div style="background:#1e354e;border-radius:10px;padding:0.6rem 0.8rem;border:1px solid #2d5a8a;">'
+            f'<div style="font-size:0.8rem;font-weight:800;color:#93c5fd;text-transform:uppercase;margin-bottom:0.35rem;">Candle Delta</div>'
+            f'<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.35rem;">'
             f'{_bar((_avg_dlt + 1) / 2 * 100, "#f59e0b" if abs(_avg_dlt) < 0.15 else ("#059669" if _avg_dlt > 0 else "#dc2626"))}'
-            f'<span style="font-size:0.62rem;font-weight:700;color:#fbbf24;white-space:nowrap;">{_avg_dlt:+.2f}</span>'
+            f'<span style="font-size:0.95rem;font-weight:800;color:#fbbf24;white-space:nowrap;">{_avg_dlt:+.2f}</span>'
             f'</div>'
-            f'<div style="font-size:0.58rem;color:#475569;margin-top:2px;">Buy/Sell bar pressure</div>'
+            f'<div style="font-size:0.75rem;color:#cbd5e1;font-weight:600;margin-top:2px;">Buy/Sell bar pressure</div>'
             f'</div>'
 
             # Block Trades
-            f'<div>'
-            f'<div style="font-size:0.58rem;font-weight:700;color:#8fb4d8;text-transform:uppercase;margin-bottom:0.25rem;">Block Trades</div>'
-            f'<div style="font-size:0.95rem;font-weight:800;color:{"#fbbf24" if _blk_ct > 5 else "#94a3b8"};">{_blk_ct}</div>'
-            f'<div style="font-size:0.58rem;color:#475569;margin-top:2px;">{"⚡ Institutional" if _blk_ct > 5 else "Low activity"} / {_mf_total} stocks</div>'
+            f'<div style="background:#1e354e;border-radius:10px;padding:0.6rem 0.8rem;border:1px solid #2d5a8a;">'
+            f'<div style="font-size:0.8rem;font-weight:800;color:#93c5fd;text-transform:uppercase;margin-bottom:0.35rem;">Block Trades</div>'
+            f'<div style="font-size:1.35rem;font-weight:900;color:{"#fbbf24" if _blk_ct > 5 else "#ffffff"};margin-bottom:0.25rem;">{_blk_ct}</div>'
+            f'<div style="font-size:0.75rem;color:#cbd5e1;font-weight:600;margin-top:2px;">{"⚡ Institutional" if _blk_ct > 5 else "Low activity"} / {_mf_total} stocks</div>'
             f'</div>'
 
             f'</div>'  # end grid

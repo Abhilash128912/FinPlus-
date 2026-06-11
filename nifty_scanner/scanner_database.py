@@ -11,93 +11,136 @@ def get_db_connection():
 
 def init_scanner_db():
     """
-    Initializes the SQLite database table for Nifty 500 stock scores.
+    Initialises the SQLite database table for Nifty 500 stock scores.
+    Existing tables are self-healed with ALTER TABLE if new columns are missing.
     """
-    conn = get_db_connection()
+    conn   = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS nifty500_cache (
-        ticker TEXT PRIMARY KEY,
-        company_name TEXT,
-        sector TEXT,
-        last_price REAL,
-        market_cap_cr REAL,
-        pe_ratio REAL,
-        industry_pe REAL,
-        pb_ratio REAL,
-        dividend_yield REAL,
-        debt_to_equity REAL,
-        roe REAL,
-        roce REAL,
-        eps_growth_yoy REAL,
-        rsi_14 REAL,
-        price_vs_20ema REAL,
-        price_vs_50ema REAL,
-        price_vs_200sma REAL,
-        rel_strength_3m REAL,
-        vol_ratio_5d_20d REAL,
-        avg_volume_5d REAL,
-        fundamental_score REAL,
-        momentum_score REAL,
-        total_score REAL,
-        last_updated TEXT
+        ticker                  TEXT PRIMARY KEY,
+        company_name            TEXT,
+        sector                  TEXT,
+        last_price              REAL,
+        market_cap_cr           REAL,
+        pe_ratio                REAL,
+        industry_pe             REAL,
+        pb_ratio                REAL,
+        dividend_yield          REAL,
+        debt_to_equity          REAL,
+        roe                     REAL,
+        roce                    REAL,
+        eps_growth_yoy          REAL,
+        rsi_14                  REAL,
+        price_vs_20ema          REAL,
+        price_vs_50ema          REAL,
+        price_vs_200sma         REAL,
+        rel_strength_3m         REAL,
+        vol_ratio_5d_20d        REAL,
+        avg_volume_5d           REAL,
+        fundamental_score       REAL,
+        momentum_score          REAL,
+        total_score             REAL,
+        last_updated            TEXT,
+        -- Enhanced indicator columns (Tier 1 upgrade)
+        adx_14                  REAL,
+        macd_signal             TEXT,
+        macd_histogram          REAL,
+        piotroski_score         INTEGER,
+        breakout_signal         INTEGER,
+        proximity_52w_high_pct  REAL,
+        atr_14                  REAL,
+        entry_price             REAL,
+        stop_loss               REAL,
+        target_1                REAL,
+        target_2                REAL,
+        rr_ratio                REAL,
+        bb_squeeze              INTEGER,
+        bb_width_pct            REAL,
+        conviction_label        TEXT
     )
     """)
-    
-    # Self-healing: alter existing table if avg_volume_5d column is missing
-    try:
-        cursor.execute("ALTER TABLE nifty500_cache ADD COLUMN avg_volume_5d REAL")
-    except sqlite3.OperationalError:
-        pass  # Column already exists or table doesn't exist yet
-        
+
+    # ── Self-healing: add any missing columns to an existing DB ──────────────
+    new_columns = {
+        "avg_volume_5d":          "REAL",
+        "adx_14":                 "REAL",
+        "macd_signal":            "TEXT",
+        "macd_histogram":         "REAL",
+        "piotroski_score":        "INTEGER",
+        "breakout_signal":        "INTEGER",
+        "proximity_52w_high_pct": "REAL",
+        "atr_14":                 "REAL",
+        "entry_price":            "REAL",
+        "stop_loss":              "REAL",
+        "target_1":               "REAL",
+        "target_2":               "REAL",
+        "rr_ratio":               "REAL",
+        "bb_squeeze":             "INTEGER",
+        "bb_width_pct":           "REAL",
+        "conviction_label":       "TEXT",
+    }
+    for col, dtype in new_columns.items():
+        try:
+            cursor.execute(f"ALTER TABLE nifty500_cache ADD COLUMN {col} {dtype}")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
     conn.commit()
     conn.close()
 
+
 def save_stock_to_cache(stock_data: dict):
     """
-    Saves or updates a single stock's calculated metrics in the SQLite cache database.
+    Upserts a single stock's full metric set into the cache.
     """
-    conn = get_db_connection()
+    conn   = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
     INSERT OR REPLACE INTO nifty500_cache (
         ticker, company_name, sector, last_price, market_cap_cr,
         pe_ratio, industry_pe, pb_ratio, dividend_yield, debt_to_equity,
         roe, roce, eps_growth_yoy, rsi_14, price_vs_20ema,
         price_vs_50ema, price_vs_200sma, rel_strength_3m, vol_ratio_5d_20d,
-        avg_volume_5d, fundamental_score, momentum_score, total_score, last_updated
+        avg_volume_5d, fundamental_score, momentum_score, total_score, last_updated,
+        adx_14, macd_signal, macd_histogram, piotroski_score, breakout_signal,
+        proximity_52w_high_pct, atr_14, entry_price, stop_loss, target_1, target_2,
+        rr_ratio, bb_squeeze, bb_width_pct, conviction_label
     ) VALUES (
         :ticker, :company_name, :sector, :last_price, :market_cap_cr,
         :pe_ratio, :industry_pe, :pb_ratio, :dividend_yield, :debt_to_equity,
         :roe, :roce, :eps_growth_yoy, :rsi_14, :price_vs_20ema,
         :price_vs_50ema, :price_vs_200sma, :rel_strength_3m, :vol_ratio_5d_20d,
-        :avg_volume_5d, :fundamental_score, :momentum_score, :total_score, :last_updated
+        :avg_volume_5d, :fundamental_score, :momentum_score, :total_score, :last_updated,
+        :adx_14, :macd_signal, :macd_histogram, :piotroski_score, :breakout_signal,
+        :proximity_52w_high_pct, :atr_14, :entry_price, :stop_loss, :target_1, :target_2,
+        :rr_ratio, :bb_squeeze, :bb_width_pct, :conviction_label
     )
     """, stock_data)
-    
+
     conn.commit()
     conn.close()
 
+
 def fetch_cached_stocks_df() -> pd.DataFrame:
     """
-    Loads all cached stock data from the SQLite database into a Pandas DataFrame.
+    Loads all cached stock data from SQLite into a Pandas DataFrame.
     """
     if not os.path.exists(DB_PATH):
         init_scanner_db()
         return pd.DataFrame()
-        
+
     conn = get_db_connection()
-    df = pd.read_sql_query("SELECT * FROM nifty500_cache", conn)
+    df   = pd.read_sql_query("SELECT * FROM nifty500_cache", conn)
     conn.close()
     return df
 
+
 def clear_scanner_cache():
-    """
-    Wipes out all records in the scanner table.
-    """
-    conn = get_db_connection()
+    """Wipes all records from the scanner cache table."""
+    conn   = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM nifty500_cache")
     conn.commit()
