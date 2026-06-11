@@ -3343,161 +3343,153 @@ with tab_paper:
             unsafe_allow_html=True
         )
         
-    df_paper_display = df_paper_filtered.copy()
-    if not df_paper_display.empty:
-        df_paper_display = df_paper_display.rename(columns={"s_no": "Trade #"})
-        
-        styled_df = style_dataframe_pnl(
-            df_paper_display[[
+    # 3-to-1 Column Layout for Table and Edit Panel side-by-side
+    table_col, edit_col = st.columns([2.5, 1.0])
+
+    with table_col:
+        df_paper_display = df_paper_filtered.copy()
+        if not df_paper_display.empty:
+            df_paper_display = df_paper_display.rename(columns={"s_no": "Trade #"})
+            styled_df = style_dataframe_pnl(
+                df_paper_display[[
+                    "Trade #", "trade_date", "symbol", "segment", "action", 
+                    "quantity", "entry_price", "exit_price", 
+                    "gross_pnl", "total_charges", "net_pnl", "source_screener", "notes"
+                ]],
+                other_cols_currency=["total_charges"]
+            )
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        else:
+            empty_cols = [
                 "Trade #", "trade_date", "symbol", "segment", "action", 
                 "quantity", "entry_price", "exit_price", 
                 "gross_pnl", "total_charges", "net_pnl", "source_screener", "notes"
-            ]],
-            other_cols_currency=["total_charges"]
-        )
-        
-        st.dataframe(
-            styled_df,
-            use_container_width=True,
-            hide_index=True
-        )
-    else:
-        empty_cols = [
-            "Trade #", "trade_date", "symbol", "segment", "action", 
-            "quantity", "entry_price", "exit_price", 
-            "gross_pnl", "total_charges", "net_pnl", "source_screener", "notes"
-        ]
-        st.dataframe(pd.DataFrame(columns=empty_cols), use_container_width=True, hide_index=True)
-        
-    st.markdown("<hr style='border-color: var(--border-color);'>", unsafe_allow_html=True)
-    st.markdown("<h5>⚙️ Manage / Edit Paper Trade Entries</h5>", unsafe_allow_html=True)
-    
-    if df_paper_filtered.empty:
-        st.info("No paper trades matched the filters or database is empty.")
-    else:
-        selectbox_paper_options = ["-- Select a Paper Trade to Edit / Manage --"]
-        id_paper_map = {}
-        df_paper_filtered_sorted = df_paper_filtered.sort_values(by=['s_no'], ascending=True)
-        for index, row in df_paper_filtered_sorted.iterrows():
-            label = f"Paper Trade #{row['s_no']} // {row['symbol']} ({row['source_screener']}) on {row['trade_date']}"
-            selectbox_paper_options.append(label)
-            id_paper_map[label] = row['id']
-            
-        selected_paper_label = st.selectbox("Select Paper Trade to Manage", options=selectbox_paper_options, index=0, key="select_paper_to_manage")
-        
-        if selected_paper_label == "-- Select a Paper Trade to Edit / Manage --":
-            st.info("Select a paper trade from the dropdown above to view, edit, or delete its details.")
+            ]
+            st.dataframe(pd.DataFrame(columns=empty_cols), use_container_width=True, hide_index=True)
+
+    with edit_col:
+        st.markdown("<h5 style='margin-top:0;'>⚙️ Edit / Delete Entry</h5>", unsafe_allow_html=True)
+        if df_paper_filtered.empty:
+            st.info("No paper trades matched the filters or database is empty.")
         else:
-            selected_paper_trade_id = int(id_paper_map[selected_paper_label])
-            pt_row = df_paper_filtered[df_paper_filtered['id'] == selected_paper_trade_id].iloc[0]
+            # Dropdown of active Trade #
+            trade_numbers = sorted(df_paper_filtered['s_no'].tolist(), reverse=True)
+            selected_s_no = st.selectbox("Select Trade # to Manage", options=trade_numbers, key="select_paper_s_no_to_manage")
             
-            st.markdown(f"**Editing Paper Trade #{pt_row['s_no']} ({pt_row['symbol']} - {pt_row['source_screener']})**")
+            pt_row = df_paper_filtered[df_paper_filtered['s_no'] == selected_s_no].iloc[0]
+            selected_paper_trade_id = int(pt_row['id'])
+
+            st.markdown(f"**Editing Trade #{selected_s_no}**")
             
-            ep_col1, ep_col2 = st.columns(2)
+            edit_pt_date = st.date_input("Trade Date", value=datetime.strptime(pt_row['trade_date'], "%Y-%m-%d").date(), key=f"edit_paper_date_{selected_paper_trade_id}")
+            edit_pt_symbol = st.text_input("Ticker / Symbol", value=pt_row['symbol'], key=f"edit_paper_symbol_{selected_paper_trade_id}").upper()
+            edit_pt_source = st.selectbox("Screener Source", options=screeners, index=screeners.index(pt_row['source_screener']) if pt_row['source_screener'] in screeners else 0, key=f"edit_paper_source_{selected_paper_trade_id}")
+            edit_pt_segment = st.selectbox("Asset Segment", options=list(brokerage_rates.keys()), index=list(brokerage_rates.keys()).index(pt_row['segment']) if pt_row['segment'] in brokerage_rates else 0, key=f"edit_paper_segment_{selected_paper_trade_id}")
+            edit_pt_action = st.selectbox("Action", options=["BUY", "SELL"], format_func=lambda x: "BUY (Long)" if x == "BUY" else "SELL (Short)", index=0 if pt_row['action'] == "BUY" else 1, key=f"edit_paper_action_{selected_paper_trade_id}")
             
-            with ep_col1:
-                edit_pt_date = st.date_input("Trade Date", value=datetime.strptime(pt_row['trade_date'], "%Y-%m-%d").date(), key=f"edit_paper_date_{selected_paper_trade_id}")
-                edit_pt_symbol = st.text_input("Ticker / Symbol", value=pt_row['symbol'], key=f"edit_paper_symbol_{selected_paper_trade_id}").upper()
-                edit_pt_source = st.selectbox("Screener Source", options=screeners, index=screeners.index(pt_row['source_screener']) if pt_row['source_screener'] in screeners else 0, key=f"edit_paper_source_{selected_paper_trade_id}")
-                edit_pt_segment = st.selectbox("Asset Segment", options=list(brokerage_rates.keys()), index=list(brokerage_rates.keys()).index(pt_row['segment']) if pt_row['segment'] in brokerage_rates else 0, key=f"edit_paper_segment_{selected_paper_trade_id}")
-                edit_pt_action = st.selectbox("Action", options=["BUY", "SELL"], format_func=lambda x: "BUY (Long)" if x == "BUY" else "SELL (Short)", index=0 if pt_row['action'] == "BUY" else 1, key=f"edit_paper_action_{selected_paper_trade_id}")
-                
-            with ep_col2:
-                edit_pt_qty = st.number_input("Quantity", min_value=0.0, step=1.0, value=float(pt_row['quantity']), key=f"edit_paper_qty_{selected_paper_trade_id}")
-                edit_pt_entry = st.number_input("Entry Price", min_value=0.0, step=0.05, value=float(pt_row['entry_price']), key=f"edit_paper_entry_{selected_paper_trade_id}")
-                edit_pt_exit = st.number_input("Exit Price", min_value=0.0, step=0.05, value=float(pt_row['exit_price']), key=f"edit_paper_exit_{selected_paper_trade_id}")
-                
-                default_edit_lot = 0.0
-                if edit_pt_segment in ["F&O - Index Options", "F&O - Stock Options", "F&O - Index Futures"]:
-                    sym_upper = edit_pt_symbol.upper().strip()
-                    if "NIFTY" in sym_upper:
-                        if "BANK" in sym_upper:
-                            default_edit_lot = 30.0
-                        elif "FIN" in sym_upper:
-                            default_edit_lot = 60.0
-                        elif "MIDCP" in sym_upper or "MID CAP" in sym_upper:
-                            default_edit_lot = 120.0
-                        else:
-                            default_edit_lot = 65.0
+            edit_pt_qty = st.number_input("Quantity", min_value=0.0, step=1.0, value=float(pt_row['quantity']), key=f"edit_paper_qty_{selected_paper_trade_id}")
+            edit_pt_entry = st.number_input("Entry Price", min_value=0.0, step=0.05, value=float(pt_row['entry_price']), key=f"edit_paper_entry_{selected_paper_trade_id}")
+            edit_pt_exit = st.number_input("Exit Price", min_value=0.0, step=0.05, value=float(pt_row['exit_price']), key=f"edit_paper_exit_{selected_paper_trade_id}")
+
+            default_edit_lot = 0.0
+            if edit_pt_segment in ["F&O - Index Options", "F&O - Stock Options", "F&O - Index Futures"]:
+                sym_upper = edit_pt_symbol.upper().strip()
+                if "NIFTY" in sym_upper:
+                    if "BANK" in sym_upper:
+                        default_edit_lot = 30.0
+                    elif "FIN" in sym_upper:
+                        default_edit_lot = 60.0
+                    elif "MIDCP" in sym_upper or "MID CAP" in sym_upper:
+                        default_edit_lot = 120.0
                     else:
                         default_edit_lot = 65.0
-                
-                edit_pt_base_lot = st.number_input("Base Lot Size (0 for flat)", min_value=0.0, step=1.0, value=float(default_edit_lot), key=f"edit_paper_base_lot_{selected_paper_trade_id}")
-                
-                def_broker_buy = brokerage_rates[edit_pt_segment]["buy"]
-                def_broker_sell = brokerage_rates[edit_pt_segment]["sell"]
-                def_total_broker = def_broker_buy + def_broker_sell
-                
-                lots_edit = 1
-                if edit_pt_base_lot > 0:
-                    lots_edit = math.ceil(edit_pt_qty / edit_pt_base_lot)
-                computed_brokerage_edit = def_total_broker * lots_edit
-                
-                edit_pt_brokerage = st.number_input(
-                    "Total Brokerage (₹)",
-                    min_value=0.0,
-                    step=1.0,
-                    value=float(computed_brokerage_edit),
-                    disabled=True,
-                    key=f"edit_paper_brokerage_{selected_paper_trade_id}"
-                )
-                
+                else:
+                    default_edit_lot = 65.0
+
+            edit_pt_base_lot = st.number_input("Base Lot Size (0 for flat)", min_value=0.0, step=1.0, value=float(default_edit_lot), key=f"edit_paper_base_lot_{selected_paper_trade_id}")
+
+            def_broker_buy = brokerage_rates[edit_pt_segment]["buy"]
+            def_broker_sell = brokerage_rates[edit_pt_segment]["sell"]
+            def_total_broker = def_broker_buy + def_broker_sell
+
+            lots_edit = 1
+            if edit_pt_base_lot > 0:
+                lots_edit = math.ceil(edit_pt_qty / edit_pt_base_lot)
+            computed_brokerage_edit = def_total_broker * lots_edit
+
+            edit_pt_brokerage = st.number_input(
+                "Total Brokerage (₹)",
+                min_value=0.0,
+                step=1.0,
+                value=float(computed_brokerage_edit),
+                disabled=True,
+                key=f"edit_paper_brokerage_{selected_paper_trade_id}"
+            )
+
             edit_pt_notes = st.text_area("Trade Notes / Signal Context", value=pt_row['notes'] if pt_row['notes'] else "", key=f"edit_paper_notes_{selected_paper_trade_id}")
-            
-            eb_col1, eb_col2 = st.columns(2)
-            with eb_col1:
-                update_paper_btn = st.button("Update Paper Trade Entry", type="primary", use_container_width=True, key=f"btn_update_paper_{selected_paper_trade_id}")
-                if update_paper_btn:
-                    if not edit_pt_symbol.strip():
-                        st.error("Please enter a valid ticker symbol.")
-                    elif edit_pt_qty <= 0:
-                        st.error("Quantity must be greater than zero.")
-                    elif edit_pt_entry <= 0:
-                        st.error("Entry price must be greater than zero.")
-                    elif edit_pt_exit <= 0:
-                        st.error("Exit price must be greater than zero.")
-                    else:
-                        metrics_edit = calculate_trade_metrics(
-                            segment=edit_pt_segment,
-                            action=edit_pt_action,
-                            quantity=edit_pt_qty,
-                            entry_price=edit_pt_entry,
-                            exit_price=edit_pt_exit,
-                            brokerage_input=computed_brokerage_edit
-                        )
-                        
-                        updated_pt_data = {
-                            "trade_date": edit_pt_date.strftime("%Y-%m-%d"),
-                            "symbol": edit_pt_symbol,
-                            "segment": edit_pt_segment,
-                            "action": edit_pt_action,
-                            "quantity": edit_pt_qty,
-                            "entry_price": edit_pt_entry,
-                            "exit_price": edit_pt_exit,
-                            "brokerage": metrics_edit["brokerage"],
-                            "stt": metrics_edit["stt"],
-                            "exchange_charges": metrics_edit["exchange_charges"],
-                            "sebi_charges": metrics_edit["sebi_charges"],
-                            "stamp_duty": metrics_edit["stamp_duty"],
-                            "gst": metrics_edit["gst"],
-                            "total_charges": metrics_edit["total_charges"],
-                            "gross_pnl": metrics_edit["gross_pnl"],
-                            "net_pnl": metrics_edit["net_pnl"],
-                            "source_screener": edit_pt_source,
-                            "notes": edit_pt_notes
-                        }
-                        
-                        update_paper_trade(selected_paper_trade_id, updated_pt_data)
-                        st.success(f"Paper Trade #{pt_row['s_no']} successfully updated!")
-                        st.rerun()
-                        
-            with eb_col2:
-                delete_paper_btn = st.button("Delete Paper Trade Entry", type="secondary", use_container_width=True, key=f"btn_delete_paper_{selected_paper_trade_id}")
-                if delete_paper_btn:
-                    delete_paper_trade(selected_paper_trade_id)
-                    st.warning(f"Paper Trade #{pt_row['s_no']} deleted.")
+
+            update_paper_btn = st.button("Update Paper Trade Entry", type="primary", use_container_width=True, key=f"btn_update_paper_{selected_paper_trade_id}")
+            if update_paper_btn:
+                if not edit_pt_symbol.strip():
+                    st.error("Please enter a valid ticker symbol.")
+                elif edit_pt_qty <= 0:
+                    st.error("Quantity must be greater than zero.")
+                elif edit_pt_entry <= 0:
+                    st.error("Entry price must be greater than zero.")
+                elif edit_pt_exit <= 0:
+                    st.error("Exit price must be greater than zero.")
+                else:
+                    metrics_edit = calculate_trade_metrics(
+                        segment=edit_pt_segment,
+                        action=edit_pt_action,
+                        quantity=edit_pt_qty,
+                        entry_price=edit_pt_entry,
+                        exit_price=edit_pt_exit,
+                        brokerage_input=computed_brokerage_edit
+                    )
+
+                    updated_pt_data = {
+                        "trade_date": edit_pt_date.strftime("%Y-%m-%d"),
+                        "symbol": edit_pt_symbol,
+                        "segment": edit_pt_segment,
+                        "action": edit_pt_action,
+                        "quantity": edit_pt_qty,
+                        "entry_price": edit_pt_entry,
+                        "exit_price": edit_pt_exit,
+                        "brokerage": metrics_edit["brokerage"],
+                        "stt": metrics_edit["stt"],
+                        "exchange_charges": metrics_edit["exchange_charges"],
+                        "sebi_charges": metrics_edit["sebi_charges"],
+                        "stamp_duty": metrics_edit["stamp_duty"],
+                        "gst": metrics_edit["gst"],
+                        "total_charges": metrics_edit["total_charges"],
+                        "gross_pnl": metrics_edit["gross_pnl"],
+                        "net_pnl": metrics_edit["net_pnl"],
+                        "source_screener": edit_pt_source,
+                        "notes": edit_pt_notes
+                    }
+
+                    update_paper_trade(selected_paper_trade_id, updated_pt_data)
+                    st.success(f"Paper Trade #{selected_s_no} successfully updated!")
                     st.rerun()
 
-    st.markdown('</div>', unsafe_allow_html=True)
+            # Delete Action
+            st.markdown("<hr style='border-color: var(--border-color);'>", unsafe_allow_html=True)
+            delete_paper_btn = st.button("❌ Delete Selected Paper Trade Entry", type="secondary", use_container_width=True, key=f"btn_delete_paper_{selected_paper_trade_id}")
+            if delete_paper_btn:
+                delete_paper_trade(selected_paper_trade_id)
+                st.success(f"Paper Trade Entry #{selected_s_no} successfully removed.")
+                st.rerun()
+
+            st.markdown(
+                """
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top:5px; text-align: center;">
+                    Warning: Deleting a paper trade entry is permanent.
+                </p>
+                """, 
+                unsafe_allow_html=True
+            )
+
+
 
 
