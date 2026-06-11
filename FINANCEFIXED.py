@@ -434,7 +434,8 @@ def save_data():
             "security_answer": st.session_state.get("security_answer", "Abhilash"),
             "cloud_sync_enabled": st.session_state.get("cloud_sync_enabled", False),
             "cloud_url": st.session_state.get("cloud_url", ""),
-            "cloud_secret": st.session_state.get("cloud_secret", "")
+            "cloud_secret": st.session_state.get("cloud_secret", ""),
+            "important_events": st.session_state.get("important_events", [])
         }
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
@@ -454,6 +455,7 @@ def load_data():
         st.session_state.cloud_sync_enabled = False
         st.session_state.cloud_url = ""
         st.session_state.cloud_secret = ""
+        st.session_state.important_events = []
         return False
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -526,6 +528,7 @@ def load_data():
             st.session_state.app_password = "finance@2026"
             st.session_state.security_question = "What is the owner name of this finance ledger?"
             st.session_state.security_answer = "Abhilash"
+            st.session_state.important_events = []
             
             save_data() # Persist migrated structure immediately
             return True
@@ -540,6 +543,7 @@ def load_data():
         st.session_state.cloud_sync_enabled = d.get("cloud_sync_enabled", False)
         st.session_state.cloud_url = d.get("cloud_url", "")
         st.session_state.cloud_secret = d.get("cloud_secret", "")
+        st.session_state.important_events = d.get("important_events", [])
         
         # Check and rename Bank Account -> Punjab National Bank, add Jio Payment Bank
         if "Bank Account" in st.session_state.accounts:
@@ -588,6 +592,7 @@ def load_data():
         st.session_state.cloud_sync_enabled = False
         st.session_state.cloud_url = ""
         st.session_state.cloud_secret = ""
+        st.session_state.important_events = []
         return False
 
 # -----------------------------
@@ -1738,7 +1743,7 @@ st.markdown("---")
 # -----------------------------
 # DASHBOARD TABS ENGINE
 # -----------------------------
-tab_jl, tab_gl, tab_tb, tab_pl, tab_bs, tab_coa, tab_fc, tab_an, tab_io = st.tabs([
+tab_jl, tab_gl, tab_tb, tab_pl, tab_bs, tab_coa, tab_fc, tab_an, tab_io, tab_ev = st.tabs([
     "📋 Journal Ledger",
     "📖 General Ledger",
     "📊 Trial Balance",
@@ -1747,7 +1752,8 @@ tab_jl, tab_gl, tab_tb, tab_pl, tab_bs, tab_coa, tab_fc, tab_an, tab_io = st.tab
     "⚙️ Chart of Accounts",
     "🔮 Asset Projections",
     "📊 Analytics",
-    "📥 Template Sync"
+    "📥 Template Sync",
+    "🚗 Important Events"
 ], key="main_navigation_tabs")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2933,3 +2939,262 @@ with tab_io:
                     st.session_state["_pending_ledger_upload"] = None
                     st.session_state["_pending_ledger_name"] = None
                     st.rerun()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 10 — IMPORTANT EVENTS & DOCUMENT VAULT
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_ev:
+    DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "event_documents")
+    os.makedirs(DOCS_DIR, exist_ok=True)
+    
+    st.markdown('<div class="glass-card preview-card">', unsafe_allow_html=True)
+    st.markdown('<h3 style="margin-top:0; color: var(--text-primary);">🚗 Important Events & Document Vault</h3>', unsafe_allow_html=True)
+    st.markdown('<p style="color: var(--text-secondary); margin-top:-10px;">Mark important milestones (e.g., buying a car, property purchase, major expenses) and upload bills, receipts, invoices, or photos. Everything stays saved securely in your local vault.</p>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    events = st.session_state.get("important_events", [])
+    total_events = len(events)
+    total_docs = sum(len(e.get("documents", [])) for e in events)
+    
+    kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
+    with kpi_col1:
+        st.metric("Total Tracked Events", total_events)
+    with kpi_col2:
+        st.metric("Stored Invoices & Documents", total_docs)
+    with kpi_col3:
+        dir_size_mb = 0.0
+        if os.path.exists(DOCS_DIR):
+            for f in os.listdir(DOCS_DIR):
+                fp = os.path.join(DOCS_DIR, f)
+                if os.path.isfile(fp):
+                    dir_size_mb += os.path.getsize(fp) / (1024 * 1024)
+        st.metric("Vault Storage Used", f"{dir_size_mb:.2f} MB")
+
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.markdown("<h4>📝 Log Event or Add Document</h4>", unsafe_allow_html=True)
+    
+    event_names = sorted(list(set(e["name"] for e in events))) if events else []
+    event_options = ["-- Create New Event --"] + event_names
+    
+    selected_event_opt = st.selectbox("Link to Event", options=event_options, index=0)
+    
+    ev_col1, ev_col2 = st.columns(2)
+    
+    with ev_col1:
+        if selected_event_opt == "-- Create New Event --":
+            new_event_name = st.text_input("New Event Name", value="", placeholder="e.g. Bought Nexon EV Car, House Renovation")
+            event_date = st.date_input("Event Date", value=datetime.now().date())
+        else:
+            existing_event = next(e for e in events if e["name"] == selected_event_opt)
+            new_event_name = selected_event_opt
+            try:
+                event_date_val = datetime.strptime(existing_event["event_date"], "%Y-%m-%d").date()
+            except Exception:
+                event_date_val = datetime.now().date()
+            event_date = st.date_input("Event Date", value=event_date_val, disabled=True)
+            
+        doc_type = st.selectbox("Document Type", options=["Invoice / Bill", "Photo / Image", "Agreement / Certificate", "Insurance Policy", "Other"])
+        
+    with ev_col2:
+        uploaded_file = st.file_uploader("Upload File (PDF, PNG, JPG, Excel, etc.)", type=["pdf", "png", "jpg", "jpeg", "xlsx", "docx", "txt", "zip"])
+        event_notes = st.text_area("Description / Notes", placeholder="Add details or narrations for this event/document...", height=100)
+
+    if st.button("🚀 Upload & Save to Vault", use_container_width=True):
+        if not new_event_name.strip():
+            st.error("Please enter a valid Event Name.")
+        else:
+            doc_info = None
+            if uploaded_file is not None:
+                import uuid
+                file_ext = os.path.splitext(uploaded_file.name)[1]
+                disk_filename = f"{uuid.uuid4().hex}{file_ext}"
+                disk_filepath = os.path.join(DOCS_DIR, disk_filename)
+                
+                try:
+                    with open(disk_filepath, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    
+                    doc_info = {
+                        "id": f"DOC-{uuid.uuid4().hex[:8].upper()}",
+                        "filename": disk_filename,
+                        "original_filename": uploaded_file.name,
+                        "doc_type": doc_type,
+                        "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "size_kb": round(len(uploaded_file.getbuffer()) / 1024, 2)
+                    }
+                except Exception as e:
+                    st.error(f"Failed to save file: {e}")
+                    st.stop()
+                    
+            existing_event_idx = None
+            for idx, e in enumerate(events):
+                if e["name"] == new_event_name:
+                    existing_event_idx = idx
+                    break
+                    
+            if existing_event_idx is not None:
+                if doc_info:
+                    events[existing_event_idx]["documents"].append(doc_info)
+                if event_notes.strip():
+                    old_notes = events[existing_event_idx].get("notes", "")
+                    events[existing_event_idx]["notes"] = f"{old_notes}\n{event_notes}".strip()
+                st.success(f"Successfully added document to event: **{new_event_name}**!")
+            else:
+                import uuid
+                new_event = {
+                    "id": f"EV-{uuid.uuid4().hex[:8].upper()}",
+                    "name": new_event_name,
+                    "event_date": event_date.strftime("%Y-%m-%d"),
+                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "documents": [doc_info] if doc_info else [],
+                    "notes": event_notes.strip()
+                }
+                events.append(new_event)
+                st.success(f"Successfully logged new event: **{new_event_name}**!")
+                
+            st.session_state.important_events = events
+            save_data()
+            st.rerun()
+            
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.markdown("<h3>📂 Document Vault & Event Ledger</h3>", unsafe_allow_html=True)
+    
+    if not events:
+        st.info("No events or documents logged yet. Use the form above to record your first milestone!")
+    else:
+        search_q = st.text_input("Search Events or Documents", placeholder="e.g. Nexon, Invoice, 2026").strip().lower()
+        
+        sorted_events = sorted(events, key=lambda x: x.get("event_date", ""), reverse=True)
+        
+        for e in sorted_events:
+            match = False
+            if not search_q:
+                match = True
+            else:
+                if search_q in e["name"].lower() or search_q in e.get("notes", "").lower() or search_q in e.get("event_date", ""):
+                    match = True
+                else:
+                    for doc in e.get("documents", []):
+                        if search_q in doc["original_filename"].lower() or search_q in doc["doc_type"].lower():
+                            match = True
+                            break
+            
+            if not match:
+                continue
+                
+            st.markdown(
+                f"""
+                <div style="border: 1px solid #E2E8F0; border-left: 5px solid #059669; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: #FFFFFF; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-weight:800; font-size:1.15rem; color: #0F172A;">{e['name']}</span>
+                        <span style="background-color: #ECFDF5; color: #059669; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.85rem;">
+                            📅 {e['event_date']}
+                        </span>
+                    </div>
+                    <div style="font-size: 0.9rem; color: #475569; margin-bottom: 10px; white-space: pre-line;">
+                        {e.get('notes', 'No notes added.')}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            docs = e.get("documents", [])
+            
+            if not docs:
+                st.markdown("<p style='font-size:0.85rem; color: #94A3B8; margin-left: 20px;'>No attachments or bills uploaded.</p>", unsafe_allow_html=True)
+            else:
+                st.markdown("<h6 style='margin: 0 0 8px 20px; font-size:0.9rem; color: #334155; font-weight: 700;'>Attachments & Receipts:</h6>", unsafe_allow_html=True)
+                
+                for doc in docs:
+                    doc_id = doc["id"]
+                    disk_file = doc["filename"]
+                    orig_file = doc["original_filename"]
+                    doc_t = doc["doc_type"]
+                    u_date = doc["uploaded_at"]
+                    sz = doc["size_kb"]
+                    
+                    doc_filepath = os.path.join(DOCS_DIR, disk_file)
+                    
+                    ext = os.path.splitext(orig_file)[1].lower()
+                    if ext in [".png", ".jpg", ".jpeg"]:
+                        file_icon = "🖼️"
+                    elif ext in [".pdf"]:
+                        file_icon = "📄"
+                    elif ext in [".xlsx", ".xls"]:
+                        file_icon = "📊"
+                    else:
+                        file_icon = "📝"
+                        
+                    doc_col1, doc_col2, doc_col3 = st.columns([6, 2, 2])
+                    
+                    with doc_col1:
+                        st.markdown(
+                            f"""
+                            <div style="margin-left: 20px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 1.1rem;">{file_icon}</span>
+                                <div>
+                                    <strong>{orig_file}</strong> <span style="color: #64748B;">({doc_t} // {sz} KB)</span><br>
+                                    <span style="font-size:0.75rem; color:#94A3B8;">Uploaded on: {u_date}</span>
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+                        
+                    file_data = b""
+                    file_exists = os.path.exists(doc_filepath)
+                    if file_exists:
+                        try:
+                            with open(doc_filepath, "rb") as f_read:
+                                file_data = f_read.read()
+                        except Exception:
+                            pass
+                            
+                    with doc_col2:
+                        if file_exists and file_data:
+                            st.download_button(
+                                label="📥 Download",
+                                data=file_data,
+                                file_name=orig_file,
+                                key=f"dl_{doc_id}",
+                                use_container_width=True
+                            )
+                        else:
+                            st.button("⚠️ Missing file", disabled=True, key=f"missing_{doc_id}", use_container_width=True)
+                            
+                    with doc_col3:
+                        if st.button("🗑️ Delete File", key=f"del_doc_{doc_id}", use_container_width=True):
+                            if file_exists:
+                                try:
+                                    os.remove(doc_filepath)
+                                except Exception:
+                                    pass
+                            e["documents"] = [d for d in e["documents"] if d["id"] != doc_id]
+                            st.success(f"Deleted {orig_file}")
+                            save_data()
+                            st.rerun()
+                            
+                    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+            
+            del_ev_col1, del_ev_col2 = st.columns([8, 2])
+            with del_ev_col2:
+                if st.button("🗑️ Delete Event", key=f"del_ev_{e['id']}", use_container_width=True):
+                    for doc in e.get("documents", []):
+                        dfp = os.path.join(DOCS_DIR, doc["filename"])
+                        if os.path.exists(dfp):
+                            try:
+                                os.remove(dfp)
+                            except Exception:
+                                pass
+                    st.session_state.important_events = [ev for ev in events if ev["id"] != e["id"]]
+                    st.warning(f"Deleted event: {e['name']}")
+                    save_data()
+                    st.rerun()
+            st.markdown("<hr style='border-color: #E2E8F0; margin: 15px 0 20px 0;'>", unsafe_allow_html=True)
+            
+    st.markdown('</div>', unsafe_allow_html=True)
+
