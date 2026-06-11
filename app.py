@@ -102,6 +102,165 @@ def get_monthly_segment_pnl() -> dict:
     segment_pnl = df_current_month.groupby('segment')['net_pnl'].sum().to_dict()
     return segment_pnl
 
+DEFAULT_SEGMENT_RULES = {
+    "base_daily_risk": 250.0,
+    "enable_step_up": True,
+    "enforcement_mode": "Hard Lock", # "Hard Lock" or "Soft Warning"
+    "rules": {
+        "Commodities": {
+            "allocation_pct": 15.0,
+            "min_savings": 6000.0,
+            "manual_adjustment": 0.0
+        },
+        "Equity - Delivery": {
+            "allocation_pct": 40.0,
+            "min_savings": 3000.0,
+            "manual_adjustment": 0.0
+        },
+        "F&O - Stock Options": {
+            "allocation_pct": 15.0,
+            "min_savings": 4500.0,
+            "manual_adjustment": 0.0
+        },
+        "F&O - Index Options": {
+            "allocation_pct": 15.0,
+            "min_savings": 4500.0,
+            "manual_adjustment": 0.0
+        },
+        "Equity - Intraday": {
+            "allocation_pct": 15.0,
+            "min_savings": 3000.0,
+            "manual_adjustment": 0.0
+        }
+    }
+}
+
+def get_segment_rules() -> dict:
+    """
+    Fetches the segment rules from settings table or returns the default structure.
+    """
+    rules = get_db_settings("segment_rules", None)
+    if rules is None:
+        rules = dict(DEFAULT_SEGMENT_RULES)
+    else:
+        # Check that all default segments exist (for schema evolution/backwards compatibility)
+        if "rules" not in rules:
+            rules["rules"] = {}
+        for seg_name, defaults in DEFAULT_SEGMENT_RULES["rules"].items():
+            if seg_name not in rules["rules"]:
+                rules["rules"][seg_name] = dict(defaults)
+            else:
+                # Fill missing keys in segments
+                for k, v in defaults.items():
+                    if k not in rules["rules"][seg_name]:
+                        if k == "manual_adjustment" and "current_savings" in rules["rules"][seg_name]:
+                            rules["rules"][seg_name]["manual_adjustment"] = float(rules["rules"][seg_name]["current_savings"])
+                        else:
+                            rules["rules"][seg_name][k] = v
+        # Ensure top level keys exist
+        for k in ["base_daily_risk", "enable_step_up", "enforcement_mode"]:
+            if k not in rules:
+                rules[k] = DEFAULT_SEGMENT_RULES[k]
+    return rules
+
+def save_segment_rules(rules: dict):
+    """
+    Saves segment rules to DB.
+    """
+    save_db_setting("segment_rules", rules)
+
+def get_segment_savings(rules: dict, seg_key: str, active_daily_risk: float) -> dict:
+    """
+    Calculates the dynamic savings, progress, and status for a segment.
+    """
+    seg_rule_data = rules.get("rules", {}).get(seg_key, {})
+    alloc_pct = float(seg_rule_data.get("allocation_pct", 15.0))
+    min_savings = float(seg_rule_data.get("min_savings", 3000.0))
+    manual_adj = float(seg_rule_data.get("manual_adjustment", 0.0))
+    
+    # Calculate daily risk allocation for this segment
+    seg_risk_allocation = active_daily_risk * (alloc_pct / 100.0)
+    
+    # Calculate days passed since start date
+    start_date_str = get_db_settings("segment_rules_start_date", "2026-06-07")
+    try:
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+    except Exception:
+        start_date = date.today()
+        
+    days_passed = max(1, (date.today() - start_date).days + 1)
+    
+    # Calculate sum of P&L for this segment since start date
+    df_t = fetch_trades_df()
+    seg_pnl = 0.0
+    if not df_t.empty:
+        # Filter trades in this segment executed on or after start_date
+        df_t['parsed_date'] = pd.to_datetime(df_t['trade_date'])
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        df_filtered = df_t[
+            (df_t['segment'] == seg_key) & 
+            (df_t['parsed_date'] >= start_dt)
+        ]
+        seg_pnl = float(df_filtered['net_pnl'].sum())
+        
+    # Total dynamic savings
+    current_savings = (days_passed * seg_risk_allocation) + seg_pnl + manual_adj
+    
+    # Status
+    is_ready = current_savings >= min_savings
+    
+    # Calculate unlock date if locked
+    days_needed = 0
+    unlock_date = None
+    if not is_ready:
+        import math
+        from datetime import timedelta
+        diff = min_savings - current_savings
+        days_needed = math.ceil(diff / seg_risk_allocation) if seg_risk_allocation > 0 else 0
+        unlock_date = date.today() + timedelta(days=days_needed)
+    
+    return {
+        "current_savings": current_savings,
+        "days_passed": days_passed,
+        "seg_risk_allocation": seg_risk_allocation,
+        "seg_pnl": seg_pnl,
+        "is_ready": is_ready,
+        "progress_pct": (current_savings / min_savings * 100.0) if min_savings > 0 else 0.0,
+        "days_needed": days_needed,
+        "unlock_date": unlock_date
+    }
+
+def get_monthly_total_pnl() -> float:
+    """
+    Computes the total net P&L for the current calendar month across both
+    standard trades and pair trades.
+    """
+    df_t = fetch_trades_df()
+    df_p = fetch_pair_trades_df()
+    
+    now = datetime.now()
+    
+    m_pnl = 0.0
+    
+    if not df_t.empty:
+        df_t['parsed_date'] = pd.to_datetime(df_t['trade_date'])
+        df_t_month = df_t[
+            (df_t['parsed_date'].dt.year == now.year) & 
+            (df_t['parsed_date'].dt.month == now.month)
+        ]
+        m_pnl += float(df_t_month['net_pnl'].sum())
+        
+    if not df_p.empty:
+        df_p['parsed_date'] = pd.to_datetime(df_p['trade_date'])
+        df_p_month = df_p[
+            (df_p['parsed_date'].dt.year == now.year) & 
+            (df_p['parsed_date'].dt.month == now.month)
+        ]
+        m_pnl += float(df_p_month['net_pnl'].sum())
+        
+    return m_pnl
+
+
 def fetch_screener_scores(symbol: str) -> dict:
     """
     Checks the local Nifty 500 SQLite cache database to pull fundamental and momentum ratings
@@ -501,50 +660,14 @@ currency_sym = get_db_settings("currency_symbol", "₹")
 df_pair_trades_kpi = fetch_pair_trades_df()
 
 def check_system_lock(df_t, df_p):
-    import math
-    from datetime import datetime, timedelta
-    
-    now = datetime.now()
-    current_month_str = now.strftime("%Y-%m")
-    
-    t1 = df_t[['trade_date', 'net_pnl']].copy() if not df_t.empty else pd.DataFrame(columns=['trade_date', 'net_pnl'])
-    t2 = df_p[['trade_date', 'net_pnl']].copy() if not df_p.empty else pd.DataFrame(columns=['trade_date', 'net_pnl'])
-    
-    df_all = pd.concat([t1, t2])
-    if df_all.empty:
-        return False, ""
-        
-    daily_pnl = df_all.groupby('trade_date')['net_pnl'].sum().to_dict()
-    
-    max_lock_date = now.date() - timedelta(days=1)
-    
-    for t_date_str, pnl in daily_pnl.items():
-        if pnl < -250:
-            penalty_days = math.ceil(abs(pnl) / 250)
-            t_date = datetime.strptime(t_date_str, "%Y-%m-%d").date()
-            lock_expiration = t_date + timedelta(days=penalty_days)
-            if lock_expiration > max_lock_date:
-                max_lock_date = lock_expiration
-                
-    if now.date() < max_lock_date:
-        return True, f"🔴 **Daily Penalty Box Active**: Trading is locked until {max_lock_date.strftime('%B %d, %Y')} due to exceeding the ₹250 daily risk limit."
-        
-    current_month_pnl = sum(pnl for d_str, pnl in daily_pnl.items() if d_str.startswith(current_month_str))
-            
-    if current_month_str == "2026-06":
-        if current_month_pnl <= -12000:
-            return True, "🔴 **June Exception Active**: Monthly hard stop of ₹12,000 reached. Trading locked until July 1st, 2026."
-    else:
-        if current_month_pnl <= -7500:
-            next_month = (now.replace(day=1) + timedelta(days=32)).replace(day=1)
-            return True, f"🔴 **Monthly Hard Stop Active**: You have reached the ₹7,500 monthly risk limit. Trading locked until {next_month.strftime('%B 1st, %Y')}."
-            
+    # Daily penalty box and monthly hard stops are deactivated as of today.
+    # Trading locks are now governed strictly by segment savings levels.
     return False, ""
 
 is_system_locked, lock_reason = check_system_lock(df_trades, df_pair_trades_kpi)
 
 # 2. Main Tabs Layout
-tab_dash, tab_add, tab_logs, tab_psych, tab_risk, tab_capital, tab_settings, tab_pair = st.tabs([
+tab_dash, tab_add, tab_logs, tab_psych, tab_risk, tab_capital, tab_settings, tab_pair, tab_rules = st.tabs([
     "📊 Performance Dashboard",
     "📝 Log a Trade",
     "🔍 Search & Edit Logs",
@@ -552,7 +675,8 @@ tab_dash, tab_add, tab_logs, tab_psych, tab_risk, tab_capital, tab_settings, tab
     "🧮 Position Size Planner",
     "💳 Capital Manager",
     "⚙️ System Settings",
-    "🔀 Nifty Pair Trading"
+    "🔀 Nifty Pair Trading",
+    "🛡️ Segment Rules"
 ])
 
 # ==========================================
@@ -638,8 +762,7 @@ with tab_dash:
         st.markdown(
             f"""
             <p style="color: var(--text-secondary); margin-top:-10px; margin-bottom: 20px;">
-                Monthly risk tolerance limits are set at <strong>{currency_sym} {float(get_db_settings("monthly_risk_limit", 3000.0)):,.2f}</strong> per segment. 
-                If a segment's net loss for the current calendar month exceeds this threshold, the segment is locked automatically (Circuit Breaker Tripped) to prevent further losses. Limits reinstate automatically at the start of next month.
+                Segment limits and trade eligibility are now governed by the **🛡️ Segment Rules & Risk Allocator** tab based on savings targets. Historical monthly performance circuit breaker locks are deactivated.
             </p>
             """,
             unsafe_allow_html=True
@@ -668,19 +791,13 @@ with tab_dash:
                 else:
                     seg_pnl = monthly_pnls.get(seg, 0.0)
                 
-                # Check status
-                if seg_pnl <= -risk_limit:
-                    status_text = "🔴 LOCKED (Breaker Tripped)"
-                    card_border = "border: 1.5px solid #EF4444;"
-                    card_bg = "background-color: #FEF2F2;"
-                    text_color = "#991B1B"
-                    progress_val = 1.0
-                elif seg_pnl < 0:
-                    status_text = "🟡 ACTIVE (Risk Warning)"
+                # Check status (locking deactivated)
+                if seg_pnl < 0:
+                    status_text = "🟡 ACTIVE (Net Loss)"
                     card_border = "border: 1.5px solid #FCD34D;"
                     card_bg = "background-color: #FFFBEB;"
                     text_color = "#92400E"
-                    progress_val = abs(seg_pnl) / risk_limit
+                    progress_val = min(1.0, abs(seg_pnl) / risk_limit)
                 else:
                     status_text = "🟢 SAFE (In Profit / Inactive)"
                     card_border = "border: 1.5px solid #A7F3D0;"
@@ -1026,30 +1143,47 @@ with tab_add:
         
     t_notes = st.text_area("Trade Notes / Psychological Context", placeholder="Describe entry trigger, plan validity, and exit management...", height=80, key=f"add_notes_{st.session_state['add_form_id']}")
     
-    # Circuit Breaker Validation
-    monthly_pnls = get_monthly_segment_pnl()
-    risk_limit = float(get_db_settings("monthly_risk_limit", 3000.0))
+    # Circuit Breaker Validation (Deactivated - locks are now governed by Segment Rules)
     is_blocked = False
+
+    # Segment Rules / Savings Guard Validation
+    seg_rules = get_segment_rules()
+    enforcement_mode = seg_rules.get("enforcement_mode", "Hard Lock")
     
-    if t_segment in ["Commodities", "F&O - Index Options", "Equity - Intraday", "F&O - Stock Options"]:
-        seg_pnl = monthly_pnls.get(t_segment, 0.0)
-        if seg_pnl <= -risk_limit:
-            # Enforce lock only starting from tomorrow, June 4th, 2026
-            is_locking_active = date.today() >= date(2026, 6, 4)
-            if is_locking_active:
+    if t_segment in seg_rules.get("rules", {}):
+        # Calculate active daily risk for dynamic checking
+        base_risk = float(seg_rules.get("base_daily_risk", 250.0))
+        enable_step_up = seg_rules.get("enable_step_up", True)
+        monthly_pnl_val = get_monthly_total_pnl()
+        step_up_bonus = 0.0
+        if enable_step_up and monthly_pnl_val > 0:
+            step_up_bonus = monthly_pnl_val * 0.10
+        active_daily_risk = base_risk + step_up_bonus
+        
+        # Calculate dynamic savings
+        savings_info = get_segment_savings(seg_rules, t_segment, active_daily_risk)
+        curr_savings = savings_info["current_savings"]
+        min_savings = float(seg_rules["rules"][t_segment].get("min_savings", 3000.0))
+        
+        if curr_savings < min_savings:
+            unlock_date_str = savings_info["unlock_date"].strftime("%d %b %Y") if savings_info.get("unlock_date") else "N/A"
+            days_needed = savings_info.get("days_needed", 0)
+            if enforcement_mode == "Hard Lock":
                 is_blocked = True
                 st.error(
-                    f"🛑 **Circuit Breaker Active for {t_segment}!** "
-                    f"Your net P&L for this segment in the current calendar month is **{currency_sym} {seg_pnl:,.2f}**, "
-                    f"which exceeds the monthly risk tolerance limit of **{currency_sym} {risk_limit:,.2f}**. "
-                    f"New trades are locked for this segment to preserve capital."
+                    f"🛑 **Segment Guard Active for {t_segment}!** "
+                    f"Your current savings allocated for this segment (**{currency_sym} {curr_savings:,.2f}**) is below the required "
+                    f"minimum target of **{currency_sym} {min_savings:,.2f}**. "
+                    f"Trade logging is strictly locked to preserve capital. "
+                    f"*(Estimated Unlock: {unlock_date_str} / in {days_needed} days)*"
                 )
             else:
                 st.warning(
-                    f"⚠️ **Circuit Breaker Warning for {t_segment}!** "
-                    f"Your net P&L for this segment in the current calendar month is **{currency_sym} {seg_pnl:,.2f}**, "
-                    f"which exceeds the monthly risk tolerance limit of **{currency_sym} {risk_limit:,.2f}**. "
-                    f"Locking will be enforced starting tomorrow. You may record your outstanding trades today."
+                    f"⚠️ **Segment Guard Warning for {t_segment}!** "
+                    f"Your current savings allocated for this segment (**{currency_sym} {curr_savings:,.2f}**) is below the required "
+                    f"minimum target of **{currency_sym} {min_savings:,.2f}**. "
+                    f"Please increase your savings to meet the rules. "
+                    f"*(Estimated Unlock: {unlock_date_str} / in {days_needed} days)*"
                 )
 
     # Dynamic quote mismatch warning
@@ -2592,3 +2726,184 @@ with tab_pair:
             st.success("Pair trade deleted.")
             st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
+
+# ==========================================
+# TAB 9: SEGMENT RULES & RISK ALLOCATOR
+# ==========================================
+with tab_rules:
+    st.markdown('<div class="glass-card preview-card">', unsafe_allow_html=True)
+    st.markdown('<h3 style="margin-top:0; color: var(--text-primary);">🛡️ Segment Rules & Risk Allocator</h3>', unsafe_allow_html=True)
+    st.markdown('<p style="color: var(--text-secondary); margin-top:-10px;">Set stricter rules by tying trade eligibility to your savings progress. Allocate your daily risk across segments, and optionally step up limits using trading profits.</p>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    rules = get_segment_rules()
+
+    # Calculate step-up risk limit
+    base_risk = float(rules.get("base_daily_risk", 250.0))
+    enable_step_up = rules.get("enable_step_up", True)
+    enforcement_mode = rules.get("enforcement_mode", "Hard Lock")
+    
+    monthly_pnl_val = get_monthly_total_pnl()
+    step_up_bonus = 0.0
+    if enable_step_up and monthly_pnl_val > 0:
+        step_up_bonus = monthly_pnl_val * 0.10
+        
+    active_daily_risk = base_risk + step_up_bonus
+
+    # Calculate Total Daily Increment
+    start_date_str = get_db_settings("segment_rules_start_date", "2026-06-07")
+    try:
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+    except Exception:
+        start_date = date.today()
+    days_passed = max(1, (date.today() - start_date).days + 1)
+    total_daily_increment = active_daily_risk * days_passed
+
+    # Metrics Row
+    met1, met2, met3, met4, met5 = st.columns(5)
+    with met1:
+        st.metric("Base Daily Risk Limit", f"₹ {base_risk:,.2f}", help="Based on 25% of monthly projected income")
+    with met2:
+        pnl_color_str = "+" if monthly_pnl_val >= 0 else ""
+        st.metric("Current Month Net P&L", f"₹ {monthly_pnl_val:,.2f}", delta=f"{pnl_color_str}10% step-up eligible" if enable_step_up else "Step-up disabled")
+    with met3:
+        st.metric("Step-Up Daily Bonus", f"₹ {step_up_bonus:,.2f}", delta="10% of monthly profit" if step_up_bonus > 0 else "No monthly profit bonus")
+    with met4:
+        st.metric("Active Daily Risk Limit", f"₹ {active_daily_risk:,.2f}", delta=f"Scaled up by ₹{step_up_bonus:,.2f}" if step_up_bonus > 0 else "Base limit active", delta_color="normal" if step_up_bonus > 0 else "off")
+    with met5:
+        st.metric("Total Daily Increment", f"₹ {total_daily_increment:,.2f}", delta=f"₹{active_daily_risk:,.2f} / day")
+
+    rule_config_col, rule_segment_col = st.columns([1, 2])
+
+    display_names = {
+        "Commodities": "Commodity Segment",
+        "Equity - Delivery": "Investment Segment",
+        "F&O - Stock Options": "Stock Option Segment",
+        "F&O - Index Options": "Nifty Index Options",
+        "Equity - Intraday": "Intraday Segment"
+    }
+
+    with rule_config_col:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown("<h5>Risk & Enforcement Config</h5>", unsafe_allow_html=True)
+        
+        with st.form("risk_config_form"):
+            new_base_risk = st.number_input("Base Daily Risk (₹)", min_value=0.0, step=10.0, value=base_risk, help="Maximum overall loss budget per day before penalty box kicks in.")
+            new_enable_step_up = st.checkbox("Enable 10% Profit Step-Up", value=enable_step_up, help="Automatically increases your active daily risk limit by 10% of your net profits this month.")
+            new_enforce_mode = st.selectbox("Rule Enforcement Mode", options=["Hard Lock", "Soft Warning"], index=0 if enforcement_mode == "Hard Lock" else 1, help="Hard Lock completely disables trade logging for locked segments. Soft Warning only shows a notice.")
+            
+            # Input allocations and minimum savings targets inside the form
+            new_allocations = {}
+            st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+            for seg_key, seg_data in rules["rules"].items():
+                st.markdown(f"**{display_names.get(seg_key, seg_key)}**")
+                subcol1, subcol2 = st.columns(2)
+                with subcol1:
+                    alloc_pct = st.number_input(f"Allocation (%)", min_value=0.0, max_value=100.0, step=1.0, value=float(seg_data.get("allocation_pct", 15.0)), key=f"alloc_pct_{seg_key}")
+                with subcol2:
+                    min_sav = st.number_input(f"Min Savings (₹)", min_value=0.0, step=100.0, value=float(seg_data.get("min_savings", 3000.0)), key=f"min_sav_{seg_key}")
+                
+                # Retrieve manual adjustment value (updated in the other column, but must preserve it here)
+                man_adj = float(seg_data.get("manual_adjustment", 0.0))
+                new_allocations[seg_key] = {
+                    "allocation_pct": alloc_pct,
+                    "min_savings": min_sav,
+                    "manual_adjustment": man_adj
+                }
+                
+            save_config = st.form_submit_button("Save Configuration & Rules")
+            if save_config:
+                total_pct = sum(item["allocation_pct"] for item in new_allocations.values())
+                if total_pct != 100.0:
+                    st.error(f"Error: Total segment allocation percentage must sum to exactly 100%. Currently it is **{total_pct}%**.")
+                else:
+                    updated_rules = {
+                        "base_daily_risk": new_base_risk,
+                        "enable_step_up": new_enable_step_up,
+                        "enforcement_mode": new_enforce_mode,
+                        "rules": new_allocations
+                    }
+                    save_segment_rules(updated_rules)
+                    st.success("Risk configuration and rules saved successfully!")
+                    st.rerun()
+                    
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with rule_segment_col:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown("<h5>Segment Savings Ledger & Guard Status</h5>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:0.85rem; color: var(--text-secondary); margin-top:-10px; margin-bottom:15px;'>Enter your current actual savings allocated for each segment. If it falls short of the target minimum savings, the segment will lock.</p>", unsafe_allow_html=True)
+        
+        # Form to update current savings
+        with st.form("savings_update_form"):
+            updated_savings_dict = {}
+            
+            for seg_key, seg_data in rules["rules"].items():
+                savings_info = get_segment_savings(rules, seg_key, active_daily_risk)
+                current_savings = savings_info["current_savings"]
+                min_savings = float(seg_data.get("min_savings", 3000.0))
+                alloc_pct = float(seg_data.get("allocation_pct", 15.0))
+                seg_risk_allocation = savings_info["seg_risk_allocation"]
+                
+                # Calculate Status
+                is_ready = savings_info["is_ready"]
+                status_badge = "🟢 READY TO TRADE" if is_ready else "🔴 LOCKED (Below Target)"
+                status_color = "var(--accent-green)" if is_ready else "var(--accent-red)"
+                badge_bg = "#ECFDF5" if is_ready else "#FEF2F2"
+                
+                progress_pct = savings_info["progress_pct"]
+                
+                # Render Segment card container in custom HTML
+                unlock_info_html = ""
+                if not is_ready and savings_info.get("unlock_date"):
+                    unlock_date_str = savings_info["unlock_date"].strftime("%d %b %Y")
+                    days_needed = savings_info["days_needed"]
+                    unlock_info_html = f"""
+                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.08); font-size: 0.88rem; color: var(--text-secondary);">
+                        ⏳ Est. Unlock: <strong style="color: var(--text-primary);">{unlock_date_str} (in {days_needed} days)</strong>
+                    </div>
+                    """
+
+                st.markdown(
+                    f"""
+                    <div style="border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 10px; background: var(--bg-secondary);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <span style="font-weight:700; font-size:1.05rem; color: var(--text-primary);">{display_names.get(seg_key, seg_key)}</span>
+                            <span style="background-color: {badge_bg}; color: {status_color}; border: 1.5px solid {status_color}; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; text-transform: uppercase;">
+                                {status_badge}
+                            </span>
+                        </div>
+                        <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size:0.9rem; margin-bottom: 8px;">
+                            <div><span style="color:var(--text-secondary);">Risk Allocation</span><br><strong>₹ {seg_risk_allocation:,.2f} ({alloc_pct}%)</strong></div>
+                            <div><span style="color:var(--text-secondary);">Target Min Savings</span><br><strong>₹ {min_savings:,.2f}</strong></div>
+                            <div><span style="color:var(--text-secondary);">Savings Progress</span><br><strong>{progress_pct:.1f}%</strong></div>
+                        </div>
+                        {unlock_info_html}
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+                
+                # Render progress bar
+                progress_val = min(1.0, max(0.0, current_savings / min_savings)) if min_savings > 0 else 0.0
+                st.progress(progress_val)
+                
+                # Input for updating current savings
+                new_sav = st.number_input(f"Update Current Savings for {display_names.get(seg_key, seg_key)} (₹)", min_value=0.0, step=10.0, value=current_savings, key=f"input_sav_{seg_key}")
+                updated_savings_dict[seg_key] = new_sav
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+            save_savings = st.form_submit_button("Save Current Savings Levels")
+            if save_savings:
+                # Update manual adjustments in settings
+                for seg_key, new_val in updated_savings_dict.items():
+                    savings_info = get_segment_savings(rules, seg_key, active_daily_risk)
+                    accumulated_base = (savings_info["days_passed"] * savings_info["seg_risk_allocation"]) + savings_info["seg_pnl"]
+                    new_adj = new_val - accumulated_base
+                    rules["rules"][seg_key]["manual_adjustment"] = new_adj
+                save_segment_rules(rules)
+                st.success("Savings levels updated successfully!")
+                st.rerun()
+                
+        st.markdown('</div>', unsafe_allow_html=True)
+

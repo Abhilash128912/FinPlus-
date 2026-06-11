@@ -9,22 +9,24 @@ import yfinance as yf
 
 # Import modular scanner components
 from scanner_database import init_scanner_db, fetch_cached_stocks_df, clear_scanner_cache
-from scanner_data_pipeline import run_nifty500_scanner_pipeline
+from scanner_data_pipeline import run_nifty500_scanner_pipeline, compute_atr
 from nifty_tickers import get_fno_symbols
 
 @st.cache_data(ttl=600)
 def fetch_live_stock_news(symbol: str) -> list:
     """
-    Downloads raw news from yfinance and parses the top 3 items.
-    Returns list of dicts with title, publisher, and link.
+    Fetches latest news headlines via yfinance.
+    Tries get_news() (newer API) then falls back to .news property.
+    Parses both legacy dict format and nested-content format.
+    Returns up to 5 items: [{title, publisher, link}].
     """
     if not symbol:
         return []
-    
+
     ticker_symbol = symbol.strip().upper()
     if not ticker_symbol:
         return []
-        
+
     # Append .NS for Indian stocks if not present
     if not ticker_symbol.endswith(".NS") and not ticker_symbol.endswith(".BO") and len(ticker_symbol) <= 10:
         index_keywords = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"]
@@ -33,36 +35,74 @@ def fetch_live_stock_news(symbol: str) -> list:
         is_commodity = any(k in ticker_symbol for k in commodity_keywords)
         if not is_index and not is_commodity:
             ticker_symbol = f"{ticker_symbol}.NS"
-            
+
+    raw_news = []
     try:
         ticker = yf.Ticker(ticker_symbol)
-        raw_news = ticker.news
-        parsed_news = []
-        if raw_news:
-            for item in raw_news[:3]:  # Top 3 headlines
-                title = ""
-                publisher = ""
-                link = ""
-                if "content" in item:
-                    c = item["content"]
-                    title = c.get("title", "")
-                    publisher = c.get("provider", {}).get("displayName", "")
-                    link = c.get("canonicalUrl", {}).get("url", "")
-                else:
-                    title = item.get("title", "")
-                    publisher = item.get("publisher", "")
-                    link = item.get("link", "")
-                
-                if title:
-                    parsed_news.append({
-                        "title": title,
-                        "publisher": publisher,
-                        "link": link
-                    })
-            return parsed_news
+        # Try newer API first (yfinance >= 0.2.37)
+        try:
+            raw_news = ticker.get_news() or []
+        except Exception:
+            pass
+        # Fall back to property accessor
+        if not raw_news:
+            try:
+                raw_news = ticker.news or []
+            except Exception:
+                pass
     except Exception:
-        pass
-    return []
+        return []
+
+    parsed_news = []
+    for item in raw_news[:5]:  # Up to 5 headlines
+        title = publisher = link = ""
+        try:
+            # Format A: {"content": {"title": ..., "provider": ..., "canonicalUrl": ...}}
+            if isinstance(item, dict) and "content" in item:
+                c = item["content"]
+                title     = c.get("title", "") or ""
+                publisher = (c.get("provider") or {}).get("displayName", "") or ""
+                link      = (c.get("canonicalUrl") or {}).get("url", "") or ""
+                if not link:
+                    link  = (c.get("clickThroughUrl") or {}).get("url", "") or ""
+            # Format B: flat dict {"title": ..., "publisher": ..., "link": ...}
+            elif isinstance(item, dict):
+                title     = item.get("title", "") or ""
+                publisher = item.get("publisher", "") or ""
+                link      = item.get("link", "") or item.get("url", "") or ""
+        except Exception:
+            continue
+        if title:
+            parsed_news.append({"title": title, "publisher": publisher, "link": link})
+
+    return parsed_news
+
+def get_news_sentiment(title: str) -> str:
+    """
+    Keyword-based sentiment classifier for a news headline.
+    Returns 'positive', 'negative', or 'neutral'.
+    """
+    t = title.lower()
+    positive_words = [
+        "surge", "rally", "soar", "jump", "gain", "rise", "up", "bull", "bullish",
+        "growth", "profit", "beat", "beats", "record", "high", "upgrade", "buy",
+        "strong", "outperform", "positive", "recovery", "boom", "expand",
+        "dividend", "buyback", "approved", "win", "award", "milestone"
+    ]
+    negative_words = [
+        "fall", "drop", "crash", "plunge", "slump", "decline", "loss", "down",
+        "bear", "bearish", "weak", "miss", "misses", "cut", "downgrade", "sell",
+        "concern", "risk", "warning", "probe", "fraud", "penalty", "fine",
+        "layoff", "recall", "default", "debt", "lawsuit", "investigation",
+        "tumble", "sink", "disappoint", "lower", "below"
+    ]
+    pos = sum(1 for w in positive_words if w in t)
+    neg = sum(1 for w in negative_words if w in t)
+    if pos > neg:
+        return "positive"
+    elif neg > pos:
+        return "negative"
+    return "neutral"
 
 def generate_modeled_option_chain(last_price: float, rsi: float, ticker: str):
     """
@@ -534,8 +574,9 @@ def update_focus_from_tab2():
         st.session_state["global_focus_ticker"] = st.session_state["screener_quick_focus_selectbox_widget"]
 
 def update_focus_from_tab5():
+    """Updates ONLY the F&O tab's local focus — does NOT touch global_focus_ticker."""
     if "tab_fno_active_ticker_selector" in st.session_state:
-        st.session_state["global_focus_ticker"] = st.session_state["tab_fno_active_ticker_selector"]
+        st.session_state["fno_tab_focus_ticker"] = st.session_state["tab_fno_active_ticker_selector"]
 
 # Check for deep-linked stock focus from URL parameters on startup
 url_focus = st.query_params.get("focus_ticker", "").strip().upper()
@@ -545,8 +586,12 @@ if url_focus:
     elif f"{url_focus}.NS" in ticker_options:
         st.session_state["global_focus_ticker"] = f"{url_focus}.NS"
 
-if "global_focus_ticker" not in st.session_state:
-    st.session_state["global_focus_ticker"] = ""
+if "global_focus_ticker" not in st.session_state or not st.session_state["global_focus_ticker"]:
+    if ticker_options:
+        default_ticker = "RELIANCE.NS" if "RELIANCE.NS" in ticker_options else ticker_options[0]
+        st.session_state["global_focus_ticker"] = default_ticker
+    else:
+        st.session_state["global_focus_ticker"] = ""
 
 # Synchronize widget session state keys safely on every run
 current_focus = st.session_state["global_focus_ticker"]
@@ -740,40 +785,211 @@ with tab_overview:
                     delta="Non-Nifty 500 constituent"
                 )
                 
-        # Fetch live stock news
+        # ── Enhanced Trade Signal & Indicator Card (Tier 1 upgrade) ──────────
+        if is_nifty500:
+            def _safe(row, col, default=None):
+                """Backward-safe column reader — returns default if column absent."""
+                return row[col] if col in row.index else default
+
+            def _is_valid(v):
+                """Returns True only if v is a real, usable number (not None / NaN / 0)."""
+                if v is None: return False
+                try: return not pd.isna(v) and float(v) > 0
+                except: return False
+
+            conv_label  = _safe(link_row, "conviction_label", "Watch")
+            adx_v       = _safe(link_row, "adx_14",  20.0)
+            macd_sig    = _safe(link_row, "macd_signal", "Neutral")
+            piot        = _safe(link_row, "piotroski_score", None)
+            bk_sig      = _safe(link_row, "breakout_signal", 0)
+            bb_sq       = _safe(link_row, "bb_squeeze", 0)
+
+            # ── 15-Minute Trade Signal Cache ─────────────────────────────────
+            # Priority: (1) DB scan values, (2) session cache <15 min, (3) compute fresh
+            _sk  = f"tp_{display_ticker}"     # session state key for plan values
+            _stk = f"tp_ts_{display_ticker}"  # session state key for timestamp
+
+            now        = datetime.now()
+            cached_ts  = st.session_state.get(_stk)
+            cached_plan = st.session_state.get(_sk)
+            plan_age_s  = (now - cached_ts).total_seconds() if cached_ts else 9999
+            TTL_SECS    = 900   # 15 minutes
+
+            # Try DB values first (set at scan time, only change on full rescan)
+            _db_ep = _safe(link_row, "entry_price", None)
+            _db_sl = _safe(link_row, "stop_loss",   None)
+            _db_t1 = _safe(link_row, "target_1",    None)
+            _db_t2 = _safe(link_row, "target_2",    None)
+            _db_rr = _safe(link_row, "rr_ratio",    None)
+            db_valid = all(_is_valid(x) for x in [_db_ep, _db_sl, _db_t1, _db_t2, _db_rr])
+
+            if db_valid:
+                # Stable DB values — only change when a new full scan is run
+                entry_p, sl_p, t1_p, t2_p, rr_v = (
+                    float(_db_ep), float(_db_sl), float(_db_t1),
+                    float(_db_t2), float(_db_rr)
+                )
+                last_scan = _safe(link_row, "last_updated", "")
+                signal_label = f"🗄️ Scan data · Last sync: {last_scan} · Updates on next scan"
+                signal_label_color = "#16a34a"
+                # Keep session cache in sync with DB values
+                st.session_state[_sk]  = (entry_p, sl_p, t1_p, t2_p, rr_v)
+                st.session_state[_stk] = now
+
+            elif cached_plan and plan_age_s < TTL_SECS:
+                # Serve from 15-min session cache — no recompute, no LTP drift
+                entry_p, sl_p, t1_p, t2_p, rr_v = cached_plan
+                remaining_s   = int(TTL_SECS - plan_age_s)
+                remaining_m   = remaining_s // 60
+                remaining_sec = remaining_s % 60
+                set_at        = cached_ts.strftime("%H:%M:%S")
+                signal_label  = f"⏳ Locked plan · Set at {set_at} · Refreshes in {remaining_m}m {remaining_sec}s"
+                signal_label_color = "#b45309"
+
+            else:
+                # Compute fresh from live price + ATR, then lock for 15 min
+                try:
+                    _hist3m = yf.Ticker(display_ticker).history(period="3mo", interval="1d")
+                    if not _hist3m.empty and len(_hist3m) >= 14:
+                        _atr   = compute_atr(_hist3m)
+                        _ema20 = float(_hist3m["Close"].ewm(span=20, adjust=False).mean().iloc[-1])
+                        entry_p  = round(last_price, 2)
+                        sl_p     = round(max(_ema20 * 0.99, last_price * 0.93), 2)
+                        t1_p     = round(last_price + 2.0 * _atr, 2)
+                        t2_p     = round(last_price + 3.0 * _atr, 2)
+                        _risk    = entry_p - sl_p
+                        rr_v     = round((t1_p - entry_p) / _risk, 2) if _risk > 0 else 1.5
+                    else:
+                        raise ValueError("Insufficient history")
+                except Exception:
+                    entry_p = round(last_price, 2)
+                    sl_p    = round(last_price * 0.93, 2)
+                    t1_p    = round(last_price * 1.05, 2)
+                    t2_p    = round(last_price * 1.08, 2)
+                    rr_v    = 1.5
+
+                # Lock into session state for 15 minutes
+                st.session_state[_sk]  = (entry_p, sl_p, t1_p, t2_p, rr_v)
+                st.session_state[_stk] = now
+                signal_label  = f"✅ Plan computed at {now.strftime('%H:%M:%S')} · Locked for 15 min"
+                signal_label_color = "#0369a1"
+
+            # Refresh button — clears cache and forces recompute on next run
+            if st.button("🔄 Refresh Trade Plan", key=f"refresh_tp_{display_ticker}",
+                         help="Forces a fresh ATR-based trade plan recompute"):
+                st.session_state.pop(_sk,  None)
+                st.session_state.pop(_stk, None)
+                st.rerun()
+
+            # Conviction palette
+            _conv_pal = {
+                "Strong Buy": ("#052e16","#16a34a","#dcfce7","🚀"),
+                "Buy":        ("#14532d","#22c55e","#f0fdf4","✅"),
+                "Watch":      ("#92400e","#f59e0b","#fffbeb","👁️"),
+                "Neutral":    ("#1e3a5f","#3b82f6","#eff6ff","⚖️"),
+                "Avoid":      ("#7f1d1d","#ef4444","#fff1f2","🚫"),
+            }
+            ctext, cborder, cbg, cicon = _conv_pal.get(conv_label, _conv_pal["Watch"])
+
+            # ADX status
+            if adx_v is not None:
+                if adx_v >= 25:   adx_label, adx_color = "Strong Trend",   "#16a34a"
+                elif adx_v >= 20: adx_label, adx_color = "Moderate Trend", "#f59e0b"
+                else:             adx_label, adx_color = "Choppy / Sideways", "#ef4444"
+                adx_str = f"{adx_v:.1f} — {adx_label}"
+            else:
+                adx_str, adx_color = "N/A", "#94a3b8"
+
+            # MACD palette
+            _macd_pal = {
+                "Bullish Crossover":  ("#15803d","#dcfce7","🟢"),
+                "Bullish":            ("#166534","#f0fdf4","🟩"),
+                "Neutral":            ("#475569","#f1f5f9","⬜"),
+                "Bearish Crossover":  ("#991b1b","#fee2e2","🔴"),
+                "Bearish":            ("#7f1d1d","#fff1f2","🟥"),
+            }
+            mc, mbg, micon = _macd_pal.get(macd_sig, _macd_pal["Neutral"])
+
+            # Piotroski badge
+            if piot is not None:
+                if piot >= 7:   pc, pbg, plabel = "#15803d","#dcfce7", f"{piot}/9 — High Quality"
+                elif piot >= 5: pc, pbg, plabel = "#b45309","#fef3c7", f"{piot}/9 — Moderate"
+                else:           pc, pbg, plabel = "#991b1b","#fee2e2", f"{piot}/9 — Caution"
+            else:
+                pc, pbg, plabel = "#64748b","#f1f5f9", "N/A"
+
+            # Build compact signal card HTML (no leading whitespace — avoids Markdown code-block)
+            sig_html = f'<div style="background:{cbg};border:2px solid {cborder};border-radius:14px;padding:16px 20px;margin-bottom:18px;">'
+            sig_html += f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">'
+            sig_html += f'<span style="font-size:0.75rem;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:0.06em;">📊 Trade Intelligence</span>'
+            sig_html += f'<span style="font-size:0.8rem;font-weight:800;color:{ctext};background:{cbg};border:1.5px solid {cborder};padding:3px 14px;border-radius:20px;">{cicon} {conv_label}</span>'
+            if bk_sig: sig_html += '<span style="font-size:0.8rem;font-weight:800;color:#c2410c;background:#fff7ed;border:1.5px solid #fb923c;padding:3px 12px;border-radius:20px;">🚀 BREAKOUT SIGNAL</span>'
+            if bb_sq:  sig_html += '<span style="font-size:0.8rem;font-weight:800;color:#7c3aed;background:#f5f3ff;border:1.5px solid #a78bfa;padding:3px 12px;border-radius:20px;">🔋 BB SQUEEZE</span>'
+            sig_html += '</div>'
+
+            # Row 1: ADX + MACD + Piotroski
+            sig_html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">'
+            sig_html += f'<div style="flex:1;min-width:150px;background:#ffffff;border-radius:10px;padding:10px 14px;border:1px solid #e2e8f0;"><div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">ADX Trend Strength</div><div style="font-size:0.9rem;font-weight:800;color:{adx_color};">{adx_str}</div></div>'
+            sig_html += f'<div style="flex:1;min-width:150px;background:{mbg};border-radius:10px;padding:10px 14px;border:1px solid #e2e8f0;"><div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">MACD Signal</div><div style="font-size:0.9rem;font-weight:800;color:{mc};">{micon} {macd_sig}</div></div>'
+            sig_html += f'<div style="flex:1;min-width:150px;background:{pbg};border-radius:10px;padding:10px 14px;border:1px solid #e2e8f0;"><div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">Piotroski F-Score</div><div style="font-size:0.9rem;font-weight:800;color:{pc};">{plabel}</div></div>'
+            sig_html += '</div>'
+
+            # Row 2: Entry / SL / T1 / T2 / RR
+            def _fmt_price(v): return f'₹{v:,.2f}' if v is not None else 'N/A'
+            sig_html += '<div style="background:#ffffff;border-radius:10px;padding:12px 16px;border:1px solid #e2e8f0;">'
+            sig_html += '<div style="font-size:0.68rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">ATR-Based Trade Plan (Suggested — not financial advice)</div>'
+            sig_html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+            sig_html += f'<div style="text-align:center;flex:1;min-width:80px;"><div style="font-size:0.65rem;font-weight:700;color:#64748b;text-transform:uppercase;">Entry</div><div style="font-size:1rem;font-weight:800;color:#0f172a;">{_fmt_price(entry_p)}</div></div>'
+            sig_html += f'<div style="text-align:center;flex:1;min-width:80px;background:#fff1f2;border-radius:8px;padding:4px;"><div style="font-size:0.65rem;font-weight:700;color:#991b1b;text-transform:uppercase;">Stop Loss</div><div style="font-size:1rem;font-weight:800;color:#dc2626;">{_fmt_price(sl_p)}</div></div>'
+            sig_html += f'<div style="text-align:center;flex:1;min-width:80px;background:#f0fdf4;border-radius:8px;padding:4px;"><div style="font-size:0.65rem;font-weight:700;color:#15803d;text-transform:uppercase;">Target 1</div><div style="font-size:1rem;font-weight:800;color:#16a34a;">{_fmt_price(t1_p)}</div></div>'
+            sig_html += f'<div style="text-align:center;flex:1;min-width:80px;background:#f0fdf4;border-radius:8px;padding:4px;"><div style="font-size:0.65rem;font-weight:700;color:#15803d;text-transform:uppercase;">Target 2</div><div style="font-size:1rem;font-weight:800;color:#16a34a;">{_fmt_price(t2_p)}</div></div>'
+            rr_disp = f'{rr_v:.1f}:1' if rr_v is not None else 'N/A'
+            rr_col  = '#16a34a' if (rr_v or 0) >= 2.0 else '#f59e0b' if (rr_v or 0) >= 1.5 else '#ef4444'
+            sig_html += f'<div style="text-align:center;flex:1;min-width:80px;"><div style="font-size:0.65rem;font-weight:700;color:#64748b;text-transform:uppercase;">R:R Ratio</div><div style="font-size:1rem;font-weight:900;color:{rr_col};">{rr_disp}</div></div>'
+            sig_html += f'</div><div style="margin-top:8px;font-size:0.7rem;font-weight:600;color:{signal_label_color};">{signal_label}</div></div>'
+            sig_html += '</div>'
+            st.markdown(sig_html, unsafe_allow_html=True)
+
+        # Fetch live stock news with sentiment coloring
         news_items = fetch_live_stock_news(display_ticker)
         if news_items:
-            news_content = ""
+            # Sentiment palette lookup
+            def _spal(s):
+                if s == "positive":
+                    return ("#22C55E","#F0FDF4","#BBF7D0","▲","#DCFCE7","#15803D","#DCFCE7","#15803D","#14532D","#166534")
+                elif s == "negative":
+                    return ("#EF4444","#FFF1F2","#FECACA","▼","#FEE2E2","#991B1B","#FEE2E2","#991B1B","#7F1D1D","#B91C1C")
+                else:
+                    return ("#94A3B8","#F8FAFC","#E2E8F0","●","#F1F5F9","#475569","#F1F5F9","#475569","#1E40AF","#64748B")
+
+            # Legend bar (no leading spaces = no code-block trigger)
+            html = '<div style="background:#FFFFFF;border:1.5px solid #E2E8F0;border-radius:14px;padding:18px 20px;margin-bottom:25px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">'
+            html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">'
+            html += '<span style="font-size:0.78rem;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:0.06em;">📰 News &amp; Sentiment</span>'
+            html += '<span style="font-size:0.72rem;background:#DCFCE7;color:#15803D;font-weight:800;padding:2px 10px;border-radius:20px;border:1px solid #22C55E;">▲ Positive</span>'
+            html += '<span style="font-size:0.72rem;background:#FEE2E2;color:#991B1B;font-weight:800;padding:2px 10px;border-radius:20px;border:1px solid #EF4444;">▼ Negative</span>'
+            html += '<span style="font-size:0.72rem;background:#F1F5F9;color:#475569;font-weight:800;padding:2px 10px;border-radius:20px;border:1px solid #94A3B8;">● Neutral</span>'
+            html += '</div>'
+
             for item in news_items:
-                news_content += f"""
-                <div style="font-size: 1.05rem; margin-bottom: 6px; line-height: 1.4;">
-                    <span style="color: #64748B; font-weight: 700;">[{item['publisher']}]</span> 
-                    <a href="{item['link']}" target="_blank" style="color: #2563EB; font-weight: 700; text-decoration: none;">{item['title']}</a>
-                </div>
-                """
-            st.markdown(
-                f"""
-                <div style="background-color: #F8FAFC; border: 1.5px solid #E2E8F0; border-radius: 12px; padding: 20px; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                    <div style="font-size: 0.9rem; color: #475569; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">
-                        📰 Latest Market Intelligence & Live News
-                    </div>
-                    {news_content}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+                s = get_news_sentiment(item["title"])
+                gutter, card_bg, card_border, icon, icon_bg, icon_color, badge_bg, badge_color, link_color, pub_color = _spal(s)
+                pub = item["publisher"] or "News"
+                title = item["title"]
+                link = item["link"] or "#"
+                html += f'<div style="display:flex;align-items:stretch;margin-bottom:8px;border-radius:10px;overflow:hidden;border:1px solid {card_border};box-shadow:0 1px 4px rgba(0,0,0,0.04);">'
+                html += f'<div style="width:6px;min-width:6px;background:{gutter};flex-shrink:0;"></div>'
+                html += f'<div style="background:{icon_bg};padding:0 12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="font-size:1.1rem;font-weight:900;color:{icon_color};line-height:1;">{icon}</span></div>'
+                html += f'<div style="background:{card_bg};padding:11px 14px;flex:1;min-width:0;">'
+                html += f'<div style="margin-bottom:4px;"><span style="font-size:0.7rem;font-weight:800;color:{badge_color};background:{badge_bg};padding:1px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:0.04em;margin-right:8px;">{icon} {s.capitalize()}</span>'
+                html += f'<span style="font-size:0.72rem;font-weight:700;color:{pub_color};text-transform:uppercase;letter-spacing:0.04em;">{pub}</span></div>'
+                html += f'<a href="{link}" target="_blank" style="color:{link_color};font-weight:700;font-size:0.97rem;text-decoration:none;line-height:1.45;display:block;">{title}</a>'
+                html += '</div></div>'
+
+            html += '</div>'
+            st.markdown(html, unsafe_allow_html=True)
         else:
-            st.markdown(
-                """
-                <div style="background-color: #F8FAFC; border: 1.5px solid #E2E8F0; border-radius: 12px; padding: 20px; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                    <div style="font-size: 0.9rem; color: #475569; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">
-                        📰 Latest Market Intelligence & Live News
-                    </div>
-                    <div style="font-size: 1.05rem; color: #64748B; font-style: italic;">No recent news articles found for this symbol.</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            st.markdown('<div style="background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:14px;padding:18px 20px;margin-bottom:25px;box-shadow:0 2px 4px rgba(0,0,0,0.02);"><span style="font-size:0.88rem;color:#475569;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;">📰 News &amp; Sentiment</span><br><span style="font-size:0.95rem;color:#94A3B8;font-style:italic;margin-top:8px;display:block;">No recent news articles found for this symbol.</span></div>', unsafe_allow_html=True)
         
         # Render Charts side-by-side
         if not df_qchart.empty:
@@ -1109,55 +1325,113 @@ with tab_screener:
     total_matches = len(df_filtered)
     st.markdown(f"<p style='color: var(--text-secondary); font-size: 0.85rem;'>Matching Stocks: <strong>{total_matches}</strong> of {total_scored_stocks} constituents</p>", unsafe_allow_html=True)
     
-    # Sort options
-    sort_by_col = st.selectbox("Sort Results By", options=["Total Score", "Fundamental Score", "Momentum Score", "Market Cap", "ROE (%)", "RSI (14d)"], index=0)
-    
+    # Sort options + breakout filter
+    sort_col1, sort_col2 = st.columns([3, 1])
+    with sort_col1:
+        sort_by_col = st.selectbox(
+            "Sort Results By",
+            options=["Total Score", "Fundamental Score", "Momentum Score",
+                     "Market Cap", "ROE (%)", "RSI (14d)", "ADX (Trend Strength)",
+                     "Piotroski Score"],
+            index=0
+        )
+    with sort_col2:
+        show_breakouts_only = st.checkbox(
+            "🚀 Breakouts Only",
+            value=False,
+            help="Show only stocks near 52-week high with a volume surge."
+        )
+
     sort_mapping = {
-        "Total Score": "total_score",
-        "Fundamental Score": "fundamental_score",
-        "Momentum Score": "momentum_score",
-        "Market Cap": "market_cap_cr",
-        "ROE (%)": "roe",
-        "RSI (14d)": "rsi_14"
+        "Total Score":         "total_score",
+        "Fundamental Score":   "fundamental_score",
+        "Momentum Score":      "momentum_score",
+        "Market Cap":          "market_cap_cr",
+        "ROE (%)":             "roe",
+        "RSI (14d)":           "rsi_14",
+        "ADX (Trend Strength)":"adx_14",
+        "Piotroski Score":     "piotroski_score",
     }
-    
-    df_filtered = df_filtered.sort_values(by=sort_mapping[sort_by_col], ascending=False)
+
+    # Breakout filter (only applies if new column exists)
+    if show_breakouts_only and "breakout_signal" in df_filtered.columns:
+        df_filtered = df_filtered[df_filtered["breakout_signal"] == 1]
+
+    sort_col = sort_mapping[sort_by_col]
+    if sort_col in df_filtered.columns:
+        df_filtered = df_filtered.sort_values(by=sort_col, ascending=False)
+    else:
+        df_filtered = df_filtered.sort_values(by="total_score", ascending=False)
     
     # Render dataframe
     df_display = df_filtered.copy()
     if not df_display.empty:
-        df_display["pe_ratio"] = df_display["pe_ratio"].map(lambda x: f"{x:.1f}x" if pd.notnull(x) else "-")
-        df_display["pb_ratio"] = df_display["pb_ratio"].map(lambda x: f"{x:.1f}x" if pd.notnull(x) else "-")
-        df_display["roe"] = df_display["roe"].map(lambda x: f"{x:.1f}%")
-        df_display["eps_growth_yoy"] = df_display["eps_growth_yoy"].map(lambda x: f"{x:.1f}%" if pd.notnull(x) else "-")
-        df_display["rsi_14"] = df_display["rsi_14"].map(lambda x: f"{x:.1f}")
-        df_display["market_cap_cr"] = df_display["market_cap_cr"].map(lambda x: f"₹{x:,.0f} Cr")
+        df_display["pe_ratio"]          = df_display["pe_ratio"].map(lambda x: f"{x:.1f}x" if pd.notnull(x) else "-")
+        df_display["pb_ratio"]          = df_display["pb_ratio"].map(lambda x: f"{x:.1f}x" if pd.notnull(x) else "-")
+        df_display["roe"]               = df_display["roe"].map(lambda x: f"{x:.1f}%")
+        df_display["eps_growth_yoy"]    = df_display["eps_growth_yoy"].map(lambda x: f"{x:.1f}%" if pd.notnull(x) else "-")
+        df_display["rsi_14"]            = df_display["rsi_14"].map(lambda x: f"{x:.1f}")
+        df_display["market_cap_cr"]     = df_display["market_cap_cr"].map(lambda x: f"₹{x:,.0f} Cr")
         df_display["fundamental_score"] = df_display["fundamental_score"].map(lambda x: f"{int(x)}/50")
-        df_display["momentum_score"] = df_display["momentum_score"].map(lambda x: f"{int(x)}/50")
-        df_display["total_score"] = df_display["total_score"].map(lambda x: f"{int(x)}/100")
-        df_display["fno_status"] = df_display["is_fno"].map(lambda x: "🟢 F&O" if x == 1 else "➖")
-        
+        df_display["momentum_score"]    = df_display["momentum_score"].map(lambda x: f"{int(x)}/50")
+        df_display["total_score"]       = df_display["total_score"].map(lambda x: f"{int(x)}/100")
+        df_display["fno_status"]        = df_display["is_fno"].map(lambda x: "🟢 F&O" if x == 1 else "➖")
+
+        # ── New enhanced columns (backward-compatible: only add if column exists) ──
+        if "conviction_label" in df_display.columns:
+            _conv_icon = {"Strong Buy": "🚀", "Buy": "✅", "Watch": "👁️", "Neutral": "⚖️", "Avoid": "🚫"}
+            df_display["conviction"] = df_display["conviction_label"].map(
+                lambda x: f"{_conv_icon.get(x, '')} {x}" if pd.notnull(x) else "–")
+        else:
+            df_display["conviction"] = "–"
+
+        if "piotroski_score" in df_display.columns:
+            df_display["piotroski"] = df_display["piotroski_score"].map(
+                lambda x: f"{int(x)}/9" if pd.notnull(x) else "–")
+        else:
+            df_display["piotroski"] = "–"
+
+        if "macd_signal" in df_display.columns:
+            _macd_icon = {"Bullish Crossover": "🟢", "Bullish": "🟩", "Bearish Crossover": "🔴",
+                          "Bearish": "🟥", "Neutral": "⬜"}
+            df_display["macd"] = df_display["macd_signal"].map(
+                lambda x: f"{_macd_icon.get(x, '')} {x}" if pd.notnull(x) else "–")
+        else:
+            df_display["macd"] = "–"
+
+        if "adx_14" in df_display.columns:
+            df_display["adx_display"] = df_display["adx_14"].map(
+                lambda x: f"{x:.1f}" if pd.notnull(x) else "–")
+        else:
+            df_display["adx_display"] = "–"
+
+        if "breakout_signal" in df_display.columns:
+            df_display["breakout"] = df_display["breakout_signal"].map(
+                lambda x: "🚀 YES" if x == 1 else "–")
+        else:
+            df_display["breakout"] = "–"
+
         # Render interactive dataframe with single-row selection enabled
+        display_cols = [
+            "ticker", "company_name", "sector", "fno_status",
+            "conviction", "piotroski", "macd", "adx_display", "breakout",
+            "fundamental_score", "momentum_score", "total_score",
+            "last_price", "market_cap_cr", "pe_ratio", "roe", "debt_to_equity",
+            "rsi_14", "rel_strength_3m"
+        ]
+        rename_map = {
+            "ticker": "Ticker", "company_name": "Company", "sector": "Sector",
+            "fno_status": "F&O",
+            "conviction": "Conviction", "piotroski": "Piotroski",
+            "macd": "MACD", "adx_display": "ADX", "breakout": "Breakout 🚀",
+            "fundamental_score": "Fund. Score", "momentum_score": "Mom. Score",
+            "total_score": "Total Score",
+            "last_price": "LTP (₹)", "market_cap_cr": "Mkt Cap",
+            "pe_ratio": "P/E", "roe": "ROE", "debt_to_equity": "D/E",
+            "rsi_14": "RSI", "rel_strength_3m": "RS 3M%"
+        }
         selection = st.dataframe(
-            df_display[[
-                "ticker", "company_name", "sector", "fno_status", "fundamental_score", "momentum_score", "total_score",
-                "last_price", "market_cap_cr", "pe_ratio", "roe", "debt_to_equity", "rsi_14", "rel_strength_3m"
-            ]].rename(columns={
-                "ticker": "Ticker", 
-                "company_name": "Company Name", 
-                "sector": "Sector", 
-                "fno_status": "Derivatives (F&O)",
-                "fundamental_score": "Fundamental Score", 
-                "momentum_score": "Momentum Score",
-                "total_score": "Total Score",
-                "last_price": "Last Price (₹)", 
-                "market_cap_cr": "Market Cap (Cr)",
-                "pe_ratio": "P/E Ratio", 
-                "roe": "ROE (%)", 
-                "debt_to_equity": "D/E Ratio",
-                "rsi_14": "RSI (14d)",
-                "rel_strength_3m": "RS vs Nifty (3M %)"
-            }),
+            df_display[display_cols].rename(columns=rename_map),
             use_container_width=True,
             hide_index=True,
             on_select="rerun",
@@ -1290,125 +1564,129 @@ with tab_charting:
     
     # Synchronized with Global Sidebar Stock Focus Selector
     selected_chart_ticker = global_focus_ticker
-    st.info(f"Showing Candlestick Canvas for focus stock: **`{selected_chart_ticker}`** (Sync'd with Sidebar Focus)")
     
-    # Timeframe Controls (Period & Candle Timeframe Selectors)
-    ch_col1, ch_col2 = st.columns(2)
-    with ch_col1:
-        period_label_map = {
-            "5 Days (Intraday)": "5d",
-            "1 Month (Short Swing)": "1mo",
-            "3 Months (Swing)": "3mo",
-            "6 Months (Intermediate)": "6mo",
-            "1 Year (Standard)": "1y",
-            "2 Years (Long-Term)": "2y",
-            "5 Years (Macro)": "5y"
-        }
-        selected_period_label = st.selectbox(
-            "Select Time Period", 
-            options=list(period_label_map.keys()), 
-            index=4, # Default: 1 Year (Standard)
-            key="chart_selected_period"
-        )
-        selected_period = period_label_map[selected_period_label]
+    if not selected_chart_ticker:
+        st.info("🎯 **No stock focused.** Please select a stock from the sidebar dropdown or click a row in the performance table to view its candlestick chart.")
+    else:
+        st.info(f"Showing Candlestick Canvas for focus stock: **`{selected_chart_ticker}`** (Sync'd with Sidebar Focus)")
         
-    with ch_col2:
-        # Dynamically filter intervals to prevent yfinance API errors
-        if selected_period == "5d":
-            interval_options = ["15m", "30m", "1h", "1d"]
-            default_int_idx = 0 # 15m
-        elif selected_period in ["1mo", "3mo"]:
-            interval_options = ["30m", "1h", "1d", "1wk"]
-            default_int_idx = 2 # 1d
-        elif selected_period == "6mo":
-            interval_options = ["1h", "1d", "1wk"]
-            default_int_idx = 1 # 1d
-        else: # 1y, 2y, 5y
-            interval_options = ["1d", "1wk", "1mo"]
-            default_int_idx = 0 # 1d
+        # Timeframe Controls (Period & Candle Timeframe Selectors)
+        ch_col1, ch_col2 = st.columns(2)
+        with ch_col1:
+            period_label_map = {
+                "5 Days (Intraday)": "5d",
+                "1 Month (Short Swing)": "1mo",
+                "3 Months (Swing)": "3mo",
+                "6 Months (Intermediate)": "6mo",
+                "1 Year (Standard)": "1y",
+                "2 Years (Long-Term)": "2y",
+                "5 Years (Macro)": "5y"
+            }
+            selected_period_label = st.selectbox(
+                "Select Time Period", 
+                options=list(period_label_map.keys()), 
+                index=4, # Default: 1 Year (Standard)
+                key="chart_selected_period"
+            )
+            selected_period = period_label_map[selected_period_label]
             
-        selected_interval = st.selectbox(
-            "Select Candle Interval", 
-            options=interval_options, 
-            index=default_int_idx,
-            key="chart_selected_interval"
-        )
-    
-    # Retrieve technical price data
-    try:
-        chart_stock = yf.Ticker(selected_chart_ticker)
-        df_chart = chart_stock.history(period=selected_period, interval=selected_interval)
-        
-        if not df_chart.empty:
-            # 1. Format X-axis labels to string to force categorical clean timeframes (hiding weekends/overnight gaps)
-            df_chart = df_chart.copy()
-            if selected_interval in ["15m", "30m", "1h"]:
-                df_chart["DateStr"] = df_chart.index.strftime("%b %d, %H:%M")
-            else:
-                df_chart["DateStr"] = df_chart.index.strftime("%b %d, %Y")
+        with ch_col2:
+            # Dynamically filter intervals to prevent yfinance API errors
+            if selected_period == "5d":
+                interval_options = ["15m", "30m", "1h", "1d"]
+                default_int_idx = 0 # 15m
+            elif selected_period in ["1mo", "3mo"]:
+                interval_options = ["30m", "1h", "1d", "1wk"]
+                default_int_idx = 2 # 1d
+            elif selected_period == "6mo":
+                interval_options = ["1h", "1d", "1wk"]
+                default_int_idx = 1 # 1d
+            else: # 1y, 2y, 5y
+                interval_options = ["1d", "1wk", "1mo"]
+                default_int_idx = 0 # 1d
                 
-            df_chart["20 EMA"] = df_chart["Close"].ewm(span=20, adjust=False).mean()
-            df_chart["50 EMA"] = df_chart["Close"].ewm(span=50, adjust=False).mean()
-            df_chart["200 SMA"] = df_chart["Close"].rolling(window=min(200, len(df_chart))).mean()
-            
-            # Plotly Candlestick Chart
-            fig_candle = go.Figure()
-            
-            # Candles
-            fig_candle.add_trace(go.Candlestick(
-                x=df_chart['DateStr'],
-                open=df_chart['Open'],
-                high=df_chart['High'],
-                low=df_chart['Low'],
-                close=df_chart['Close'],
-                name="Price"
-            ))
-            
-            # Moving Averages
-            fig_candle.add_trace(go.Scatter(x=df_chart['DateStr'], y=df_chart["20 EMA"], name="20 EMA", line=dict(color="#3B82F6", width=1.5)))
-            fig_candle.add_trace(go.Scatter(x=df_chart['DateStr'], y=df_chart["50 EMA"], name="50 EMA", line=dict(color="#8B5CF6", width=1.5)))
-            fig_candle.add_trace(go.Scatter(x=df_chart['DateStr'], y=df_chart["200 SMA"], name="200 SMA", line=dict(color="#EF4444", width=2)))
-            
-            fig_candle.update_layout(
-                title=f"{selected_chart_ticker} Candlestick Chart (Period: {selected_period_label}, Interval: {selected_interval})",
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                xaxis_rangeslider_visible=False,
-                xaxis=dict(
-                    type='category',
-                    gridcolor='rgba(0,0,0,0.05)', 
-                    color='#475569',
-                    nticks=12
-                ),
-                yaxis=dict(gridcolor='rgba(0,0,0,0.05)', color='#475569'),
-                height=450,
-                legend=dict(font=dict(color='#0F172A'))
+            selected_interval = st.selectbox(
+                "Select Candle Interval", 
+                options=interval_options, 
+                index=default_int_idx,
+                key="chart_selected_interval"
             )
-            
-            st.plotly_chart(fig_candle, use_container_width=True)
-            
-            # Volume bar chart underneath
-            fig_vol = px.bar(df_chart, x="DateStr", y="Volume", labels={"Volume": "Volume Traded"})
-            fig_vol.update_traces(marker_color="#CBD5E1")
-            fig_vol.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                xaxis=dict(
-                    type='category',
-                    gridcolor='rgba(0,0,0,0.05)', 
-                    color='#475569',
-                    nticks=12
-                ),
-                yaxis=dict(gridcolor='rgba(0,0,0,0.05)', color='#475569'),
-                height=150
-            )
-            st.plotly_chart(fig_vol, use_container_width=True)
-            
-        else:
-            st.error("No historical candlestick data found for the selected ticker.")
-    except Exception as e:
-        st.error(f"Error drawing candlestick canvas: {e}")
         
+        # Retrieve technical price data
+        try:
+            chart_stock = yf.Ticker(selected_chart_ticker)
+            df_chart = chart_stock.history(period=selected_period, interval=selected_interval)
+            
+            if not df_chart.empty:
+                # 1. Format X-axis labels to string to force categorical clean timeframes (hiding weekends/overnight gaps)
+                df_chart = df_chart.copy()
+                if selected_interval in ["15m", "30m", "1h"]:
+                    df_chart["DateStr"] = df_chart.index.strftime("%b %d, %H:%M")
+                else:
+                    df_chart["DateStr"] = df_chart.index.strftime("%b %d, %Y")
+                    
+                df_chart["20 EMA"] = df_chart["Close"].ewm(span=20, adjust=False).mean()
+                df_chart["50 EMA"] = df_chart["Close"].ewm(span=50, adjust=False).mean()
+                df_chart["200 SMA"] = df_chart["Close"].rolling(window=min(200, len(df_chart))).mean()
+                
+                # Plotly Candlestick Chart
+                fig_candle = go.Figure()
+                
+                # Candles
+                fig_candle.add_trace(go.Candlestick(
+                    x=df_chart['DateStr'],
+                    open=df_chart['Open'],
+                    high=df_chart['High'],
+                    low=df_chart['Low'],
+                    close=df_chart['Close'],
+                    name="Price"
+                ))
+                
+                # Moving Averages
+                fig_candle.add_trace(go.Scatter(x=df_chart['DateStr'], y=df_chart["20 EMA"], name="20 EMA", line=dict(color="#3B82F6", width=1.5)))
+                fig_candle.add_trace(go.Scatter(x=df_chart['DateStr'], y=df_chart["50 EMA"], name="50 EMA", line=dict(color="#8B5CF6", width=1.5)))
+                fig_candle.add_trace(go.Scatter(x=df_chart['DateStr'], y=df_chart["200 SMA"], name="200 SMA", line=dict(color="#EF4444", width=2)))
+                
+                fig_candle.update_layout(
+                    title=f"{selected_chart_ticker} Candlestick Chart (Period: {selected_period_label}, Interval: {selected_interval})",
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    xaxis_rangeslider_visible=False,
+                    xaxis=dict(
+                        type='category',
+                        gridcolor='rgba(0,0,0,0.05)', 
+                        color='#475569',
+                        nticks=12
+                    ),
+                    yaxis=dict(gridcolor='rgba(0,0,0,0.05)', color='#475569'),
+                    height=450,
+                    legend=dict(font=dict(color='#0F172A'))
+                )
+                
+                st.plotly_chart(fig_candle, use_container_width=True)
+                
+                # Volume bar chart underneath
+                fig_vol = px.bar(df_chart, x="DateStr", y="Volume", labels={"Volume": "Volume Traded"})
+                fig_vol.update_traces(marker_color="#CBD5E1")
+                fig_vol.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    xaxis=dict(
+                        type='category',
+                        gridcolor='rgba(0,0,0,0.05)', 
+                        color='#475569',
+                        nticks=12
+                    ),
+                    yaxis=dict(gridcolor='rgba(0,0,0,0.05)', color='#475569'),
+                    height=150
+                )
+                st.plotly_chart(fig_vol, use_container_width=True)
+                
+            else:
+                st.error("No historical candlestick data found for the selected ticker.")
+        except Exception as e:
+            st.error(f"Error drawing candlestick canvas: {e}")
+            
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
@@ -1421,72 +1699,76 @@ with tab_pe_valuation:
     
     # Synchronized with Global Sidebar Stock Focus Selector
     selected_val_ticker = global_focus_ticker
-    st.info(f"Showing P/E Valuation Bands for focus stock: **`{selected_val_ticker}`** (Sync'd with Sidebar Focus)")
     
-    try:
-        val_stock = yf.Ticker(selected_val_ticker)
+    if not selected_val_ticker:
+        st.info("🎯 **No stock focused.** Please select a stock from the sidebar dropdown or click a row in the performance table to view its P/E valuation bands.")
+    else:
+        st.info(f"Showing P/E Valuation Bands for focus stock: **`{selected_val_ticker}`** (Sync'd with Sidebar Focus)")
         
-        # Load EPS info
-        stock_info = val_stock.info
-        eps = stock_info.get("trailingEps")
-        
-        hist_val = val_stock.history(period="1y", interval="1d")
-        
-        if eps and eps > 0 and not hist_val.empty:
-            # 1. Format X-axis labels to string to force categorical clean timelines (excluding weekends)
-            hist_val = hist_val.copy()
-            hist_val["DateStr"] = hist_val.index.strftime("%b %d, %Y")
+        try:
+            val_stock = yf.Ticker(selected_val_ticker)
             
-            # Generate P/E bands (Price = EPS * P/E multiple)
-            # We map multiples based on the stock's current PE ratio
-            current_pe = stock_info.get("trailingPE", 25.0)
+            # Load EPS info
+            stock_info = val_stock.info
+            eps = stock_info.get("trailingEps")
             
-            multiples = [current_pe * 0.7, current_pe * 0.85, current_pe, current_pe * 1.15, current_pe * 1.3]
-            labels = ["Low PE Band", "Discount PE Band", "Median PE Band", "Premium PE Band", "Extreme PE Band"]
-            colors = ["#10B981", "#3B82F6", "#8B5CF6", "#F59E0B", "#EF4444"]
+            hist_val = val_stock.history(period="1y", interval="1d")
             
-            fig_bands = go.Figure()
-            # Standard Stock Close Price
-            fig_bands.add_trace(go.Scatter(x=hist_val["DateStr"], y=hist_val["Close"], name="Stock Price", line=dict(color="#0F172A", width=2.5)))
-            
-            # Draw standard multiples bands
-            for mult, label, color in zip(multiples, labels, colors):
-                band_price = eps * mult
-                fig_bands.add_trace(go.Scatter(
-                    x=hist_val["DateStr"], 
-                    y=[band_price] * len(hist_val), 
-                    name=f"{label} ({mult:.1f}x)", 
-                    line=dict(color=color, width=1.5, dash='dash')
-                ))
+            if eps and eps > 0 and not hist_val.empty:
+                # 1. Format X-axis labels to string to force categorical clean timelines (excluding weekends)
+                hist_val = hist_val.copy()
+                hist_val["DateStr"] = hist_val.index.strftime("%b %d, %Y")
                 
-            fig_bands.update_layout(
-                title=f"{selected_val_ticker} Price Overlay on EPS-PE Valuation Bands (EPS: ₹{eps:.2f})",
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                xaxis=dict(
-                    type='category',
-                    gridcolor='rgba(0,0,0,0.05)', 
-                    color='#475569',
-                    nticks=12
-                ),
-                yaxis=dict(gridcolor='rgba(0,0,0,0.05)', color='#475569'),
-                height=450,
-                legend=dict(font=dict(color='#0F172A'))
-            )
-            st.plotly_chart(fig_bands, use_container_width=True)
+                # Generate P/E bands (Price = EPS * P/E multiple)
+                # We map multiples based on the stock's current PE ratio
+                current_pe = stock_info.get("trailingPE", 25.0)
+                
+                multiples = [current_pe * 0.7, current_pe * 0.85, current_pe, current_pe * 1.15, current_pe * 1.3]
+                labels = ["Low PE Band", "Discount PE Band", "Median PE Band", "Premium PE Band", "Extreme PE Band"]
+                colors = ["#10B981", "#3B82F6", "#8B5CF6", "#F59E0B", "#EF4444"]
+                
+                fig_bands = go.Figure()
+                # Standard Stock Close Price
+                fig_bands.add_trace(go.Scatter(x=hist_val["DateStr"], y=hist_val["Close"], name="Stock Price", line=dict(color="#0F172A", width=2.5)))
+                
+                # Draw standard multiples bands
+                for mult, label, color in zip(multiples, labels, colors):
+                    band_price = eps * mult
+                    fig_bands.add_trace(go.Scatter(
+                        x=hist_val["DateStr"], 
+                        y=[band_price] * len(hist_val), 
+                        name=f"{label} ({mult:.1f}x)", 
+                        line=dict(color=color, width=1.5, dash='dash')
+                    ))
+                    
+                fig_bands.update_layout(
+                    title=f"{selected_val_ticker} Price Overlay on EPS-PE Valuation Bands (EPS: ₹{eps:.2f})",
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    xaxis=dict(
+                        type='category',
+                        gridcolor='rgba(0,0,0,0.05)', 
+                        color='#475569',
+                        nticks=12
+                    ),
+                    yaxis=dict(gridcolor='rgba(0,0,0,0.05)', color='#475569'),
+                    height=450,
+                    legend=dict(font=dict(color='#0F172A'))
+                )
+                st.plotly_chart(fig_bands, use_container_width=True)
+                
+                st.markdown(
+                    f"""
+                    > [!TIP]
+                    > **Valuation Interpretation**: If the stock price trades close to the **Low PE Band** (green) or **Discount PE Band** (blue), it indicates a strong historical value buy scenario. 
+                    > Trading near the **Extreme PE Band** (red) flags relative overvaluation relative to its trailing earnings.
+                    """
+                )
+            else:
+                st.warning("Trailing EPS is negative or unavailable for this stock. P/E standard deviation valuation bands cannot be modeled for loss-making corporations.")
+        except Exception as e:
+            st.error(f"Error modeling valuation bands: {e}")
             
-            st.markdown(
-                f"""
-                > [!TIP]
-                > **Valuation Interpretation**: If the stock price trades close to the **Low PE Band** (green) or **Discount PE Band** (blue), it indicates a strong historical value buy scenario. 
-                > Trading near the **Extreme PE Band** (red) flags relative overvaluation relative to its trailing earnings.
-                """
-            )
-        else:
-            st.warning("Trailing EPS is negative or unavailable for this stock. P/E standard deviation valuation bands cannot be modeled for loss-making corporations.")
-    except Exception as e:
-        st.error(f"Error modeling valuation bands: {e}")
-        
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
@@ -1546,17 +1828,20 @@ with tab_fno:
             key="fno_treemap_click_selector"
         )
         
-        # Capture clicks on Treemap boxes to update focused stock reactively!
+        # Capture clicks on Treemap boxes — updates ONLY the F&O tab focus (not global).
+        # NOTE: on_select="rerun" already triggers a Streamlit rerun on click.
+        # We must NOT call st.rerun() again here — a second rerun clears the Plotly
+        # selection state, making the box appear to "snap back" and losing the ticker.
         if selection_event and "selection" in selection_event and selection_event["selection"]["points"]:
             points = selection_event["selection"]["points"]
             selected_point = points[0]
             selected_label = selected_point.get("label")
-            # If the clicked block matches an F&O ticker, update and rerun
-            fno_ticker_options = sorted(list(df_fno_only["ticker"].unique()))
-            if selected_label and selected_label in fno_ticker_options:
-                if selected_label != st.session_state["global_focus_ticker"]:
-                    st.session_state["global_focus_ticker"] = selected_label
-                    st.rerun()
+            # Only update if we clicked an actual ticker leaf (not a sector parent node)
+            fno_ticker_options_click = sorted(list(df_fno_only["ticker"].unique()))
+            if selected_label and selected_label in fno_ticker_options_click:
+                # Update session state — the on_select rerun will re-render the OC below
+                st.session_state["fno_tab_focus_ticker"] = selected_label
+                # ← NO st.rerun() here; on_select already caused this rerun
                     
         st.markdown('</div>', unsafe_allow_html=True)
         
@@ -1569,10 +1854,15 @@ with tab_fno:
         # Show F&O eligible only in this search box
         fno_ticker_options = [t for t in fno_ticker_options if t.replace(".NS", "") in fno_symbols]
         
-        # Safely sync the widget state inside the F&O list
-        current_focus = st.session_state["global_focus_ticker"]
-        if current_focus in fno_ticker_options:
-            st.session_state["tab_fno_active_ticker_selector"] = current_focus
+        # Initialise the F&O-local focus if not yet set
+        if "fno_tab_focus_ticker" not in st.session_state or st.session_state["fno_tab_focus_ticker"] not in fno_ticker_options:
+            if fno_ticker_options:
+                st.session_state["fno_tab_focus_ticker"] = fno_ticker_options[0]
+
+        # Safely sync the widget state to the F&O-local focus (independent of global)
+        fno_current = st.session_state["fno_tab_focus_ticker"]
+        if fno_current in fno_ticker_options:
+            st.session_state["tab_fno_active_ticker_selector"] = fno_current
         else:
             if fno_ticker_options:
                 st.session_state["tab_fno_active_ticker_selector"] = fno_ticker_options[0]
@@ -1588,10 +1878,10 @@ with tab_fno:
         with oc_col2:
             st.write("") 
             st.write("") 
-            st.caption("Active stock is synchronized globally across charts, bands, and option chains.")
+            st.caption("ℹ️ Selecting here or clicking the heatmap updates only this F&O panel — your main chart focus is preserved.")
             
-        selected_oc_ticker = st.session_state["global_focus_ticker"]
-        st.info(f"Showing derivative option chain for focus stock: **`{selected_oc_ticker}`** (Sync'd with Dashboard Focus)")
+        selected_oc_ticker = st.session_state["fno_tab_focus_ticker"]
+        st.info(f"Showing derivative option chain for: **`{selected_oc_ticker}`** · F&O Tab Focus (main chart focus unchanged)")
         
         # Fetch stock details from df_stocks
         stock_row = df_stocks[df_stocks["ticker"] == selected_oc_ticker]
@@ -1645,6 +1935,105 @@ with tab_fno:
                     unsafe_allow_html=True
                 )
                 
+                # ── Live News Panel with Sentiment Coloring ──────────────────────
+                fno_news_items = fetch_live_stock_news(selected_oc_ticker)
+                if fno_news_items:
+                    fno_news_content = ""
+                    for ni in fno_news_items:
+                        sentiment = get_news_sentiment(ni["title"])
+                        # Sentiment-driven visual tokens
+                        if sentiment == "positive":
+                            row_bg      = "#F0FDF4"   # soft green
+                            border_col  = "#22C55E"   # green
+                            dot_col     = "#16A34A"
+                            badge_bg    = "#DCFCE7"
+                            badge_color = "#15803D"
+                            badge_label = "▲ Positive"
+                            link_color  = "#14532D"
+                        elif sentiment == "negative":
+                            row_bg      = "#FFF1F2"   # soft red
+                            border_col  = "#EF4444"   # red
+                            dot_col     = "#DC2626"
+                            badge_bg    = "#FEE2E2"
+                            badge_color = "#991B1B"
+                            badge_label = "▼ Negative"
+                            link_color  = "#7F1D1D"
+                        else:
+                            row_bg      = "#F8FAFC"   # neutral slate
+                            border_col  = "#94A3B8"
+                            dot_col     = "#64748B"
+                            badge_bg    = "#F1F5F9"
+                            badge_color = "#475569"
+                            badge_label = "● Neutral"
+                            link_color  = "#1E40AF"
+
+                        fno_news_content += f"""
+                        <div style="display:flex; align-items:flex-start; gap:12px;
+                                    margin-bottom:10px; padding:12px 14px;
+                                    background:{row_bg}; border-radius:10px;
+                                    border-left:4px solid {border_col};">
+                            <div style="min-width:9px; width:9px; height:9px; border-radius:50%;
+                                        background:{dot_col}; margin-top:6px; flex-shrink:0;"></div>
+                            <div style="flex:1;">
+                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; flex-wrap:wrap;">
+                                    <span style="font-size:0.72rem; color:{badge_color}; font-weight:800;
+                                                 background:{badge_bg}; padding:2px 8px; border-radius:20px;
+                                                 border:1px solid {border_col}; letter-spacing:0.04em;">{badge_label}</span>
+                                    <span style="font-size:0.72rem; color:#64748B; font-weight:700;
+                                                 text-transform:uppercase; letter-spacing:0.04em;">{ni['publisher']}</span>
+                                </div>
+                                <a href="{ni['link']}" target="_blank"
+                                   style="color:{link_color}; font-weight:700; font-size:1.0rem;
+                                          text-decoration:none; line-height:1.45;">
+                                   {ni['title']}
+                                </a>
+                            </div>
+                        </div>"""
+
+                    st.markdown(
+                        f"""
+                        <div style="background:linear-gradient(135deg,#F8FAFC 0%,#EFF6FF 100%);
+                                    border:1.5px solid #BFDBFE; border-left:5px solid #2563EB;
+                                    border-radius:14px; padding:20px 24px; margin-bottom:24px;
+                                    box-shadow:0 4px 12px rgba(37,99,235,0.06);">
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+                                <span style="font-size:1.2rem;">📰</span>
+                                <span style="font-size:0.88rem; font-weight:800; color:#1D4ED8;
+                                             text-transform:uppercase; letter-spacing:0.06em;">
+                                    Latest News &amp; Sentiment · {selected_oc_ticker.replace('.NS','')}
+                                </span>
+                                <span style="margin-left:auto; font-size:0.72rem; color:#64748B; font-weight:600;">
+                                    <span style="color:#15803D; font-weight:800;">▲ Positive</span>
+                                    &nbsp;/&nbsp;
+                                    <span style="color:#991B1B; font-weight:800;">▼ Negative</span>
+                                    &nbsp;/&nbsp;
+                                    <span style="color:#475569;">● Neutral</span>
+                                </span>
+                            </div>
+                            {fno_news_content}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.markdown(
+                        f"""
+                        <div style="background:#F8FAFC; border:1.5px solid #E2E8F0; border-left:5px solid #CBD5E1;
+                                    border-radius:14px; padding:18px 24px; margin-bottom:24px;
+                                    box-shadow:0 2px 6px rgba(0,0,0,0.03);">
+                            <span style="font-size:0.88rem; font-weight:800; color:#64748B;
+                                         text-transform:uppercase; letter-spacing:0.06em;">
+                                📰 Latest News · {selected_oc_ticker.replace('.NS','')}
+                            </span><br>
+                            <span style="font-size:0.95rem; color:#94A3B8; font-style:italic; margin-top:6px; display:block;">
+                                No recent news articles found for this symbol.
+                            </span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                # ── End News Panel ─────────────────────────────────────────────────
+
                 # Generate modeled option chain
                 oc_results = generate_modeled_option_chain(last_price, rsi, selected_oc_ticker)
                 
