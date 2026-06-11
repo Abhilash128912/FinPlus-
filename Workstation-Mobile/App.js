@@ -345,9 +345,9 @@ export default function App() {
     // Indices Ticker
     const nifty = indices?.NIFTY_50 || {};
     const bank = indices?.BANK_NIFTY || {};
-    const niftyPrice = nifty.last_price || nifty.close || 0;
+    const niftyPrice = nifty.ltp || nifty.last_price || nifty.close || 0;
     const niftyChg = nifty.day_change_percentage || nifty.change_percentage || 0;
-    const bankPrice = bank.last_price || bank.close || 0;
+    const bankPrice = bank.ltp || bank.last_price || bank.close || 0;
     const bankChg = bank.day_change_percentage || bank.change_percentage || 0;
 
     // WS Connection State
