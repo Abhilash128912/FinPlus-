@@ -3003,6 +3003,24 @@ with tab_paper:
             profit_factor_s = abs(gross_profit_s / gross_loss_s) if gross_loss_s != 0 else (gross_profit_s if gross_profit_s > 0 else 1.0)
             net_pnl_s = df_scr['net_pnl'].sum()
             total_charges_s = df_scr['total_charges'].sum()
+            
+            # Find best and worst trades
+            best_idx = df_scr['net_pnl'].idxmax()
+            worst_idx = df_scr['net_pnl'].idxmin()
+            
+            best_row = df_scr.loc[best_idx]
+            worst_row = df_scr.loc[worst_idx]
+            
+            best_pnl = best_row['net_pnl']
+            worst_pnl = worst_row['net_pnl']
+            
+            best_sign = "+" if best_pnl > 0 else ""
+            best_color = "var(--accent-green)" if best_pnl >= 0 else "#EA580C"
+            best_trade_info = f"<strong>{best_row['symbol']}</strong> ({best_row['trade_date']}) <span style='color: {best_color}; font-weight:700;'>{best_sign}{currency_sym}{best_pnl:,.2f}</span>"
+            
+            worst_sign = "+" if worst_pnl > 0 else ""
+            worst_color = "var(--accent-green)" if worst_pnl >= 0 else "#EA580C"
+            worst_trade_info = f"<strong>{worst_row['symbol']}</strong> ({worst_row['trade_date']}) <span style='color: {worst_color}; font-weight:700;'>{worst_sign}{currency_sym}{worst_pnl:,.2f}</span>"
         else:
             winning_trades_s = 0
             losing_trades_s = 0
@@ -3010,6 +3028,8 @@ with tab_paper:
             profit_factor_s = 1.0
             net_pnl_s = 0.0
             total_charges_s = 0.0
+            best_trade_info = "<span style='color: var(--text-secondary);'>None</span>"
+            worst_trade_info = "<span style='color: var(--text-secondary);'>None</span>"
             
         stats[scr] = {
             "total": total_trades_s,
@@ -3018,7 +3038,9 @@ with tab_paper:
             "net_pnl": net_pnl_s,
             "charges": total_charges_s,
             "wins": winning_trades_s,
-            "losses": losing_trades_s
+            "losses": losing_trades_s,
+            "best_trade": best_trade_info,
+            "worst_trade": worst_trade_info
         }
         
     # Render Metrics Row
@@ -3028,7 +3050,7 @@ with tab_paper:
         with col:
             s_data = stats[scr]
             pnl_val = s_data["net_pnl"]
-            pnl_color = "var(--accent-green)" if pnl_val >= 0 else "var(--accent-red)"
+            pnl_color = "var(--accent-green)" if pnl_val >= 0 else "#EA580C"
             pnl_sign = "+" if pnl_val > 0 else ""
             
             icon = "⚡" if scr == "Trading Workstation" else "🔍"
@@ -3064,6 +3086,16 @@ with tab_paper:
                     <div style="font-size: 0.82rem; color: var(--text-secondary); border-top: 1px dashed var(--border-color); padding-top: 8px; margin-top: 8px; display: flex; justify-content: space-between;">
                         <span>Record: <strong>{s_data['wins']}W - {s_data['losses']}L</strong></span>
                         <span>Charges: <strong>{currency_sym}{s_data['charges']:,.2f}</strong></span>
+                    </div>
+                    <div style="font-size: 0.85rem; border-top: 1px dashed var(--border-color); padding-top: 8px; margin-top: 8px; line-height: 1.45;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--text-secondary); font-weight: 600;">🏆 Best Trade:</span>
+                            <span>{s_data['best_trade']}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                            <span style="color: var(--text-secondary); font-weight: 600;">⚠️ Worst Trade:</span>
+                            <span>{s_data['worst_trade']}</span>
+                        </div>
                     </div>
                 </div>
                 """,
