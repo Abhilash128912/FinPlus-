@@ -459,17 +459,25 @@ export default function App() {
   // Watchlist item renderer
   const renderWatchlistItem = ({ item }) => {
     const isLong = item.Signal.includes('LONG');
-    const changePct = Number(item.DayChange || 0);
+    const changePct = Number(item["Change %"] || 0);
+    const isTopPick = item.Score >= 8 || item.Score === item.Total_Checks;
 
     return (
       <TouchableOpacity
-        style={styles.signalCard}
+        style={[styles.signalCard, isTopPick && styles.topPickCard]}
         onPress={() => handleOpenDetails(item.Stock)}
         activeOpacity={0.7}
       >
         <View style={styles.cardHeader}>
           <View>
-            <Text style={styles.cardSymbol}>{item.Stock.replace('.NS', '')}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.cardSymbol}>{item.Stock.replace('.NS', '')}</Text>
+              {isTopPick && (
+                <View style={styles.topPickBadge}>
+                  <Text style={styles.topPickBadgeText}>TOP PICK</Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.cardSector}>{item.Sector || 'Other'}</Text>
           </View>
           <View style={[styles.signalBadge, isLong ? styles.badgeGreen : styles.badgeRed]}>
@@ -490,8 +498,8 @@ export default function App() {
 
           <View style={styles.metricColumn}>
             <Text style={styles.metricLabel}>R-Vol</Text>
-            <Text style={styles.metricValue}>{Number(item.RVol).toFixed(1)}x</Text>
-            <Text style={styles.metricSubValue}>Breakout: {item.Score}/10</Text>
+            <Text style={styles.metricValue}>{Number(item.RVOL).toFixed(1)}x</Text>
+            <Text style={styles.metricSubValue}>Breakout: {item.Score}/{item.Total_Checks || 8}</Text>
           </View>
 
           <View style={styles.metricColumnRight}>
@@ -2153,5 +2161,26 @@ const styles = StyleSheet.create({
   tabLabelActive: {
     color: '#06b6d4',
     fontWeight: 'bold',
+  },
+  topPickCard: {
+    borderColor: '#eab30855',
+    borderWidth: 1.5,
+    backgroundColor: '#1e1a0a',
+  },
+  topPickBadge: {
+    backgroundColor: '#eab3081a',
+    borderColor: '#eab30844',
+    borderWidth: 1,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+    marginLeft: 8,
+    alignSelf: 'center',
+  },
+  topPickBadgeText: {
+    color: '#eab308',
+    fontSize: 8,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
 });

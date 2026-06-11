@@ -180,6 +180,7 @@ def startup_event():
     token = Trading_WS.load_cached_token()
     if token:
         st.session_state.token_accepted = True
+        st.session_state.accepted_token = token
         # Run historical load in background to avoid blocking API startup
         global bg_load_thread
         bg_load_thread = threading.Thread(target=_run_historical_load_bg, args=(token,), daemon=True)
@@ -233,6 +234,7 @@ def connect_system(req: TokenConnectRequest, background_tasks: BackgroundTasks):
     # Save token and accept it
     Trading_WS.save_cached_token(req.access_token)
     st.session_state.token_accepted = True
+    st.session_state.accepted_token = req.access_token
     
     # Trigger loading historical data + starting feed in background
     global bg_load_thread
@@ -429,8 +431,10 @@ def get_indices_data():
     """Returns the latest quotes for NIFTY 50 and BANK NIFTY indices."""
     _fs = Trading_WS.feed_state
     with _fs.lock:
-        nifty = dict(_fs.index_data.get("NIDX:40000001", {}))
-        banknifty = dict(_fs.index_data.get("NIDX:40000003", {}))
+        index_snapshot = dict(_fs.index_data)
+        
+    nifty = Trading_WS.get_index_tile_quote("NIDX:40000001", index_snapshot)
+    banknifty = Trading_WS.get_index_tile_quote("NIDX:40000003", index_snapshot)
         
     return {
         "NIFTY_50": nifty,
