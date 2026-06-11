@@ -37,6 +37,50 @@ from database import (
 )
 from calculator import calculate_trade_metrics
 
+def style_dataframe_pnl(df_to_style, gross_col="gross_pnl", net_col="net_pnl", other_cols_currency=[]):
+    """
+    Styles gross_pnl and net_pnl columns using custom colors:
+    - Positive: Green (#16A34A)
+    - Negative: Orange (#EA580C)
+    """
+    def color_pnl(val):
+        try:
+            val_float = float(val)
+            if val_float > 0:
+                return 'color: #16A34A; font-weight: bold;'
+            elif val_float < 0:
+                return 'color: #EA580C; font-weight: bold;'
+        except (ValueError, TypeError):
+            pass
+        return ''
+
+    styler = df_to_style.style
+    
+    # Try mapping styling
+    try:
+        styler = styler.map(color_pnl, subset=[gross_col, net_col])
+    except AttributeError:
+        styler = styler.applymap(color_pnl, subset=[gross_col, net_col])
+        
+    # Apply format mappings
+    format_rules = {}
+    for col in [gross_col, net_col] + other_cols_currency:
+        if col in df_to_style.columns:
+            format_rules[col] = lambda x: f"{currency_sym}{x:,.2f}" if pd.notnull(x) and isinstance(x, (int, float)) else ""
+            
+    # Format standard price columns
+    for price_col in ["entry_price", "exit_price", "L1 Entry", "L1 Exit", "L2 Entry", "L2 Exit", "leg1_entry", "leg1_exit", "leg2_entry", "leg2_exit"]:
+        if price_col in df_to_style.columns:
+            format_rules[price_col] = lambda x: f"{x:,.2f}" if pd.notnull(x) and isinstance(x, (int, float)) else ""
+            
+    # Format quantity columns
+    for qty_col in ["quantity", "L1 Qty", "L2 Qty", "leg1_qty", "leg2_qty"]:
+        if qty_col in df_to_style.columns:
+            format_rules[qty_col] = lambda x: f"{x:,.0f}" if pd.notnull(x) and isinstance(x, (int, float)) else ""
+            
+    styler = styler.format(format_rules)
+    return styler
+
 def get_quote_mismatch_warning(symbol: str, segment: str) -> str:
     if not symbol:
         return ""
@@ -1009,17 +1053,19 @@ with tab_dash:
                 st.markdown(f"###### Detailed Log Sheets for **{inspect_day}**")
                 
                 df_day_display = df_day_trades.copy()
-                df_day_display['gross_pnl'] = df_day_display['gross_pnl'].map(lambda x: f"{currency_sym}{x:,.2f}")
-                df_day_display['total_charges'] = df_day_display['total_charges'].map(lambda x: f"{currency_sym}{x:,.2f}")
-                df_day_display['net_pnl'] = df_day_display['net_pnl'].map(lambda x: f"{currency_sym}{x:,.2f}")
                 df_day_display = df_day_display.rename(columns={"s_no": "Trade #"})
                 
-                st.dataframe(
+                styled_df = style_dataframe_pnl(
                     df_day_display[[
                         "Trade #", "symbol", "segment", "action", "quantity", 
                         "entry_price", "exit_price", "gross_pnl", "total_charges", 
                         "net_pnl", "strategy", "mistake", "notes"
                     ]],
+                    other_cols_currency=["total_charges"]
+                )
+                
+                st.dataframe(
+                    styled_df,
                     use_container_width=True,
                     hide_index=True
                 )
@@ -1296,17 +1342,19 @@ with tab_logs:
     # Display styled table
     df_display = df_filtered.copy()
     if not df_display.empty:
-        df_display['gross_pnl'] = df_display['gross_pnl'].map(lambda x: f"{currency_sym}{x:,.2f}")
-        df_display['total_charges'] = df_display['total_charges'].map(lambda x: f"{currency_sym}{x:,.2f}")
-        df_display['net_pnl'] = df_display['net_pnl'].map(lambda x: f"{currency_sym}{x:,.2f}")
         df_display = df_display.rename(columns={"s_no": "Trade #"})
         
-        st.dataframe(
+        styled_df = style_dataframe_pnl(
             df_display[[
                 "Trade #", "trade_date", "symbol", "segment", "action", 
                 "quantity", "entry_price", "exit_price", 
                 "gross_pnl", "total_charges", "net_pnl", "strategy", "mistake", "notes"
             ]],
+            other_cols_currency=["total_charges"]
+        )
+        
+        st.dataframe(
+            styled_df,
             use_container_width=True,
             hide_index=True
         )
@@ -2547,11 +2595,6 @@ with tab_pair:
         st.info("No Nifty pair trades logged yet.")
     else:
         pair_display = df_pair_trades.copy()
-        pair_display["brokerage"] = pair_display["brokerage"].map(lambda x: f"{currency_sym}{x:,.2f}")
-        pair_display["other_charges"] = pair_display["other_charges"].map(lambda x: f"{currency_sym}{x:,.2f}")
-        pair_display["gross_pnl"] = pair_display["gross_pnl"].map(lambda x: f"{currency_sym}{x:,.2f}")
-        pair_display["total_charges"] = pair_display["total_charges"].map(lambda x: f"{currency_sym}{x:,.2f}")
-        pair_display["net_pnl"] = pair_display["net_pnl"].map(lambda x: f"{currency_sym}{x:,.2f}")
         pair_display = pair_display.rename(columns={
             "trade_date": "Date",
             "pair_name": "Pair",
@@ -2572,12 +2615,20 @@ with tab_pair:
             "net_pnl": "Net P&L",
             "notes": "Notes"
         })
-        st.dataframe(
+        
+        styled_df = style_dataframe_pnl(
             pair_display[[
                 "id", "Date", "Pair", "Leg 1", "L1 Action", "L1 Qty", "L1 Entry", "L1 Exit",
                 "Leg 2", "L2 Action", "L2 Qty", "L2 Entry", "L2 Exit", "Brokerage", "Manual Extra",
                 "Gross P&L", "Charges", "Net P&L", "Notes"
             ]],
+            gross_col="Gross P&L",
+            net_col="Net P&L",
+            other_cols_currency=["Brokerage", "Manual Extra", "Charges"]
+        )
+        
+        st.dataframe(
+            styled_df,
             use_container_width=True,
             hide_index=True
         )
@@ -3183,17 +3234,19 @@ with tab_paper:
     
     df_paper_display = df_paper_filtered.copy()
     if not df_paper_display.empty:
-        df_paper_display['gross_pnl'] = df_paper_display['gross_pnl'].map(lambda x: f"{currency_sym}{x:,.2f}")
-        df_paper_display['total_charges'] = df_paper_display['total_charges'].map(lambda x: f"{currency_sym}{x:,.2f}")
-        df_paper_display['net_pnl'] = df_paper_display['net_pnl'].map(lambda x: f"{currency_sym}{x:,.2f}")
         df_paper_display = df_paper_display.rename(columns={"s_no": "Trade #"})
         
-        st.dataframe(
+        styled_df = style_dataframe_pnl(
             df_paper_display[[
                 "Trade #", "trade_date", "symbol", "segment", "action", 
                 "quantity", "entry_price", "exit_price", 
                 "gross_pnl", "total_charges", "net_pnl", "source_screener", "notes"
             ]],
+            other_cols_currency=["total_charges"]
+        )
+        
+        st.dataframe(
+            styled_df,
             use_container_width=True,
             hide_index=True
         )
