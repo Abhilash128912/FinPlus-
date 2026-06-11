@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Trading Workstation",
+    "slug": "trading-workstation-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0c0f1d"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0c0f1d"
+      },
+      "package": "com.finance.tradingworkstation"
+    }
+  }
+}
