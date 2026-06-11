@@ -28,8 +28,11 @@ def calculate_trade_metrics(
     total_turnover = buy_turnover + sell_turnover
 
     # 2. Brokerage
-    # Brokerage is taken directly from the user input (which defaults to segment rate but can be edited)
-    brokerage = brokerage_input
+    # Brokerage is taken directly from user input, but forced to 0.0 for Equity - Delivery
+    if segment == "Equity - Delivery":
+        brokerage = 0.0
+    else:
+        brokerage = brokerage_input
 
     # 3. STT / CTT (Securities / Commodity Transaction Tax)
     stt = 0.0

@@ -1157,8 +1157,8 @@ with tab_add:
         t_base_lot = st.number_input("Base Lot Size (0 for flat)", min_value=0.0, step=1.0, value=float(default_base_lot), help="Set to minimum lot size (e.g. 65 or 75) to scale brokerage per lot automatically (Brokerage = Rate * Lots). Set to 0 to disable scaling.", key=f"add_base_lot_{st.session_state['add_form_id']}")
         
         # Fetch default brokerage per buy + sell for selected segment
-        def_brokerage_buy = brokerage_rates[t_segment]["buy"]
-        def_brokerage_sell = brokerage_rates[t_segment]["sell"]
+        def_brokerage_buy = brokerage_rates[t_segment]["buy"] if t_segment != "Equity - Delivery" else 0.0
+        def_brokerage_sell = brokerage_rates[t_segment]["sell"] if t_segment != "Equity - Delivery" else 0.0
         def_total_brokerage = def_brokerage_buy + def_brokerage_sell
         
         # Scale brokerage per lot if base lot size > 0
@@ -1472,8 +1472,8 @@ with tab_logs:
                 )
                 
                 # Compute default brokerage from rates for selected segment (pre-filled, read-only)
-                e_def_brokerage_buy = brokerage_rates[e_segment]["buy"]
-                e_def_brokerage_sell = brokerage_rates[e_segment]["sell"]
+                e_def_brokerage_buy = brokerage_rates[e_segment]["buy"] if e_segment != "Equity - Delivery" else 0.0
+                e_def_brokerage_sell = brokerage_rates[e_segment]["sell"] if e_segment != "Equity - Delivery" else 0.0
                 e_def_total_brokerage = e_def_brokerage_buy + e_def_brokerage_sell
                 
                 import math
@@ -2208,10 +2208,11 @@ with tab_settings:
             with col_target:
                 st.markdown(f"**{seg_name}**")
                 sub_col1, sub_col2 = st.columns(2)
+                is_delivery = (seg_name == "Equity - Delivery")
                 with sub_col1:
-                    b_buy = st.number_input(f"Buy Rate (₹)", min_value=0.0, step=1.0, value=float(rates["buy"]), key=f"set_b_buy_{idx}")
+                    b_buy = st.number_input(f"Buy Rate (₹)", min_value=0.0, step=1.0, value=0.0 if is_delivery else float(rates["buy"]), disabled=is_delivery, key=f"set_b_buy_{idx}")
                 with sub_col2:
-                    b_sell = st.number_input(f"Sell Rate (₹)", min_value=0.0, step=1.0, value=float(rates["sell"]), key=f"set_b_sell_{idx}")
+                    b_sell = st.number_input(f"Sell Rate (₹)", min_value=0.0, step=1.0, value=0.0 if is_delivery else float(rates["sell"]), disabled=is_delivery, key=f"set_b_sell_{idx}")
                 
                 updated_rates[seg_name] = {"buy": b_buy, "sell": b_sell}
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -3204,8 +3205,8 @@ with tab_paper:
                 
         pt_base_lot = st.number_input("Base Lot Size (0 for flat)", min_value=0.0, step=1.0, value=float(default_base_lot_p), help="Set to minimum lot size (e.g. 65 or 75) to scale brokerage per lot automatically.", key=f"paper_base_lot_{st.session_state['paper_form_id']}")
         
-        def_brokerage_buy_p = brokerage_rates[pt_segment]["buy"]
-        def_brokerage_sell_p = brokerage_rates[pt_segment]["sell"]
+        def_brokerage_buy_p = brokerage_rates[pt_segment]["buy"] if pt_segment != "Equity - Delivery" else 0.0
+        def_brokerage_sell_p = brokerage_rates[pt_segment]["sell"] if pt_segment != "Equity - Delivery" else 0.0
         def_total_brokerage_p = def_brokerage_buy_p + def_brokerage_sell_p
         
         import math
@@ -3408,8 +3409,8 @@ with tab_paper:
 
             edit_pt_base_lot = st.number_input("Base Lot Size (0 for flat)", min_value=0.0, step=1.0, value=float(default_edit_lot), key=f"edit_paper_base_lot_{selected_paper_trade_id}")
 
-            def_broker_buy = brokerage_rates[edit_pt_segment]["buy"]
-            def_broker_sell = brokerage_rates[edit_pt_segment]["sell"]
+            def_broker_buy = brokerage_rates[edit_pt_segment]["buy"] if edit_pt_segment != "Equity - Delivery" else 0.0
+            def_broker_sell = brokerage_rates[edit_pt_segment]["sell"] if edit_pt_segment != "Equity - Delivery" else 0.0
             def_total_broker = def_broker_buy + def_broker_sell
 
             lots_edit = 1
