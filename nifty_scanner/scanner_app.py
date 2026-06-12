@@ -854,7 +854,9 @@ with tab_overview:
                         _atr   = compute_atr(_hist3m)
                         _ema20 = float(_hist3m["Close"].ewm(span=20, adjust=False).mean().iloc[-1])
                         entry_p  = round(last_price, 2)
-                        sl_p     = round(max(_ema20 * 0.99, last_price * 0.93), 2)
+                        _sl_ema  = _ema20 * 0.99
+                        _sl_hard = last_price * 0.93
+                        sl_p     = round(max(_sl_ema, _sl_hard), 2) if _sl_ema < last_price else round(_sl_hard, 2)
                         t1_p     = round(last_price + 2.0 * _atr, 2)
                         t2_p     = round(last_price + 3.0 * _atr, 2)
                         _risk    = entry_p - sl_p

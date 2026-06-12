@@ -32,13 +32,14 @@ export const setApiUrl = async (url) => {
 // Generic fetch wrapper with timeout
 const apiFetch = async (endpoint, options = {}) => {
   const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+  const id = setTimeout(() => controller.abort(), 20000); // 20 second timeout
 
   try {
     const response = await fetch(`${activeBaseUrl}${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        'Bypass-Tunnel-Reminder': 'true',
         ...options.headers,
       },
       signal: controller.signal,
@@ -91,3 +92,8 @@ export const logPaperTrade = (tradeData) =>
     method: 'POST',
     body: JSON.stringify(tradeData),
   });
+
+export const getAlphaPicks = () => apiFetch('/api/alpha-picks');
+
+export const unlockAlphaPicks = () => apiFetch('/api/alpha-picks/unlock', { method: 'POST' });
+

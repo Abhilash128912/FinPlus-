@@ -360,7 +360,7 @@ def fetch_single_stock_metrics(ticker: str, nifty_df_3m: float) -> dict:
             entry_price = round(last_price, 2)
             sl_ema      = ema20 * 0.99             # 1% below 20 EMA
             sl_hard     = last_price * 0.93        # 7% hard stop
-            stop_loss   = round(max(sl_ema, sl_hard), 2)
+            stop_loss   = round(max(sl_ema, sl_hard), 2) if sl_ema < last_price else round(sl_hard, 2)
             target_1    = round(last_price + 2.0 * atr, 2)   # 1:2 R:R
             target_2    = round(last_price + 3.0 * atr, 2)   # 1:3 R:R
             risk_amt    = last_price - stop_loss

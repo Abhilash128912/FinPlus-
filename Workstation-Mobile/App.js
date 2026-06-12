@@ -13,6 +13,7 @@ import {
   StatusBar,
   Dimensions,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import {
@@ -27,6 +28,8 @@ import {
   getStockDetails,
   getMarketRegime,
   logPaperTrade,
+  getAlphaPicks,
+  unlockAlphaPicks,
 } from './api';
 import {
   Eye,
@@ -98,6 +101,8 @@ export default function App() {
   const [indices, setIndices] = useState(null);
   const [watchlist, setWatchlist] = useState([]);
   const [regimeData, setRegimeData] = useState(null);
+  const [alphaPicks, setAlphaPicks] = useState(null);
+  const [alphaPicksLoading, setAlphaPicksLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -172,17 +177,19 @@ export default function App() {
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      const statusData = await getSystemStatus().catch(() => null);
+      const [statusData, indicesData, wlData, rData, picksData] = await Promise.all([
+        getSystemStatus().catch(() => null),
+        getIndices().catch(() => null),
+        getWatchlist({ sr_pivot_type: detailPivotType }).catch(() => []),
+        getMarketRegime().catch(() => null),
+        getAlphaPicks().catch(() => null)
+      ]);
+
       setSystemStatus(statusData);
-
-      const indicesData = await getIndices().catch(() => null);
       setIndices(indicesData);
-
-      const wlData = await getWatchlist({ sr_pivot_type: detailPivotType }).catch(() => []);
       setWatchlist(wlData);
-
-      const rData = await getMarketRegime().catch(() => null);
       setRegimeData(rData);
+      setAlphaPicks(picksData);
     } catch (e) {
       console.error('Error loading API data:', e);
     } finally {
@@ -193,14 +200,19 @@ export default function App() {
   // Silent update for live price streaming
   const fetchWatchlistAndStatusSilently = async () => {
     try {
-      const statusData = await getSystemStatus();
-      setSystemStatus(statusData);
+      const [statusData, indicesData, wlData, rData, picksData] = await Promise.all([
+        getSystemStatus().catch(() => null),
+        getIndices().catch(() => null),
+        getWatchlist({ sr_pivot_type: detailPivotType }).catch(() => []),
+        getMarketRegime().catch(() => null),
+        getAlphaPicks().catch(() => null)
+      ]);
 
-      const indicesData = await getIndices();
-      setIndices(indicesData);
-
-      const wlData = await getWatchlist({ sr_pivot_type: detailPivotType });
-      setWatchlist(wlData);
+      if (statusData) setSystemStatus(statusData);
+      if (indicesData) setIndices(indicesData);
+      if (wlData) setWatchlist(wlData);
+      if (rData) setRegimeData(rData);
+      if (picksData) setAlphaPicks(picksData);
     } catch (e) {
       console.warn('Silent update failed:', e.message);
     }
@@ -275,11 +287,26 @@ export default function App() {
     }
   };
 
+  const handleRecalculatePicks = async () => {
+    setAlphaPicksLoading(true);
+    try {
+      await unlockAlphaPicks();
+      const freshPicks = await getAlphaPicks();
+      setAlphaPicks(freshPicks);
+      Alert.alert('Recalculated', 'Picks have been successfully unlocked and fresh opportunities selected.');
+    } catch (e) {
+      Alert.alert('Unlock Error', e.message);
+    } finally {
+      setAlphaPicksLoading(false);
+    }
+  };
+
   // Pre-fill paper trade form from watchlist detail sheet
   const handleQuickTrade = (symbol) => {
     const ltpVal = selectedStock?.live_quote?.close || selectedStock?.historical_metrics?.day_open || 0;
     const ltpStr = ltpVal > 0 ? String(ltpVal.toFixed(2)) : '';
-    const isLong = watchlist.find(item => item.Stock.replace('.NS', '') === symbol)?.Signal.includes('LONG') ?? true;
+    const wlItem = (watchlist || []).find(item => item && item.Stock && item.Stock.replace('.NS', '') === symbol);
+    const isLong = wlItem && wlItem.Signal ? wlItem.Signal.includes('LONG') : true;
     
     // Suggest 3% profit target for LONG, -3% for SHORT
     const exitVal = ltpVal > 0 ? (isLong ? ltpVal * 1.03 : ltpVal * 0.97) : 0;
@@ -355,6 +382,14 @@ export default function App() {
     const hist = systemStatus?.historical_data || {};
     const isWsConnected = ws.connected;
 
+    // Market Breadth Trend Banner variables
+    const broad = regimeData?.broad_market || {};
+    const advances = broad.advances || 0;
+    const declines = broad.declines || 0;
+    const uptrend = broad.uptrend_count || 0;
+    const downtrend = broad.downtrend_count || 0;
+    const neutral = broad.neutral_count || 0;
+
     return (
       <View style={styles.headerBlock}>
         {/* Indices Ticker */}
@@ -392,6 +427,236 @@ export default function App() {
             </View>
           )}
         </View>
+
+        {/* Market Breadth Trend Banner */}
+        {regimeData && regimeData.broad_market && (
+          <View style={styles.trendBanner}>
+            <View style={styles.trendRow}>
+              <Text style={styles.trendLabel}>MARKET BREADTH</Text>
+              <Text style={styles.trendRatioText}>
+                Adv/Dec Ratio: {declines > 0 ? (advances / declines).toFixed(2) : advances}
+              </Text>
+            </View>
+            <View style={styles.breadthBarContainer}>
+              <View style={[styles.breadthSegment, { flex: Math.max(1, uptrend), backgroundColor: '#10b981' }]} />
+              <View style={[styles.breadthSegment, { flex: Math.max(1, downtrend), backgroundColor: '#f43f5e' }]} />
+              <View style={[styles.breadthSegment, { flex: Math.max(1, neutral), backgroundColor: '#475569' }]} />
+            </View>
+            <View style={styles.trendCountsRow}>
+              <Text style={styles.trendCountGreen}>▲ {uptrend} Positive</Text>
+              <Text style={styles.trendCountRed}>▼ {downtrend} Negative</Text>
+              <Text style={styles.trendCountNeutral}>⬦ {neutral} Neutral</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Alpha Picks Header & Action */}
+        <View style={styles.alphaPicksHeaderRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Award size={18} color="#eab308" />
+            <Text style={styles.alphaPicksTitle}>ALPHA PICKS OF THE DAY</Text>
+          </View>
+          {alphaPicks && alphaPicks.locked && (
+            <TouchableOpacity 
+              style={styles.recalcBtn} 
+              onPress={handleRecalculatePicks}
+              disabled={alphaPicksLoading}
+            >
+              {alphaPicksLoading ? (
+                <ActivityIndicator size="small" color="#eab308" />
+              ) : (
+                <Text style={styles.recalcBtnText}>🔄 RECALCULATE</Text>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Carousel ScrollView */}
+        {alphaPicksLoading ? (
+          <View style={styles.picksLoader}>
+            <ActivityIndicator size="small" color="#06b6d4" />
+            <Text style={styles.picksLoaderText}>Scanning active breakouts...</Text>
+          </View>
+        ) : alphaPicks ? (
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={width - 48 + 12} // snap to card width + margin
+            decelerationRate="fast"
+            contentContainerStyle={styles.picksCarousel}
+          >
+            {/* Card 1: Intraday Pick */}
+            {alphaPicks.intraday ? (
+              <View style={[styles.pickCard, styles.borderGold]}>
+                <View style={styles.pickCardHeader}>
+                  <Text style={styles.pickCardSub}>⚡ INTRADAY BREAKOUT</Text>
+                  <Text style={styles.pickTime}>{alphaPicks.intraday.Suggested_At}</Text>
+                </View>
+                <View style={styles.pickSymbolRow}>
+                  <Text style={styles.pickSymbol}>{alphaPicks.intraday.Stock}</Text>
+                  <View style={[styles.signalBadge, alphaPicks.intraday.Signal === 'LONG' ? styles.badgeGreen : styles.badgeRed]}>
+                    <Text style={[styles.signalBadgeText, alphaPicks.intraday.Signal === 'LONG' ? styles.textGreen : styles.textRed]}>
+                      {alphaPicks.intraday.Signal}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.pickDetailRow}>
+                  <View>
+                    <Text style={styles.pickLabel}>LTP</Text>
+                    <Text style={styles.pickValue}>₹{Number(alphaPicks.intraday.LTP || 0).toFixed(2)}</Text>
+                    <Text style={[styles.pickChange, alphaPicks.intraday["Change %"] >= 0 ? styles.textGreen : styles.textRed]}>
+                      {alphaPicks.intraday["Change %"] >= 0 ? '+' : ''}{alphaPicks.intraday["Change %"]}%
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.pickLabel}>Score / Conf</Text>
+                    <Text style={styles.pickValueText}>{alphaPicks.intraday.Score}</Text>
+                    <Text style={styles.pickSubText}>Conf: {alphaPicks.intraday.Confidence}% ({alphaPicks.intraday.Quality})</Text>
+                  </View>
+                </View>
+                <View style={styles.levelsRow}>
+                  <Text style={styles.levelText}>Entry: <Text style={styles.levelVal}>₹{Number(alphaPicks.intraday.Entry_Price || 0).toFixed(2)}</Text></Text>
+                  <Text style={styles.levelText}>Tgt: <Text style={[styles.levelVal, styles.textGreen]}>₹{Number(alphaPicks.intraday.Target || 0).toFixed(2)}</Text></Text>
+                  <Text style={styles.levelText}>SL: <Text style={[styles.levelVal, styles.textRed]}>₹{Number(alphaPicks.intraday.Stop_Loss || 0).toFixed(2)}</Text></Text>
+                </View>
+              </View>
+            ) : (
+              <View style={[styles.pickCard, styles.pickCardEmpty]}>
+                <Text style={styles.emptyCardTitle}>⚡ INTRADAY BREAKOUT</Text>
+                <Text style={styles.emptyCardText}>No active intraday breakouts detected above thresholds.</Text>
+              </View>
+            )}
+
+            {/* Card 2: Stock Option Pick */}
+            {alphaPicks.option ? (
+              <View style={[styles.pickCard, styles.borderCyan]}>
+                <View style={styles.pickCardHeader}>
+                  <Text style={styles.pickCardSub}>🎯 STOCK OPTION CALL</Text>
+                  <Text style={styles.pickTime}>{alphaPicks.option.Suggested_At}</Text>
+                </View>
+                <View style={styles.pickSymbolRow}>
+                  <Text style={styles.pickSymbol}>{alphaPicks.option.Contract}</Text>
+                  <View style={[styles.signalBadge, styles.badgeGreen]}>
+                    <Text style={[styles.signalBadgeText, styles.textGreen]}>BUY</Text>
+                  </View>
+                </View>
+                <View style={styles.pickDetailRow}>
+                  <View>
+                    <Text style={styles.pickLabel}>Spot LTP</Text>
+                    <Text style={styles.pickValue}>₹{Number(alphaPicks.option.LTP || 0).toFixed(2)}</Text>
+                    <Text style={[styles.pickChange, alphaPicks.option["Change %"] >= 0 ? styles.textGreen : styles.textRed]}>
+                      {alphaPicks.option["Change %"] >= 0 ? '+' : ''}{alphaPicks.option["Change %"]}%
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.pickLabel}>Lot Size / Lots</Text>
+                    <Text style={styles.pickValueText}>{alphaPicks.option.Lot_Size || 0} Qty</Text>
+                    <Text style={styles.pickSubText}>{alphaPicks.option.Lots || 0} Lot(s)</Text>
+                  </View>
+                </View>
+                <View style={styles.levelsRow}>
+                  <Text style={styles.levelText}>Premium: <Text style={styles.levelVal}>₹{Number(alphaPicks.option.Entry_Price || 0).toFixed(1)}</Text></Text>
+                  <Text style={styles.levelText}>Tgt: <Text style={[styles.levelVal, styles.textGreen]}>₹{Number(alphaPicks.option.Target || 0).toFixed(1)}</Text></Text>
+                  <Text style={styles.levelText}>SL: <Text style={[styles.levelVal, styles.textRed]}>₹{Number(alphaPicks.option.Stop_Loss || 0).toFixed(1)}</Text></Text>
+                </View>
+              </View>
+            ) : (
+              <View style={[styles.pickCard, styles.pickCardEmpty]}>
+                <Text style={styles.emptyCardTitle}>🎯 STOCK OPTION CALL</Text>
+                <Text style={styles.emptyCardText}>No liquid stock option opportunities confirmed.</Text>
+              </View>
+            )}
+
+            {/* Card 3: Nifty Option Pick */}
+            {alphaPicks.nifty_option && alphaPicks.nifty_option.Signal !== 'NEUTRAL / NO TRADE' ? (
+              <View style={[styles.pickCard, styles.borderPurple]}>
+                <View style={styles.pickCardHeader}>
+                  <Text style={styles.pickCardSub}>📊 NIFTY INDEX CALL</Text>
+                  <Text style={styles.pickTime}>{alphaPicks.nifty_option.Suggested_At}</Text>
+                </View>
+                <View style={styles.pickSymbolRow}>
+                  <Text style={[styles.pickSymbol, { fontSize: 13 }]}>{alphaPicks.nifty_option.Contract}</Text>
+                  <View style={[styles.signalBadge, alphaPicks.nifty_option.Signal.includes('CALL') ? styles.badgeGreen : styles.badgeRed]}>
+                    <Text style={[styles.signalBadgeText, alphaPicks.nifty_option.Signal.includes('CALL') ? styles.textGreen : styles.textRed]}>
+                      {alphaPicks.nifty_option.Signal.includes('CALL') ? 'CALL' : 'PUT'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.pickDetailRow}>
+                  <View>
+                    <Text style={styles.pickLabel}>Nifty Spot</Text>
+                    <Text style={styles.pickValue}>{Number(alphaPicks.nifty_option.Nifty_LTP || 0).toFixed(2)}</Text>
+                    <Text style={styles.pickSubText}>PCR: {alphaPicks.nifty_option.PCR}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.pickLabel}>Support / Resistance</Text>
+                    <Text style={styles.pickSubText}>Sup: {Number(alphaPicks.nifty_option.Support || 0).toFixed(0)}</Text>
+                    <Text style={styles.pickSubText}>Res: {Number(alphaPicks.nifty_option.Resistance || 0).toFixed(0)}</Text>
+                  </View>
+                </View>
+                <View style={styles.levelsRow}>
+                  <Text style={styles.levelText}>Entry: <Text style={styles.levelVal}>₹{Number(alphaPicks.nifty_option.Entry_Price || 0).toFixed(1)}</Text></Text>
+                  <Text style={styles.levelText}>Tgt: <Text style={[styles.levelVal, styles.textGreen]}>₹{Number(alphaPicks.nifty_option.Target || 0).toFixed(1)}</Text></Text>
+                  <Text style={styles.levelText}>SL: <Text style={[styles.levelVal, styles.textRed]}>₹{Number(alphaPicks.nifty_option.Stop_Loss || 0).toFixed(1)}</Text></Text>
+                </View>
+              </View>
+            ) : (
+              <View style={[styles.pickCard, styles.pickCardEmpty]}>
+                <Text style={styles.emptyCardTitle}>📊 NIFTY INDEX CALL</Text>
+                <Text style={styles.emptyCardText}>Nifty RSI is Neutral. No active index calls suggested.</Text>
+              </View>
+            )}
+
+            {/* Card 4: Swing Pick */}
+            {alphaPicks.swing ? (
+              <View style={[styles.pickCard, styles.borderGold]}>
+                <View style={styles.pickCardHeader}>
+                  <Text style={styles.pickCardSub}>⭐ SWING ALPHA PICK</Text>
+                  <Text style={styles.pickTime}>{alphaPicks.swing.Suggested_At}</Text>
+                </View>
+                <View style={styles.pickSymbolRow}>
+                  <View>
+                    <Text style={styles.pickSymbol}>{alphaPicks.swing.Stock}</Text>
+                    <Text style={styles.pickCompany} numberOfLines={1}>{alphaPicks.swing.Company}</Text>
+                  </View>
+                  <View style={[styles.signalBadge, styles.badgeGreen]}>
+                    <Text style={[styles.signalBadgeText, styles.textGreen]}>SWING</Text>
+                  </View>
+                </View>
+                <View style={styles.pickDetailRow}>
+                  <View>
+                    <Text style={styles.pickLabel}>LTP</Text>
+                    <Text style={styles.pickValue}>₹{Number(alphaPicks.swing.LTP || 0).toFixed(2)}</Text>
+                    <Text style={[styles.pickChange, alphaPicks.swing["Change %"] >= 0 ? styles.textGreen : styles.textRed]}>
+                      {alphaPicks.swing["Change %"] >= 0 ? '+' : ''}{alphaPicks.swing["Change %"]}%
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.pickLabel}>Quant Score</Text>
+                    <Text style={styles.pickValueText}>{alphaPicks.swing.Total}/100</Text>
+                    <Text style={styles.pickSubText}>Funda:{alphaPicks.swing.Funda} | Mntm:{alphaPicks.swing.Mntm}</Text>
+                  </View>
+                </View>
+                <View style={styles.levelsRow}>
+                  <Text style={styles.levelText}>Entry: <Text style={styles.levelVal}>₹{Number(alphaPicks.swing.Entry_Price || 0).toFixed(2)}</Text></Text>
+                  <Text style={styles.levelText}>Tgt: <Text style={[styles.levelVal, styles.textGreen]}>₹{Number(alphaPicks.swing.Target || 0).toFixed(2)}</Text></Text>
+                  <Text style={styles.levelText}>SL: <Text style={[styles.levelVal, styles.textRed]}>₹{Number(alphaPicks.swing.Stop_Loss || 0).toFixed(2)}</Text></Text>
+                </View>
+              </View>
+            ) : (
+              <View style={[styles.pickCard, styles.pickCardEmpty]}>
+                <Text style={styles.emptyCardTitle}>⭐ SWING ALPHA PICK</Text>
+                <Text style={styles.emptyCardText}>No Swing picks active in nifty500_scanner database.</Text>
+              </View>
+            )}
+          </ScrollView>
+        ) : (
+          <View style={styles.picksCarouselPlaceholder}>
+            <Text style={styles.placeholderText}>
+              Sync token and start WebSocket feed to fetch Alpha Picks of the Day.
+            </Text>
+          </View>
+        )}
 
         {/* Search and Filters Toggle */}
         <View style={styles.searchContainer}>
@@ -458,9 +723,10 @@ export default function App() {
 
   // Watchlist item renderer
   const renderWatchlistItem = ({ item }) => {
-    const isLong = item.Signal.includes('LONG');
+    if (!item || !item.Stock) return null;
+    const isLong = item.Signal ? item.Signal.includes('LONG') : true;
     const changePct = Number(item["Change %"] || 0);
-    const isTopPick = item.Score >= 8 || item.Score === item.Total_Checks;
+    const isTopPick = (item.Score || 0) >= 8 || item.Score === item.Total_Checks;
 
     return (
       <TouchableOpacity
@@ -490,7 +756,7 @@ export default function App() {
         <View style={styles.cardBody}>
           <View style={styles.metricColumn}>
             <Text style={styles.metricLabel}>LTP</Text>
-            <Text style={styles.metricValue}>₹{Number(item.LTP).toFixed(2)}</Text>
+            <Text style={styles.metricValue}>₹{Number(item.LTP || 0).toFixed(2)}</Text>
             <Text style={[styles.metricSubValue, changePct >= 0 ? styles.textGreen : styles.textRed]}>
               {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%
             </Text>
@@ -498,7 +764,7 @@ export default function App() {
 
           <View style={styles.metricColumn}>
             <Text style={styles.metricLabel}>R-Vol</Text>
-            <Text style={styles.metricValue}>{Number(item.RVOL).toFixed(1)}x</Text>
+            <Text style={styles.metricValue}>{Number(item.RVOL || 0).toFixed(1)}x</Text>
             <Text style={styles.metricSubValue}>Breakout: {item.Score}/{item.Total_Checks || 8}</Text>
           </View>
 
@@ -517,12 +783,13 @@ export default function App() {
   };
 
   // Filters logic
-  const filteredWatchlist = watchlist.filter((item) => {
+  const filteredWatchlist = (watchlist || []).filter((item) => {
+    if (!item || !item.Stock) return false;
     const symbolMatch =
       item.Stock.toUpperCase().includes(searchQuery.toUpperCase()) ||
       (item.Sector && item.Sector.toUpperCase().includes(searchQuery.toUpperCase()));
-    const signalMatch = filterSignal === 'ALL' || item.Signal.includes(filterSignal);
-    const breakoutMatch = item.Score >= filterBreakout;
+    const signalMatch = filterSignal === 'ALL' || (item.Signal && item.Signal.includes(filterSignal));
+    const breakoutMatch = (item.Score || 0) >= filterBreakout;
     return symbolMatch && signalMatch && breakoutMatch;
   });
 
@@ -602,7 +869,7 @@ export default function App() {
       <ScrollView
         style={styles.tabScroll}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshCw size={24} color="#06b6d4" onRefresh={handleRefresh} refreshing={refreshing} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#06b6d4" colors={["#06b6d4"]} />}
       >
         {/* Regime Overview card */}
         <View style={styles.regimeCard}>
@@ -624,7 +891,7 @@ export default function App() {
 
           {/* Advance / Decline Bar */}
           <Text style={styles.progressBarLabel}>
-            Advances: {advances} | Declines: {declines} (Ratio: {adTotal > 0 ? (advances / declines).toFixed(2) : '0'})
+            Advances: {advances} | Declines: {declines} (Ratio: {declines > 0 ? (advances / declines).toFixed(2) : advances.toString()})
           </Text>
           <View style={styles.progressBarBg}>
             <View style={[styles.progressBarFill, { width: `${adRatio}%`, backgroundColor: '#10b981' }]} />
@@ -2182,5 +2449,247 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: 'bold',
     letterSpacing: 0.5,
+  },
+
+  // Market Breadth Trend Banner
+  trendBanner: {
+    backgroundColor: '#12172a',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    marginBottom: 12,
+  },
+  trendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  trendLabel: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#94a3b8',
+    letterSpacing: 0.5,
+  },
+  trendRatioText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#64748b',
+  },
+  breadthBarContainer: {
+    height: 6,
+    flexDirection: 'row',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  breadthSegment: {
+    height: '100%',
+  },
+  trendCountsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  trendCountGreen: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  trendCountRed: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#f43f5e',
+  },
+  trendCountNeutral: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+
+  // Alpha Picks Header & Carousel
+  alphaPicksHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  alphaPicksTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#eab308',
+    letterSpacing: 0.5,
+    marginLeft: 6,
+  },
+  recalcBtn: {
+    backgroundColor: '#eab3081a',
+    borderColor: '#eab30833',
+    borderWidth: 1,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  recalcBtnText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#eab308',
+  },
+  picksLoader: {
+    height: 140,
+    backgroundColor: '#0c0f1d',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  picksLoaderText: {
+    color: '#64748b',
+    fontSize: 11,
+    marginTop: 8,
+  },
+  picksCarousel: {
+    paddingLeft: 4,
+    paddingRight: 16,
+    marginBottom: 16,
+  },
+  picksCarouselPlaceholder: {
+    height: 100,
+    backgroundColor: '#0c0f1d',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  placeholderText: {
+    color: '#64748b',
+    fontSize: 11,
+    textAlign: 'center',
+  },
+  pickCard: {
+    width: width - 48,
+    backgroundColor: '#12172a',
+    borderRadius: 10,
+    padding: 12,
+    marginRight: 12,
+    borderWidth: 1.5,
+  },
+  pickCardEmpty: {
+    width: width - 48,
+    backgroundColor: '#0c0f1d',
+    borderRadius: 10,
+    padding: 12,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 130,
+  },
+  emptyCardTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#64748b',
+    marginBottom: 8,
+  },
+  emptyCardText: {
+    color: '#475569',
+    fontSize: 11,
+    textAlign: 'center',
+  },
+  borderGold: {
+    borderColor: '#eab30888',
+    backgroundColor: '#16130b',
+  },
+  borderCyan: {
+    borderColor: '#06b6d488',
+    backgroundColor: '#07151e',
+  },
+  borderPurple: {
+    borderColor: '#a855f788',
+    backgroundColor: '#120d1c',
+  },
+  pickCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+    paddingBottom: 6,
+    marginBottom: 8,
+  },
+  pickCardSub: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#94a3b8',
+    letterSpacing: 0.5,
+  },
+  pickTime: {
+    fontSize: 9,
+    color: '#64748b',
+  },
+  pickSymbolRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  pickSymbol: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#f8fafc',
+  },
+  pickCompany: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  pickDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  pickLabel: {
+    fontSize: 8,
+    color: '#64748b',
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  pickValue: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#f8fafc',
+  },
+  pickValueText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#f8fafc',
+  },
+  pickSubText: {
+    fontSize: 9,
+    color: '#64748b',
+  },
+  pickChange: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  levelsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#080b1655',
+    padding: 6,
+    borderRadius: 6,
+  },
+  levelText: {
+    fontSize: 10,
+    color: '#94a3b8',
+  },
+  levelVal: {
+    fontWeight: 'bold',
   },
 });

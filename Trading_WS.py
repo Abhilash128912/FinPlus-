@@ -941,6 +941,10 @@ def send_telegram_picks_message(
     max_trades: int,
 ) -> bool:
     """Format and send the Command Center Alpha Picks of the Day to Telegram Bot API."""
+    import html
+    import os
+    is_cloud = os.name != "nt"
+    env_label = "Cloud App" if is_cloud else "Local Laptop"
     token, chat_id, enabled = get_telegram_config()
     if not token or not chat_id:
         st.error("Telegram is not configured. Add Bot Token and Chat ID to Streamlit Secrets or Settings.")
@@ -949,7 +953,7 @@ def send_telegram_picks_message(
     now_ist = datetime.now(_IST_TZ)
     date_str = now_ist.strftime("%a, %d %b %Y")
 
-    msg = f"🎯 <b>Fin+ Workstation — Alpha Picks of the Day</b>\n"
+    msg = f"🎯 <b>Fin+ Workstation — Alpha Picks of the Day ({env_label})</b>\n"
     msg += f"📅 <i>Date: {date_str} (IST)</i>\n\n"
 
     # 1. INTRADAY
@@ -972,7 +976,7 @@ def send_telegram_picks_message(
         
         direction = "BUY (Long)" if _is_long else "SELL (Short)"
         msg += f"⚡ <b>INTRADAY SNIPER PLAY</b>\n"
-        msg += f"Stock: <b>{_stk}</b> (Signal: {_sig})\n"
+        msg += f"Stock: <b>{html.escape(_stk)}</b> (Signal: {_sig})\n"
         msg += f"• Entry Limit: ₹{_ltp:.2f} ({_chg:+.2f}%)\n"
         msg += f"• Stop Loss: ₹{_sl:.2f} (1.5%)\n"
         msg += f"• Target Net: ₹{_tgt:.2f} (3.0%)\n"
@@ -1027,7 +1031,7 @@ def send_telegram_picks_message(
         _max_risk = _total_premium_val * 0.35
         
         msg += f"📦 <b>STOCK OPTION SNIPER</b>\n"
-        msg += f"Contract: <b>{_contract}</b> (ATM Option)\n"
+        msg += f"Contract: <b>{html.escape(_contract)}</b> (ATM Option)\n"
         msg += f"• Under. LTP: ₹{_ltp:.2f} (Est Prem: ₹{est_premium:.2f})\n"
         msg += f"• Stop Loss: Premium -35%\n"
         msg += f"• Target Net: Premium +70%\n"
@@ -1060,7 +1064,7 @@ def send_telegram_picks_message(
         _max_risk = _total_premium_val * 0.30
         
         msg += f"📦 <b>NIFTY INDEX OPTION SNIPER</b>\n"
-        msg += f"Contract: <b>{_contract}</b> (Signal: {_sig})\n"
+        msg += f"Contract: <b>{html.escape(_contract)}</b> (Signal: {_sig})\n"
         msg += f"• Spot LTP: ₹{_ltp:,.2f} (Entry: ₹{_entry:.2f})\n"
         msg += f"• Stop Loss: ₹{_sl:.2f}\n"
         msg += f"• Target Net: ₹{_tgt:.2f}\n"
@@ -1089,7 +1093,7 @@ def send_telegram_picks_message(
         _max_risk = _qty * (_ltp - _sl)
         
         msg += f"📈 <b>SWING ALPHA PICK</b>\n"
-        msg += f"Stock: <b>{_stk}</b> ({_company})\n"
+        msg += f"Stock: <b>{html.escape(_stk)}</b> ({html.escape(_company)})\n"
         msg += f"• Entry Limit: ₹{_ltp:.2f} (Score: {_total}/100, F:{_funda} M:{_mntm})\n"
         msg += f"• Stop Loss: ₹{_sl:.2f} (5%)\n"
         msg += f"• Target Net: ₹{_tgt:.2f} (12%)\n"
@@ -3910,16 +3914,26 @@ with st.sidebar:
         db_tg_chat_id = get_db_settings("telegram_chat_id", "")
         db_tg_enabled = get_db_settings("telegram_notifications_enabled", False)
 
-        tg_enabled = st.checkbox("Enable Telegram Alerts", value=db_tg_enabled, key="tg_sidebar_enabled")
-        tg_token = st.text_input("Bot Token", value=db_tg_token, type="password", key="tg_sidebar_token")
-        tg_chat_id = st.text_input("Chat ID", value=db_tg_chat_id, key="tg_sidebar_chat_id")
+        with st.form("tg_settings_form"):
+            tg_enabled = st.checkbox("Enable Telegram Alerts", value=db_tg_enabled, key="tg_sidebar_enabled")
+            tg_token = st.text_input("Bot Token", value=db_tg_token, type="password", key="tg_sidebar_token")
+            tg_chat_id = st.text_input("Chat ID", value=db_tg_chat_id, key="tg_sidebar_chat_id")
+            
+            submit_save = st.form_submit_button("💾 Save Settings", use_container_width=True)
 
-        if tg_token.strip() and tg_chat_id.strip():
+        if submit_save:
+            save_db_setting("telegram_bot_token", tg_token.strip())
+            save_db_setting("telegram_chat_id", tg_chat_id.strip())
+            save_db_setting("telegram_notifications_enabled", tg_enabled)
+            st.toast("Telegram settings saved successfully!", icon="💾")
+            st.rerun()
+
+        if db_tg_token.strip() and db_tg_chat_id.strip():
             if st.button("🧪 Test Telegram Connection", key="tg_sidebar_test_btn", use_container_width=True):
                 with st.spinner("Sending test message..."):
-                    url = f"https://api.telegram.org/bot{tg_token.strip()}/sendMessage"
+                    url = f"https://api.telegram.org/bot{db_tg_token.strip()}/sendMessage"
                     payload = {
-                        "chat_id": tg_chat_id.strip(),
+                        "chat_id": db_tg_chat_id.strip(),
                         "text": "<b>Fin+ Workstation Connection Test</b>\n\n🟢 Your Telegram Bot is successfully connected and authorized to send alerts! 🚀",
                         "parse_mode": "HTML"
                     }
@@ -3936,13 +3950,6 @@ with st.sidebar:
                             st.toast("✅ Test message sent successfully!", icon="✅")
                     except Exception as e:
                         st.error(f"Failed to send test message: {e}")
-
-        if tg_enabled != db_tg_enabled or tg_token.strip() != db_tg_token or tg_chat_id.strip() != db_tg_chat_id:
-            save_db_setting("telegram_bot_token", tg_token.strip())
-            save_db_setting("telegram_chat_id", tg_chat_id.strip())
-            save_db_setting("telegram_notifications_enabled", tg_enabled)
-            st.toast("Telegram settings saved successfully!", icon="💾")
-            st.rerun()
     except Exception as e:
         st.caption(f"Error loading Telegram DB settings: {e}")
 
