@@ -17,6 +17,11 @@
         "backgroundColor": "#0c0f1d"
       },
       "package": "com.finance.tradingworkstation"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2ad10edb-bf9b-4128-b1ed-7591fbe19314"
+      }
     }
   }
 }
