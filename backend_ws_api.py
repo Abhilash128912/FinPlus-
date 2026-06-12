@@ -426,6 +426,319 @@ def get_watchlist(
     results = sorted(results, key=lambda x: x["Confidence"], reverse=True)
     return results
 
+@app.get("/api/alpha-picks")
+def get_alpha_picks():
+    """Generates and returns the 4 Alpha Picks of the Day, with 15-minute selection locks."""
+    import streamlit as st
+    import pandas as pd
+    
+    # Initialize session state locks if not present
+    if "locked_intraday_pick" not in st.session_state:
+        st.session_state.locked_intraday_pick = None
+    if "locked_option_pick" not in st.session_state:
+        st.session_state.locked_option_pick = None
+    if "locked_nifty_option_pick" not in st.session_state:
+        st.session_state.locked_nifty_option_pick = None
+    if "locked_swing_pick" not in st.session_state:
+        st.session_state.locked_swing_pick = None
+    if "locked_at_time" not in st.session_state:
+        st.session_state.locked_at_time = 0.0
+
+    now_ts = time.time()
+    # 15-minute auto-expiry (900 seconds)
+    if st.session_state.locked_at_time > 0.0 and (now_ts - st.session_state.locked_at_time > 900.0):
+        st.session_state.locked_intraday_pick = None
+        st.session_state.locked_option_pick = None
+        st.session_state.locked_nifty_option_pick = None
+        st.session_state.locked_swing_pick = None
+        st.session_state.locked_at_time = 0.0
+
+    # Get active watchlist signals
+    wl_signals = get_watchlist(
+        min_change=0.4,
+        min_rvol=1.0,
+        min_breakout_score=3,
+        sr_pivot_type="None"
+    )
+
+    _fs = Trading_WS.feed_state
+    with _fs.lock:
+        _mkt = dict(_fs.market_data)
+        _idx_d = dict(_fs.index_data)
+
+    _ms2 = Trading_WS.market_status()
+    _now2 = datetime.now(Trading_WS._IST_TZ)
+    
+    # Map name to token dynamically
+    eu = Trading_WS.effective_universe()
+    name_to_token = {name.replace(".NS", ""): tok for tok, name in eu.items()}
+
+    # 1. INTRADAY PICK
+    intraday_pick = None
+    if st.session_state.locked_intraday_pick:
+        intraday_pick = st.session_state.locked_intraday_pick.copy()
+        # Update price from live feed
+        sym = intraday_pick["Stock"]
+        tok = name_to_token.get(sym)
+        if tok and tok in _mkt:
+            live_q = Trading_WS.parse_quote(_mkt[tok])
+            if live_q["close"] > 0:
+                intraday_pick["LTP"] = live_q["close"]
+                open_p = live_q.get("open", 0)
+                if open_p > 0:
+                    intraday_pick["Change %"] = round(((live_q["close"] - open_p) / open_p) * 100, 2)
+        st.session_state.locked_intraday_pick = intraday_pick.copy()
+    else:
+        if wl_signals:
+            is_opening = _ms2["is_open"] and (_now2.hour == 9 and 15 <= _now2.minute < 30)
+            max_chg = 4.0 if is_opening else 1.5
+            candidates = [
+                item for item in wl_signals 
+                if item["Signal"] in ["LONG", "SHORT"] 
+                and abs(item["Change %"]) < max_chg 
+                and abs(item["Change %"]) > 0.4
+            ]
+            if candidates:
+                top_grade = [c for c in candidates if c.get("Quality") in ["A+", "A"]]
+                if not top_grade:
+                    top_grade = [c for c in candidates if c.get("Quality") == "B"]
+                if not top_grade:
+                    top_grade = candidates
+                top_grade = sorted(top_grade, key=lambda x: (x.get("Score", 0), x.get("RVOL", 0)), reverse=True)
+                item = top_grade[0]
+                
+                intraday_pick = {
+                    "Stock": item["Stock"].replace(".NS", ""),
+                    "Signal": item["Signal"],
+                    "LTP": float(item["LTP"]),
+                    "Change %": float(item["Change %"]),
+                    "Score": f"{item['Score']}/{item.get('Total_Checks', 8)}",
+                    "Confidence": item.get("Confidence", 50),
+                    "Quality": item.get("Quality", "B"),
+                    "Sector": item.get("Sector", "Other"),
+                    "Suggested_At": datetime.now(Trading_WS._IST_TZ).strftime("%I:%M:%S %p") if _ms2["is_open"] else "EOD (03:30 PM)"
+                }
+                _init_ltp = intraday_pick["LTP"]
+                intraday_pick["Entry_Price"] = _init_ltp
+                _sl_dist = _init_ltp * 0.015
+                _is_long = intraday_pick["Signal"] in ("LONG", "BREAKOUT")
+                intraday_pick["Stop_Loss"] = round(_init_ltp - _sl_dist if _is_long else _init_ltp + _sl_dist, 2)
+                intraday_pick["Target"] = round(_init_ltp + (_sl_dist * 2.0) if _is_long else _init_ltp - (_sl_dist * 2.0), 2)
+                
+                st.session_state.locked_intraday_pick = intraday_pick.copy()
+                if st.session_state.locked_at_time == 0.0:
+                    st.session_state.locked_at_time = time.time()
+
+    # 2. STOCK OPTION PICK
+    option_pick = None
+    if st.session_state.locked_option_pick:
+        option_pick = st.session_state.locked_option_pick.copy()
+        # Update price from live feed
+        sym = option_pick["Stock"]
+        tok = name_to_token.get(sym)
+        if tok and tok in _mkt:
+            live_q = Trading_WS.parse_quote(_mkt[tok])
+            if live_q["close"] > 0:
+                option_pick["LTP"] = live_q["close"]
+                open_p = live_q.get("open", 0)
+                if open_p > 0:
+                    option_pick["Change %"] = round(((live_q["close"] - open_p) / open_p) * 100, 2)
+        st.session_state.locked_option_pick = option_pick.copy()
+    else:
+        FO_LOT_SIZES = {
+            "RELIANCE": 250, "TCS": 175, "INFY": 400, "TATASTEEL": 5500, "SBIN": 1500,
+            "BHARTIARTL": 950, "ICICIBANK": 700, "HDFCBANK": 550, "AXISBANK": 625, "ITC": 1600,
+            "LT": 300, "HINDUNILVR": 300, "M&M": 350, "SUNPHARMA": 700, "MARUTI": 50,
+            "ONGC": 3850, "JSWSTEEL": 675, "ADANIENT": 300, "COALINDIA": 4200, "NTPC": 1500,
+            "POWERGRID": 3600, "KOTAKBANK": 400
+        }
+        if wl_signals:
+            candidates = [
+                item for item in wl_signals 
+                if item["Signal"] in ["LONG", "SHORT"]
+            ]
+            if candidates:
+                fo_candidates = [c for c in candidates if c["Stock"].replace(".NS", "") in FO_LOT_SIZES]
+                top_grade = [c for c in fo_candidates if c.get("Quality") in ["A+", "A"]]
+                if not top_grade:
+                    top_grade = fo_candidates
+                if not top_grade:
+                    top_grade = [c for c in candidates if c.get("Quality") in ["A+", "A"]]
+                if not top_grade:
+                    top_grade = candidates
+                top_grade = sorted(top_grade, key=lambda x: (x.get("Score", 0), x.get("RVOL", 0)), reverse=True)
+                item = top_grade[0]
+                
+                stock_clean = item["Stock"].replace(".NS", "")
+                _ltp = float(item["LTP"])
+                _is_long = item["Signal"] in ("LONG", "BREAKOUT")
+                
+                def calculate_atm_strike_local(price: float) -> int:
+                    if price > 5000:
+                        interval = 100
+                    elif price > 2000:
+                        interval = 50
+                    elif price > 800:
+                        interval = 20
+                    elif price > 300:
+                        interval = 10
+                    else:
+                        interval = 5
+                    return int(round(price / interval) * interval)
+                    
+                _strike = calculate_atm_strike_local(_ltp)
+                _option_type = "CE" if _is_long else "PE"
+                contract_name = f"{stock_clean} {_strike} {_option_type}"
+                
+                lot_size = FO_LOT_SIZES.get(stock_clean, 100)
+                est_premium = _ltp * 0.03
+                
+                option_pick = {
+                    "Stock": stock_clean,
+                    "Signal": item["Signal"],
+                    "LTP": _ltp,
+                    "Change %": float(item["Change %"]),
+                    "Contract": contract_name,
+                    "Entry_Price": round(est_premium, 2),
+                    "Stop_Loss": round(est_premium * 0.65, 2),
+                    "Target": round(est_premium * 1.50, 2),
+                    "Lots": 1,
+                    "Lot_Size": lot_size,
+                    "Confidence": item.get("Confidence", 50),
+                    "Quality": item.get("Quality", "B"),
+                    "Suggested_At": datetime.now(Trading_WS._IST_TZ).strftime("%I:%M:%S %p") if _ms2["is_open"] else "EOD (03:30 PM)"
+                }
+                
+                st.session_state.locked_option_pick = option_pick.copy()
+                if st.session_state.locked_at_time == 0.0:
+                    st.session_state.locked_at_time = time.time()
+
+    # 3. NIFTY INDEX CALL
+    nifty_pick = None
+    if st.session_state.locked_nifty_option_pick:
+        nifty_pick = st.session_state.locked_nifty_option_pick.copy()
+        # Update index price
+        nifty_tile = Trading_WS.get_index_tile_quote("NIDX:40000001", _idx_d)
+        nifty_ltp = nifty_tile.get("ltp") or nifty_tile.get("last_price") or nifty_tile.get("close")
+        if nifty_ltp:
+            nifty_pick["Nifty_LTP"] = float(nifty_ltp)
+        st.session_state.locked_nifty_option_pick = nifty_pick.copy()
+    else:
+        nifty_tile = Trading_WS.get_index_tile_quote("NIDX:40000001", _idx_d)
+        nifty_ltp = nifty_tile.get("ltp") or nifty_tile.get("last_price") or nifty_tile.get("close")
+        
+        ws_nifty = st.session_state.get("_idx_ws_candles_NIDX:40000001", [])
+        rest_nifty = st.session_state.get("_idx_rest_candles_NIDX:40000001", [])
+        if ws_nifty and rest_nifty:
+            ws_start = ws_nifty[0][0]
+            base_nifty = [c for c in rest_nifty if c[0] < ws_start]
+            nifty_candles = base_nifty + ws_nifty
+        elif ws_nifty:
+            nifty_candles = ws_nifty
+        else:
+            nifty_candles = rest_nifty
+            
+        if nifty_ltp is None and nifty_candles:
+            nifty_ltp = float(nifty_candles[-1][4])
+            
+        if nifty_ltp is not None:
+            nifty_ltp = float(nifty_ltp)
+            nifty_pick_raw = Trading_WS.generate_nifty_option_chain_and_signal(nifty_ltp, nifty_candles)
+            if nifty_pick_raw:
+                nifty_pick = {
+                    "Contract": nifty_pick_raw["contract"],
+                    "Signal": nifty_pick_raw["signal"],
+                    "Entry_Price": nifty_pick_raw["entry_price"],
+                    "Target": nifty_pick_raw["target"],
+                    "Stop_Loss": nifty_pick_raw["stop_loss"],
+                    "Nifty_LTP": nifty_ltp,
+                    "PCR": nifty_pick_raw["pcr"],
+                    "Support": nifty_pick_raw["support"],
+                    "Resistance": nifty_pick_raw["resistance"],
+                    "Suggested_At": datetime.now(Trading_WS._IST_TZ).strftime("%I:%M:%S %p") if _ms2["is_open"] else "EOD (03:30 PM)"
+                }
+                st.session_state.locked_nifty_option_pick = nifty_pick.copy()
+                if st.session_state.locked_at_time == 0.0:
+                    st.session_state.locked_at_time = time.time()
+
+    # 4. SWING PICK
+    swing_pick = None
+    if st.session_state.locked_swing_pick:
+        swing_pick = st.session_state.locked_swing_pick.copy()
+        # Update Swing LTP
+        sym = swing_pick["Stock"]
+        tok = name_to_token.get(sym)
+        if tok and tok in _mkt:
+            live_q = Trading_WS.parse_quote(_mkt[tok])
+            if live_q["close"] > 0:
+                swing_pick["LTP"] = live_q["close"]
+                open_p = live_q.get("open", 0)
+                if open_p > 0:
+                    swing_pick["Change %"] = round(((live_q["close"] - open_p) / open_p) * 100, 2)
+        st.session_state.locked_swing_pick = swing_pick.copy()
+    else:
+        import sqlite3
+        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nifty_scanner", "nifty500_scanner.db")
+        if os.path.exists(db_path):
+            try:
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT ticker, company_name, total_score, fundamental_score, momentum_score, last_price "
+                    "FROM nifty500_cache "
+                    "WHERE total_score >= 60 AND last_price > 50 AND market_cap_cr > 2000 "
+                    "ORDER BY total_score DESC, momentum_score DESC LIMIT 10"
+                )
+                rows = cursor.fetchall()
+                conn.close()
+                if rows:
+                    import random
+                    row = random.choice(rows)
+                    swing_pick = {
+                        "Stock": row[0].replace(".NS", ""),
+                        "Company": row[1],
+                        "Total": int(row[2]),
+                        "Funda": int(row[3]),
+                        "Mntm": int(row[4]),
+                        "LTP": float(row[5]),
+                        "Suggested_At": datetime.now(Trading_WS._IST_TZ).strftime("%I:%M:%S %p") if _ms2["is_open"] else "EOD (03:30 PM)"
+                    }
+                    _init_ltp = swing_pick["LTP"]
+                    swing_pick["Entry_Price"] = _init_ltp
+                    swing_pick["Stop_Loss"] = round(_init_ltp * 0.95, 2)
+                    swing_pick["Target"] = round(_init_ltp * 1.12, 2)
+                    
+                    st.session_state.locked_swing_pick = swing_pick.copy()
+                    if st.session_state.locked_at_time == 0.0:
+                        st.session_state.locked_at_time = time.time()
+            except Exception:
+                pass
+
+    remaining_secs = 0
+    if st.session_state.locked_at_time > 0:
+        elapsed = time.time() - st.session_state.locked_at_time
+        remaining_secs = max(0, int(900 - elapsed))
+
+    return {
+        "intraday": intraday_pick,
+        "option": option_pick,
+        "nifty_option": nifty_pick,
+        "swing": swing_pick,
+        "remaining_seconds": remaining_secs,
+        "locked": st.session_state.locked_at_time > 0
+    }
+
+@app.post("/api/alpha-picks/unlock")
+def unlock_alpha_picks():
+    """Manually resets the 15-minute selection locks."""
+    import streamlit as st
+    st.session_state.locked_intraday_pick = None
+    st.session_state.locked_option_pick = None
+    st.session_state.locked_nifty_option_pick = None
+    st.session_state.locked_swing_pick = None
+    st.session_state.locked_at_time = 0.0
+    return {"status": "Success", "message": "Alpha picks unlocked successfully."}
+
 @app.get("/api/indices")
 def get_indices_data():
     """Returns the latest quotes for NIFTY 50 and BANK NIFTY indices."""
@@ -488,17 +801,80 @@ def get_stock_details(symbol: str, sr_pivot_type: str = "None"):
 
 @app.get("/api/market-regime")
 def get_market_regime():
-    """Returns the market edge index, money flow, and regime indicators."""
+    """Returns the market edge index, money flow list, and regime indicators."""
+    import streamlit as st
     bms = Trading_WS.calculate_broad_market_status()
     regime = Trading_WS.calculate_market_regime()
     edge = Trading_WS.calculate_edge_index()
-    money_flow = Trading_WS.calculate_money_flow_universe()
     
+    # Calculate sector-level money flow as expected by the mobile frontend App.js
+    meta = Trading_WS.load_db_metadata()
+    sector_data = {}
+    
+    # Get live snapshot to compute live changes if feed is active
+    _fs = Trading_WS.feed_state
+    _mkt, _, _ = Trading_WS.snapshot_feed(_fs)
+    
+    with _fs.lock:
+        market_data = dict(_fs.market_data)
+        
+    eu = Trading_WS.effective_universe()
+    
+    for instrument, hist in st.session_state.historical_data.items():
+        stock_name = eu.get(instrument) or Trading_WS.STOCK_NAMES.get(instrument) or instrument
+        symbol_clean = stock_name.replace(".NS", "")
+        sector = meta.get(symbol_clean, {}).get("sector", "Other")
+        
+        # Day change percentage
+        day_chg = hist.get("day_change_pct", 0.0)
+        
+        # Get live quote if available
+        quote = market_data.get(instrument)
+        if quote:
+            parsed = Trading_WS.parse_quote(quote)
+            open_p = parsed.get("open", 0.0)
+            close_p = parsed.get("close", 0.0)
+            if open_p > 0:
+                day_chg = ((close_p - open_p) / open_p) * 100
+        
+        # Estimate money flow in Cr (crores) based on Relative Volume (RVOL) and price
+        rvol = hist.get("rvol", 1.0)
+        ltp = close_p if (quote and close_p > 0) else hist.get("day_open", 100.0)
+        
+        # Traded value estimate scaling for realistic Cr representation
+        estimated_turnover = (ltp * rvol * 0.12)
+        
+        if sector not in sector_data:
+            sector_data[sector] = {
+                "Sector": sector,
+                "StocksCount": 0,
+                "TotalChange": 0.0,
+                "TotalMoneyFlow": 0.0
+            }
+            
+        sector_data[sector]["StocksCount"] += 1
+        sector_data[sector]["TotalChange"] += day_chg
+        sector_data[sector]["TotalMoneyFlow"] += estimated_turnover * (1 if day_chg >= 0 else -0.8)
+
+    # Format into a sorted list of sector dicts
+    money_flow_list = []
+    for sector, s_info in sector_data.items():
+        count = s_info["StocksCount"]
+        avg_chg = s_info["TotalChange"] / count if count > 0 else 0.0
+        money_flow_list.append({
+            "Sector": sector,
+            "StocksCount": count,
+            "MoneyFlow": round(s_info["TotalMoneyFlow"], 1),
+            "DayChange": round(avg_chg, 2)
+        })
+        
+    money_flow_list = sorted(money_flow_list, key=lambda x: x["DayChange"], reverse=True)
+
     return {
         "broad_market": bms,
         "regime": regime,
         "edge_index": edge,
-        "money_flow": money_flow
+        "money_flow": money_flow_list
     }
 
 @app.post("/api/paper-trade")

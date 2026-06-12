@@ -6193,11 +6193,13 @@ def live_scanner_fragment(
                         "SELECT ticker, company_name, total_score, fundamental_score, momentum_score, last_price "
                         "FROM nifty500_cache "
                         "WHERE total_score >= 60 AND last_price > 50 AND market_cap_cr > 2000 "
-                        "ORDER BY total_score DESC, momentum_score DESC LIMIT 1"
+                        "ORDER BY total_score DESC, momentum_score DESC LIMIT 10"
                     )
-                    row = cursor.fetchone()
+                    rows = cursor.fetchall()
                     conn.close()
-                    if row:
+                    if rows:
+                        import random
+                        row = random.choice(rows)
                         swing_pick = {
                             "Stock": row[0].replace(".NS", ""),
                             "Company": row[1],
