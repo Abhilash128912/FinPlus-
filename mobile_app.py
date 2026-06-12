@@ -358,7 +358,7 @@ def format_account_label(acc_name):
     return acc_name
 
 @st.cache_data(ttl=3600)
-def fetch_gold_price_inr():
+def fetch_gold_price_inr(last_gold_rate=None):
     price = None
     try:
         import urllib.request
@@ -374,6 +374,9 @@ def fetch_gold_price_inr():
     except Exception:
         pass
     if price is None:
+        # Try falling back to the last successfully scraped gold rate saved in the database
+        price = last_gold_rate
+    if price is None:
         try:
             gold = yf.Ticker("GC=F")
             gold_price_usd = gold.history(period="1d")["Close"].iloc[-1]
@@ -387,7 +390,7 @@ def fetch_gold_price_inr():
 def get_all_journal_entries():
     jvs = list(d.get("journal_entries", []))
     gold_qty = d.get("gold_qty", 177.0)
-    gold_rate = fetch_gold_price_inr()
+    gold_rate = fetch_gold_price_inr(d.get("last_gold_rate"))
     gold_depreciation = 0.23
     val = gold_qty * gold_rate * (1 - gold_depreciation)
     if val > 0:
@@ -430,7 +433,7 @@ def save_and_push():
 accounts_list = list(d.get("accounts", {}).keys())
 asset_accounts = [name for name in accounts_list if get_account_type(name) == "Asset"]
 other_assets_sum = sum(get_account_balance(name) for name in asset_accounts if name != "Gold Asset")
-gold_rate = fetch_gold_price_inr()
+gold_rate = fetch_gold_price_inr(d.get("last_gold_rate"))
 gold_qty = d.get("gold_qty", 177.0)
 gold_depreciation = 0.23
 live_gold_bal = get_account_balance("Gold Asset")

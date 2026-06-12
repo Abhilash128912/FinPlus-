@@ -23,7 +23,14 @@ from openpyxl.worksheet.datavalidation import DataValidation
 # LOCAL PERSISTENCE — AUTO-SAVE / AUTO-LOAD
 # Data is stored in finance_data.json next to this script
 # -----------------------------
-DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "finance_data.json")
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_data_file_primary = os.path.join(_script_dir, "finance_data.json")
+_data_file_fallback = os.path.join(os.path.dirname(_script_dir), "finance_data.json")
+# Use the primary path; if it doesn't exist but the fallback does, copy it over automatically
+if not os.path.exists(_data_file_primary) and os.path.exists(_data_file_fallback):
+    import shutil
+    shutil.copy2(_data_file_fallback, _data_file_primary)
+DATA_FILE = _data_file_primary
 
 DEFAULT_COA = {
     # Assets
@@ -176,7 +183,7 @@ def get_monthly_payment(account_name):
 # ACCOUNT AND LEDGER HELPER ROUTINES
 # -----------------------------
 @st.cache_data(ttl=3600)
-def fetch_gold_price_inr():
+def fetch_gold_price_inr(last_gold_rate=None):
     if "cached_gold_rate" in st.session_state and st.session_state.cached_gold_rate is not None:
         return st.session_state.cached_gold_rate
 
@@ -208,7 +215,11 @@ def fetch_gold_price_inr():
         pass
 
     if price is None:
-        # 2. If scraping fails, try fetching from yfinance (global spot price conversion)
+        # 2. Try falling back to the last successfully scraped gold rate saved in the session/database (much more accurate than yfinance)
+        price = last_gold_rate
+
+    if price is None:
+        # 3. If scraping and saved rate fail, try fetching from yfinance (global spot price conversion)
         try:
             gold = yf.Ticker("GC=F")
             gold_price_usd = gold.history(period="1d")["Close"].iloc[-1]
@@ -220,17 +231,26 @@ def fetch_gold_price_inr():
             pass
 
     if price is None:
-        # 3. Ultimate static fallback (approximate recent market rate)
+        # 4. Ultimate static fallback (approximate recent market rate)
         price = 14000.0
 
     st.session_state.cached_gold_rate = price
     return price
 
+def next_jv_id():
+    """Return the next unique JV ID by scanning max existing number (safe after deletions)."""
+    max_num = 0
+    for jv in st.session_state.journal_entries:
+        jv_id = jv.get("jv_id", "")
+        if jv_id.startswith("JV-") and jv_id[3:].isdigit():
+            max_num = max(max_num, int(jv_id[3:]))
+    return f"JV-{max_num + 1:05d}"
+
 def get_all_journal_entries():
     jvs = list(st.session_state.journal_entries)
     
     # Calculate dynamic gold valuation
-    gold_rate = fetch_gold_price_inr()
+    gold_rate = fetch_gold_price_inr(st.session_state.get("last_gold_rate"))
     gold_qty = st.session_state.get("gold_qty", 177.0)
     gold_depreciation = 0.23
     val = gold_qty * gold_rate * (1 - gold_depreciation)
@@ -435,7 +455,8 @@ def save_data():
             "cloud_sync_enabled": st.session_state.get("cloud_sync_enabled", False),
             "cloud_url": st.session_state.get("cloud_url", ""),
             "cloud_secret": st.session_state.get("cloud_secret", ""),
-            "important_events": st.session_state.get("important_events", [])
+            "important_events": st.session_state.get("important_events", []),
+            "last_gold_rate": st.session_state.get("cached_gold_rate")
         }
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
@@ -544,6 +565,7 @@ def load_data():
         st.session_state.cloud_url = d.get("cloud_url", "")
         st.session_state.cloud_secret = d.get("cloud_secret", "")
         st.session_state.important_events = d.get("important_events", [])
+        st.session_state.last_gold_rate = d.get("last_gold_rate")
         
         # Check and rename Bank Account -> Punjab National Bank, add Jio Payment Bank
         if "Bank Account" in st.session_state.accounts:
@@ -710,7 +732,7 @@ logo_path = r"C:\Users\AbhilashBabu\Finance\finplus_brand_image.png"
 # Calculate Current Net Worth dynamically
 asset_accounts = [name for name in st.session_state.accounts if get_account_type(name) == "Asset"]
 other_assets_sum = sum(get_account_balance(name) for name in asset_accounts if name != "Gold Asset")
-gold_rate = fetch_gold_price_inr()
+gold_rate = fetch_gold_price_inr(st.session_state.get("last_gold_rate"))
 gold_qty = st.session_state.get("gold_qty", 177.0)
 gold_depreciation = 0.23
 live_gold_bal = get_account_balance("Gold Asset")
@@ -1192,6 +1214,11 @@ if owner_name_input != st.session_state.get("owner_name", "Abhilash"):
     save_data()
     st.rerun()
 
+if st.sidebar.button("🔄 Sync & Reload Data", use_container_width=True, key="btn_reload_ledger"):
+    st.session_state["_ledger_loaded"] = load_data()
+    st.session_state.success_msg = "🔄 Ledger data reloaded and synced successfully!"
+    st.rerun()
+
 with st.sidebar.expander("☁️ Cloud Sync (Mobile Link)", expanded=False):
     st.markdown("**Real-time Cloud Sync**")
     sync_enabled = st.checkbox("Enable Cloud Sync", value=st.session_state.get("cloud_sync_enabled", False), key="sync_enabled_chk")
@@ -1413,7 +1440,7 @@ with st.container():
         elif not qe_amount or qe_amount <= 0:
             st.error("⚠️ Enter a valid amount greater than zero.")
         else:
-            next_id = f"JV-{len(st.session_state.journal_entries) + 1:05d}"
+            next_id = next_jv_id()
             lines = [
                 {"account": qe_debit_acc, "debit": float(qe_amount), "credit": 0.0},
                 {"account": qe_credit_acc, "debit": 0.0, "credit": float(qe_amount)}
@@ -1586,7 +1613,7 @@ with st.expander("🛠️ Advanced Journal Voucher (JV) Splits Editor", expanded
             st.warning("⚠️ One or more split lines have an amount but no account selected. Please select an account or remove the line.")
             
         if st.button("💾 Post Journal Voucher", type="primary", use_container_width=True, disabled=has_empty_account, key="btn_post_jv"):
-            next_id = f"JV-{len(st.session_state.journal_entries) + 1:05d}"
+            next_id = next_jv_id()
             
             st.session_state.journal_entries.append({
                 "jv_id": next_id,
@@ -2119,13 +2146,25 @@ with tab_pl:
             if bal != 0:
                 expense_details.append({"Expense Account": acc_name, "Amount": bal})
 
+    # Calculate percentages of total
+    for item in revenue_details:
+        item["% of Total"] = (item["Amount"] / total_rev_p * 100.0) if total_rev_p != 0.0 else 0.0
+    for item in expense_details:
+        item["% of Total"] = (item["Amount"] / total_exp_p * 100.0) if total_exp_p != 0.0 else 0.0
+
     col_pl1, col_pl2 = st.columns(2)
     
     with col_pl1:
         st.markdown("### 📥 Revenue")
         if revenue_details:
             df_rev = pd.DataFrame(revenue_details)
-            st.dataframe(df_rev.style.format({"Amount": "₹{:.2f}"}), use_container_width=True, hide_index=True)
+            # Sort by Amount descending
+            df_rev = df_rev.sort_values(by="Amount", ascending=False)
+            st.dataframe(
+                df_rev.style.format({"Amount": "₹{:.2f}", "% of Total": "{:.2f}%"}), 
+                use_container_width=True, 
+                hide_index=True
+            )
         else:
             st.caption("No revenue recorded.")
         st.markdown(f"**Total Revenue**: ₹{total_rev_p:,.2f}")
@@ -2134,7 +2173,13 @@ with tab_pl:
         st.markdown("### 📤 Expenses")
         if expense_details:
             df_exp = pd.DataFrame(expense_details)
-            st.dataframe(df_exp.style.format({"Amount": "₹{:.2f}"}), use_container_width=True, hide_index=True)
+            # Sort by Amount descending
+            df_exp = df_exp.sort_values(by="Amount", ascending=False)
+            st.dataframe(
+                df_exp.style.format({"Amount": "₹{:.2f}", "% of Total": "{:.2f}%"}), 
+                use_container_width=True, 
+                hide_index=True
+            )
         else:
             st.caption("No expenses recorded.")
         st.markdown(f"**Total Expenses**: ₹{total_exp_p:,.2f}")
@@ -2411,7 +2456,7 @@ with tab_fc:
         # Adjustable monthly savings surplus (Net Balance growth)
         proj_net_balance = st.number_input("Projected Monthly Savings (Net Balance)", value=float(historical_net_balance), step=500.0, format="%.2f", help="Net savings surplus added to your liquid cash/bank assets each month (defaults to current month's Net Receipts minus Net Payout)")
         
-    gold_rate = fetch_gold_price_inr()
+    gold_rate = fetch_gold_price_inr(st.session_state.get("last_gold_rate"))
     
     # Check if there is gold asset balance in ledger, otherwise fall back to physical weight pricing
     live_gold_bal = get_account_balance("Gold Asset")
@@ -2703,6 +2748,41 @@ with tab_an:
             else:
                 st.info("No Cash, Punjab National Bank, or Jio Payment Bank activity logged.")
 
+        # Expense Concentration Analysis
+        st.markdown("---")
+        st.markdown("#### 📊 Expense Concentration Analysis (Pareto)")
+        st.markdown(
+            "This analysis sorts expenses by amount, showing each item's share and cumulative impact. "
+            "It helps identify the critical categories that drive the majority of your spending."
+        )
+        
+        if not df_exp_grouped.empty:
+            df_pareto = df_exp_grouped.copy()
+            df_pareto["% of Total"] = (df_pareto["Expense"] / _total_expense * 100.0)
+            df_pareto["Cumulative %"] = df_pareto["% of Total"].cumsum()
+            
+            # Classify impact
+            def classify_impact(cum_pct):
+                if cum_pct <= 80.0:
+                    return "🔴 High Impact (Top 80%)"
+                elif cum_pct <= 95.0:
+                    return "🟡 Medium Impact (Next 15%)"
+                else:
+                    return "🟢 Low Impact (Remaining 5%)"
+            
+            df_pareto["Impact Category"] = df_pareto["Cumulative %"].apply(classify_impact)
+            df_pareto = df_pareto.rename(columns={"Expense": "Amount"})
+            
+            st.dataframe(
+                df_pareto.style.format({
+                    "Amount": "₹{:.2f}",
+                    "% of Total": "{:.2f}%",
+                    "Cumulative %": "{:.2f}%"
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
+
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB 9 — TEMPLATE SYNC (IMPORT / EXPORT)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2939,6 +3019,154 @@ with tab_io:
                     st.session_state["_pending_ledger_upload"] = None
                     st.session_state["_pending_ledger_name"] = None
                     st.rerun()
+
+    # 🗓️ Close Financial Year & Roll Over
+    st.markdown("---")
+    st.markdown("### 🗓️ Close Financial Year & Roll Over")
+    st.markdown("""
+    <div style="font-size:0.8rem;color:#64748B;font-weight:500;margin-bottom:0.8rem;">
+        Closes nominal accounts (Revenue & Expenses) as of a closing date (e.g. 31-03-2027), rolls the Net profit/loss into Retained Earnings, 
+        creates a secure backup of the data on disk, and creates a consolidated opening entry for Assets, Liabilities, and Equity on 01-04-2027.
+    </div>
+    """, unsafe_allow_html=True)
+
+    if "confirm_close_fy" not in st.session_state:
+        st.session_state.confirm_close_fy = False
+
+    if not st.session_state.confirm_close_fy:
+        col_fy1, col_fy2 = st.columns([1, 1])
+        with col_fy1:
+            close_date = st.date_input(
+                "Select Year-End Closing Date", 
+                value=datetime(2027, 3, 31).date(),
+                key="fy_close_date"
+            )
+        with col_fy2:
+            st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+            if st.button("🚀 Close Financial Year", use_container_width=True, key="btn_close_fy_trigger"):
+                st.session_state.confirm_close_fy = True
+                st.rerun()
+    else:
+        # Seek permission before doing so
+        st.warning("⚠️ **End of financial year backup and clean all nominal accounts and start fresh?**")
+        st.markdown(f"**Closing Date**: `{st.session_state.fy_close_date}`  |  **New Year Start Date**: `{st.session_state.fy_close_date + relativedelta(days=1)}`")
+        st.markdown("This action will:")
+        st.markdown("1. Calculate all ending Asset, Liability, and Equity balances up to the closing date.")
+        st.markdown("2. Clear all previous JVs up to the closing date, retaining your chart of accounts.")
+        st.markdown("3. Create a secure backup file in your Finance directory.")
+        st.markdown("4. Post a single consolidated Opening Entry on the next day representing the carried-forward balances.")
+        
+        c_yes, c_no = st.columns(2)
+        with c_yes:
+            if st.button("✅ Yes, Proceed", use_container_width=True, key="btn_close_fy_confirm"):
+                close_dt = st.session_state.fy_close_date
+                start_next_dt = close_dt + relativedelta(days=1)
+                
+                # 1. Backup local data to a new file with timestamp
+                backup_name = f"finance_data_backup_{close_dt.strftime('%Y_%m_%d')}.json"
+                backup_path = os.path.join(os.path.dirname(DATA_FILE), backup_name)
+                
+                try:
+                    with open(DATA_FILE, "r", encoding="utf-8") as f:
+                        raw_data = json.load(f)
+                    with open(backup_path, "w", encoding="utf-8") as f:
+                        json.dump(raw_data, f, indent=2, ensure_ascii=False)
+                except Exception as e:
+                    st.error(f"Failed to create backup: {e}")
+                    st.stop()
+                
+                # 2. Calculate balances as of close_dt
+                balances = {}
+                for acc_name in st.session_state.accounts:
+                    balances[acc_name] = {"dr": 0.0, "cr": 0.0}
+                
+                for jv in get_all_journal_entries():
+                    jv_date = jv["date"]
+                    if jv_date <= close_dt:
+                        for line in jv["lines"]:
+                            acc = line["account"]
+                            if acc in balances:
+                                balances[acc]["dr"] += line["debit"]
+                                balances[acc]["cr"] += line["credit"]
+                
+                carried_forward_lines = []
+                total_rev = 0.0
+                total_exp = 0.0
+                
+                for acc_name, info in st.session_state.accounts.items():
+                    typ = get_account_type(acc_name)
+                    dr = balances[acc_name]["dr"]
+                    cr = balances[acc_name]["cr"]
+                    
+                    if typ == "Revenue":
+                        total_rev += (cr - dr)
+                    elif typ == "Expense":
+                        total_exp += (dr - cr)
+                    else:
+                        if typ == "Asset":
+                            net_bal = dr - cr
+                            if net_bal != 0:
+                                if net_bal > 0:
+                                    carried_forward_lines.append({"account": acc_name, "debit": net_bal, "credit": 0.0})
+                                else:
+                                    carried_forward_lines.append({"account": acc_name, "debit": 0.0, "credit": abs(net_bal)})
+                        elif typ in ["Liability", "Equity"]:
+                            if acc_name != "Retained Earnings":
+                                net_bal = cr - dr
+                                if net_bal != 0:
+                                    if net_bal > 0:
+                                        carried_forward_lines.append({"account": acc_name, "debit": 0.0, "credit": net_bal})
+                                    else:
+                                        carried_forward_lines.append({"account": acc_name, "debit": abs(net_bal), "credit": 0.0})
+                
+                # Calculate Retained Earnings separately
+                net_pnl = total_rev - total_exp
+                re_bal = balances["Retained Earnings"]["cr"] - balances["Retained Earnings"]["dr"]
+                final_re_bal = re_bal + net_pnl
+                if final_re_bal != 0:
+                    if final_re_bal > 0:
+                        carried_forward_lines.append({"account": "Retained Earnings", "debit": 0.0, "credit": final_re_bal})
+                    else:
+                        carried_forward_lines.append({"account": "Retained Earnings", "debit": abs(final_re_bal), "credit": 0.0})
+                
+                # Safe checking for balancing debits & credits
+                dr_total = sum(l["debit"] for l in carried_forward_lines)
+                cr_total = sum(l["credit"] for l in carried_forward_lines)
+                diff = dr_total - cr_total
+                if abs(diff) > 0.01:
+                    if diff > 0:
+                        carried_forward_lines.append({"account": "Opening Balance Equity", "debit": 0.0, "credit": abs(diff)})
+                    else:
+                        carried_forward_lines.append({"account": "Opening Balance Equity", "debit": abs(diff), "credit": 0.0})
+                
+                # Filter out JVs on or before close_dt
+                remaining_jvs = [jv for jv in st.session_state.journal_entries if jv["date"] > close_dt]
+                
+                # Create consolidated opening JV
+                opening_jv = {
+                    "jv_id": "JV-00001",
+                    "date": start_next_dt,
+                    "narration": f"Opening Balance Carry-Forward for FY starting {start_next_dt.strftime('%d-%m-%Y')}",
+                    "lines": carried_forward_lines
+                }
+                
+                new_jvs = [opening_jv] + remaining_jvs
+                new_jvs = sorted(new_jvs, key=lambda x: x["date"])
+                for idx, jv in enumerate(new_jvs, start=1):
+                    if not jv["jv_id"].startswith("JV-VAL-"):
+                        jv["jv_id"] = f"JV-{idx:05d}"
+                
+                st.session_state.journal_entries = new_jvs
+                save_data()
+                
+                st.session_state.confirm_close_fy = False
+                st.session_state.success_msg = f"🎉 Year closed! Created backup {backup_name} and posted Opening Balance JV."
+                st.rerun()
+                
+        with c_no:
+            if st.button("❌ Cancel", use_container_width=True, key="btn_close_fy_cancel"):
+                st.session_state.confirm_close_fy = False
+                st.rerun()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

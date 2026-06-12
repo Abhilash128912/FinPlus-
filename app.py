@@ -155,6 +155,8 @@ DEFAULT_SEGMENT_RULES = {
     "base_daily_risk": 250.0,
     "enable_step_up": True,
     "enforcement_mode": "Hard Lock", # "Hard Lock" or "Soft Warning"
+    "profit_sharing_pct": 50.0,
+    "profit_sharing_mode": "Full Reinvestment (Rest stays in original segment)", # "Full Reinvestment (Rest stays in original segment)", "Partial Reinvestment (Rest is withdrawn/payout)", "No Sharing (100% stays in original segment)"
     "rules": {
         "Commodities": {
             "allocation_pct": 15.0,
@@ -207,7 +209,7 @@ def get_segment_rules() -> dict:
                         else:
                             rules["rules"][seg_name][k] = v
         # Ensure top level keys exist
-        for k in ["base_daily_risk", "enable_step_up", "enforcement_mode"]:
+        for k in ["base_daily_risk", "enable_step_up", "enforcement_mode", "profit_sharing_pct", "profit_sharing_mode"]:
             if k not in rules:
                 rules[k] = DEFAULT_SEGMENT_RULES[k]
     return rules
@@ -247,10 +249,42 @@ def get_segment_savings(rules: dict, seg_key: str, active_daily_risk: float) -> 
         df_t['parsed_date'] = pd.to_datetime(df_t['trade_date'])
         start_dt = datetime.combine(start_date, datetime.min.time())
         df_filtered = df_t[
-            (df_t['segment'] == seg_key) & 
             (df_t['parsed_date'] >= start_dt)
         ]
-        seg_pnl = float(df_filtered['net_pnl'].sum())
+        
+        # Get profit sharing parameters
+        sharing_pct = float(rules.get("profit_sharing_pct", 50.0))
+        sharing_mode = rules.get("profit_sharing_mode", "Full Reinvestment (Rest stays in original segment)")
+        
+        # Calculate segments' allocation percentages for distribution
+        allocations = {}
+        for s_key, s_data in rules.get("rules", {}).items():
+            allocations[s_key] = float(s_data.get("allocation_pct", 15.0))
+            
+        for _, trade in df_filtered.iterrows():
+            t_seg = trade['segment']
+            t_net_pnl = float(trade['net_pnl'])
+            
+            if t_net_pnl < 0:
+                # Loss is borne fully by the segment that took the trade
+                if t_seg == seg_key:
+                    seg_pnl += t_net_pnl
+            else:
+                # Profitable trade
+                if sharing_mode == "No Sharing (100% stays in original segment)":
+                    if t_seg == seg_key:
+                        seg_pnl += t_net_pnl
+                else:
+                    shared_amount = t_net_pnl * (sharing_pct / 100.0)
+                    retained_amount = t_net_pnl - shared_amount
+                    
+                    # Each segment gets its allocation_pct share of the shared portion
+                    seg_share = shared_amount * (allocations.get(seg_key, 0.0) / 100.0)
+                    seg_pnl += seg_share
+                    
+                    if sharing_mode == "Full Reinvestment (Rest stays in original segment)":
+                        if t_seg == seg_key:
+                            seg_pnl += retained_amount
         
     # Total dynamic savings
     current_savings = (days_passed * seg_risk_allocation) + seg_pnl + manual_adj
@@ -1179,6 +1213,31 @@ with tab_add:
             key=f"add_brokerage_{st.session_state['add_form_id']}"
         )
         
+        if t_qty > 0 and t_entry > 0 and t_exit > 0:
+            preview_metrics = calculate_trade_metrics(
+                segment=t_segment,
+                action=t_action,
+                quantity=t_qty,
+                entry_price=t_entry,
+                exit_price=t_exit,
+                brokerage_input=computed_brokerage
+            )
+            st.markdown(
+                f"""
+                <div style="font-size: 0.82rem; color: var(--text-secondary); background: var(--bg-secondary); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); margin-top: 5px;">
+                    <strong>Estimated Charges Breakdown:</strong><br>
+                    • Brokerage: <b>₹{preview_metrics['brokerage']:.2f}</b><br>
+                    • STT/CTT: <b>₹{preview_metrics['stt']:.2f}</b><br>
+                    • Stamp Duty: <b>₹{preview_metrics['stamp_duty']:.2f}</b><br>
+                    • Exchange Charges: <b>₹{preview_metrics['exchange_charges']:.2f}</b><br>
+                    • SEBI Charges: <b>₹{preview_metrics['sebi_charges']:.2f}</b><br>
+                    • GST (18%): <b>₹{preview_metrics['gst']:.2f}</b><br>
+                    • Total Charges: <b style="color: var(--text-primary);">₹{preview_metrics['total_charges']:.2f}</b>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        
         if t_base_lot > 0 and t_base_lot < 5.0 and t_qty > 10.0:
             st.warning("⚠️ **Warning: Brokerage scaling is active with a small lot size.** This multiplies your brokerage (currently scaled by the number of lots). If you want standard flat brokerage, set **Base Lot Size** to **0**.")
         
@@ -1369,10 +1428,10 @@ with tab_logs:
         styled_df = style_dataframe_pnl(
             df_display[[
                 "Trade #", "trade_date", "symbol", "segment", "action", 
-                "quantity", "entry_price", "exit_price", 
+                "quantity", "entry_price", "exit_price", "brokerage",
                 "gross_pnl", "total_charges", "net_pnl", "strategy", "mistake", "notes"
             ]],
-            other_cols_currency=["total_charges"]
+            other_cols_currency=["brokerage", "total_charges"]
         )
         
         st.dataframe(
@@ -1384,7 +1443,7 @@ with tab_logs:
         # Create an empty dataframe with correct columns to display nicely
         empty_cols = [
             "Trade #", "trade_date", "symbol", "segment", "action", 
-            "quantity", "entry_price", "exit_price", 
+            "quantity", "entry_price", "exit_price", "brokerage",
             "gross_pnl", "total_charges", "net_pnl", "strategy", "mistake", "notes"
         ]
         st.dataframe(pd.DataFrame(columns=empty_cols), use_container_width=True, hide_index=True)
@@ -1478,7 +1537,9 @@ with tab_logs:
                 
                 import math
                 e_lots = 1
-                if e_base_lot > 0:
+                if e_segment == "Equity - Delivery":
+                    e_computed_brokerage = 0.0
+                elif e_base_lot > 0:
                     e_lots = math.ceil(e_qty / e_base_lot)
                     e_computed_brokerage = e_def_total_brokerage * e_lots
                 else:
@@ -1497,6 +1558,31 @@ with tab_logs:
                     key=f"edit_brokerage_display_{selected_trade_id}",
                     help="Automatically loaded based on segment settings and lot scaling."
                 )
+                
+                if e_qty > 0 and e_entry > 0 and e_exit > 0:
+                    edit_preview_metrics = calculate_trade_metrics(
+                        segment=e_segment,
+                        action=e_action,
+                        quantity=e_qty,
+                        entry_price=e_entry,
+                        exit_price=e_exit,
+                        brokerage_input=e_computed_brokerage
+                    )
+                    st.markdown(
+                        f"""
+                        <div style="font-size: 0.82rem; color: var(--text-secondary); background: var(--bg-secondary); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); margin-top: 5px;">
+                            <strong>Estimated Charges Breakdown:</strong><br>
+                            • Brokerage: <b>₹{edit_preview_metrics['brokerage']:.2f}</b><br>
+                            • STT/CTT: <b>₹{edit_preview_metrics['stt']:.2f}</b><br>
+                            • Stamp Duty: <b>₹{edit_preview_metrics['stamp_duty']:.2f}</b><br>
+                            • Exchange Charges: <b>₹{edit_preview_metrics['exchange_charges']:.2f}</b><br>
+                            • SEBI Charges: <b>₹{edit_preview_metrics['sebi_charges']:.2f}</b><br>
+                            • GST (18%): <b>₹{edit_preview_metrics['gst']:.2f}</b><br>
+                            • Total Charges: <b style="color: var(--text-primary);">₹{edit_preview_metrics['total_charges']:.2f}</b>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
                 
                 if e_base_lot > 0 and e_base_lot < 5.0 and e_qty > 10.0:
                     st.warning("⚠️ **Warning: Brokerage scaling is active with a small lot size.** This multiplies your brokerage (currently scaled by the number of lots). If you want standard flat brokerage, set **Base Lot Size** to **0**.")
@@ -2823,6 +2909,8 @@ with tab_rules:
     base_risk = float(rules.get("base_daily_risk", 250.0))
     enable_step_up = rules.get("enable_step_up", True)
     enforcement_mode = rules.get("enforcement_mode", "Hard Lock")
+    profit_sharing_pct = float(rules.get("profit_sharing_pct", 50.0))
+    profit_sharing_mode = rules.get("profit_sharing_mode", "Full Reinvestment (Rest stays in original segment)")
     
     monthly_pnl_val = get_monthly_total_pnl()
     step_up_bonus = 0.0
@@ -2873,6 +2961,32 @@ with tab_rules:
             new_enable_step_up = st.checkbox("Enable 10% Profit Step-Up", value=enable_step_up, help="Automatically increases your active daily risk limit by 10% of your net profits this month.")
             new_enforce_mode = st.selectbox("Rule Enforcement Mode", options=["Hard Lock", "Soft Warning"], index=0 if enforcement_mode == "Hard Lock" else 1, help="Hard Lock completely disables trade logging for locked segments. Soft Warning only shows a notice.")
             
+            st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+            st.markdown("##### Profit Reinvestment & Sharing")
+            sharing_modes = [
+                "Full Reinvestment (Rest stays in original segment)",
+                "Partial Reinvestment (Rest is withdrawn/payout)",
+                "No Sharing (100% stays in original segment)"
+            ]
+            try:
+                sharing_idx = sharing_modes.index(profit_sharing_mode)
+            except ValueError:
+                sharing_idx = 0
+            new_profit_sharing_mode = st.selectbox(
+                "Profit Reinvestment Mode",
+                options=sharing_modes,
+                index=sharing_idx,
+                help="Configure how net profits from trades are distributed across segment savings."
+            )
+            new_profit_sharing_pct = st.slider(
+                "Shared Profit Percentage (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(profit_sharing_pct),
+                step=5.0,
+                help="Percentage of the profit to share/reinvest across all segments (based on allocation %)."
+            )
+
             # Input allocations and minimum savings targets inside the form
             new_allocations = {}
             st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
@@ -2902,6 +3016,8 @@ with tab_rules:
                         "base_daily_risk": new_base_risk,
                         "enable_step_up": new_enable_step_up,
                         "enforcement_mode": new_enforce_mode,
+                        "profit_sharing_pct": new_profit_sharing_pct,
+                        "profit_sharing_mode": new_profit_sharing_mode,
                         "rules": new_allocations
                     }
                     save_segment_rules(updated_rules)
@@ -3225,6 +3341,31 @@ with tab_paper:
             key=f"paper_brokerage_{st.session_state['paper_form_id']}"
         )
         
+        if pt_qty > 0 and pt_entry > 0 and pt_exit > 0:
+            paper_preview_metrics = calculate_trade_metrics(
+                segment=pt_segment,
+                action=pt_action,
+                quantity=pt_qty,
+                entry_price=pt_entry,
+                exit_price=pt_exit,
+                brokerage_input=computed_brokerage_p
+            )
+            st.markdown(
+                f"""
+                <div style="font-size: 0.82rem; color: var(--text-secondary); background: var(--bg-secondary); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); margin-top: 5px;">
+                    <strong>Estimated Charges Breakdown:</strong><br>
+                    • Brokerage: <b>₹{paper_preview_metrics['brokerage']:.2f}</b><br>
+                    • STT/CTT: <b>₹{paper_preview_metrics['stt']:.2f}</b><br>
+                    • Stamp Duty: <b>₹{paper_preview_metrics['stamp_duty']:.2f}</b><br>
+                    • Exchange Charges: <b>₹{paper_preview_metrics['exchange_charges']:.2f}</b><br>
+                    • SEBI Charges: <b>₹{paper_preview_metrics['sebi_charges']:.2f}</b><br>
+                    • GST (18%): <b>₹{paper_preview_metrics['gst']:.2f}</b><br>
+                    • Total Charges: <b style="color: var(--text-primary);">₹{paper_preview_metrics['total_charges']:.2f}</b>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        
     pt_notes = st.text_area("Trade Notes / Signal Context", placeholder="Why did you log this signal? e.g. 'SMA crossover' or 'INDmoney notification'...", height=80, key=f"paper_notes_{st.session_state['paper_form_id']}")
     
     if pt_symbol:
@@ -3354,16 +3495,16 @@ with tab_paper:
             styled_df = style_dataframe_pnl(
                 df_paper_display[[
                     "Trade #", "trade_date", "symbol", "segment", "action", 
-                    "quantity", "entry_price", "exit_price", 
+                    "quantity", "entry_price", "exit_price", "brokerage",
                     "gross_pnl", "total_charges", "net_pnl", "source_screener", "notes"
                 ]],
-                other_cols_currency=["total_charges"]
+                other_cols_currency=["brokerage", "total_charges"]
             )
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
         else:
             empty_cols = [
                 "Trade #", "trade_date", "symbol", "segment", "action", 
-                "quantity", "entry_price", "exit_price", 
+                "quantity", "entry_price", "exit_price", "brokerage",
                 "gross_pnl", "total_charges", "net_pnl", "source_screener", "notes"
             ]
             st.dataframe(pd.DataFrame(columns=empty_cols), use_container_width=True, hide_index=True)
@@ -3426,6 +3567,31 @@ with tab_paper:
                 disabled=True,
                 key=f"edit_paper_brokerage_{selected_paper_trade_id}"
             )
+            
+            if edit_pt_qty > 0 and edit_pt_entry > 0 and edit_pt_exit > 0:
+                edit_paper_preview_metrics = calculate_trade_metrics(
+                    segment=edit_pt_segment,
+                    action=edit_pt_action,
+                    quantity=edit_pt_qty,
+                    entry_price=edit_pt_entry,
+                    exit_price=edit_pt_exit,
+                    brokerage_input=computed_brokerage_edit
+                )
+                st.markdown(
+                    f"""
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); background: var(--bg-secondary); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); margin-top: 5px;">
+                        <strong>Estimated Charges Breakdown:</strong><br>
+                        • Brokerage: <b>₹{edit_paper_preview_metrics['brokerage']:.2f}</b><br>
+                        • STT/CTT: <b>₹{edit_paper_preview_metrics['stt']:.2f}</b><br>
+                        • Stamp Duty: <b>₹{edit_paper_preview_metrics['stamp_duty']:.2f}</b><br>
+                        • Exchange Charges: <b>₹{edit_paper_preview_metrics['exchange_charges']:.2f}</b><br>
+                        • SEBI Charges: <b>₹{edit_paper_preview_metrics['sebi_charges']:.2f}</b><br>
+                        • GST (18%): <b>₹{edit_paper_preview_metrics['gst']:.2f}</b><br>
+                        • Total Charges: <b style="color: var(--text-primary);">₹{edit_paper_preview_metrics['total_charges']:.2f}</b>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
             edit_pt_notes = st.text_area("Trade Notes / Signal Context", value=pt_row['notes'] if pt_row['notes'] else "", key=f"edit_paper_notes_{selected_paper_trade_id}")
 

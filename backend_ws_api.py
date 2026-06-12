@@ -882,22 +882,29 @@ def log_paper_trade_api(trade: PaperTradeCreate):
     """Exposes paper trading logging directly to the mobile application."""
     symbol_upper = trade.symbol.upper().strip()
     
+    # Map short names from mobile client to DB segments
+    segment_mapping = {
+        "Futures": "F&O - Index Futures",
+        "Options": "F&O - Index Options",
+    }
+    mapped_segment = segment_mapping.get(trade.segment, trade.segment)
+
     # Verify segment rates exist
     brokerage_rates = get_brokerage_rates()
-    if trade.segment not in brokerage_rates:
+    if mapped_segment not in brokerage_rates:
         raise HTTPException(status_code=400, detail=f"Invalid segment name: {trade.segment}")
         
     # Enforce zero brokerage for Equity - Delivery
     computed_brokerage = 0.0
-    if trade.segment != "Equity - Delivery":
+    if mapped_segment != "Equity - Delivery":
         # Calculate standard 1-lot default brokerage or simple flat rates
-        buy_rate = brokerage_rates[trade.segment]["buy"]
-        sell_rate = brokerage_rates[trade.segment]["sell"]
+        buy_rate = brokerage_rates[mapped_segment]["buy"]
+        sell_rate = brokerage_rates[mapped_segment]["sell"]
         computed_brokerage = buy_rate + sell_rate
         
     # Calculate transaction metrics using database helper
     metrics = calculate_trade_metrics(
-        segment=trade.segment,
+        segment=mapped_segment,
         action=trade.action,
         quantity=trade.quantity,
         entry_price=trade.entry_price,
@@ -908,7 +915,7 @@ def log_paper_trade_api(trade: PaperTradeCreate):
     paper_trade_data = {
         "trade_date": date.today().strftime("%Y-%m-%d"),
         "symbol": symbol_upper,
-        "segment": trade.segment,
+        "segment": mapped_segment,
         "action": trade.action,
         "quantity": trade.quantity,
         "entry_price": trade.entry_price,
