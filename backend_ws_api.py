@@ -782,10 +782,20 @@ def get_stock_details(symbol: str, sr_pivot_type: str = "None"):
         if stock_token in _fs.market_data:
             live_quote = Trading_WS.parse_quote(_fs.market_data[stock_token])
             
-    # Compute stops and targets
-    ltp = live_quote.get("close", hist.get("day_open", 0.0))
-    r1, r2, r3 = hist.get("r1", 0.0), hist.get("r2", 0.0), hist.get("r3", 0.0)
-    s1, s2, s3 = hist.get("s1", 0.0), hist.get("s2", 0.0), hist.get("s3", 0.0)
+    # Calculate pivots dynamically based on the requested sr_pivot_type
+    p_high = hist.get("prev_day_high", 0.0)
+    p_low = hist.get("prev_day_low", 0.0)
+    p_close = hist.get("prev_day_close", 0.0)
+    
+    pivots_dict = Trading_WS.calculate_pivots(p_high, p_low, p_close, sr_pivot_type)
+    
+    r1 = pivots_dict.get("R1", 0.0)
+    r2 = pivots_dict.get("R2", 0.0)
+    r3 = pivots_dict.get("R3", 0.0)
+    
+    s1 = pivots_dict.get("S1", 0.0)
+    s2 = pivots_dict.get("S2", 0.0)
+    s3 = pivots_dict.get("S3", 0.0)
     
     return {
         "symbol": symbol,

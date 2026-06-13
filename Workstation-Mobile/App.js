@@ -140,6 +140,17 @@ export default function App() {
     const startup = async () => {
       const url = await initApiUrl();
       setApiUrlState(url);
+      
+      // Load saved token if any
+      try {
+        const savedToken = await AsyncStorage.getItem('@indmoney_access_token');
+        if (savedToken) {
+          setTokenInput(savedToken);
+        }
+      } catch (err) {
+        console.error('Failed to load token from storage', err);
+      }
+      
       await fetchAllData();
     };
     startup();
@@ -248,7 +259,10 @@ export default function App() {
     try {
       const res = await connectSystem(tokenInput);
       Alert.alert('Sync Started', res.message);
-      setTokenInput('');
+      
+      // Save token in AsyncStorage so it persists
+      await AsyncStorage.setItem('@indmoney_access_token', tokenInput.trim());
+      
       await fetchAllData();
     } catch (e) {
       Alert.alert('Sync Error', e.message);
@@ -1289,6 +1303,10 @@ export default function App() {
                   scrollEnabled={false}
                   domStorageEnabled={true}
                   javaScriptEnabled={true}
+                  onShouldStartLoadWithRequest={(request) => {
+                    // Only allow initial load
+                    return request.url === 'about:blank' || request.url.startsWith('data:text/html');
+                  }}
                 />
               </View>
 
