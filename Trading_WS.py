@@ -903,7 +903,14 @@ def auth_headers(access_token: str) -> dict[str, str]:
 
 
 def get_telegram_config() -> tuple[str, str, bool]:
-    """Retrieve Telegram configuration. Prioritizes st.secrets (cloud) then database (local)."""
+    """Retrieve Telegram configuration. Prioritizes environment variables, st.secrets, then database."""
+    # 0. System Environment Variables (ideal for Render/Docker Cloud)
+    env_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    env_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if env_token and env_chat_id:
+        env_enabled = os.environ.get("TELEGRAM_NOTIFICATIONS_ENABLED", "True").strip().upper() == "TRUE"
+        return env_token.strip(), env_chat_id.strip(), env_enabled
+
     # 1. Streamlit Secrets (ideal for Cloud)
     try:
         if "TELEGRAM_BOT_TOKEN" in st.secrets and "TELEGRAM_CHAT_ID" in st.secrets:
