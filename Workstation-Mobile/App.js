@@ -84,6 +84,7 @@ const getTradingViewHtml = (symbol) => `
         "hide_top_toolbar": true,
         "hide_legend": false,
         "save_image": false,
+        "allow_symbol_change": false,
         "container_id": "tradingview_chart"
       });
       </script>
@@ -1316,11 +1317,11 @@ export default function App() {
                 <View style={styles.regimeRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.statLabel}>LTP Price</Text>
-                    <Text style={styles.statPrice}>₹{(live.close || hist.day_open || 0).toFixed(2)}</Text>
+                    <Text style={styles.statPrice}>₹{(live.close || hist.last_close || hist.prev_day_close || 0).toFixed(2)}</Text>
                   </View>
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={styles.statLabel}>ATR (Volatility)</Text>
-                    <Text style={styles.statValue}>₹{Number(hist.atr || 0).toFixed(2)}</Text>
+                    <Text style={styles.statLabel}>RVOL (Rel Vol)</Text>
+                    <Text style={styles.statValue}>{Number(hist.rvol || 0).toFixed(2)}x</Text>
                   </View>
                 </View>
               </View>
