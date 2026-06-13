@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DEFAULT_BASE_URL = 'http://localhost:8000';
+const DEFAULT_BASE_URL = 'https://finplus.onrender.com';
 let activeBaseUrl = DEFAULT_BASE_URL;
 
 // Load stored URL on startup

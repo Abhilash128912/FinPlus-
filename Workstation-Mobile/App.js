@@ -96,7 +96,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('watchlist'); // 'watchlist', 'regime', 'trade', 'settings'
 
   // Server state
-  const [apiUrl, setApiUrlState] = useState('http://localhost:8000');
+  const [apiUrl, setApiUrlState] = useState('https://finplus.onrender.com');
   const [systemStatus, setSystemStatus] = useState(null);
   const [indices, setIndices] = useState(null);
   const [watchlist, setWatchlist] = useState([]);
