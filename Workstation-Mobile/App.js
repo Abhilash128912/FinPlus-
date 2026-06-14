@@ -22,7 +22,6 @@ import {
   getApiUrl,
   setApiUrl,
   getSystemStatus,
-  getAllStocks,
   connectSystem,
   disconnectSystem,
   getWatchlist,
@@ -57,7 +56,7 @@ import {
 const { width } = Dimensions.get('window');
 
 // TradingView widget HTML generator
-const getTradingViewHtml = (symbol, interval = 'D') => `
+const getTradingViewHtml = (symbol) => `
   <!DOCTYPE html>
   <html>
   <head>
@@ -75,7 +74,7 @@ const getTradingViewHtml = (symbol, interval = 'D') => `
         "width": "100%",
         "height": "100%",
         "symbol": "NSE:${symbol}",
-        "interval": "${interval}",
+        "interval": "D",
         "timezone": "Asia/Kolkata",
         "theme": "dark",
         "style": "1",
@@ -114,7 +113,6 @@ export default function App() {
   const [filterSignal, setFilterSignal] = useState('ALL'); // 'ALL', 'LONG', 'SHORT'
   const [filterBreakout, setFilterBreakout] = useState(0); // 0, 3, 5, 8
   const [showFiltersPanel, setShowFiltersPanel] = useState(false);
-  const [allStocks, setAllStocks] = useState([]);
 
   // Detail Modal
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -122,7 +120,6 @@ export default function App() {
   const [selectedStock, setSelectedStock] = useState(null);
   const [detailPivotType, setDetailPivotType] = useState('None'); // 'None', 'Traditional', 'Camarilla'
   const [detailModalLoading, setDetailModalLoading] = useState(false);
-  const [chartInterval, setChartInterval] = useState('D'); // '1', '5', '15', '60', 'D'
 
   // Paper Trade Form
   const [paperTradeForm, setPaperTradeForm] = useState({
@@ -212,19 +209,17 @@ export default function App() {
     setLoading(true);
     try {
       // First batch: fast endpoints that always return immediately
-      const [statusData, indicesData, wlData, rData, stocksList] = await Promise.all([
+      const [statusData, indicesData, wlData, rData] = await Promise.all([
         getSystemStatus().catch(() => null),
         getIndices().catch(() => null),
         getWatchlist({ sr_pivot_type: detailPivotType }).catch(() => []),
         getMarketRegime().catch(() => null),
-        getAllStocks().catch(() => []),
       ]);
 
       setSystemStatus(statusData);
       setIndices(indicesData);
       setWatchlist(wlData);
       setRegimeData(rData);
-      setAllStocks(stocksList);
     } catch (e) {
       console.error('Error loading API data:', e);
     } finally {
@@ -742,30 +737,6 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* Autocomplete Search Results Dropdown */}
-        {searchQuery.trim() !== '' && matchingAllStocks.length > 0 && (
-          <View style={styles.autocompleteDropdown}>
-            {matchingAllStocks.map((symbol) => {
-              const isInWatchlist = (watchlist || []).some(w => w.Stock.replace('.NS', '') === symbol);
-              return (
-                <TouchableOpacity
-                  key={symbol}
-                  style={styles.autocompleteItem}
-                  onPress={() => {
-                    handleOpenDetails(symbol);
-                    setSearchQuery('');
-                  }}
-                >
-                  <Text style={styles.autocompleteText}>{symbol}</Text>
-                  <Text style={styles.autocompleteSubtext}>
-                    {isInWatchlist ? 'Active Signal (Watchlist)' : 'Open Tech Chart & Pivots'}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
         {/* Advanced Filters Panel */}
         {showFiltersPanel && (
           <View style={styles.filtersPanel}>
@@ -876,11 +847,6 @@ export default function App() {
     return symbolMatch && signalMatch && breakoutMatch;
   });
 
-  // Autocomplete matching for all stocks in the universe (not just active watchlist)
-  const matchingAllStocks = searchQuery.trim() !== ''
-    ? (allStocks || []).filter(sym => sym.toUpperCase().includes(searchQuery.toUpperCase())).slice(0, 5)
-    : [];
-
   // Watchlist Tab
   const renderWatchlistTab = () => {
     if (loading && watchlist.length === 0) {
@@ -898,7 +864,7 @@ export default function App() {
         renderItem={renderWatchlistItem}
         keyExtractor={(item) => item.Stock}
         contentContainerStyle={styles.listContent}
-        ListHeaderComponent={renderWatchlistHeader()}
+        ListHeaderComponent={renderWatchlistHeader}
         refreshing={refreshing}
         onRefresh={handleRefresh}
         ListEmptyComponent={
@@ -1368,34 +1334,19 @@ export default function App() {
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.modalScrollContent}>
-              {/* Timeframe Selector */}
-              <View style={styles.timeframeContainer}>
-                {['1', '5', '15', '60', 'D'].map((interval) => {
-                  const label = interval === 'D' ? '1D' : interval === '60' ? '1H' : `${interval}M`;
-                  const isActive = chartInterval === interval;
-                  return (
-                    <TouchableOpacity
-                      key={interval}
-                      style={[styles.timeframeBtn, isActive && styles.timeframeBtnActive]}
-                      onPress={() => setChartInterval(interval)}
-                    >
-                      <Text style={[styles.timeframeBtnText, isActive && styles.timeframeBtnTextActive]}>
-                        {label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
               {/* TradingView Chart Container */}
               <View style={styles.chartContainer}>
                 <WebView
-                  key={`${selectedStockSymbol}_${chartInterval}`}
+                  key={selectedStockSymbol}
                   originWhitelist={['*']}
-                  source={{ uri: `https://s.tradingview.com/widgetembed/?symbol=NSE:${selectedStockSymbol}&interval=${chartInterval}&theme=dark&locale=in` }}
+                  source={{ uri: `https://in.tradingview.com/chart/?symbol=NSE:${selectedStockSymbol}` }}
                   style={styles.webView}
+                  scrollEnabled={true}
                   domStorageEnabled={true}
                   javaScriptEnabled={true}
+                  cacheEnabled={false}
+                  incognito={true}
+                  cacheMode="LOAD_NO_CACHE"
                   allowsInlineMediaPlayback={true}
                 />
               </View>
@@ -2381,70 +2332,13 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   chartContainer: {
-    height: 280,
+    height: 230,
     backgroundColor: '#0c0f1d',
     borderRadius: 8,
     overflow: 'hidden',
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#1e293b',
-  },
-  timeframeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  timeframeBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    marginHorizontal: 3,
-    backgroundColor: '#1e293b',
-    borderRadius: 6,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  timeframeBtnActive: {
-    backgroundColor: '#06b6d4',
-    borderColor: '#22d3ee',
-  },
-  timeframeBtnText: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  timeframeBtnTextActive: {
-    color: '#0f172a',
-    fontWeight: 'bold',
-  },
-  autocompleteDropdown: {
-    backgroundColor: '#1e293b',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginTop: 4,
-    marginBottom: 8,
-    paddingVertical: 4,
-    zIndex: 1000,
-    elevation: 5,
-  },
-  autocompleteItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
-  },
-  autocompleteText: {
-    color: '#f8fafc',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  autocompleteSubtext: {
-    color: '#64748b',
-    fontSize: 11,
   },
   webView: {
     flex: 1,
