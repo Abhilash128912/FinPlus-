@@ -1392,7 +1392,7 @@ export default function App() {
                 <WebView
                   key={`${selectedStockSymbol}_${chartInterval}`}
                   originWhitelist={['*']}
-                  source={{ html: getTradingViewHtml(selectedStockSymbol, chartInterval) }}
+                  source={{ uri: `https://s.tradingview.com/widgetembed/?symbol=NSE:${selectedStockSymbol}&interval=${chartInterval}&theme=dark&locale=in` }}
                   style={styles.webView}
                   domStorageEnabled={true}
                   javaScriptEnabled={true}
