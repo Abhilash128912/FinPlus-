@@ -240,8 +240,12 @@ def connect_system(req: TokenConnectRequest, background_tasks: BackgroundTasks):
     st.session_state.token_accepted = True
     st.session_state.accepted_token = req.access_token
     
-    # Trigger loading historical data + starting feed in background
+    # Avoid spawning duplicate threads if one is already running for this token
     global bg_load_thread
+    if bg_load_thread is not None and bg_load_thread.is_alive() and st.session_state.accepted_token == req.access_token:
+        return {"status": "Initializing", "message": "Historical data download is already in progress for this token."}
+        
+    # Trigger loading historical data + starting feed in background
     bg_load_thread = threading.Thread(target=_run_historical_load_bg, args=(req.access_token,), daemon=True)
     bg_load_thread.start()
     

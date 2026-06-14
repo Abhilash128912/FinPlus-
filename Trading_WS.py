@@ -2394,6 +2394,9 @@ def load_historical_data(access_token: str, worker_count: int = HISTORICAL_WORKE
                         loaded_history[stock_token] = metrics
                     else:
                         failures_by_token[stock_token] = error or "Unknown error"
+                
+                # Yield control to the OS scheduler and uvicorn event loop to prevent GIL starvation
+                time.sleep(0.15)
 
         for stock_token in stock_tokens:
             if stock_token not in loaded_history and stock_token not in failures_by_token:
