@@ -898,7 +898,7 @@ export default function App() {
         renderItem={renderWatchlistItem}
         keyExtractor={(item) => item.Stock}
         contentContainerStyle={styles.listContent}
-        ListHeaderComponent={renderWatchlistHeader}
+        ListHeaderComponent={renderWatchlistHeader()}
         refreshing={refreshing}
         onRefresh={handleRefresh}
         ListEmptyComponent={

@@ -880,6 +880,7 @@ class FeedState:
     # the background thread never touches st.session_state (not thread-safe).
     instruments_snapshot: list[str] = field(default_factory=list)
     last_raw_message: str = ""
+    ws_app: Any = None
 
 
 @st.cache_resource
@@ -2870,9 +2871,6 @@ def websocket_worker(
                     if parts:
                         feed_state.last_error = "WS closed: " + " · ".join(parts)
 
-            with feed_state.lock:
-                feed_state.status = "Connecting"
-
             try:
                 ws_app = websocket.WebSocketApp(
                     WS_URL,
@@ -2885,6 +2883,9 @@ def websocket_worker(
                     on_error=on_error,
                     on_close=on_close,
                 )
+                with feed_state.lock:
+                    feed_state.ws_app = ws_app
+                    feed_state.status = "Connecting"
                 ws_app.run_forever(
                     ping_interval=20,
                     ping_timeout=10,
@@ -2911,6 +2912,7 @@ def websocket_worker(
         with feed_state.lock:
             feed_state.status = "Stopped"
             feed_state.started = False
+            feed_state.ws_app = None
 
 
 def start_feed(feed_state: FeedState, access_token: str) -> None:
@@ -2948,6 +2950,11 @@ def stop_feed(feed_state: FeedState) -> None:
     with feed_state.lock:
         feed_state.stop_event.set()
         feed_state.status = "Stopping"
+        if feed_state.ws_app:
+            try:
+                feed_state.ws_app.close()
+            except Exception:
+                pass
 
 
 def snapshot_feed(feed_state: FeedState) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, Any]]:
