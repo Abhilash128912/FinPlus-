@@ -32,7 +32,7 @@ export const setApiUrl = async (url) => {
 // Generic fetch wrapper with timeout
 const apiFetch = async (endpoint, options = {}) => {
   const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+  const id = setTimeout(() => controller.abort(), 60000); // 60 second timeout to accommodate Render cold start
 
   try {
     const response = await fetch(`${activeBaseUrl}${endpoint}`, {
