@@ -307,6 +307,14 @@ def disconnect_system():
     Trading_WS.stop_feed(Trading_WS.feed_state)
     return {"status": "Stopping", "message": "WebSocket feed stop requested."}
 
+@app.get("/api/stocks")
+def get_all_stocks():
+    """Returns the list of all stock symbols in the active universe."""
+    import Trading_WS
+    eu = Trading_WS.effective_universe()
+    symbols = sorted([name.replace(".NS", "") for name in eu.values()])
+    return symbols
+
 @app.get("/api/watchlist")
 def get_watchlist(
     min_change: float = 1.5,

@@ -22,6 +22,7 @@ import {
   getApiUrl,
   setApiUrl,
   getSystemStatus,
+  getAllStocks,
   connectSystem,
   disconnectSystem,
   getWatchlist,
@@ -113,6 +114,7 @@ export default function App() {
   const [filterSignal, setFilterSignal] = useState('ALL'); // 'ALL', 'LONG', 'SHORT'
   const [filterBreakout, setFilterBreakout] = useState(0); // 0, 3, 5, 8
   const [showFiltersPanel, setShowFiltersPanel] = useState(false);
+  const [allStocks, setAllStocks] = useState([]);
 
   // Detail Modal
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -210,17 +212,19 @@ export default function App() {
     setLoading(true);
     try {
       // First batch: fast endpoints that always return immediately
-      const [statusData, indicesData, wlData, rData] = await Promise.all([
+      const [statusData, indicesData, wlData, rData, stocksList] = await Promise.all([
         getSystemStatus().catch(() => null),
         getIndices().catch(() => null),
         getWatchlist({ sr_pivot_type: detailPivotType }).catch(() => []),
         getMarketRegime().catch(() => null),
+        getAllStocks().catch(() => []),
       ]);
 
       setSystemStatus(statusData);
       setIndices(indicesData);
       setWatchlist(wlData);
       setRegimeData(rData);
+      setAllStocks(stocksList);
     } catch (e) {
       console.error('Error loading API data:', e);
     } finally {
@@ -738,6 +742,30 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
+        {/* Autocomplete Search Results Dropdown */}
+        {searchQuery.trim() !== '' && matchingAllStocks.length > 0 && (
+          <View style={styles.autocompleteDropdown}>
+            {matchingAllStocks.map((symbol) => {
+              const isInWatchlist = (watchlist || []).some(w => w.Stock.replace('.NS', '') === symbol);
+              return (
+                <TouchableOpacity
+                  key={symbol}
+                  style={styles.autocompleteItem}
+                  onPress={() => {
+                    handleOpenDetails(symbol);
+                    setSearchQuery('');
+                  }}
+                >
+                  <Text style={styles.autocompleteText}>{symbol}</Text>
+                  <Text style={styles.autocompleteSubtext}>
+                    {isInWatchlist ? 'Active Signal (Watchlist)' : 'Open Tech Chart & Pivots'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
         {/* Advanced Filters Panel */}
         {showFiltersPanel && (
           <View style={styles.filtersPanel}>
@@ -847,6 +875,11 @@ export default function App() {
     const breakoutMatch = (item.Score || 0) >= filterBreakout;
     return symbolMatch && signalMatch && breakoutMatch;
   });
+
+  // Autocomplete matching for all stocks in the universe (not just active watchlist)
+  const matchingAllStocks = searchQuery.trim() !== ''
+    ? (allStocks || []).filter(sym => sym.toUpperCase().includes(searchQuery.toUpperCase())).slice(0, 5)
+    : [];
 
   // Watchlist Tab
   const renderWatchlistTab = () => {
@@ -2383,6 +2416,35 @@ const styles = StyleSheet.create({
   timeframeBtnTextActive: {
     color: '#0f172a',
     fontWeight: 'bold',
+  },
+  autocompleteDropdown: {
+    backgroundColor: '#1e293b',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginTop: 4,
+    marginBottom: 8,
+    paddingVertical: 4,
+    zIndex: 1000,
+    elevation: 5,
+  },
+  autocompleteItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  autocompleteText: {
+    color: '#f8fafc',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  autocompleteSubtext: {
+    color: '#64748b',
+    fontSize: 11,
   },
   webView: {
     flex: 1,

@@ -61,6 +61,7 @@ const apiFetch = async (endpoint, options = {}) => {
 
 // API calls
 export const getSystemStatus = () => apiFetch('/api/status');
+export const getAllStocks = () => apiFetch('/api/stocks');
 export const connectSystem = (accessToken) => 
   apiFetch('/api/connect', {
     method: 'POST',
