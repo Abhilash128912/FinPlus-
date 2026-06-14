@@ -95,6 +95,18 @@ import Trading_WS
 from calculator import calculate_trade_metrics
 from database import add_paper_trade, get_brokerage_rates, delete_paper_trade
 
+# Override fetch_news_sentiment to avoid blocking external RSS fetches in API mode
+def mock_fetch_news_sentiment(stock_name: str) -> dict:
+    return {
+        "sentiment": "Neutral",
+        "score": 0,
+        "pos_count": 0,
+        "neg_count": 0,
+        "neu_count": 0,
+        "latest_headline": "News sentiment disabled in API mode"
+    }
+Trading_WS.fetch_news_sentiment = mock_fetch_news_sentiment
+
 # =========================================================
 # ─── FASTAPI APPLICATION SETUP ──────────────────────────
 # =========================================================
