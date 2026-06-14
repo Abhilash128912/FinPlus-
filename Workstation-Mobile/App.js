@@ -56,7 +56,7 @@ import {
 const { width } = Dimensions.get('window');
 
 // TradingView widget HTML generator
-const getTradingViewHtml = (symbol) => `
+const getTradingViewHtml = (symbol, interval = 'D') => `
   <!DOCTYPE html>
   <html>
   <head>
@@ -74,7 +74,7 @@ const getTradingViewHtml = (symbol) => `
         "width": "100%",
         "height": "100%",
         "symbol": "NSE:${symbol}",
-        "interval": "D",
+        "interval": "${interval}",
         "timezone": "Asia/Kolkata",
         "theme": "dark",
         "style": "1",
@@ -120,6 +120,7 @@ export default function App() {
   const [selectedStock, setSelectedStock] = useState(null);
   const [detailPivotType, setDetailPivotType] = useState('None'); // 'None', 'Traditional', 'Camarilla'
   const [detailModalLoading, setDetailModalLoading] = useState(false);
+  const [chartInterval, setChartInterval] = useState('D'); // '1', '5', '15', '60', 'D'
 
   // Paper Trade Form
   const [paperTradeForm, setPaperTradeForm] = useState({
@@ -1334,19 +1335,34 @@ export default function App() {
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.modalScrollContent}>
+              {/* Timeframe Selector */}
+              <View style={styles.timeframeContainer}>
+                {['1', '5', '15', '60', 'D'].map((interval) => {
+                  const label = interval === 'D' ? '1D' : interval === '60' ? '1H' : `${interval}M`;
+                  const isActive = chartInterval === interval;
+                  return (
+                    <TouchableOpacity
+                      key={interval}
+                      style={[styles.timeframeBtn, isActive && styles.timeframeBtnActive]}
+                      onPress={() => setChartInterval(interval)}
+                    >
+                      <Text style={[styles.timeframeBtnText, isActive && styles.timeframeBtnTextActive]}>
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
               {/* TradingView Chart Container */}
               <View style={styles.chartContainer}>
                 <WebView
-                  key={selectedStockSymbol}
+                  key={`${selectedStockSymbol}_${chartInterval}`}
                   originWhitelist={['*']}
-                  source={{ uri: `https://in.tradingview.com/chart/?symbol=NSE:${selectedStockSymbol}` }}
+                  source={{ html: getTradingViewHtml(selectedStockSymbol, chartInterval) }}
                   style={styles.webView}
-                  scrollEnabled={true}
                   domStorageEnabled={true}
                   javaScriptEnabled={true}
-                  cacheEnabled={false}
-                  incognito={true}
-                  cacheMode="LOAD_NO_CACHE"
                   allowsInlineMediaPlayback={true}
                 />
               </View>
@@ -2332,13 +2348,41 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   chartContainer: {
-    height: 230,
+    height: 280,
     backgroundColor: '#0c0f1d',
     borderRadius: 8,
     overflow: 'hidden',
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#1e293b',
+  },
+  timeframeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  timeframeBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    marginHorizontal: 3,
+    backgroundColor: '#1e293b',
+    borderRadius: 6,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  timeframeBtnActive: {
+    backgroundColor: '#06b6d4',
+    borderColor: '#22d3ee',
+  },
+  timeframeBtnText: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  timeframeBtnTextActive: {
+    color: '#0f172a',
+    fontWeight: 'bold',
   },
   webView: {
     flex: 1,
