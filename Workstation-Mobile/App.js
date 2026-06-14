@@ -204,29 +204,39 @@ export default function App() {
     }
   }, [detailPivotType, showDetailModal, selectedStockSymbol]);
 
-  // Fetch all endpoints
+  // Fetch all endpoints — alpha picks are loaded lazily after main data
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      const [statusData, indicesData, wlData, rData, picksData] = await Promise.all([
+      // First batch: fast endpoints that always return immediately
+      const [statusData, indicesData, wlData, rData] = await Promise.all([
         getSystemStatus().catch(() => null),
         getIndices().catch(() => null),
         getWatchlist({ sr_pivot_type: detailPivotType }).catch(() => []),
         getMarketRegime().catch(() => null),
-        getAlphaPicks().catch(() => null)
       ]);
 
       setSystemStatus(statusData);
       setIndices(indicesData);
       setWatchlist(wlData);
       setRegimeData(rData);
-      setAlphaPicks(picksData);
     } catch (e) {
       console.error('Error loading API data:', e);
     } finally {
       setLoading(false);
     }
+    // Load alpha picks lazily after UI is rendered (non-blocking)
+    // Backend now returns instantly from cache; swing pick may be null while computing
+    setTimeout(async () => {
+      try {
+        const picksData = await getAlphaPicks().catch(() => null);
+        if (picksData) setAlphaPicks(picksData);
+      } catch (e) {
+        console.warn('Alpha picks lazy load failed:', e.message);
+      }
+    }, 1500);
   };
+
 
   // Silent update for live price streaming
   const fetchWatchlistAndStatusSilently = async () => {
@@ -680,9 +690,19 @@ export default function App() {
             ) : (
               <View style={[styles.pickCard, styles.pickCardEmpty]}>
                 <Text style={styles.emptyCardTitle}>⭐ SWING ALPHA PICK</Text>
-                <Text style={styles.emptyCardText}>No Swing picks active in nifty500_scanner database.</Text>
+                {alphaPicks.swing_computing ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                    <ActivityIndicator size="small" color="#f59e0b" style={{ marginRight: 8 }} />
+                    <Text style={[styles.emptyCardText, { color: '#f59e0b' }]}>
+                      Scanning 191 stocks for swing setups... (~2 min)
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.emptyCardText}>No Swing picks active in nifty500_scanner database.</Text>
+                )}
               </View>
             )}
+
           </ScrollView>
         ) : (
           <View style={styles.picksCarouselPlaceholder}>

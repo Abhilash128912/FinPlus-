@@ -133,6 +133,18 @@ app.add_middleware(
 # In-memory background tasks tracker
 bg_load_thread = None
 
+# ── Swing Picks Background Cache ─────────────────────────────────────────────
+# scan_for_swing_picks makes ~191 HTTP calls and takes 2-3 min. We run it once
+# in a background thread and cache the result for up to 4 hours so the
+# /api/alpha-picks endpoint ALWAYS returns immediately.
+_swing_cache = {
+    "result": None,         # List[dict] output from scan_for_swing_picks
+    "computed_at": 0.0,     # Unix timestamp of last successful scan
+    "running": False,       # True while the background scan is in progress
+    "lock": threading.Lock()
+}
+_SWING_CACHE_TTL = 4 * 3600  # 4 hours in seconds
+
 class TokenConnectRequest(BaseModel):
     access_token: str
 
@@ -149,6 +161,26 @@ class PaperTradeCreate(BaseModel):
 # =========================================================
 # ─── BACKGROUND WORKERS ────────────────────────────────
 # =========================================================
+
+def _run_swing_picks_bg(access_token: str):
+    """Runs scan_for_swing_picks in a background thread and caches the result."""
+    with _swing_cache["lock"]:
+        if _swing_cache["running"]:
+            return  # Already running, skip
+        _swing_cache["running"] = True
+    try:
+        print(f"[{datetime.now()}] Background swing picks scan started...")
+        results = scan_for_swing_picks(access_token)
+        with _swing_cache["lock"]:
+            _swing_cache["result"] = results
+            _swing_cache["computed_at"] = time.time()
+        print(f"[{datetime.now()}] Background swing picks scan complete: {len(results)} candidates.")
+    except Exception as e:
+        print(f"[{datetime.now()}] Background swing picks scan failed: {e}")
+    finally:
+        with _swing_cache["lock"]:
+            _swing_cache["running"] = False
+
 
 def _run_historical_load_bg(access_token: str):
     import streamlit as st
@@ -172,6 +204,12 @@ def _run_historical_load_bg(access_token: str):
             # Start WebSocket feed after historical baseline is built
             Trading_WS.start_feed(Trading_WS.feed_state, access_token)
             print(f"[{datetime.now()}] WebSocket feed started successfully.")
+            
+            # Kick off the swing picks scan in the background (non-blocking)
+            swing_thread = threading.Thread(
+                target=_run_swing_picks_bg, args=(access_token,), daemon=True
+            )
+            swing_thread.start()
         else:
             is_auth_error = any("403" in str(f) or "401" in str(f) or "unauthorized" in str(f).lower() or "token expired" in str(f).lower() for f in failures)
             st.session_state.history_status = "Token Expired" if is_auth_error else "Failed"
@@ -468,7 +506,7 @@ def scan_for_swing_picks(access_token: str) -> list[dict]:
         try:
             # Fetch daily candles
             end_time = int(time.time() * 1000)
-            lookback_days = 380
+            lookback_days = 150
             start_time = end_time - (lookback_days * 24 * 60 * 60 * 1000)
             
             params = {
@@ -618,7 +656,11 @@ def scan_for_swing_picks(access_token: str) -> list[dict]:
 
 @app.get("/api/alpha-picks")
 def get_alpha_picks():
-    """Generates and returns the 4 Alpha Picks of the Day, with 15-minute selection locks."""
+    """Generates and returns the 4 Alpha Picks of the Day, with 15-minute selection locks.
+    
+    The swing pick uses a background-cached scan (updated every 4 hours) to avoid
+    blocking the endpoint for 2-3 minutes on every call.
+    """
     import streamlit as st
     import pandas as pd
     
@@ -643,7 +685,7 @@ def get_alpha_picks():
         st.session_state.locked_swing_pick = None
         st.session_state.locked_at_time = 0.0
 
-    # Get active watchlist signals
+    # Get active watchlist signals (fast - uses in-memory data)
     wl_signals = get_watchlist(
         min_change=0.4,
         min_rvol=1.0,
@@ -852,10 +894,13 @@ def get_alpha_picks():
                     st.session_state.locked_at_time = time.time()
 
     # 4. SWING PICK
+    # Uses background-cached results from scan_for_swing_picks to avoid a 2-3 min
+    # synchronous HTTP flood on every API call. The background thread is triggered
+    # after historical data loads. If cache is stale/expired, a new bg scan is launched.
     swing_pick = None
     if st.session_state.locked_swing_pick:
         swing_pick = st.session_state.locked_swing_pick.copy()
-        # Update Swing LTP
+        # Update Swing LTP from live feed
         sym = swing_pick["Stock"]
         tok = name_to_token.get(sym)
         if tok and tok in _mkt:
@@ -867,14 +912,24 @@ def get_alpha_picks():
                     swing_pick["Change %"] = round(((live_q["close"] - open_p) / open_p) * 100, 2)
         st.session_state.locked_swing_pick = swing_pick.copy()
     else:
+        # Pull from background cache
         access_token = getattr(st.session_state, "accepted_token", None) or Trading_WS.load_cached_token()
         candidates = []
-        if access_token:
-            try:
-                candidates = scan_for_swing_picks(access_token)
-            except Exception as e:
-                print(f"Error running swing picks scan: {e}")
-                
+        with _swing_cache["lock"]:
+            cache_age = now_ts - _swing_cache["computed_at"]
+            cache_valid = _swing_cache["result"] is not None and cache_age < _SWING_CACHE_TTL
+            cache_running = _swing_cache["running"]
+            if cache_valid:
+                candidates = list(_swing_cache["result"])
+
+        # If cache is empty/stale and scan is not running, launch background scan
+        if not cache_valid and not cache_running and access_token:
+            bg_swing = threading.Thread(
+                target=_run_swing_picks_bg, args=(access_token,), daemon=True
+            )
+            bg_swing.start()
+            print(f"[{datetime.now()}] Swing picks scan triggered on demand (cache miss).")
+
         if candidates:
             # Filter candidates for RSI < 70 to avoid buying at overbought peaks (custom swing momentum overlay)
             reasonable = [c for c in candidates if c["Mntm"] < 70]
@@ -930,11 +985,16 @@ def get_alpha_picks():
         elapsed = time.time() - st.session_state.locked_at_time
         remaining_secs = max(0, int(900 - elapsed))
 
+    # Indicate whether the swing scan is still in progress
+    with _swing_cache["lock"]:
+        swing_computing = _swing_cache["running"]
+
     return {
         "intraday": intraday_pick,
         "option": option_pick,
         "nifty_option": nifty_pick,
         "swing": swing_pick,
+        "swing_computing": swing_computing,
         "remaining_seconds": remaining_secs,
         "locked": st.session_state.locked_at_time > 0
     }
@@ -949,6 +1009,26 @@ def unlock_alpha_picks():
     st.session_state.locked_swing_pick = None
     st.session_state.locked_at_time = 0.0
     return {"status": "Success", "message": "Alpha picks unlocked successfully."}
+
+@app.post("/api/alpha-picks/refresh-swing")
+def refresh_swing_picks():
+    """Forces a fresh background swing scan, bypassing the cache TTL."""
+    import streamlit as st
+    access_token = getattr(st.session_state, "accepted_token", None) or Trading_WS.load_cached_token()
+    if not access_token:
+        raise HTTPException(status_code=400, detail="No access token available. Please connect first.")
+    with _swing_cache["lock"]:
+        is_running = _swing_cache["running"]
+    if is_running:
+        return {"status": "Running", "message": "Swing picks scan is already running in the background."}
+    # Expire the cache so next /api/alpha-picks call also picks fresh results
+    with _swing_cache["lock"]:
+        _swing_cache["computed_at"] = 0.0
+    bg_swing = threading.Thread(target=_run_swing_picks_bg, args=(access_token,), daemon=True)
+    bg_swing.start()
+    return {"status": "Started", "message": "Swing picks background scan triggered. Results will be ready in 2-3 minutes."}
+
+
 
 @app.get("/api/indices")
 def get_indices_data():
