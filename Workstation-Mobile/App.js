@@ -1299,16 +1299,17 @@ export default function App() {
               {/* TradingView Chart Container */}
               <View style={styles.chartContainer}>
                 <WebView
+                  key={selectedStockSymbol}
                   originWhitelist={['*']}
-                  source={{ html: getTradingViewHtml(selectedStockSymbol) }}
+                  source={{ uri: `https://in.tradingview.com/chart/?symbol=NSE:${selectedStockSymbol}` }}
                   style={styles.webView}
-                  scrollEnabled={false}
+                  scrollEnabled={true}
                   domStorageEnabled={true}
                   javaScriptEnabled={true}
-                  onShouldStartLoadWithRequest={(request) => {
-                    // Only allow initial load
-                    return request.url === 'about:blank' || request.url.startsWith('data:text/html');
-                  }}
+                  cacheEnabled={false}
+                  incognito={true}
+                  cacheMode="LOAD_NO_CACHE"
+                  allowsInlineMediaPlayback={true}
                 />
               </View>
 
