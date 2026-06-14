@@ -799,7 +799,7 @@ export default function App() {
           <View style={styles.metricColumn}>
             <Text style={styles.metricLabel}>R-Vol</Text>
             <Text style={styles.metricValue}>{Number(item.RVOL || 0).toFixed(1)}x</Text>
-            <Text style={styles.metricSubValue}>Breakout: {item.Score}/{item.Total_Checks || 8}</Text>
+            <Text style={styles.metricSubValue}>Breakout: {item.Score}/{item.Total_Checks || 8} · F-Score: {item.Piotroski || 0}</Text>
           </View>
 
           <View style={styles.metricColumnRight}>
@@ -1341,6 +1341,31 @@ export default function App() {
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
                     <Text style={styles.statLabel}>RVOL (Rel Vol)</Text>
                     <Text style={styles.statValue}>{Number(hist.rvol || 0).toFixed(2)}x</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Fundamental Quality Card */}
+              <View style={styles.statsCard}>
+                <Text style={styles.cardSecTitle}>Fundamentals & Screener Scores</Text>
+                <View style={styles.regimeRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.statLabel}>Piotroski F-Score</Text>
+                    <Text style={[styles.statValDetail, (hist.piotroski_score || 0) >= 7 ? styles.textGreen : (hist.piotroski_score || 0) <= 3 ? styles.textRed : null]}>
+                      {hist.piotroski_score !== undefined ? `${hist.piotroski_score}/9` : 'N/A'}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={styles.statLabel}>Screener Scores</Text>
+                    <Text style={styles.statValDetail}>
+                      {hist.fundamental_score !== undefined ? `${hist.fundamental_score}/${hist.momentum_score}` : 'N/A'}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                    <Text style={styles.statLabel}>Total Rating</Text>
+                    <Text style={styles.statValDetail}>
+                      {hist.total_score !== undefined ? `${hist.total_score}` : 'N/A'}
+                    </Text>
                   </View>
                 </View>
               </View>

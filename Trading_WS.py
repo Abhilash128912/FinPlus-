@@ -1206,7 +1206,7 @@ def load_db_metadata() -> dict[str, dict[str, Any]]:
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT ticker, company_name, sector, market_cap_cr, fundamental_score, momentum_score, total_score FROM nifty500_cache")
+        cursor.execute("SELECT ticker, company_name, sector, market_cap_cr, fundamental_score, momentum_score, total_score, piotroski_score FROM nifty500_cache")
         rows = cursor.fetchall()
         conn.close()
         
@@ -1220,6 +1220,7 @@ def load_db_metadata() -> dict[str, dict[str, Any]]:
                 "fundamental_score": r["fundamental_score"] or 0.0,
                 "momentum_score": r["momentum_score"] or 0.0,
                 "total_score": r["total_score"] or 0.0,
+                "piotroski_score": r["piotroski_score"] or 0,
             }
         return meta
     except Exception:

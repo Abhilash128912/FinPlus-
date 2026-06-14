@@ -353,6 +353,7 @@ def get_watchlist(
             meta_info = db_meta.get(stock_clean, {})
             sector = meta_info.get("sector", "Other")
             signal["Sector"] = sector
+            signal["Piotroski"] = meta_info.get("piotroski_score", 0)
             
             # Sentiment score
             news_data = Trading_WS.fetch_news_sentiment(stock_clean)
@@ -965,9 +966,18 @@ def get_stock_details(symbol: str, sr_pivot_type: str = "None"):
         raise HTTPException(status_code=404, detail=f"Stock symbol {symbol} not found in watchlist universe.")
         
     # Get historical data
-    hist = st.session_state.historical_data.get(stock_token)
-    if not hist:
+    cached_hist = st.session_state.historical_data.get(stock_token)
+    if not cached_hist:
         raise HTTPException(status_code=400, detail=f"Historical data not loaded yet for {symbol}.")
+        
+    hist = dict(cached_hist)
+    db_meta = Trading_WS.load_db_metadata()
+    symbol_clean = symbol.replace(".NS", "")
+    meta_info = db_meta.get(symbol_clean, {})
+    hist["piotroski_score"] = meta_info.get("piotroski_score", 0)
+    hist["fundamental_score"] = meta_info.get("fundamental_score", 0)
+    hist["momentum_score"] = meta_info.get("momentum_score", 0)
+    hist["total_score"] = meta_info.get("total_score", 0)
         
     # Get live quote if available
     _fs = Trading_WS.feed_state
