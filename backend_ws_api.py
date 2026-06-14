@@ -161,12 +161,15 @@ def _run_historical_load_bg(access_token: str):
             Trading_WS.start_feed(Trading_WS.feed_state, access_token)
             print(f"[{datetime.now()}] WebSocket feed started successfully.")
         else:
-            st.session_state.history_status = "Failed"
+            is_auth_error = any("403" in str(f) or "401" in str(f) or "unauthorized" in str(f).lower() or "token expired" in str(f).lower() for f in failures)
+            st.session_state.history_status = "Token Expired" if is_auth_error else "Failed"
             st.session_state.history_errors = failures
             print(f"[{datetime.now()}] Background historical data load failed: {failures}")
     except Exception as e:
-        st.session_state.history_status = "Failed"
-        st.session_state.history_errors = [str(e)]
+        err_str = str(e)
+        is_auth_error = "403" in err_str or "401" in err_str or "unauthorized" in err_str.lower()
+        st.session_state.history_status = "Token Expired" if is_auth_error else "Failed"
+        st.session_state.history_errors = [err_str]
         print(f"[{datetime.now()}] Error in background historical load: {e}")
 
 # =========================================================
@@ -219,7 +222,8 @@ def get_system_status():
             "status": st.session_state.history_status,
             "loaded_count": len(st.session_state.historical_data),
             "loaded_at": Trading_WS.format_last_update(st.session_state.history_loaded_at) if st.session_state.history_loaded_at else "Never",
-            "errors_count": len(st.session_state.history_errors)
+            "errors_count": len(st.session_state.history_errors),
+            "errors": st.session_state.history_errors
         },
         "token_accepted": st.session_state.token_accepted
     }

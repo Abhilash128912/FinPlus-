@@ -143,14 +143,32 @@ export default function App() {
       const url = await initApiUrl();
       setApiUrlState(url);
       
+      let savedToken = null;
       // Load saved token if any
       try {
-        const savedToken = await AsyncStorage.getItem('@indmoney_access_token');
+        savedToken = await AsyncStorage.getItem('@indmoney_access_token');
         if (savedToken) {
           setTokenInput(savedToken);
         }
       } catch (err) {
         console.error('Failed to load token from storage', err);
+      }
+      
+      // Fetch status first to check if we need to auto-connect
+      try {
+        const statusData = await getSystemStatus().catch(() => null);
+        if (statusData) {
+          setSystemStatus(statusData);
+          if (!statusData.token_accepted && savedToken) {
+            console.log('Backend has no token, auto-connecting with saved token...');
+            const res = await connectSystem(savedToken).catch(() => null);
+            if (res) {
+              console.log('Auto-connected successfully:', res.message);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to auto-connect token on startup:', e);
       }
       
       await fetchAllData();

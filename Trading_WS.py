@@ -1884,6 +1884,11 @@ def fetch_daily_volumes_batch(
             data_daily = resp.json()
             batch_success = True
             break
+        except requests.HTTPError as exc:
+            if exc.response.status_code in (401, 403):
+                raise ValueError("Token Expired")
+            if attempt < max_attempts - 1:
+                time.sleep(1.5 * (attempt + 1))
         except Exception:
             if attempt < max_attempts - 1:
                 time.sleep(1.5 * (attempt + 1))
@@ -1915,6 +1920,11 @@ def fetch_daily_volumes_batch(
                     candles_d = extract_candles(data_single, t)
                     if candles_d:
                         break
+                except requests.HTTPError as exc:
+                    if exc.response.status_code in (401, 403):
+                        raise ValueError("Token Expired")
+                    if t_attempt < 1:
+                        time.sleep(1.0)
                 except Exception:
                     if t_attempt < 1:
                         time.sleep(1.0)
@@ -2171,18 +2181,19 @@ def apply_bg_hist_results() -> bool:
         st.session_state.auto_history_last_load = time.time()
     else:
         # Background load failed! Do not destroy existing good historical data if we have it!
+        is_auth_error = any("403" in str(f) or "401" in str(f) or "unauthorized" in str(f).lower() or "token expired" in str(f).lower() for f in res["failures"])
         if not st.session_state.get("history_loaded") or not st.session_state.historical_data:
             st.session_state.historical_data   = res["data"]
             st.session_state.history_loaded    = False
             st.session_state.history_loaded_at = None
             st.session_state.history_errors    = res["failures"]
             st.session_state.history_started_at = None
-            st.session_state.history_status = "Failed"
+            st.session_state.history_status = "Token Expired" if is_auth_error else "Failed"
         else:
             # We already have good data! Keep it, but update failures for diagnostics
             st.session_state.history_errors    = res["failures"]
             st.session_state.history_started_at = None
-            st.session_state.history_status = "Auto-refresh failed"
+            st.session_state.history_status = "Auto-refresh token expired" if is_auth_error else "Auto-refresh failed"
         
         # Throttling fix: Update auto_history_last_load to prevent thread-spamming retry loop
         st.session_state.auto_history_last_load = time.time()
@@ -2230,7 +2241,9 @@ def fetch_historical_metrics_batch(
         except requests.HTTPError as exc:
             status_code = exc.response.status_code
             last_err = f"HTTP {status_code}"
-            if status_code in (400, 401, 403, 404):
+            if status_code in (401, 403):
+                raise ValueError("Token Expired")
+            if status_code in (400, 404):
                 break
         except Exception as exc:
             last_err = str(exc)
@@ -2261,8 +2274,11 @@ def fetch_historical_metrics_batch(
                     else:
                         raise Exception("No candles returned")
                 except requests.HTTPError as exc:
-                    last_errs[t] = f"HTTP {exc.response.status_code}"
-                    if exc.response.status_code in (400, 401, 403, 404):
+                    status_code = exc.response.status_code
+                    last_errs[t] = f"HTTP {status_code}"
+                    if status_code in (401, 403):
+                        raise ValueError("Token Expired")
+                    if status_code in (400, 404):
                         break
                 except Exception as exc:
                     last_errs[t] = str(exc)
@@ -2303,6 +2319,28 @@ def fetch_historical_metrics_batch(
     return results
 
 def load_historical_data(access_token: str, worker_count: int = HISTORICAL_WORKERS) -> tuple[int, list[str]]:
+    # ── Step 0.0: Pre-check token validity to fast-fail ─────────────────────
+    try:
+        resp_test = requests.get(
+            HISTORICAL_URL,
+            params=historical_params(["CHOLAFIN"], 1),
+            headers=auth_headers(access_token),
+            timeout=4.0,
+        )
+        resp_test.raise_for_status()
+    except requests.HTTPError as exc:
+        if exc.response.status_code in (401, 403):
+            st.session_state.historical_data = empty_history()
+            st.session_state.history_loaded = False
+            st.session_state.history_loaded_at = None
+            st.session_state["_frag_last_applied_hist_time"] = 0.0
+            st.session_state.history_errors = ["Token Expired"]
+            st.session_state.history_status = "Token Expired"
+            st.session_state.history_started_at = None
+            return 0, st.session_state.history_errors
+    except Exception:
+        pass
+
     # ── Step 0: refresh instrument tokens from API ──────────────────────────
     with st.spinner("Refreshing instrument master from INDstocks..."):
         live_universe = refresh_instrument_tokens(access_token)
@@ -2339,6 +2377,8 @@ def load_historical_data(access_token: str, worker_count: int = HISTORICAL_WORKE
                 try:
                     batch_results = future.result()
                 except Exception as exc:
+                    if "Token Expired" in str(exc):
+                        raise exc
                     batch_results = {t: (None, str(exc)) for t in batch}
 
                 for stock_token, (metrics, error) in batch_results.items():
@@ -2376,7 +2416,8 @@ def load_historical_data(access_token: str, worker_count: int = HISTORICAL_WORKE
             st.session_state.history_status = f"{success_count}/{len(stock_tokens)} loaded"
         else:
             st.session_state.history_loaded_at = None
-            st.session_state.history_status = "Failed"
+            is_auth_error = any("403" in str(f) or "401" in str(f) or "unauthorized" in str(f).lower() or "token expired" in str(f).lower() for f in failures)
+            st.session_state.history_status = "Token Expired" if is_auth_error else "Failed"
 
         progress.progress(1.0, text="Historical data load finished.")
         time.sleep(0.2)
@@ -2387,8 +2428,10 @@ def load_historical_data(access_token: str, worker_count: int = HISTORICAL_WORKE
         st.session_state.history_loaded = False
         st.session_state.history_loaded_at = None
         st.session_state["_frag_last_applied_hist_time"] = 0.0
-        st.session_state.history_errors = [f"Historical loader failed: {compact_error(str(exc))}"]
-        st.session_state.history_status = "Failed"
+        err_str = str(exc)
+        is_auth_error = "403" in err_str or "401" in err_str or "unauthorized" in err_str.lower() or "token expired" in err_str.lower()
+        st.session_state.history_errors = [f"Historical loader failed: {compact_error(err_str)}"]
+        st.session_state.history_status = "Token Expired" if is_auth_error else "Failed"
         st.session_state.history_started_at = None
         return 0, st.session_state.history_errors
 
