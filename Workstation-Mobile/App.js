@@ -1389,9 +1389,9 @@ export default function App() {
                 <WebView
                   key={selectedStockSymbol}
                   originWhitelist={['*']}
-                  source={{ uri: `https://in.tradingview.com/chart/?symbol=NSE:${selectedStockSymbol}` }}
+                  source={{ html: getTradingViewHtml(selectedStockSymbol) }}
                   style={styles.webView}
-                  scrollEnabled={true}
+                  scrollEnabled={false}
                   domStorageEnabled={true}
                   javaScriptEnabled={true}
                   cacheEnabled={false}
@@ -2382,7 +2382,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   chartContainer: {
-    height: 230,
+    height: 360,
     backgroundColor: '#0c0f1d',
     borderRadius: 8,
     overflow: 'hidden',
