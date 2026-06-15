@@ -405,6 +405,15 @@ def get_all_journal_entries():
         })
     return jvs
 
+def next_jv_id():
+    """Return the next unique JV ID by scanning max existing number."""
+    max_num = 0
+    for jv in d.get("journal_entries", []):
+        jv_id = jv.get("jv_id", "")
+        if jv_id.startswith("JV-") and jv_id[3:].isdigit():
+            max_num = max(max_num, int(jv_id[3:]))
+    return f"JV-{max_num + 1:05d}"
+
 def get_account_balance(account_name):
     account_type = get_account_type(account_name)
     total_dr = 0.0
@@ -537,7 +546,7 @@ with tab_q:
         elif not qe_amount or qe_amount <= 0:
             st.error("⚠️ Enter a valid amount.")
         else:
-            next_id = f"JV-{len(d.get('journal_entries', [])) + 1:05d}"
+            next_id = next_jv_id()
             lines = [
                 {"account": qe_debit_acc, "debit": float(qe_amount), "credit": 0.0},
                 {"account": qe_credit_acc, "debit": 0.0, "credit": float(qe_amount)}
@@ -666,7 +675,7 @@ with tab_a:
             st.warning("⚠️ Select account names for all non-zero amounts.")
             
         if st.button("💾 Record Journal Voucher", disabled=has_empty_account, key="btn_post_jv"):
-            next_id = f"JV-{len(d.get('journal_entries', [])) + 1:05d}"
+            next_id = next_jv_id()
             
             d["journal_entries"].append({
                 "jv_id": next_id,

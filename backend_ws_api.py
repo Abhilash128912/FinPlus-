@@ -95,17 +95,156 @@ import Trading_WS
 from calculator import calculate_trade_metrics
 from database import add_paper_trade, get_brokerage_rates, delete_paper_trade
 
-# Override fetch_news_sentiment to avoid blocking external RSS fetches in API mode
-def mock_fetch_news_sentiment(stock_name: str) -> dict:
-    return {
-        "sentiment": "Neutral",
-        "score": 0,
-        "pos_count": 0,
-        "neg_count": 0,
-        "neu_count": 0,
-        "latest_headline": "News sentiment disabled in API mode"
-    }
-Trading_WS.fetch_news_sentiment = mock_fetch_news_sentiment
+# Asynchronous news sentiment fetcher to avoid blocking the REST API thread
+_API_NEWS_CACHE = {}  # {stock_name: (timestamp, data)}
+_API_NEWS_TTL = 900   # 15 minutes cache TTL
+_API_NEWS_LOCK = threading.Lock()
+_PENDING_NEWS_FETCHES = set()  # set of stock names currently fetching in background
+
+def async_fetch_news_sentiment(stock_name: str) -> dict:
+    stock_name = stock_name.upper().strip()
+    now = time.time()
+    
+    # 1. Return valid cached data instantly if available
+    with _API_NEWS_LOCK:
+        cached = _API_NEWS_CACHE.get(stock_name)
+        if cached:
+            timestamp, data = cached
+            if now - timestamp < _API_NEWS_TTL:
+                return data
+            fallback_data = data  # return stale data but trigger async refresh
+        else:
+            fallback_data = {
+                "sentiment": "Neutral",
+                "score": 0,
+                "pos_count": 0,
+                "neg_count": 0,
+                "neu_count": 0,
+                "latest_headline": "Loading latest news headlines..."
+            }
+            
+    # 2. Spawn background fetch if not already in flight
+    with _API_NEWS_LOCK:
+        is_fetching = stock_name in _PENDING_NEWS_FETCHES
+        if not is_fetching:
+            _PENDING_NEWS_FETCHES.add(stock_name)
+            
+    if not is_fetching:
+        def worker(sym):
+            try:
+                import urllib.request
+                import xml.etree.ElementTree as ET
+                import urllib.parse
+                
+                query = f"{sym} Stock News"
+                url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=en-IN&gl=IN&ceid=IN:en"
+                
+                req = urllib.request.Request(
+                    url, 
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                )
+                with urllib.request.urlopen(req, timeout=4) as response:
+                    xml_data = response.read()
+                
+                root = ET.fromstring(xml_data)
+                items = root.findall('.//item')
+                
+                POS_WORDS = {
+                    'buy', 'positive', 'raise', 'target', 'growth', 'jump', 'surge', 'bullish', 
+                    'record', 'profit', 'double', 'up', 'gain', 'beats', 'expansion', 'high', 
+                    'acquisition', 'deal', 'order', 'upgrade', 'strong', 'soars', 'climb', 'outperform'
+                }
+                NEG_WORDS = {
+                    'sell', 'negative', 'cut', 'loss', 'fall', 'drop', 'plunge', 'bearish', 
+                    'debt', 'decline', 'down', 'hit', 'miss', 'downgrade', 'probe', 'fine', 
+                    'warning', 'low', 'crash', 'slump', 'tumbles', 'weak', 'lower', 'underperform'
+                }
+                
+                res = {
+                    "sentiment": "Neutral",
+                    "score": 0,
+                    "pos_count": 0,
+                    "neg_count": 0,
+                    "neu_count": 0,
+                    "latest_headline": "No news available for this ticker"
+                }
+                
+                if items:
+                    pos_count = 0
+                    neg_count = 0
+                    neu_count = 0
+                    latest_headline = ""
+                    
+                    for i, item in enumerate(items[:5]):
+                        title = item.find('title')
+                        if title is not None and title.text:
+                            headline = title.text
+                            if " - " in headline:
+                                headline = headline.rsplit(" - ", 1)[0]
+                            if i == 0:
+                                latest_headline = headline
+                            
+                            title_lower = headline.lower()
+                            words = title_lower.split()
+                            matched_pos = False
+                            matched_neg = False
+                            for w in words:
+                                w_clean = w.strip('.,!?;:"\'()[]{}')
+                                if w_clean in POS_WORDS:
+                                    matched_pos = True
+                                elif w_clean in NEG_WORDS:
+                                    matched_neg = True
+                            if matched_pos and not matched_neg:
+                                pos_count += 1
+                            elif matched_neg and not matched_pos:
+                                neg_count += 1
+                            else:
+                                neu_count += 1
+                                
+                    total = pos_count + neg_count + neu_count
+                    if total > 0:
+                        score = int(((pos_count - neg_count) / max(1, pos_count + neg_count)) * 100)
+                    else:
+                        score = 0
+                        
+                    if pos_count > neg_count + 1:
+                        sentiment = "Positive"
+                    elif neg_count > pos_count + 1:
+                        sentiment = "Negative"
+                    else:
+                        sentiment = "Neutral"
+                        
+                    res = {
+                        "sentiment": sentiment,
+                        "score": score,
+                        "pos_count": pos_count,
+                        "neg_count": neg_count,
+                        "neu_count": neu_count,
+                        "latest_headline": latest_headline or "No specific headlines found"
+                    }
+                
+                with _API_NEWS_LOCK:
+                    _API_NEWS_CACHE[sym] = (time.time(), res)
+            except Exception:
+                with _API_NEWS_LOCK:
+                    if sym not in _API_NEWS_CACHE:
+                        _API_NEWS_CACHE[sym] = (time.time(), {
+                            "sentiment": "Neutral",
+                            "score": 0,
+                            "pos_count": 0,
+                            "neg_count": 0,
+                            "neu_count": 0,
+                            "latest_headline": "News temporarily unavailable"
+                        })
+            finally:
+                with _API_NEWS_LOCK:
+                    _PENDING_NEWS_FETCHES.discard(sym)
+                    
+        threading.Thread(target=worker, args=(stock_name,), daemon=True).start()
+        
+    return fallback_data
+
+Trading_WS.fetch_news_sentiment = async_fetch_news_sentiment
 
 # =========================================================
 # ─── FASTAPI APPLICATION SETUP ──────────────────────────

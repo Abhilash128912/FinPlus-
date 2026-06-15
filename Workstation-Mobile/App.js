@@ -97,6 +97,9 @@ export default function App() {
   // Navigation
   const [activeTab, setActiveTab] = useState('watchlist'); // 'watchlist', 'regime', 'trade', 'settings'
 
+  const carouselScrollX = React.useRef(0);
+  const carouselRef = React.useRef(null);
+
   // Server state
   const [apiUrl, setApiUrlState] = useState('https://finplus.onrender.com');
   const [systemStatus, setSystemStatus] = useState(null);
@@ -315,10 +318,26 @@ export default function App() {
   };
 
   const handleOpenDetails = async (symbol) => {
+    if (!symbol) return;
     const cleanSym = symbol.replace('.NS', '');
-    setSelectedStockSymbol(cleanSym);
+    const isNifty = cleanSym.toUpperCase().includes('NIFTY');
+    setSelectedStockSymbol(isNifty ? 'NIFTY' : cleanSym);
     setDetailModalLoading(true);
     setShowDetailModal(true);
+
+    if (isNifty) {
+      const niftyLtp = indices?.NIFTY_50?.ltp || indices?.NIFTY_50?.last_price || indices?.NIFTY_50?.close || alphaPicks?.nifty_option?.Nifty_LTP || 0;
+      setSelectedStock({
+        historical_metrics: {},
+        live_quote: { close: niftyLtp },
+        pivots: {
+          resistances: [alphaPicks?.nifty_option?.Resistance || 0, 0, 0],
+          supports: [alphaPicks?.nifty_option?.Support || 0, 0, 0]
+        }
+      });
+      setDetailModalLoading(false);
+      return;
+    }
 
     try {
       const data = await getStockDetails(cleanSym, detailPivotType);
@@ -347,9 +366,9 @@ export default function App() {
 
   // Pre-fill paper trade form from watchlist detail sheet
   const handleQuickTrade = (symbol) => {
-    const ltpVal = selectedStock?.live_quote?.close || selectedStock?.historical_metrics?.day_open || 0;
-    const ltpStr = ltpVal > 0 ? String(ltpVal.toFixed(2)) : '';
     const wlItem = (watchlist || []).find(item => item && item.Stock && item.Stock.replace('.NS', '') === symbol);
+    const ltpVal = wlItem?.LTP || selectedStock?.live_quote?.close || selectedStock?.historical_metrics?.day_open || 0;
+    const ltpStr = ltpVal > 0 ? String(ltpVal.toFixed(2)) : '';
     const isLong = wlItem && wlItem.Signal ? wlItem.Signal.includes('LONG') : true;
     
     // Suggest 3% profit target for LONG, -3% for SHORT
@@ -523,15 +542,34 @@ export default function App() {
           </View>
         ) : alphaPicks ? (
           <ScrollView 
+            ref={carouselRef}
             horizontal 
             showsHorizontalScrollIndicator={false}
             snapToInterval={width - 48 + 12} // snap to card width + margin
             decelerationRate="fast"
             contentContainerStyle={styles.picksCarousel}
+            onScroll={(event) => {
+              carouselScrollX.current = event.nativeEvent.contentOffset.x;
+            }}
+            scrollEventThrottle={16}
+            onLayout={() => {
+              if (carouselRef.current && carouselScrollX.current > 0) {
+                carouselRef.current.scrollTo({ x: carouselScrollX.current, animated: false });
+              }
+            }}
+            onContentSizeChange={() => {
+              if (carouselRef.current && carouselScrollX.current > 0) {
+                carouselRef.current.scrollTo({ x: carouselScrollX.current, animated: false });
+              }
+            }}
           >
             {/* Card 1: Intraday Pick */}
             {alphaPicks.intraday ? (
-              <View style={[styles.pickCard, styles.borderGold]}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => handleOpenDetails(alphaPicks.intraday.Stock)}
+                style={[styles.pickCard, styles.borderGold]}
+              >
                 <View style={styles.pickCardHeader}>
                   <Text style={styles.pickCardSub}>⚡ INTRADAY BREAKOUT</Text>
                   <Text style={styles.pickTime}>{alphaPicks.intraday.Suggested_At}</Text>
@@ -563,7 +601,7 @@ export default function App() {
                   <Text style={styles.levelText}>Tgt: <Text style={[styles.levelVal, styles.textGreen]}>₹{Number(alphaPicks.intraday.Target || 0).toFixed(2)}</Text></Text>
                   <Text style={styles.levelText}>SL: <Text style={[styles.levelVal, styles.textRed]}>₹{Number(alphaPicks.intraday.Stop_Loss || 0).toFixed(2)}</Text></Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ) : (
               <View style={[styles.pickCard, styles.pickCardEmpty]}>
                 <Text style={styles.emptyCardTitle}>⚡ INTRADAY BREAKOUT</Text>
@@ -573,7 +611,11 @@ export default function App() {
 
             {/* Card 2: Stock Option Pick */}
             {alphaPicks.option ? (
-              <View style={[styles.pickCard, styles.borderCyan]}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => handleOpenDetails(alphaPicks.option.Stock)}
+                style={[styles.pickCard, styles.borderCyan]}
+              >
                 <View style={styles.pickCardHeader}>
                   <Text style={styles.pickCardSub}>🎯 STOCK OPTION CALL</Text>
                   <Text style={styles.pickTime}>{alphaPicks.option.Suggested_At}</Text>
@@ -603,7 +645,7 @@ export default function App() {
                   <Text style={styles.levelText}>Tgt: <Text style={[styles.levelVal, styles.textGreen]}>₹{Number(alphaPicks.option.Target || 0).toFixed(1)}</Text></Text>
                   <Text style={styles.levelText}>SL: <Text style={[styles.levelVal, styles.textRed]}>₹{Number(alphaPicks.option.Stop_Loss || 0).toFixed(1)}</Text></Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ) : (
               <View style={[styles.pickCard, styles.pickCardEmpty]}>
                 <Text style={styles.emptyCardTitle}>🎯 STOCK OPTION CALL</Text>
@@ -613,7 +655,11 @@ export default function App() {
 
             {/* Card 3: Nifty Option Pick */}
             {alphaPicks.nifty_option && alphaPicks.nifty_option.Signal !== 'NEUTRAL / NO TRADE' ? (
-              <View style={[styles.pickCard, styles.borderPurple]}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => handleOpenDetails('NIFTY')}
+                style={[styles.pickCard, styles.borderPurple]}
+              >
                 <View style={styles.pickCardHeader}>
                   <Text style={styles.pickCardSub}>📊 NIFTY INDEX CALL</Text>
                   <Text style={styles.pickTime}>{alphaPicks.nifty_option.Suggested_At}</Text>
@@ -643,7 +689,7 @@ export default function App() {
                   <Text style={styles.levelText}>Tgt: <Text style={[styles.levelVal, styles.textGreen]}>₹{Number(alphaPicks.nifty_option.Target || 0).toFixed(1)}</Text></Text>
                   <Text style={styles.levelText}>SL: <Text style={[styles.levelVal, styles.textRed]}>₹{Number(alphaPicks.nifty_option.Stop_Loss || 0).toFixed(1)}</Text></Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ) : (
               <View style={[styles.pickCard, styles.pickCardEmpty]}>
                 <Text style={styles.emptyCardTitle}>📊 NIFTY INDEX CALL</Text>
@@ -653,7 +699,11 @@ export default function App() {
 
             {/* Card 4: Swing Pick */}
             {alphaPicks.swing ? (
-              <View style={[styles.pickCard, styles.borderGold]}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => handleOpenDetails(alphaPicks.swing.Stock)}
+                style={[styles.pickCard, styles.borderGold]}
+              >
                 <View style={styles.pickCardHeader}>
                   <Text style={styles.pickCardSub}>⭐ SWING ALPHA PICK</Text>
                   <Text style={styles.pickTime}>{alphaPicks.swing.Suggested_At}</Text>
@@ -686,7 +736,7 @@ export default function App() {
                   <Text style={styles.levelText}>Tgt: <Text style={[styles.levelVal, styles.textGreen]}>₹{Number(alphaPicks.swing.Target || 0).toFixed(2)}</Text></Text>
                   <Text style={styles.levelText}>SL: <Text style={[styles.levelVal, styles.textRed]}>₹{Number(alphaPicks.swing.Stop_Loss || 0).toFixed(2)}</Text></Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ) : (
               <View style={[styles.pickCard, styles.pickCardEmpty]}>
                 <Text style={styles.emptyCardTitle}>⭐ SWING ALPHA PICK</Text>
@@ -864,7 +914,7 @@ export default function App() {
         renderItem={renderWatchlistItem}
         keyExtractor={(item) => item.Stock}
         contentContainerStyle={styles.listContent}
-        ListHeaderComponent={renderWatchlistHeader}
+        ListHeaderComponent={renderWatchlistHeader()}
         refreshing={refreshing}
         onRefresh={handleRefresh}
         ListEmptyComponent={
@@ -1356,7 +1406,7 @@ export default function App() {
                 <View style={styles.regimeRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.statLabel}>LTP Price</Text>
-                    <Text style={styles.statPrice}>₹{(live.close || hist.last_close || hist.prev_day_close || 0).toFixed(2)}</Text>
+                    <Text style={styles.statPrice}>₹{Number(signalItem.LTP || live.close || hist.last_close || hist.prev_day_close || 0).toFixed(2)}</Text>
                   </View>
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
                     <Text style={styles.statLabel}>RVOL (Rel Vol)</Text>

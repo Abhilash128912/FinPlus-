@@ -284,6 +284,42 @@ def get_account_balance(account_name):
     else:
         return total_cr - total_dr
 
+def classify_asset_account(acc_name):
+    """Classify an Asset account into Liquid or Security, or None if excluded."""
+    name_lower = acc_name.lower()
+    if "gold" in name_lower or "mutual fund" in name_lower:
+        return None
+    
+    is_security = (
+        "blinkx" in name_lower or
+        "indmoney" in name_lower or
+        "zerodha" in name_lower or
+        "stock" in name_lower or
+        "security" in name_lower or
+        "securities" in name_lower or
+        "shares" in name_lower or
+        "equity" in name_lower or
+        "investment" in name_lower
+    )
+    if is_security:
+        return "Security"
+    return "Liquid"
+
+def get_asset_icon(name):
+    """Retrieve an icon for an asset based on its name."""
+    name_lower = name.lower()
+    if "cash" in name_lower:
+        return "💵"
+    elif "bank" in name_lower or "sugama" in name_lower or "pnb" in name_lower or "jio" in name_lower:
+        return "🏦"
+    elif "gold" in name_lower:
+        return "🟡"
+    elif "fund" in name_lower or "mutual" in name_lower:
+        return "📊"
+    elif "blinkx" in name_lower or "indmoney" in name_lower or "zerodha" in name_lower or "stock" in name_lower:
+        return "📈"
+    return "💰"
+
 def get_rolled_up_balances(level_view="Detailed"):
     """Calculate balances for accounts, rolling up child accounts if level_view is 'Main Ledgers Only'."""
     raw_balances = {}
@@ -587,16 +623,39 @@ def load_data():
         if "INDmoney Account" not in st.session_state.accounts:
             st.session_state.accounts["INDmoney Account"] = {"type": "Asset", "parent": None}
             
+        # Check and resolve duplicate or empty/malformed JV IDs
+        seen_ids = set()
+        highest_id = 0
+        # Step 1: Scan for the highest numeric ID in the dataset
+        for entry in d.get("journal_entries", []):
+            jv_id = entry.get("jv_id", "")
+            if jv_id.startswith("JV-") and jv_id[3:].isdigit():
+                highest_id = max(highest_id, int(jv_id[3:]))
+
         jes = []
         for entry in d.get("journal_entries", []):
             je = entry.copy()
-            if "date" in je:
+            jv_id = je.get("jv_id", "")
+            
+            # If ID is empty, duplicate, or invalid (except the special gold valuation), reassign
+            if not jv_id or jv_id in seen_ids or not (jv_id.startswith("JV-") or jv_id == "JV-VAL-GOLD"):
+                if jv_id != "JV-VAL-GOLD":
+                    highest_id += 1
+                    je["jv_id"] = f"JV-{highest_id:05d}"
+            
+            if "date" in je and isinstance(je["date"], str):
                 je["date"] = datetime.strptime(je["date"], "%Y-%m-%d").date()
+            elif "date" in je and isinstance(je["date"], datetime):
+                je["date"] = je["date"].date()
+                
             # Upgrade legacy Bank Account to Punjab National Bank in line records
             for line in je.get("lines", []):
                 if line["account"] == "Bank Account":
                     line["account"] = "Punjab National Bank"
+            
             jes.append(je)
+            seen_ids.add(je["jv_id"])
+            
         st.session_state.journal_entries = jes
         
         # Save structural upgrades
@@ -1672,8 +1731,9 @@ total_equity = total_equity_accts + net_profit
 liquid_assets_total = 0.0
 for acc_name in st.session_state.accounts:
     acc_type = get_account_type(acc_name)
-    if acc_type == "Asset" and ("bank" in acc_name.lower() or "cash" in acc_name.lower()):
-        liquid_assets_total += get_account_balance(acc_name)
+    if acc_type == "Asset":
+        if classify_asset_account(acc_name) == "Liquid":
+            liquid_assets_total += get_account_balance(acc_name)
 
 # Calculate total loan payments
 total_loan_payments = 0.0
@@ -1764,6 +1824,60 @@ with col_m2:
 
 with col_m3:
     st.metric("Net Balance", f"₹{liquid_assets_total:,.2f}")
+    
+    # Calculate categories
+    liquid_list = []
+    securities_list = []
+    liquid_total = 0.0
+    securities_total = 0.0
+    
+    for acc_name in st.session_state.accounts:
+        acc_type = get_account_type(acc_name)
+        if acc_type == "Asset":
+            bal = get_account_balance(acc_name)
+            category = classify_asset_account(acc_name)
+            if category == "Liquid":
+                liquid_list.append((acc_name, bal))
+                liquid_total += bal
+            elif category == "Security":
+                securities_list.append((acc_name, bal))
+                securities_total += bal
+                
+    # Tabs
+    tab1, tab2 = st.tabs([
+        f"💧 Liquid (₹{liquid_total:,.2f})", 
+        f"📈 Securities (₹{securities_total:,.2f})"
+    ])
+    
+    with tab1:
+        liquid_items = []
+        for name, bal in sorted(liquid_list, key=lambda x: x[0]):
+            icon = get_asset_icon(name)
+            liquid_items.append(
+                f'<div style="display: flex; justify-content: space-between; font-size: 0.8rem; line-height: 1.4; border-bottom: 1px dashed #F1F5F9; padding: 4px 0;">'
+                f'<span style="font-weight: 600; color: #475569;">{icon} {name}</span>'
+                f'<span style="font-weight: 700; color: #0F172A;">₹{bal:,.2f}</span>'
+                f'</div>'
+            )
+        if not liquid_items:
+            liquid_items.append('<div style="font-size: 0.8rem; color: #94A3B8; text-align: center; padding: 10px;">No liquid assets</div>')
+            
+        st.markdown(f'<div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 10px 14px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03); margin-top: 8px;">{"".join(liquid_items)}</div>', unsafe_allow_html=True)
+        
+    with tab2:
+        securities_items = []
+        for name, bal in sorted(securities_list, key=lambda x: x[0]):
+            icon = get_asset_icon(name)
+            securities_items.append(
+                f'<div style="display: flex; justify-content: space-between; font-size: 0.8rem; line-height: 1.4; border-bottom: 1px dashed #F1F5F9; padding: 4px 0;">'
+                f'<span style="font-weight: 600; color: #475569;">{icon} {name}</span>'
+                f'<span style="font-weight: 700; color: #0F172A;">₹{bal:,.2f}</span>'
+                f'</div>'
+            )
+        if not securities_items:
+            securities_items.append('<div style="font-size: 0.8rem; color: #94A3B8; text-align: center; padding: 10px;">No securities</div>')
+            
+        st.markdown(f'<div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 10px 14px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03); margin-top: 8px;">{"".join(securities_items)}</div>', unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -2889,7 +3003,7 @@ with tab_io:
                 if "Stock Market Asset" not in st.session_state.accounts:
                     st.session_state.accounts["Stock Market Asset"] = {"type": "Asset", "parent": None}
                     
-                next_id = f"JV-{len(st.session_state.journal_entries) + 1:05d}"
+                next_id = next_jv_id()
                 lines = []
                 
                 if total_pnl >= 0:

@@ -9,6 +9,8 @@ export const initApiUrl = async () => {
     const savedUrl = await AsyncStorage.getItem('@backend_api_url');
     if (savedUrl) {
       activeBaseUrl = savedUrl.trim();
+    } else {
+      activeBaseUrl = DEFAULT_BASE_URL;
     }
   } catch (e) {
     console.error('Failed to load API URL from storage', e);
