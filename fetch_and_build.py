@@ -3841,6 +3841,32 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             if os.path.exists(OUT_HTML):
+                try:
+                    import re
+                    with open(OUT_HTML, 'r', encoding='utf-8', errors='ignore') as f:
+                        old_html = f.read()
+                    screener_m = re.search(r'const SCREENER_DATA = (\[.*?\]);', old_html)
+                    watchlist_m = re.search(r'const WATCHLIST_SEED = (\[.*?\]);', old_html)
+                    top_pick_m = re.search(r'const TOP_PICK = (\{.*?\});', old_html)
+                    history_m = re.search(r'const DAILY_PICKS_HISTORY = (\[.*?\]);', old_html)
+                    commodities_m = re.search(r'const COMMODITIES_DATA = (\{.*?\});', old_html)
+                    mkt_m = re.search(r'const MARKET_INFO = (\{.*?\});', old_html)
+                    fno_m = re.search(r'const FNO_DATA = (\[.*?\]);', old_html)
+
+                    s_data = json.loads(screener_m.group(1)) if screener_m else []
+                    w_data = json.loads(watchlist_m.group(1)) if watchlist_m else []
+                    tp_data = json.loads(top_pick_m.group(1)) if top_pick_m else {}
+                    h_data = json.loads(history_m.group(1)) if history_m else []
+                    c_data = json.loads(commodities_m.group(1)) if commodities_m else {}
+                    mk_data = json.loads(mkt_m.group(1)) if mkt_m else {}
+                    fn_data = json.loads(fno_m.group(1)) if fno_m else []
+
+                    fresh_html = build_html(s_data, w_data, tp_data, h_data, c_data, mk_data, fn_data)
+                    self.wfile.write(fresh_html.encode('utf-8'))
+                    return
+                except Exception as e:
+                    print("Error baking fresh HTML in do_GET:", e)
+
                 with open(OUT_HTML, 'rb') as f:
                     self.wfile.write(f.read())
             else:
