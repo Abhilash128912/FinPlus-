@@ -1605,21 +1605,9 @@ details[open] summary::before {
   <div class="progress-log" id="scanProgressLog">Fetching real-time stock data from Yahoo Finance...</div>
 </div>
 
-<div class="commodity-bar" id="commodityBar">
-  <div class="commodity-bar-title">
-    <span style="font-size:16px">⛽</span>
-    <span style="font-weight:600;font-size:13px;color:var(--text)">Commodities Intraday Signals</span>
-    <span style="font-size:10px;background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:10px;color:var(--muted)">15m timeframe (15/20 EMA Crossover)</span>
-  </div>
-  <div class="commodity-cards" id="commodityCards"></div>
-</div>
-
 <div class="main">
 
-  <!-- Stats -->
-  <div class="stats-grid" id="statsGrid"></div>
-
-  <!-- Tabs -->
+  <!-- Desktop Top Tabs (Hidden on mobile where bottom nav is active) -->
   <div class="tabs">
     <button class="tab active" onclick="switchTab('screener')">🔍 Screener Results</button>
     <button class="tab" onclick="switchTab('watchlist')">⭐ My Watchlist (<span id="wlCount">0</span>)</button>
@@ -1799,8 +1787,24 @@ details[open] summary::before {
     </div>
   </div>
 
-  <!-- STOCK OF THE DAY TAB -->
-  <div id="tab-top-pick" style="display:none"></div>
+  <!-- STOCK OF THE DAY & DASHBOARD OVERVIEW TAB -->
+  <div id="tab-top-pick" style="display:none">
+    <!-- 6-Card Stats Summary Grid -->
+    <div class="stats-grid" id="statsGrid" style="margin-bottom:20px"></div>
+
+    <!-- Commodities Intraday Signals Bar -->
+    <div class="commodity-bar" id="commodityBar" style="margin-bottom:20px">
+      <div class="commodity-bar-title">
+        <span style="font-size:16px">⛽</span>
+        <span style="font-weight:600;font-size:13px;color:var(--text)">Commodities Intraday Signals</span>
+        <span style="font-size:10px;background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:10px;color:var(--muted)">15m timeframe (15/20 EMA Crossover)</span>
+      </div>
+      <div class="commodity-cards" id="commodityCards"></div>
+    </div>
+
+    <!-- Inner Spotlight Content -->
+    <div id="topPickInnerContent"></div>
+  </div>
 
   <!-- F&O OPTIONS TAB -->
   <div id="tab-fno" style="display:none"></div>
@@ -2666,7 +2670,7 @@ function renderHolidaysTab() {
 
 // ── Stock of the Day & History ──────────────────────────────────────────
 function renderTopPick() {
-  const container = document.getElementById('tab-top-pick');
+  const container = document.getElementById('topPickInnerContent') || document.getElementById('tab-top-pick');
   if (!container || !TOP_PICK || !TOP_PICK.symbol) return;
 
   const inWl = watchlist.some(w => w.symbol === TOP_PICK.symbol);
