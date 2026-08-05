@@ -220,26 +220,12 @@ def read_stock_list() -> list[str]:
 def fetch_news_for_ticker(ticker: str) -> list[dict]:
     news_list = []
     try:
-        t = yf.Ticker(ticker)
-        raw_news = t.news
-        if raw_news:
-            for item in raw_news:
-                content = item.get("content", {})
-                url = ""
-                if content.get("clickThroughUrl"):
-                    url = content["clickThroughUrl"].get("url", "")
-                if not url and content.get("canonicalUrl"):
-                    url = content["canonicalUrl"].get("url", "")
-                
-                news_list.append({
-                    "title": content.get("title", ""),
-                    "summary": content.get("summary", ""),
-                    "pubDate": content.get("pubDate", ""),
-                    "provider": content.get("provider", {}).get("displayName", ""),
-                    "url": url
-                })
-    except Exception as e:
-        log(f"  ⚠ news fetch error {ticker}: {e}")
+        from curl_cffi import requests
+        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1d"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        r = requests.get(url, impersonate="chrome120", headers=headers, timeout=5)
+    except Exception:
+        pass
     return news_list
 
 
@@ -3814,10 +3800,16 @@ def run_server(port=None):
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
+    import threading
     log("=" * 60)
     log("  Quality Stock Screener — Phase 1")
     log("  Source: Nifty 500 | Scoring: Strength + Value + Momentum")
     log("=" * 60)
+
+    # Launch web server immediately in background thread so Render detects port binding in <1s
+    log("⚡ Starting Web Server for cloud port binding...")
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
 
     # Automatically check and download Nifty index list updates first
     log("Checking for Nifty stock list updates from NSE...")
@@ -3848,8 +3840,6 @@ if __name__ == "__main__":
         f.write(html)
 
     log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
-
-    # Launch server
-    run_server()
+    server_thread.join()
 
 
