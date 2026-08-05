@@ -1,0 +1,12 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+*.db
+.idea/
+.vscode/
+.DS_Store
+FINANCEFIXED.py/
+DEPTH/
+INDMONEY/
+SCANNER/

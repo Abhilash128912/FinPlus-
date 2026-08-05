@@ -685,7 +685,6 @@ export function importJournalCSV(csvText, currentTrades = []) {
  * Syncs trade journal state and capital settings automatically between Mobile APK & PC.
  */
 const CLOUD_SYNC_SERVERS = [
-  'https://finplus-kite.onrender.com',
   'http://127.0.0.1:8000'
 ];
 
