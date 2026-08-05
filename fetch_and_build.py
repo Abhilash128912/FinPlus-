@@ -1322,10 +1322,101 @@ tr:hover td{background:#ffffff06}
 .progress-text{color:var(--text);font-size:14px}
 .progress-log{color:var(--muted);font-size:12px;max-height:200px;overflow-y:auto;width:500px;text-align:center}
 
-/* ── Responsive ── */
-@media(max-width:600px){
-  .stats-grid{grid-template-columns:1fr 1fr}
-  .wl-grid{grid-template-columns:1fr}
+/* ── Mobile-First Responsive Styles & Bottom Navigation ── */
+.mobile-nav-bar {
+  display: none;
+}
+
+@media(max-width: 768px){
+  body {
+    padding-bottom: 70px !important;
+  }
+  .app-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 14px !important;
+  }
+  .stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+  .stat-card {
+    padding: 10px !important;
+  }
+  .stat-val {
+    font-size: 18px !important;
+  }
+  .tabs {
+    overflow-x: auto;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+    padding: 4px;
+    gap: 6px;
+  }
+  .tab {
+    padding: 6px 14px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .filters {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 12px !important;
+  }
+  .filter-group input[type=text],
+  .filter-group select {
+    width: 100% !important;
+  }
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 12px;
+  }
+  table {
+    min-width: 650px !important;
+  }
+
+  /* Fixed Mobile Bottom Navigation Bar */
+  .mobile-nav-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: rgba(10, 10, 26, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 9999;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
+  }
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    flex: 1;
+  }
+  .mobile-nav-item.active {
+    color: #34D399;
+    background: rgba(16, 185, 129, 0.14);
+  }
+  .mobile-nav-icon {
+    font-size: 16px;
+  }
 }
 
 /* ── Details / Summary News Collapsible ── */
@@ -1740,6 +1831,30 @@ details[open] summary::before {
     </div>
     <div id="bseAddStatus" style="font-size:12px;margin-top:8px"></div>
   </div>
+</div>
+
+<!-- Fixed Mobile Bottom Navigation Bar -->
+<div class="mobile-nav-bar">
+  <button class="mobile-nav-item active" data-tab="screener" onclick="switchTab('screener')">
+    <span class="mobile-nav-icon">🔍</span>
+    <span>Screener</span>
+  </button>
+  <button class="mobile-nav-item" data-tab="watchlist" onclick="switchTab('watchlist')">
+    <span class="mobile-nav-icon">⭐</span>
+    <span>Watchlist</span>
+  </button>
+  <button class="mobile-nav-item" data-tab="top-pick" onclick="switchTab('top-pick')">
+    <span class="mobile-nav-icon">🏆</span>
+    <span>Top Pick</span>
+  </button>
+  <button class="mobile-nav-item" data-tab="fno" onclick="switchTab('fno')">
+    <span class="mobile-nav-icon">📊</span>
+    <span>F&amp;O</span>
+  </button>
+  <button class="mobile-nav-item" data-tab="holidays" onclick="switchTab('holidays')">
+    <span class="mobile-nav-icon">📅</span>
+    <span>Holidays</span>
+  </button>
 </div>
 
 <script>
@@ -2279,6 +2394,9 @@ function renderStats() {
 function switchTab(tab) {
   const tabs = ['screener', 'watchlist', 'top-pick', 'fno', 'holidays'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabs[i] === tab));
+  document.querySelectorAll('.mobile-nav-item').forEach(m => {
+    m.classList.toggle('active', m.dataset.tab === tab);
+  });
   document.getElementById('tab-screener').style.display  = tab === 'screener'  ? '' : 'none';
   document.getElementById('tab-watchlist').style.display = tab === 'watchlist' ? '' : 'none';
   document.getElementById('tab-top-pick').style.display  = tab === 'top-pick'  ? '' : 'none';
@@ -2288,6 +2406,7 @@ function switchTab(tab) {
   if (tab === 'top-pick')  renderTopPick();
   if (tab === 'fno')       renderFnoTab();
   if (tab === 'holidays')  renderHolidaysTab();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ── F&O Options Tab ──────────────────────────────────────────────
