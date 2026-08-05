@@ -183,7 +183,10 @@ export default function App() {
   
   const currentYearMonthStr = new Date().toISOString().slice(0, 7);
   const [selectedRiskMonth, setSelectedRiskMonth] = useState(currentYearMonthStr);
-  const API_BASE_URL = 'http://127.0.0.1:8000';
+  const RENDER_BACKEND_URL = 'https://finplus.onrender.com';
+  const isNativeMobileApp = Boolean(window.Capacitor?.isNativePlatform?.()) || window.location.protocol === 'capacitor:';
+  const API_BASE_URL = localStorage.getItem('finplus_server_url') 
+    || (isNativeMobileApp ? RENDER_BACKEND_URL : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000' : RENDER_BACKEND_URL));
   const [liveLtps, setLiveLtps] = useState({
     "ASHOKLEY": 151.15, "ASHOKLEY.NS": 151.15,
     "BEL": 405.05, "BEL.NS": 405.05,
@@ -367,11 +370,10 @@ export default function App() {
       const queryStr = tickers.join(',');
       let fetchedPrices = {};
 
-      // Tier 1: Try FastAPI backend on port 8000
-      const ports = ['8000'];
-      for (const port of ports) {
+      const apiEndpoints = [API_BASE_URL, 'https://finplus.onrender.com', 'http://127.0.0.1:8000'];
+      for (const endpoint of apiEndpoints) {
         try {
-          const res = await fetch(`http://127.0.0.1:${port}/api/investment/yfinance-prices?tickers=${encodeURIComponent(queryStr)}`);
+          const res = await fetch(`${endpoint}/api/investment/yfinance-prices?tickers=${encodeURIComponent(queryStr)}`);
           if (res.ok) {
             const data = await res.json();
             if (data && data.prices) {
@@ -886,12 +888,11 @@ export default function App() {
       }
     }
 
-    // NEW STOCK ADDITION
     let liveFetchedPrice = 0;
-    const ports = ['8000'];
-    for (const port of ports) {
+    const apiEndpoints = [API_BASE_URL, 'https://finplus.onrender.com', 'http://127.0.0.1:8000'];
+    for (const endpoint of apiEndpoints) {
       try {
-        const res = await fetch(`http://127.0.0.1:${port}/api/investment/yfinance-prices?tickers=${encodeURIComponent(formatted)}`);
+        const res = await fetch(`${endpoint}/api/investment/yfinance-prices?tickers=${encodeURIComponent(formatted)}`);
         if (res.ok) {
           const data = await res.json();
           const pObj = data.prices?.[formatted] || data.prices?.[cleanSymbol] || data.prices?.[inputSym];
