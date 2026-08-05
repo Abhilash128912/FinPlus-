@@ -1906,7 +1906,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ padding: '24px 36px 100px 36px', maxWidth: '1440px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div className="app-main-wrapper">
       
       {/* Toast Notification */}
       {toast && (
