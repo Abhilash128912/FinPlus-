@@ -1337,27 +1337,27 @@ tr:hover td{background:#ffffff06}
     gap: 10px !important;
     padding: 14px !important;
   }
+  .main {
+    padding: 10px 8px !important;
+  }
   .stats-grid {
+    display: grid !important;
     grid-template-columns: 1fr 1fr !important;
     gap: 8px !important;
+    width: 100% !important;
+    margin: 0 0 16px 0 !important;
+    box-sizing: border-box !important;
   }
   .stat-card {
-    padding: 10px !important;
+    padding: 12px 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
   .stat-val {
     font-size: 18px !important;
   }
   .tabs {
-    overflow-x: auto;
-    max-width: 100%;
-    -webkit-overflow-scrolling: touch;
-    padding: 4px;
-    gap: 6px;
-  }
-  .tab {
-    padding: 6px 14px;
-    font-size: 12px;
-    white-space: nowrap;
+    display: none !important;
   }
   .filters {
     flex-direction: column !important;
