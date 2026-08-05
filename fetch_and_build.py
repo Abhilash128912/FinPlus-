@@ -2223,6 +2223,20 @@ function updateLtpBadgeStatus() {
 }
 
 async function fetchLiveLTPForSymbol(ticker) {
+  // 1. Try Render Backend API first (rate-limit free)
+  let rUrl = `https://finplus-g0b5.onrender.com/api/ltp?ticker=${encodeURIComponent(ticker)}`;
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    rUrl = `http://localhost:5000/api/ltp?ticker=${encodeURIComponent(ticker)}`;
+  }
+  try {
+    const res = await fetch(rUrl);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.price && data.price > 0) return data.price;
+    }
+  } catch (e) {}
+
+  // 2. Direct Yahoo Finance API
   const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`;
   try {
     const res = await fetch(yUrl);
@@ -2233,6 +2247,7 @@ async function fetchLiveLTPForSymbol(ticker) {
     }
   } catch (e) {}
 
+  // 3. CORS Proxy Fallback
   try {
     const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(yUrl)}`;
     const res = await fetch(proxyUrl);
@@ -3871,6 +3886,32 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(f.read())
             else:
                 self.wfile.write(b"HTML report not generated yet.")
+            return
+        elif parsed.path == '/api/ltp':
+            query = urllib.parse.parse_qs(parsed.query)
+            ticker = query.get('ticker', [''])[0]
+            price = None
+            if ticker:
+                try:
+                    import yfinance as yf
+                    tk = yf.Ticker(ticker)
+                    fast_info = getattr(tk, 'fast_info', None)
+                    if fast_info and hasattr(fast_info, 'last_price') and fast_info.last_price:
+                        price = float(fast_info.last_price)
+                    elif fast_info and 'lastPrice' in fast_info and fast_info['lastPrice']:
+                        price = float(fast_info['lastPrice'])
+                    else:
+                        hist = tk.history(period='1d')
+                        if not hist.empty and 'Close' in hist.columns:
+                            price = float(hist['Close'].iloc[-1])
+                except Exception as e:
+                    pass
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({"ticker": ticker, "price": price}).encode('utf-8'))
             return
         elif parsed.path == '/api/status':
             self.send_response(200)
