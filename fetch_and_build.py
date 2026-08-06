@@ -2030,15 +2030,20 @@ function renderMarketStatusHeader() {
   updateLtpBadgeStatus();
 }
 
+function isRealDesktopPC() {
+  const isCapacitor = !!(window.Capacitor || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()));
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+  const hasLocalPort = (window.location.port === '5000' || window.location.port === '3000');
+  return (!isCapacitor && !isMobileUA && hasLocalPort);
+}
+
 async function triggerAppScan() {
   const overlay = document.getElementById('scanProgressOverlay');
   const btnText = document.getElementById('scanProgressText');
   const btnLog = document.getElementById('scanProgressLog');
   const barInner = document.getElementById('scanProgressBarInner');
 
-  const isDesktop = (window.location.port === '5000' || window.location.port === '3000');
-
-  if (!isDesktop) {
+  if (!isRealDesktopPC()) {
     const confirmed = confirm(
       '⚡ Cloud Auto-Scan Active\n\n' +
       'GitHub Actions automatically runs the full Nifty 500 scan every weekday at 9:15 AM IST before market opens.\n\n' +
@@ -2275,10 +2280,9 @@ function updateLtpBadgeStatus() {
 }
 
 async function fetchLiveLTPForSymbol(ticker) {
-  // 1. Try Render Backend API first (rate-limit free)
-  // Port check (not hostname) - Capacitor APK also uses hostname=localhost!
+  // 1. Try local server IF on real Desktop PC, otherwise try Render backend
   let rUrl = `https://finplus-g0b5.onrender.com/api/ltp?ticker=${encodeURIComponent(ticker)}`;
-  if (window.location.port === '5000' || window.location.port === '3000') {
+  if (isRealDesktopPC()) {
     rUrl = `http://localhost:${window.location.port}/api/ltp?ticker=${encodeURIComponent(ticker)}`;
   }
   try {
