@@ -228,7 +228,40 @@ export default function App() {
     return scored.slice(0, 8).map(item => item.stock);
   }, [newSipTicker, combinedStockList]);
 
-  // MTF ticker autocomplete suggestions
+
+  // Live auto-fill company name & default buy price when suggestion matches current input
+  useEffect(() => {
+    if (!newSipTicker.trim()) {
+      setNewSipName('');
+      setNewSipBuyPrice('');
+      return;
+    }
+    if (filteredNiftySuggestions.length > 0) {
+      const topMatch = filteredNiftySuggestions[0];
+      setNewSipName(topMatch.name || topMatch.symbol);
+      const cleanSym = topMatch.symbol.toUpperCase().replace('.NS', '');
+      const ltp = liveLtps[cleanSym] || liveLtps[`${cleanSym}.NS`];
+      if (ltp && !newSipBuyPrice) {
+        setNewSipBuyPrice(String(ltp));
+      }
+    }
+  }, [newSipTicker, filteredNiftySuggestions, liveLtps]);
+
+  const [txTicker, setTxTicker] = useState('TATAPOWER.NS');
+  const [txType, setTxType] = useState('BUY');
+  const [txDate, setTxDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [txPrice, setTxPrice] = useState('');
+  const [txShares, setTxShares] = useState('1');
+
+  const [mtfTicker, setMtfTicker] = useState('');
+  const [mtfBuyPrice, setMtfBuyPrice] = useState('');
+  const [mtfShares, setMtfShares] = useState('10');
+  const [mtfBrokerFundedPct, setMtfBrokerFundedPct] = useState('68.0');
+  const [mtfBuyDate, setMtfBuyDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [mtfViewMode, setMtfViewMode] = useState('overall'); // 'overall', 'active', 'closed'
+  const [showMtfDropdown, setShowMtfDropdown] = useState(false);
+
+  // MTF ticker autocomplete suggestions (must be AFTER mtfTicker state declaration)
   const filteredMtfSuggestions = React.useMemo(() => {
     const query = mtfTicker.toLowerCase().replace('.ns', '').trim();
     if (!query || query.length < 2) return [];
@@ -262,37 +295,6 @@ export default function App() {
     }
   }, [mtfTicker, filteredMtfSuggestions, liveLtps]);
 
-  // Live auto-fill company name & default buy price when suggestion matches current input
-  useEffect(() => {
-    if (!newSipTicker.trim()) {
-      setNewSipName('');
-      setNewSipBuyPrice('');
-      return;
-    }
-    if (filteredNiftySuggestions.length > 0) {
-      const topMatch = filteredNiftySuggestions[0];
-      setNewSipName(topMatch.name || topMatch.symbol);
-      const cleanSym = topMatch.symbol.toUpperCase().replace('.NS', '');
-      const ltp = liveLtps[cleanSym] || liveLtps[`${cleanSym}.NS`];
-      if (ltp && !newSipBuyPrice) {
-        setNewSipBuyPrice(String(ltp));
-      }
-    }
-  }, [newSipTicker, filteredNiftySuggestions, liveLtps]);
-
-  const [txTicker, setTxTicker] = useState('TATAPOWER.NS');
-  const [txType, setTxType] = useState('BUY');
-  const [txDate, setTxDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [txPrice, setTxPrice] = useState('');
-  const [txShares, setTxShares] = useState('1');
-
-  const [mtfTicker, setMtfTicker] = useState('');
-  const [mtfBuyPrice, setMtfBuyPrice] = useState('');
-  const [mtfShares, setMtfShares] = useState('10');
-  const [mtfBrokerFundedPct, setMtfBrokerFundedPct] = useState('68.0');
-  const [mtfBuyDate, setMtfBuyDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [mtfViewMode, setMtfViewMode] = useState('overall'); // 'overall', 'active', 'closed'
-  const [showMtfDropdown, setShowMtfDropdown] = useState(false);
 
   // Sync pullbackData from backend API on mount
   useEffect(() => {
