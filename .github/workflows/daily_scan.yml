@@ -1,0 +1,57 @@
+name: Daily Stock Screener Scan
+
+on:
+  schedule:
+    # Run every weekday at 03:45 UTC = 9:15 AM IST (before NSE market opens)
+    - cron: '45 3 * * 1-5'
+  workflow_dispatch:
+    # Allow manual trigger from GitHub Actions UI anytime
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    permissions:
+      contents: write   # needed to commit back to repo
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Nifty 2400 stock screener scan
+        run: |
+          echo "Starting full NSE list scan at $(date '+%Y-%m-%d %H:%M:%S IST')"
+          python scan_runner.py
+
+      - name: Commit and push updated report
+        run: |
+          git config --global user.name  "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+
+          git add screener_data.json nifty_stocks_auto.json || true
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit (data unchanged since last scan)"
+          else
+            IST=$(TZ='Asia/Kolkata' date '+%Y-%m-%d %H:%M IST')
+            git commit -m "auto: daily scan $IST [skip ci]"
+            git push
+            echo "Successfully pushed updated scan report"
+          fi

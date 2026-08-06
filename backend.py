@@ -1,10 +1,12 @@
 import os
 import json
 import time
+import base64
+import requests
 import sqlite3
 import threading
 from typing import Dict, List, Any, Optional
-from fastapi import FastAPI, Request, Query
+from fastapi import FastAPI, Request, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
 
@@ -208,8 +210,60 @@ def fetch_yfinance_batch(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
 
     return final_output
 
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
+GITHUB_REPO = "Abhilash128912/FinPlus-"
+GITHUB_BRANCH = "main"
+
+def push_to_github(filepath: str, repo_path: str):
+    if not GITHUB_TOKEN:
+        print(f"[GitHub Sync] GITHUB_TOKEN not set. Local save only for {repo_path}")
+        return
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{repo_path}?ref={GITHUB_BRANCH}"
+        headers = {
+            "Authorization": f"Bearer {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github+json"
+        }
+        res = requests.get(url, headers=headers)
+        sha = None
+        if res.status_code == 200:
+            sha = res.json().get("sha")
+
+        with open(filepath, "rb") as f:
+            content_bytes = f.read()
+        content_b64 = base64.b64encode(content_bytes).decode("utf-8")
+
+        payload = {
+            "message": f"sync: update {repo_path} from backend",
+            "content": content_b64,
+            "branch": GITHUB_BRANCH
+        }
+        if sha:
+            payload["sha"] = sha
+
+        put_res = requests.put(f"https://api.github.com/repos/{GITHUB_REPO}/contents/{repo_path}", json=payload, headers=headers)
+        if put_res.status_code in [200, 201]:
+            print(f"[GitHub Sync] Successfully pushed {repo_path} to GitHub!")
+        else:
+            print(f"[GitHub Sync] Failed to push {repo_path}: {put_res.status_code} - {put_res.text}")
+    except Exception as e:
+        print(f"[GitHub Sync Error] Failed to sync {repo_path}: {e}")
+
+def load_from_github(filepath: str, repo_path: str) -> bool:
+    raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{repo_path}"
+    try:
+        res = requests.get(raw_url, timeout=5)
+        if res.status_code == 200:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(res.text)
+            return True
+    except Exception as e:
+        print(f"[GitHub Load Error] Failed to fetch {repo_path}: {e}")
+    return False
+
 def load_pullback_file() -> Dict[str, Any]:
     with file_lock:
+        load_from_github(PULLBACK_FILE, "pullback_data.json")
         if not os.path.exists(PULLBACK_FILE):
             with open(PULLBACK_FILE, "w", encoding="utf-8") as f:
                 json.dump(DEFAULT_PULLBACK_DATA, f, indent=2)
@@ -224,9 +278,11 @@ def save_pullback_file(data: Dict[str, Any]):
     with file_lock:
         with open(PULLBACK_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+    push_to_github(PULLBACK_FILE, "pullback_data.json")
 
 def load_journal_file() -> List[Dict[str, Any]]:
     with file_lock:
+        load_from_github(JOURNAL_FILE, "finplus_journal_data.json")
         if not os.path.exists(JOURNAL_FILE):
             return []
         try:
@@ -239,6 +295,8 @@ def save_journal_file(trades: List[Dict[str, Any]]):
     with file_lock:
         with open(JOURNAL_FILE, "w", encoding="utf-8") as f:
             json.dump(trades, f, indent=2)
+            
+    push_to_github(JOURNAL_FILE, "finplus_journal_data.json")
             
     # Sync SQLite
     try:
@@ -391,3 +449,39 @@ async def sync_trades(request: Request):
         save_journal_file(trades_list)
         return { "status": "success", "synced_count": len(trades_list) }
     return { "status": "success", "synced_count": 0 }
+
+SCAN_IN_PROGRESS = False
+
+def run_scan_in_background():
+    global SCAN_IN_PROGRESS
+    try:
+        import scan_runner
+        scan_runner.main()
+    except Exception as e:
+        print(f"[Scan Error]: {e}")
+    finally:
+        SCAN_IN_PROGRESS = False
+
+@app.post("/api/scan")
+def trigger_scan(background_tasks: BackgroundTasks):
+    global SCAN_IN_PROGRESS
+    if SCAN_IN_PROGRESS:
+        return { "status": "error", "message": "Scan already in progress" }
+    SCAN_IN_PROGRESS = True
+    background_tasks.add_task(run_scan_in_background)
+    return { "status": "success", "message": "Scan started in background" }
+
+@app.get("/api/screener-data")
+def get_screener_data():
+    path = os.path.join(BASE_DIR, "screener_data.json")
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        return { "status": "error", "message": str(e) }
+
+@app.get("/api/scan/status")
+def get_scan_status():
+    return { "scan_in_progress": SCAN_IN_PROGRESS }

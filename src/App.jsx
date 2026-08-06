@@ -29,7 +29,10 @@ import {
   Calendar,
   Filter,
   Clock,
-  Layers
+  Layers,
+  Search,
+  Eye,
+  RefreshCw
 } from 'lucide-react';
 
 const DEFAULT_NIFTY500_STOCKS = [
@@ -133,6 +136,23 @@ export default function App() {
   const [trades, setTrades] = useState(() => loadJournalEngine());
   const [activeTab, setActiveTab] = useState('home'); // 'home' | 'trades' | 'capital' | 'sip' | 'mtf'
 
+  // Screener States
+  const [screenerData, setScreenerData] = useState([]);
+  const [screenerLoading, setScreenerLoading] = useState(false);
+  const [screenerSearchQuery, setScreenerSearchQuery] = useState('');
+  const [screenerFilter, setScreenerFilter] = useState('all'); // 'all' | 'qualified'
+  const [screenerSortCol, setScreenerSortCol] = useState('total_score');
+  const [screenerSortAsc, setScreenerSortAsc] = useState(false);
+  const [localScanActive, setLocalScanActive] = useState(false);
+  const [selectedScreenerStock, setSelectedScreenerStock] = useState(null);
+  const [serverUrl, setServerUrl] = useState(() => {
+    return localStorage.getItem('finplus_server_url') || '';
+  });
+  const [serverStatus, setServerStatus] = useState('offline');
+  const [serverUrlInput, setServerUrlInput] = useState(() => {
+    return localStorage.getItem('finplus_server_url') || '';
+  });
+
   // PnL View Mode: 'overall' | 'daily'
   const [pnlViewMode, setPnlViewMode] = useState('overall');
   const getTodayDateStr = () => {
@@ -185,7 +205,7 @@ export default function App() {
   const [selectedRiskMonth, setSelectedRiskMonth] = useState(currentYearMonthStr);
   const RENDER_BACKEND_URL = 'https://finplus.onrender.com';
   const isNativeMobileApp = Boolean(window.Capacitor?.isNativePlatform?.()) || window.location.protocol === 'capacitor:';
-  const API_BASE_URL = localStorage.getItem('finplus_server_url') 
+  const API_BASE_URL = serverUrl 
     || (isNativeMobileApp ? RENDER_BACKEND_URL : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000' : RENDER_BACKEND_URL));
   const [liveLtps, setLiveLtps] = useState({
     "ASHOKLEY": 151.15, "ASHOKLEY.NS": 151.15,
@@ -360,6 +380,210 @@ export default function App() {
     };
     fetchPullbackData();
   }, [API_BASE_URL]);
+
+  // Server Health Status Check Effect
+  useEffect(() => {
+    const checkServerStatus = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/health`, { method: 'GET' });
+        if (res.ok) {
+          setServerStatus('online');
+        } else {
+          setServerStatus('offline');
+        }
+      } catch (e) {
+        setServerStatus('offline');
+      }
+    };
+    checkServerStatus();
+    const interval = setInterval(checkServerStatus, 15000);
+    return () => clearInterval(interval);
+  }, [API_BASE_URL]);
+
+  // Screener Data Fetch Effect
+  const fetchScreenerData = async () => {
+    setScreenerLoading(true);
+    let success = false;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/screener-data`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setScreenerData(data);
+          success = true;
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch screener data from local server, trying GitHub...", e);
+    }
+    if (!success) {
+      try {
+        const res = await fetch("https://raw.githubusercontent.com/Abhilash128912/FinPlus-/main/screener_data.json");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setScreenerData(data);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch screener data from GitHub...", e);
+      }
+    }
+    setScreenerLoading(false);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'screener') {
+      fetchScreenerData();
+    }
+  }, [activeTab, API_BASE_URL]);
+
+  const handleSaveServerUrl = () => {
+    const trimmed = serverUrlInput.trim().replace(/\/$/, '');
+    localStorage.setItem('finplus_server_url', trimmed);
+    setServerUrl(trimmed);
+    showToast('Backend server URL saved successfully!');
+  };
+
+  const addStockToSipWatchlist = async (ticker, name, currentPrice) => {
+    let cleanSymbol = ticker.toUpperCase().replace('.NS', '');
+    const formatted = `${cleanSymbol}.NS`;
+    const existingStock = pullbackData[formatted] || pullbackData[cleanSymbol];
+    if (existingStock) {
+      showToast(`${formatted} is already in your Watchlist!`, 'info');
+      return;
+    }
+    const refPrice = currentPrice > 0 ? currentPrice : 0;
+    const txDateStr = new Date().toISOString().split('T')[0];
+    const updated = {
+      ...pullbackData,
+      [formatted]: {
+        name: name || cleanSymbol,
+        category: 'Core',
+        transactions: [],
+        local_peak: refPrice,
+        date_added: txDateStr,
+        initial_reference_price: refPrice
+      }
+    };
+    savePullbackState(updated);
+    if (refPrice > 0) {
+      setLiveLtps(prev => ({ ...prev, [formatted]: refPrice, [cleanSymbol]: refPrice }));
+    }
+    showToast(`Added ${formatted} to Watchlist (Pending Initial Buy)!`);
+  };
+
+  const handlePollSingleLtp = async (symbol) => {
+    try {
+      const formatted = `${symbol}.NS`;
+      const res = await fetch(`${API_BASE_URL}/api/ltp?symbols=${formatted}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success' && data.ltps[formatted]) {
+          const freshPrice = data.ltps[formatted];
+          setScreenerData(prev => prev.map(item => 
+            item.symbol === symbol ? { ...item, ltp: freshPrice } : item
+          ));
+          showToast(`Refreshed LTP for ${symbol}: ₹${freshPrice}`, 'success');
+        }
+      }
+    } catch (e) {
+      showToast(`Failed to poll price for ${symbol}.`, 'error');
+    }
+  };
+
+  const handlePollAllLtps = async () => {
+    const visibleSymbols = sortedScreenerData.slice(0, 50).map(s => `${s.symbol}.NS`);
+    if (visibleSymbols.length === 0) return;
+    showToast("Polling live prices for top visible stocks...", "info");
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ltp?symbols=${visibleSymbols.join(',')}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success') {
+          setScreenerData(prev => prev.map(item => {
+            const formatted = `${item.symbol}.NS`;
+            if (data.ltps[formatted]) {
+              return { ...item, ltp: data.ltps[formatted] };
+            }
+            return item;
+          }));
+          showToast("Live prices updated!", "success");
+        }
+      }
+    } catch (e) {
+      showToast("Failed to refresh prices.", "error");
+    }
+  };
+
+  const handleLocalScan = async () => {
+    if (localScanActive) return;
+    setLocalScanActive(true);
+    showToast("Starting live stock scan on local server...", "info");
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/scan`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success') {
+          showToast("Local scan started. Polling status...", "info");
+          const pollInterval = setInterval(async () => {
+            try {
+              const statusRes = await fetch(`${API_BASE_URL}/api/scan/status`);
+              if (statusRes.ok) {
+                const statusData = await statusRes.json();
+                if (!statusData.scan_in_progress) {
+                  clearInterval(pollInterval);
+                  setLocalScanActive(false);
+                  showToast("Local scan completed successfully!", "success");
+                  fetchScreenerData();
+                }
+              }
+            } catch (e) {
+              clearInterval(pollInterval);
+              setLocalScanActive(false);
+            }
+          }, 5000);
+        } else {
+          showToast(data.message || "Failed to start scan.", "error");
+          setLocalScanActive(false);
+        }
+      } else {
+        showToast("Local scan server returned an error.", "error");
+        setLocalScanActive(false);
+      }
+    } catch (e) {
+      showToast("Local python scan server is offline.", "error");
+      setLocalScanActive(false);
+    }
+  };
+
+  const sortedScreenerData = React.useMemo(() => {
+    let filtered = [...screenerData];
+    if (screenerSearchQuery) {
+      const q = screenerSearchQuery.toLowerCase();
+      filtered = filtered.filter(item => 
+        (item.symbol || '').toLowerCase().includes(q) || 
+        (item.name || '').toLowerCase().includes(q)
+      );
+    }
+    if (screenerFilter === 'qualified') {
+      filtered = filtered.filter(item => item.qualified);
+    }
+    if (screenerSortCol) {
+      filtered.sort((a, b) => {
+        let valA = a[screenerSortCol];
+        let valB = b[screenerSortCol];
+        if (valA === undefined || valA === null) return 1;
+        if (valB === undefined || valB === null) return -1;
+        if (typeof valA === 'string') {
+          return screenerSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        } else {
+          return screenerSortAsc ? valA - valB : valB - valA;
+        }
+      });
+    }
+    return filtered;
+  }, [screenerData, screenerSearchQuery, screenerFilter, screenerSortCol, screenerSortAsc]);
 
   // Periodically fetch live yfinance LTPs for all monitored stocks in Pullback SIP & MTF
   useEffect(() => {
@@ -3074,6 +3298,61 @@ export default function App() {
             </div>
           </div>
 
+          {/* Server Sync Configuration (For Mobile App Synchronization) */}
+          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Activity size={18} style={{ color: '#34d399' }} />
+                <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Mobile App Sync Settings</h2>
+              </div>
+              <span style={{ 
+                fontSize: '11px', 
+                fontWeight: 800, 
+                background: serverStatus === 'online' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', 
+                color: serverStatus === 'online' ? '#34d399' : '#f87171',
+                padding: '3px 8px',
+                borderRadius: '6px'
+              }}>
+                ● {serverStatus === 'online' ? 'Connected' : 'Offline'}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                  BACKEND SERVER URL (PC IP Address)
+                </label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input 
+                    type="text" 
+                    value={serverUrlInput}
+                    onChange={e => setServerUrlInput(e.target.value)}
+                    className="input-field"
+                    style={{ flex: 1 }}
+                    placeholder="e.g. http://192.168.1.15:8000"
+                  />
+                  <button 
+                    onClick={handleSaveServerUrl}
+                    style={{ 
+                      background: '#6366f1', 
+                      color: 'white', 
+                      border: 'none', 
+                      padding: '8px 16px', 
+                      borderRadius: '6px', 
+                      cursor: 'pointer', 
+                      fontWeight: 700 
+                    }}
+                  >
+                    Save & Connect
+                  </button>
+                </div>
+                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '6px' }}>
+                  To sync with the mobile app, make sure your phone is on the same Wi-Fi network and enter your PC's IP address (e.g. <code>http://192.168.x.x:8000</code>). Find your PC's IP by running <code>ipconfig</code> in Command Prompt.
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Segment-Wise Risk & Stop-Loss Guidelines Table */}
           <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', borderLeft: '4px solid #6366f1' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
@@ -4636,6 +4915,234 @@ export default function App() {
         </div>
       )}
 
+      {/* Stock Screener Tab */}
+      {activeTab === 'screener' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }} className="animate-fade-in">
+          
+          {/* Summary Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #ec4899' }}>
+              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>Total Scanned Stocks</div>
+              <div style={{ fontSize: '28px', fontWeight: 900, color: 'white' }}>
+                {screenerLoading ? '...' : screenerData.length}
+              </div>
+              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Full NSE Equities Constituent List</div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #10b981' }}>
+              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>Qualified Top Picks</div>
+              <div style={{ fontSize: '28px', fontWeight: 900, color: '#34d399' }}>
+                {screenerLoading ? '...' : screenerData.filter(s => s.qualified).length}
+              </div>
+              <div style={{ fontSize: '11px', color: '#34d399', fontWeight: 700, marginTop: '4px' }}>Score &ge; 55 & Strength &ge; 50</div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #6366f1' }}>
+              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>Scan Sync Engine Status</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                <span style={{ height: '8px', width: '8px', borderRadius: '50%', background: serverStatus === 'online' ? '#10b981' : '#f87171', boxShadow: `0 0 10px ${serverStatus === 'online' ? '#10b981' : '#f87171'}` }}></span>
+                <span style={{ fontSize: '16px', fontWeight: 800, color: 'white' }}>
+                  {serverStatus === 'online' ? 'PC Local Server Active' : 'GitHub Offline Mode'}
+                </span>
+              </div>
+              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '8px' }}>
+                {serverStatus === 'online' ? 'Live on demand polling enabled' : 'Fetching daily pre-built report'}
+              </div>
+            </div>
+          </div>
+
+          {/* Filtering and Actions Row */}
+          <div className="glass-panel" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div style={{ display: 'flex', gap: '12px', flex: 1, minWidth: '300px', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+                <input 
+                  type="text" 
+                  value={screenerSearchQuery}
+                  onChange={e => setScreenerSearchQuery(e.target.value)}
+                  className="input-field" 
+                  placeholder="Search symbol or company name..."
+                  style={{ paddingLeft: '36px' }}
+                />
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#a5b4fc' }} />
+              </div>
+
+              <select 
+                value={screenerFilter} 
+                onChange={e => setScreenerFilter(e.target.value)} 
+                className="input-field"
+                style={{ width: '180px' }}
+              >
+                <option value="all">All Scanned Stocks</option>
+                <option value="qualified">Qualified Stocks Only</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <button 
+                onClick={handlePollAllLtps}
+                disabled={screenerLoading || sortedScreenerData.length === 0}
+                style={{
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  color: '#a5b4fc',
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <RefreshCw size={14} /> Refresh Top LTPs
+              </button>
+
+              <button 
+                onClick={handleLocalScan}
+                disabled={localScanActive}
+                style={{
+                  background: localScanActive ? '#1e1b4b' : '#6366f1',
+                  border: 'none',
+                  color: 'white',
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {localScanActive ? (
+                  <>⚡ Scanning...</>
+                ) : (
+                  <>⚡ Live Scan (PC Server)</>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="glass-panel" style={{ padding: '24px', overflowX: 'auto' }}>
+            {screenerLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#a5b4fc', fontSize: '15px' }}>
+                <RefreshCw size={24} className="spin" style={{ animation: 'spin 1.5s linear infinite', marginBottom: '12px' }} />
+                <div>Loading stock screener database...</div>
+              </div>
+            ) : sortedScreenerData.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#a5b4fc' }}>
+                No stocks match the search query or filters.
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', color: '#a5b4fc', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <th style={{ padding: '12px 16px', cursor: 'pointer' }} onClick={() => { setScreenerSortCol('symbol'); setScreenerSortAsc(!screenerSortAsc); }}>Symbol / Name {screenerSortCol === 'symbol' ? (screenerSortAsc ? '▲' : '▼') : ''}</th>
+                    <th style={{ padding: '12px 16px', cursor: 'pointer' }} onClick={() => { setScreenerSortCol('ltp'); setScreenerSortAsc(!screenerSortAsc); }}>Price (LTP) {screenerSortCol === 'ltp' ? (screenerSortAsc ? '▲' : '▼') : ''}</th>
+                    <th style={{ padding: '12px 16px', cursor: 'pointer', textAlign: 'center' }} onClick={() => { setScreenerSortCol('total_score'); setScreenerSortAsc(!screenerSortAsc); }}>Total Score {screenerSortCol === 'total_score' ? (screenerSortAsc ? '▲' : '▼') : ''}</th>
+                    <th style={{ padding: '12px 16px', cursor: 'pointer', textAlign: 'center' }} onClick={() => { setScreenerSortCol('strength'); setScreenerSortAsc(!screenerSortAsc); }}>Strength {screenerSortCol === 'strength' ? (screenerSortAsc ? '▲' : '▼') : ''}</th>
+                    <th style={{ padding: '12px 16px', cursor: 'pointer', textAlign: 'center' }} onClick={() => { setScreenerSortCol('value'); setScreenerSortAsc(!screenerSortAsc); }}>Value {screenerSortCol === 'value' ? (screenerSortAsc ? '▲' : '▼') : ''}</th>
+                    <th style={{ padding: '12px 16px', cursor: 'pointer', textAlign: 'center' }} onClick={() => { setScreenerSortCol('momentum'); setScreenerSortAsc(!screenerSortAsc); }}>Momentum {screenerSortCol === 'momentum' ? (screenerSortAsc ? '▲' : '▼') : ''}</th>
+                    <th style={{ padding: '12px 16px' }}>Trend & Rating</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedScreenerData.slice(0, 100).map(stock => {
+                    const totalColor = stock.total_score >= 60 ? '#10b981' : (stock.total_score >= 45 ? '#fbbf24' : '#f87171');
+                    const trendClass = stock.tech_class || 'badge-yellow';
+                    let trendBadgeColor = '#fbbf24';
+                    let trendBg = 'rgba(251, 191, 36, 0.15)';
+                    if (trendClass.includes('green') || trendClass.includes('buy')) {
+                      trendBadgeColor = '#34d399';
+                      trendBg = 'rgba(16, 185, 129, 0.15)';
+                    } else if (trendClass.includes('red') || trendClass.includes('sell')) {
+                      trendBadgeColor = '#f87171';
+                      trendBg = 'rgba(239, 68, 68, 0.15)';
+                    } else if (trendClass.includes('purple') || trendClass.includes('accumulation')) {
+                      trendBadgeColor = '#c084fc';
+                      trendBg = 'rgba(168, 85, 247, 0.15)';
+                    }
+                    
+                    return (
+                      <tr key={stock.symbol} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', background: stock.qualified ? 'rgba(16, 185, 129, 0.02)' : 'none' }}>
+                        <td style={{ padding: '14px 16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <strong style={{ fontSize: '14px', color: 'white' }}>{stock.symbol}</strong>
+                            {stock.qualified && (
+                              <span style={{ fontSize: '10px', background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>
+                                QUALIFIED
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '2px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {stock.name}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 16px', fontWeight: 700 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            ₹{stock.ltp ? stock.ltp.toFixed(2) : '—'}
+                            <button 
+                              onClick={() => handlePollSingleLtp(stock.symbol)}
+                              style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer', display: 'flex', padding: '2px' }}
+                              title="Poll price live"
+                            >
+                              <RefreshCw size={11} />
+                            </button>
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                          <span style={{ background: `rgba(255,255,255,0.05)`, border: `1px solid ${totalColor}`, color: totalColor, padding: '4px 10px', borderRadius: '6px', fontWeight: 900, fontSize: '14px' }}>
+                            {stock.total_score}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 700, color: stock.strength >= 50 ? '#34d399' : '#ffffff' }}>
+                          {stock.strength}
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 700, color: '#fde047' }}>
+                          {stock.value}
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 700, color: '#00b4d8' }}>
+                          {stock.momentum}
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <span style={{ display: 'inline-block', fontSize: '10px', fontWeight: 800, color: trendBadgeColor, background: trendBg, padding: '3px 8px', borderRadius: '12px', border: `1px solid ${trendBadgeColor}40` }}>
+                            {stock.tech_rating || stock.trend || '—'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            <button 
+                              onClick={() => setSelectedScreenerStock(stock)}
+                              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+                            >
+                              📊 Details
+                            </button>
+                            <button 
+                              onClick={() => addStockToSipWatchlist(stock.symbol, stock.name, stock.ltp)}
+                              style={{ background: '#6366f1', border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                            >
+                              📌 + Watchlist
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+            {!screenerLoading && sortedScreenerData.length > 100 && (
+              <div style={{ textAlign: 'center', padding: '12px', color: '#a5b4fc', fontSize: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', marginTop: '12px' }}>
+                Showing top 100 results. Use search to filter down further.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Itemized Zerodha Charges Breakdown Drawer */}
       {selectedChargeTrade && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
@@ -4692,6 +5199,135 @@ export default function App() {
         </div>
       )}
 
+      {/* Screener Stock Detail Modal */}
+      {selectedScreenerStock && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
+          <div className="glass-panel animate-fade-in" style={{ padding: '24px', width: '100%', maxWidth: '750px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '14px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h3 style={{ fontSize: '20px', fontWeight: 900, color: '#ffffff' }}>{selectedScreenerStock.name}</h3>
+                  <span style={{ fontSize: '12px', fontWeight: 800, background: 'rgba(99, 102, 241, 0.15)', color: '#a5b4fc', padding: '3px 8px', borderRadius: '6px' }}>
+                    {selectedScreenerStock.symbol}
+                  </span>
+                </div>
+                <div style={{ fontSize: '13px', color: '#a5b4fc', marginTop: '4px' }}>
+                  Sector: {selectedScreenerStock.sector || 'N/A'} • Live Price: <strong style={{ color: '#ffffff' }}>₹{selectedScreenerStock.ltp || 'N/A'}</strong>
+                </div>
+              </div>
+              <button onClick={() => setSelectedScreenerStock(null)} style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+
+            {/* Scores Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+              <div className="glass-panel-inner" style={{ padding: '12px', textAlign: 'center', borderTop: '4px solid #a855f7' }}>
+                <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700, textTransform: 'uppercase' }}>Total Score</div>
+                <div style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff', marginTop: '4px' }}>{selectedScreenerStock.total_score}</div>
+              </div>
+              <div className="glass-panel-inner" style={{ padding: '12px', textAlign: 'center', borderTop: '4px solid #10b981' }}>
+                <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700, textTransform: 'uppercase' }}>Strength</div>
+                <div style={{ fontSize: '22px', fontWeight: 900, color: '#34d399', marginTop: '4px' }}>{selectedScreenerStock.strength}</div>
+              </div>
+              <div className="glass-panel-inner" style={{ padding: '12px', textAlign: 'center', borderTop: '4px solid #fde047' }}>
+                <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700, textTransform: 'uppercase' }}>Value</div>
+                <div style={{ fontSize: '22px', fontWeight: 900, color: '#fde047', marginTop: '4px' }}>{selectedScreenerStock.value}</div>
+              </div>
+              <div className="glass-panel-inner" style={{ padding: '12px', textAlign: 'center', borderTop: '4px solid #00b4d8' }}>
+                <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700, textTransform: 'uppercase' }}>Momentum</div>
+                <div style={{ fontSize: '22px', fontWeight: 900, color: '#00b4d8', marginTop: '4px' }}>{selectedScreenerStock.momentum}</div>
+              </div>
+            </div>
+
+            {/* Details Section */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', fontSize: '13px' }}>
+              
+              {/* Strength Column */}
+              <div className="glass-panel-inner" style={{ padding: '16px' }}>
+                <h4 style={{ color: '#34d399', fontWeight: 800, marginBottom: '10px', borderBottom: '1px solid rgba(16, 185, 129, 0.2)', paddingBottom: '6px' }}>Strength (Fundamental)</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#a5b4fc' }}>ROE:</span>
+                    <span style={{ fontWeight: 700 }}>{selectedScreenerStock.roe_pct != null ? `${selectedScreenerStock.roe_pct}%` : 'N/A'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#a5b4fc' }}>D/E Ratio:</span>
+                    <span style={{ fontWeight: 700 }}>{selectedScreenerStock.de_ratio != null ? selectedScreenerStock.de_ratio.toFixed(2) : 'N/A'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#a5b4fc' }}>Net Profit Margin:</span>
+                    <span style={{ fontWeight: 700 }}>{selectedScreenerStock.npm_pct != null ? `${selectedScreenerStock.npm_pct}%` : 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Value Column */}
+              <div className="glass-panel-inner" style={{ padding: '16px' }}>
+                <h4 style={{ color: '#fde047', fontWeight: 800, marginBottom: '10px', borderBottom: '1px solid rgba(253, 224, 71, 0.2)', paddingBottom: '6px' }}>Value (Pricing)</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#a5b4fc' }}>PE Ratio:</span>
+                    <span style={{ fontWeight: 700 }}>{selectedScreenerStock.pe != null ? selectedScreenerStock.pe.toFixed(1) : 'N/A'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#a5b4fc' }}>52-W Return:</span>
+                    <span style={{ fontWeight: 700, color: selectedScreenerStock.wk52_return_pct >= 0 ? '#34d399' : '#f87171' }}>
+                      {selectedScreenerStock.wk52_return_pct != null ? `${selectedScreenerStock.wk52_return_pct.toFixed(1)}%` : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Momentum Column */}
+              <div className="glass-panel-inner" style={{ padding: '16px' }}>
+                <h4 style={{ color: '#00b4d8', fontWeight: 800, marginBottom: '10px', borderBottom: '1px solid rgba(0, 180, 216, 0.2)', paddingBottom: '6px' }}>Momentum (Technical)</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#a5b4fc' }}>RSI (14d):</span>
+                    <span style={{ fontWeight: 700, color: selectedScreenerStock.rsi > 70 ? '#f87171' : (selectedScreenerStock.rsi < 30 ? '#34d399' : '#ffffff') }}>
+                      {selectedScreenerStock.rsi != null ? selectedScreenerStock.rsi.toFixed(1) : 'N/A'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#a5b4fc' }}>200-Day MA:</span>
+                    <span style={{ fontWeight: 700 }}>{selectedScreenerStock.ma200 != null ? `₹${selectedScreenerStock.ma200.toFixed(2)}` : 'N/A'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#a5b4fc' }}>Trend Info:</span>
+                    <span style={{ fontWeight: 700 }}>{selectedScreenerStock.trend || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => {
+                  addStockToSipWatchlist(selectedScreenerStock.symbol, selectedScreenerStock.name, selectedScreenerStock.ltp);
+                  setSelectedScreenerStock(null);
+                }}
+                style={{ 
+                  background: '#6366f1', 
+                  color: 'white', 
+                  border: 'none', 
+                  padding: '10px 18px', 
+                  borderRadius: '8px', 
+                  cursor: 'pointer', 
+                  fontWeight: 700 
+                }}
+              >
+                📌 Add to SIP Watchlist
+              </button>
+              <button onClick={() => setSelectedScreenerStock(null)} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#ffffff', padding: '10px 20px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer' }}>Close</button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* Bottom Navigation Bar (Mobile App Style) */}
       <div style={{
         position: 'fixed',
@@ -4711,6 +5347,7 @@ export default function App() {
           { key: 'home', label: 'Home', icon: Activity, color: '#6366f1' },
           { key: 'trades', label: 'Trades', icon: FileText, color: '#14b8a6' },
           { key: 'capital', label: 'Capital', icon: DollarSign, color: '#a855f7' },
+          { key: 'screener', label: 'Screener', icon: Search, color: '#ec4899' },
           { key: 'sip', label: 'SIP', icon: TrendingUp, color: '#00b4d8' },
           { key: 'mtf', label: 'MTF', icon: Layers, color: '#f59e0b' }
         ].map(navItem => {

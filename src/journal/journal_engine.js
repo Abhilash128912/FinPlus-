@@ -413,9 +413,15 @@ export function saveJournalEngine(trades) {
       lastSyncedJson = jsonStr;
 
       // Async sync with local Python backend to write to SQLite + disk JSON file
-      const candidateUrls = [
-        'http://127.0.0.1:8000'
-      ];
+      const isNative = typeof window !== 'undefined' && (Boolean(window.Capacitor?.isNativePlatform?.()) || window.location.protocol === 'capacitor:');
+      const defaultCloudUrl = 'https://finplus.onrender.com';
+      const customUrl = typeof window !== 'undefined' && localStorage.getItem('finplus_server_url');
+      
+      const candidateUrls = [];
+      if (customUrl) candidateUrls.push(customUrl);
+      if (isNative) candidateUrls.push(defaultCloudUrl);
+      candidateUrls.push('http://127.0.0.1:8000');
+
       for (const url of candidateUrls) {
         fetch(`${url}/api/trades/sync`, {
           method: 'POST',
@@ -684,9 +690,17 @@ export function importJournalCSV(csvText, currentTrades = []) {
  * 10. Real-time Cloud Synchronization Engine (Option A)
  * Syncs trade journal state and capital settings automatically between Mobile APK & PC.
  */
-const CLOUD_SYNC_SERVERS = [
-  'http://127.0.0.1:8000'
-];
+const getCloudSyncServers = () => {
+  const isNative = typeof window !== 'undefined' && (Boolean(window.Capacitor?.isNativePlatform?.()) || window.location.protocol === 'capacitor:');
+  const defaultCloudUrl = 'https://finplus.onrender.com';
+  const customUrl = typeof window !== 'undefined' && localStorage.getItem('finplus_server_url');
+  
+  const servers = [];
+  if (customUrl) servers.push(customUrl);
+  if (isNative) servers.push(defaultCloudUrl);
+  servers.push('http://127.0.0.1:8000');
+  return servers;
+};
 
 export async function pushJournalToCloud(trades, settings = {}) {
   const payload = {
@@ -696,7 +710,8 @@ export async function pushJournalToCloud(trades, settings = {}) {
     settings
   };
 
-  for (const serverUrl of CLOUD_SYNC_SERVERS) {
+  const syncServers = getCloudSyncServers();
+  for (const serverUrl of syncServers) {
     try {
       const res = await fetch(`${serverUrl}/api/journal/sync`, {
         method: 'POST',
@@ -714,7 +729,8 @@ export async function pushJournalToCloud(trades, settings = {}) {
 }
 
 export async function fetchJournalFromCloud() {
-  for (const serverUrl of CLOUD_SYNC_SERVERS) {
+  const syncServers = getCloudSyncServers();
+  for (const serverUrl of syncServers) {
     try {
       const res = await fetch(`${serverUrl}/api/journal/sync`);
       if (res.ok) {
