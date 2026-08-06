@@ -1,0 +1,108 @@
+name: Daily Stock Screener Scan
+
+on:
+  schedule:
+    # Run every weekday at 11:00 UTC = 4:30 PM IST (after NSE market close at 3:30 PM IST)
+    - cron: '0 11 * * 1-5'
+  workflow_dispatch:
+    # Allow manual trigger from GitHub Actions UI anytime
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: write   # needed to commit index.html back to repo
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Nifty 500 stock screener scan
+        run: |
+          echo "Starting full Nifty 500 scan at $(date '+%Y-%m-%d %H:%M:%S IST')"
+          # Run in scan-only mode (no web server, no blocking join)
+          python -c "
+          import os, sys
+          sys.path.insert(0, '.')
+          import fetch_and_build as fb
+          import download_nse_indices
+
+          print('Updating Nifty stock list from NSE...')
+          try:
+              download_nse_indices.main()
+          except Exception as e:
+              print(f'  Stock list update skipped: {e}')
+
+          print('Reading stock list...')
+          tickers = fb.read_stock_list()
+          print(f'  Loaded {len(tickers)} tickers')
+
+          print('Running scan (this takes 10-12 minutes)...')
+          results = fb.run_scan(tickers)
+
+          print('Processing watchlist...')
+          wl_data = fb.process_watchlist(results)
+
+          print('Processing daily top pick...')
+          top_pick, daily_history, mkt_info = fb.process_daily_top_pick(results)
+
+          print('Fetching commodity signals...')
+          commodity_signals = fb.fetch_commodity_signals()
+
+          print('Processing F&O signals...')
+          fno_data = fb.process_fno_stocks(results)
+
+          print('Building HTML report...')
+          html = fb.build_html(results, wl_data, top_pick, daily_history, commodity_signals, mkt_info, fno_data)
+
+          with open(fb.OUT_HTML, 'w', encoding='utf-8') as f:
+              f.write(html)
+          os.makedirs(os.path.dirname(fb.OUT_WWW_HTML), exist_ok=True)
+          with open(fb.OUT_WWW_HTML, 'w', encoding='utf-8') as f:
+              f.write(html)
+
+          apk_path = 'android/app/src/main/assets/public/index.html'
+          os.makedirs(os.path.dirname(apk_path), exist_ok=True)
+          with open(apk_path, 'w', encoding='utf-8') as f:
+              f.write(html)
+
+          print(f'Scan complete! index.html updated ({len(html):,} bytes)')
+          "
+
+      - name: Apply mobile-safe URL fix to generated HTML
+        run: python fix_scan_url.py
+        continue-on-error: true
+
+      - name: Commit and push updated report
+        run: |
+          git config --global user.name  "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+
+          git add index.html www/index.html android/app/src/main/assets/public/index.html daily_picks_history.json watchlist_data.json || true
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit (data unchanged since last scan)"
+          else
+            IST=$(TZ='Asia/Kolkata' date '+%Y-%m-%d %H:%M IST')
+            git commit -m "auto: daily scan $IST [skip ci]"
+            git push
+            echo "Successfully pushed updated scan report"
+          fi

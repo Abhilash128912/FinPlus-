@@ -38,6 +38,7 @@ CACHE_DIR  = os.path.join(BASE_DIR, "cache")
 WL_SEED    = os.path.join(BASE_DIR, "watchlist_seed.json")
 WL_FILE    = os.path.join(BASE_DIR, "watchlist_data.json")
 OUT_HTML   = os.path.join(BASE_DIR, "index.html")
+OUT_WWW_HTML = os.path.join(BASE_DIR, "www", "index.html")
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -2034,38 +2035,48 @@ async function triggerAppScan() {
   const btnText = document.getElementById('scanProgressText');
   const btnLog = document.getElementById('scanProgressLog');
   const barInner = document.getElementById('scanProgressBarInner');
-  
+
+  // On mobile (Capacitor APK), port is empty - scan can only run from desktop
+  const isDesktop = window.location.port === '5000' || window.location.port === '3000';
+
+  if (!isDesktop) {
+    // Mobile: show informational dialog, offer to reload
+    const confirmed = confirm(
+      '\u26a1 Scan runs on your Desktop PC\n\n' +
+      'The full Nifty 500 scan takes 10-12 minutes and can only run from your PC.\n\n' +
+      'To trigger a scan:\n' +
+      '  1. Open your PC\n' +
+      '  2. Run \"Run Screener.bat\"\n\n' +
+      'Tap OK to reload the latest available data.'
+    );
+    if (confirmed) window.location.reload();
+    return;
+  }
+
+  // Desktop only: call local scan server
   if (overlay) overlay.style.display = 'flex';
   if (btnText) btnText.textContent = 'Initializing live stock & commodity scan...';
   if (barInner) barInner.style.width = '20%';
   if (btnLog) btnLog.textContent = 'Connecting to local scan engine server...';
 
-  let scanUrl = '/api/scan';
-  if (window.location.protocol === 'file:') {
-    scanUrl = 'http://localhost:5000/api/scan';
-  }
+  const scanUrl = 'http://localhost:' + window.location.port + '/api/scan';
 
   try {
     if (barInner) barInner.style.width = '40%';
     if (btnLog) btnLog.textContent = 'Fetching Nifty 500 prices & scoring stocks...';
-    
     const res = await fetch(scanUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
     if (res.ok) {
-      if (barInner) barInner.style.width = '90%';
+      if (barInner) barInner.style.width = '100%';
       if (btnText) btnText.textContent = 'Scan complete! Reloading latest data...';
       if (btnLog) btnLog.textContent = 'Updating watchlist and daily picks...';
-      
-      setTimeout(() => {
-        if (barInner) barInner.style.width = '100%';
-        window.location.reload();
-      }, 800);
+      setTimeout(() => { window.location.reload(); }, 800);
     } else {
       throw new Error(`Server returned status ${res.status}`);
     }
   } catch (err) {
-    console.warn("Direct scan endpoint failed or offline:", err);
+    console.warn('Direct scan endpoint failed or offline:', err);
     if (overlay) overlay.style.display = 'none';
-    alert("⚡ Python Scan Server is not running.\n\nPlease launch 'Run Screener.bat' or execute:\n  python fetch_and_build.py --server\nto enable 1-click background scanning from the web app.");
+    alert("\u26a1 Python Scan Server is not running.\n\nPlease launch 'Run Screener.bat' to start the scan server.");
   }
 }
 
@@ -2233,6 +2244,52 @@ function autoAddTopSuggestions(silent = false) {
   }
 }
 
+// ── Live App Trigger Scan ───────────────────────────────────────────────────
+async function triggerAppScan() {
+  const overlay = document.getElementById('scanProgressOverlay');
+  const txt = document.getElementById('scanProgressText');
+  const logEl = document.getElementById('scanProgressLog');
+  const bar = document.getElementById('scanProgressBarInner');
+
+  if (overlay) overlay.style.display = 'flex';
+  if (txt) txt.textContent = 'Triggering Full Market Scan...';
+  if (logEl) logEl.textContent = 'Connecting to scanner server...';
+  if (bar) bar.style.width = '20%';
+
+  // Port check (not hostname) - Capacitor APK also uses hostname=localhost!
+  let sUrl = 'https://finplus-g0b5.onrender.com/api/scan';
+  if (window.location.port === '5000' || window.location.port === '3000') {
+    sUrl = 'http://localhost:' + window.location.port + '/api/scan';
+  }
+
+  try {
+    if (bar) bar.style.width = '50%';
+    if (logEl) logEl.textContent = 'Running Nifty 500 & Commodity scan algorithm...';
+    
+    const res = await fetch(sUrl, { method: 'POST' });
+    if (res.ok) {
+      if (bar) bar.style.width = '100%';
+      if (txt) txt.textContent = 'Scan Completed Successfully!';
+      if (logEl) logEl.textContent = 'Reloading report data...';
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+      return;
+    } else {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.message || 'Server error during scan');
+    }
+  } catch (e) {
+    if (bar) bar.style.width = '100%';
+    if (txt) txt.textContent = 'Scan Server Unavailable';
+    if (logEl) logEl.innerHTML = `<span style="color:#ef4444">⚠ Error: ${e.message}<br>Make sure the Stock Screener Server is running.</span>`;
+    setTimeout(() => {
+      if (overlay) overlay.style.display = 'none';
+      alert('⚠ Could not run live scan. Make sure backend server is active at ' + sUrl);
+    }, 2500);
+  }
+}
+
 // ── Live LTP Polling System ───────────────────────────────────────────────
 function updateLtpBadgeStatus() {
   const dot = document.getElementById('ltpStatusDot');
@@ -2270,9 +2327,10 @@ function updateLtpBadgeStatus() {
 
 async function fetchLiveLTPForSymbol(ticker) {
   // 1. Try Render Backend API first (rate-limit free)
+  // Port check (not hostname) - Capacitor APK also uses hostname=localhost!
   let rUrl = `https://finplus-g0b5.onrender.com/api/ltp?ticker=${encodeURIComponent(ticker)}`;
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    rUrl = `http://localhost:5000/api/ltp?ticker=${encodeURIComponent(ticker)}`;
+  if (window.location.port === '5000' || window.location.port === '3000') {
+    rUrl = `http://localhost:${window.location.port}/api/ltp?ticker=${encodeURIComponent(ticker)}`;
   }
   try {
     const res = await fetch(rUrl);
@@ -4074,6 +4132,12 @@ if __name__ == "__main__":
     html = build_html(screener_results, wl_data, top_pick, daily_history, commodity_signals, mkt_info, fno_data)
     with open(OUT_HTML, "w", encoding="utf-8") as f:
         f.write(html)
+    try:
+        os.makedirs(os.path.dirname(OUT_WWW_HTML), exist_ok=True)
+        with open(OUT_WWW_HTML, "w", encoding="utf-8") as f:
+            f.write(html)
+    except Exception as e:
+        log(f"  ⚠ Could not copy report to www/index.html: {e}")
 
     log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
     server_thread.join()
