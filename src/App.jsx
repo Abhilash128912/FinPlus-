@@ -924,10 +924,12 @@ export default function App() {
     const netPnl = grossPnl - totalCarryingCost;
     const netReturnPct = marginPaid > 0 ? (netPnl / marginPaid) * 100 : 0;
 
-    // Overall Accumulation
-    overallMtfDeployedMargin += marginPaid;
-    overallMtfBrokerFunding += funding;
-    overallMtfCurrentVal += currentVal;
+    // Overall Accumulation (Deployed capital/value only applies to Active positions)
+    if (t.status === 'Active') {
+      overallMtfDeployedMargin += marginPaid;
+      overallMtfBrokerFunding += funding;
+      overallMtfCurrentVal += currentVal;
+    }
     overallMtfGrossPnl += grossPnl;
     overallMtfInterest14 += interestCost14;
     overallMtfBrokerage += brokerage;
@@ -1822,6 +1824,17 @@ export default function App() {
     if (chg.net_pnl > 0) winningTradesCount++;
   });
 
+  // Cumulative totals (Journal closed trades + MTF closed trades)
+  const closedMtfTrades = mtfSummaryList.filter(t => t.status === 'Closed');
+  const cumulativeRealizedNetPnl = totalRealizedNetPnl + closedMtfNetPnl;
+  const cumulativeGrossPnl = totalGrossPnl + closedMtfGrossPnl;
+  const cumulativeCharges = totalZerodhaCharges + closedMtfCarryingCharges;
+  const cumulativeClosedTradesCount = closedTrades.length + closedMtfTrades.length;
+  const cumulativeWinningTradesCount = winningTradesCount + closedMtfTrades.filter(t => t.netPnl > 0).length;
+  const cumulativeWinRatePct = cumulativeClosedTradesCount > 0 
+    ? ((cumulativeWinningTradesCount / cumulativeClosedTradesCount) * 100).toFixed(1)
+    : '0';
+
   const winRatePct = closedTrades.length > 0 ? ((winningTradesCount / closedTrades.length) * 100).toFixed(1) : '0';
 
   // Helper to extract YYYY-MM-DD from trade created_at, entry_date, date, or updated_at
@@ -2423,15 +2436,15 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                 <span style={{ height: '8px', width: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }}></span>
                 <span style={{ fontSize: '14px', fontWeight: 800, color: '#34d399', textTransform: 'uppercase' }}>
-                  ● Realized Closed P&L Summary (All Time)
+                  ● Cumulative Realized P&L Summary (Journal + MTF)
                 </span>
               </div>
 
               <div className="glass-panel-inner" style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', alignItems: 'center' }}>
                 <div>
                   <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 600 }}>NET REALIZED P&L</div>
-                  <div style={{ fontSize: '22px', fontWeight: 900, color: totalRealizedNetPnl > 0 ? '#34d399' : (totalRealizedNetPnl < 0 ? '#f87171' : '#ffffff'), marginTop: '4px' }}>
-                    {totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}
+                  <div style={{ fontSize: '22px', fontWeight: 900, color: cumulativeRealizedNetPnl > 0 ? '#34d399' : (cumulativeRealizedNetPnl < 0 ? '#f87171' : '#ffffff'), marginTop: '4px' }}>
+                    {cumulativeRealizedNetPnl >= 0 ? '+' : ''}₹{cumulativeRealizedNetPnl.toFixed(2)}
                   </div>
                 </div>
 
@@ -2446,15 +2459,18 @@ export default function App() {
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 600 }}>WIN RATE</div>
                   <div style={{ fontSize: '22px', fontWeight: 900, color: '#c084fc', marginTop: '4px' }}>
-                    {winRatePct}%
+                    {cumulativeWinRatePct}%
                   </div>
-                  <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>{winningTradesCount} W / {closedTrades.length} T</div>
+                  <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>{cumulativeWinningTradesCount} W / {cumulativeClosedTradesCount} T</div>
                 </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#a5b4fc', marginTop: '12px', padding: '0 4px' }}>
-                <span>Gross P&L: ₹{totalGrossPnl.toFixed(2)}</span>
-                <span>Zerodha Statutory Taxes: ₹{totalZerodhaCharges.toFixed(2)}</span>
+                <span>Gross: ₹{cumulativeGrossPnl.toFixed(2)}</span>
+                <span>Taxes & Charges: ₹{cumulativeCharges.toFixed(2)}</span>
+              </div>
+              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '6px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
+                Journal P&L: <strong style={{ color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>{totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}</strong> | MTF P&L: <strong style={{ color: closedMtfNetPnl >= 0 ? '#34d399' : '#f87171' }}>{closedMtfNetPnl >= 0 ? '+' : ''}₹{closedMtfNetPnl.toFixed(2)}</strong>
               </div>
             </div>
 

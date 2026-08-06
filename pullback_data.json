@@ -14,7 +14,7 @@
         "shares": 2
       }
     ],
-    "local_peak": 177.8,
+    "local_peak": 177.7,
     "date_added": "2026-07-03",
     "initial_reference_price": 160.53
   },
@@ -132,7 +132,9 @@
       "margin_ratio": 0.32,
       "margin_paid": 4483.199999999999,
       "broker_funding": 9526.800000000001,
-      "status": "Active"
+      "status": "Closed",
+      "sell_date": "2026-08-06",
+      "sell_price": 1348.67
     }
   ],
   "UYFINCORP.NS": {
