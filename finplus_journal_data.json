@@ -1,1277 +1,1277 @@
-[
-  {
-    "uuid": "fp_ms5wckzb_q0rbcpp",
-    "symbol": "SENSEX 78500 CE",
-    "entry_price": 17,
-    "quantity": 20,
-    "stop_loss": 14,
-    "target_price": 23,
-    "instrument_type": "Nifty Options",
-    "exit_price": 18.95,
-    "status": "CLOSED",
-    "created_at": "2026-07-29T09:43:01.175Z",
-    "updated_at": "2026-07-29T09:44:55.590Z"
-  },
-  {
-    "uuid": "fp_ms5wbyru_e9mtxpr",
-    "symbol": "SENSEX78300 CE",
-    "entry_price": 27.25,
-    "quantity": 20,
-    "stop_loss": 22.45,
-    "target_price": 36.8,
-    "instrument_type": "Nifty Options",
-    "exit_price": 22.5,
-    "status": "CLOSED",
-    "created_at": "2026-07-29T09:42:32.394Z",
-    "updated_at": "2026-07-29T09:44:47.134Z"
-  },
-  {
-    "uuid": "fp_ms5wb5f3_1va810y",
-    "symbol": "SENSEX 76600 PE",
-    "entry_price": 29.35,
-    "quantity": 20,
-    "stop_loss": 24.2,
-    "target_price": 39.65,
-    "instrument_type": "Nifty Options",
-    "exit_price": 28.35,
-    "status": "CLOSED",
-    "created_at": "2026-07-29T09:41:54.351Z",
-    "updated_at": "2026-07-29T09:44:37.144Z"
-  },
-  {
-    "uuid": "fp_ms5wa2rk_r6r61k9",
-    "symbol": "SENSEX 78200 CEQ",
-    "entry_price": 41,
-    "quantity": 20,
-    "stop_loss": 33.8,
-    "target_price": 55.35,
-    "instrument_type": "Nifty Options",
-    "exit_price": 36.9,
-    "status": "CLOSED",
-    "created_at": "2026-07-29T09:41:04.256Z",
-    "updated_at": "2026-07-29T09:44:22.417Z"
-  },
-  {
-    "uuid": "fp_ms5w95ou_rk9csv5",
-    "symbol": "SENSEX 78200 CE",
-    "entry_price": 41.45,
-    "quantity": 20,
-    "stop_loss": 34.15,
-    "target_price": 56,
-    "instrument_type": "Nifty Options",
-    "exit_price": 36.4,
-    "status": "CLOSED",
-    "created_at": "2026-07-29T09:40:21.390Z",
-    "updated_at": "2026-07-29T09:44:13.470Z"
-  },
-  {
-    "uuid": "fp_ms5w7fiq_qfqk4hq",
-    "symbol": "SENSEX 76800 PE",
-    "entry_price": 44.7,
-    "quantity": 20,
-    "stop_loss": 44.3,
-    "target_price": 45.45,
-    "instrument_type": "Intraday",
-    "exit_price": 42.1,
-    "status": "CLOSED",
-    "created_at": "2026-07-29T09:39:00.818Z",
-    "updated_at": "2026-07-29T09:44:00.814Z"
-  },
-  {
-    "uuid": "fp_ms5w6tl0_x3nzhut",
-    "symbol": "SENSEX 78200 CE",
-    "entry_price": 42,
-    "quantity": 20,
-    "stop_loss": 41.65,
-    "target_price": 42.7,
-    "instrument_type": "Intraday",
-    "exit_price": 37.9,
-    "status": "CLOSED",
-    "created_at": "2026-07-29T09:38:32.388Z",
-    "updated_at": "2026-07-29T09:43:47.851Z"
-  },
-  {
-    "uuid": "fp_ms5w69jx_ab06qd5",
-    "symbol": "SENSEX 78400 CE",
-    "entry_price": 20.75,
-    "quantity": 20,
-    "stop_loss": 17.1,
-    "target_price": 28.05,
-    "instrument_type": "Nifty Options",
-    "exit_price": 22.75,
-    "status": "CLOSED",
-    "created_at": "2026-07-29T09:38:06.430Z",
-    "updated_at": "2026-07-29T09:43:35.255Z"
-  },
-  {
-    "uuid": "fp_ms5w5j73_g1i2cpc",
-    "symbol": "NIFTY 24600 CE",
-    "entry_price": 16,
-    "quantity": 65,
-    "stop_loss": 13.15,
-    "target_price": 21.6,
-    "instrument_type": "Nifty Options",
-    "exit_price": 16.95,
-    "status": "CLOSED",
-    "created_at": "2026-07-29T09:37:32.271Z",
-    "updated_at": "2026-07-29T09:43:23.566Z"
-  },
-  {
-    "uuid": "fp_ms4dz17q_227t67m",
-    "symbol": "AHOKLEYLAND",
-    "entry_price": 157.39,
-    "quantity": 12,
-    "stop_loss": 156.1,
-    "target_price": 159.95,
-    "instrument_type": "Intraday",
-    "exit_price": 158.28,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:20:49.766Z",
-    "updated_at": "2026-07-28T08:25:04.255Z"
-  },
-  {
-    "uuid": "fp_ms4dy7px_ujsggzh",
-    "symbol": "NIFTY 24100 CE",
-    "entry_price": 9.9,
-    "quantity": 65,
-    "stop_loss": 8.15,
-    "target_price": 13.4,
-    "instrument_type": "Nifty Options",
-    "exit_price": 5.9,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:20:11.541Z",
-    "updated_at": "2026-07-28T08:24:56.008Z"
-  },
-  {
-    "uuid": "fp_ms4dxvwx_7394lac",
-    "symbol": "NIFTY 23950 PE",
-    "entry_price": 12.6,
-    "quantity": 65,
-    "stop_loss": 10.35,
-    "target_price": 17.05,
-    "instrument_type": "Nifty Options",
-    "exit_price": 11.1,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:19:56.241Z",
-    "updated_at": "2026-07-28T08:24:44.609Z"
-  },
-  {
-    "uuid": "fp_ms4dxi7h_u9ioh8z",
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 17.7,
-    "quantity": 65,
-    "stop_loss": 14.6,
-    "target_price": 23.9,
-    "instrument_type": "Nifty Options",
-    "exit_price": 13.2,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:19:38.477Z",
-    "updated_at": "2026-07-28T08:24:32.837Z"
-  },
-  {
-    "uuid": "fp_ms4dx6g3_wloeues",
-    "symbol": "NIFTY 23950 PE",
-    "entry_price": 11.55,
-    "quantity": 65,
-    "stop_loss": 9.5,
-    "target_price": 15.6,
-    "instrument_type": "Nifty Options",
-    "exit_price": 10.1,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:19:23.235Z",
-    "updated_at": "2026-07-28T08:24:20.346Z"
-  },
-  {
-    "uuid": "fp_ms4dwtkr_tf0r5f9",
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 16.25,
-    "quantity": 65,
-    "stop_loss": 13.4,
-    "target_price": 21.95,
-    "instrument_type": "Nifty Options",
-    "exit_price": 15.65,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:19:06.555Z",
-    "updated_at": "2026-07-28T08:24:08.056Z"
-  },
-  {
-    "uuid": "fp_ms4dwi8f_nv1680o",
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 17.75,
-    "quantity": 65,
-    "stop_loss": 14.6,
-    "target_price": 24,
-    "instrument_type": "Nifty Options",
-    "exit_price": 17,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:18:51.855Z",
-    "updated_at": "2026-07-28T08:23:48.643Z"
-  },
-  {
-    "uuid": "fp_ms4dvnwf_cdbs8xc",
-    "symbol": "NIFTY 24000 PE",
-    "entry_price": 24.5,
-    "quantity": 65,
-    "stop_loss": 20.2,
-    "target_price": 33.1,
-    "instrument_type": "Nifty Options",
-    "exit_price": 25.5,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:18:12.543Z",
-    "updated_at": "2026-07-28T08:23:37.496Z"
-  },
-  {
-    "uuid": "fp_ms4dv8e6_be2uuyi",
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 19,
-    "quantity": 65,
-    "stop_loss": 15.65,
-    "target_price": 25.65,
-    "instrument_type": "Nifty Options",
-    "exit_price": 19.2,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:17:52.446Z",
-    "updated_at": "2026-07-28T08:23:24.732Z"
-  },
-  {
-    "uuid": "fp_ms4duxkv_f2rg9ff",
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 16.55,
-    "quantity": 65,
-    "stop_loss": 13.65,
-    "target_price": 22.35,
-    "instrument_type": "Nifty Options",
-    "exit_price": 16.85,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:17:38.431Z",
-    "updated_at": "2026-07-28T08:23:15.325Z"
-  },
-  {
-    "uuid": "fp_ms4dul2y_s15rk2v",
-    "symbol": "NIFTY 23950 PE",
-    "entry_price": 22.2,
-    "quantity": 65,
-    "stop_loss": 15.25,
-    "target_price": 25,
-    "instrument_type": "Nifty Options",
-    "exit_price": 18.5,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:17:22.234Z",
-    "updated_at": "2026-07-28T08:23:01.146Z"
-  },
-  {
-    "uuid": "fp_ms4du9k1_3mo5k1f",
-    "symbol": "NIFTY 24000 CE",
-    "entry_price": 32.15,
-    "quantity": 65,
-    "stop_loss": 26.5,
-    "target_price": 43.45,
-    "instrument_type": "Nifty Options",
-    "exit_price": 30,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:17:07.297Z",
-    "updated_at": "2026-07-28T08:22:20.585Z"
-  },
-  {
-    "uuid": "fp_ms4dtyzj_u5egw2l",
-    "symbol": "NIFTY 24000 CE",
-    "entry_price": 29,
-    "quantity": 65,
-    "stop_loss": 23.9,
-    "target_price": 39.2,
-    "instrument_type": "Nifty Options",
-    "exit_price": 32.55,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:16:53.599Z",
-    "updated_at": "2026-07-28T08:22:07.921Z"
-  },
-  {
-    "uuid": "fp_ms4dti5x_2hn73qh",
-    "symbol": "NIFTY 24000 CE",
-    "entry_price": 26.4,
-    "quantity": 65,
-    "stop_loss": 21.75,
-    "target_price": 35.65,
-    "instrument_type": "Nifty Options",
-    "exit_price": 31.45,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:16:31.797Z",
-    "updated_at": "2026-07-28T08:21:56.665Z"
-  },
-  {
-    "uuid": "fp_ms4drfh7_g7r314b",
-    "symbol": "NIFTY 23950 PE",
-    "entry_price": 30.2,
-    "quantity": 65,
-    "stop_loss": 53.6,
-    "target_price": 87.75,
-    "instrument_type": "Nifty Options",
-    "exit_price": 28.65,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:14:55.003Z",
-    "updated_at": "2026-07-28T08:21:44.351Z"
-  },
-  {
-    "uuid": "fp_ms4dr0q4_zcxr5ue",
-    "symbol": "NIFTY 23900 PE",
-    "entry_price": 12.3,
-    "quantity": 65,
-    "stop_loss": 10.1,
-    "target_price": 16.65,
-    "instrument_type": "Nifty Options",
-    "exit_price": 7.05,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:14:35.884Z",
-    "updated_at": "2026-07-28T08:21:19.808Z"
-  },
-  {
-    "uuid": "fp_ms4dqsft_fiy6ga8",
-    "symbol": "NIFTY 24100 CE",
-    "entry_price": 12.8,
-    "quantity": 65,
-    "stop_loss": 10.1,
-    "target_price": 16.65,
-    "instrument_type": "Nifty Options",
-    "exit_price": 7.85,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:14:25.145Z",
-    "updated_at": "2026-07-28T08:21:31.450Z"
-  },
-  {
-    "uuid": "fp_ms4dqf2d_pq3d631",
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 35,
-    "quantity": 65,
-    "stop_loss": 53.6,
-    "target_price": 87.75,
-    "instrument_type": "Nifty Options",
-    "exit_price": 33.4,
-    "status": "CLOSED",
-    "created_at": "2026-07-28T08:14:07.813Z",
-    "updated_at": "2026-07-28T08:21:04.760Z"
-  },
-  {
-    "id": 3276,
-    "symbol": "CRUDEOILM 9400 CE",
-    "entry_price": 183,
-    "quantity": 10,
-    "stop_loss": 181.15,
-    "target_price": 186.7,
-    "exit_price": 175,
-    "instrument_type": "Crude Oil Mini",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T14:09:22.048Z",
-    "ltp": 175,
-    "gross_pnl": -80,
-    "net_pnl": -82.31,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.07,
-      "exchange_txn": 0.11,
-      "taxes": 1.13,
-      "total": 2.31
-    }
-  },
-  {
-    "id": 3277,
-    "symbol": "CRUDEOILM 7000 PE",
-    "entry_price": 111,
-    "quantity": 10,
-    "stop_loss": 109.85,
-    "target_price": 113.25,
-    "exit_price": 106.45,
-    "instrument_type": "Crude Oil Mini",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T13:58:04.563Z",
-    "ltp": 106.45,
-    "gross_pnl": -45.5,
-    "net_pnl": -46.9,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 0.65,
-      "exchange_txn": 0.06,
-      "taxes": 0.69,
-      "total": 1.4
-    }
-  },
-  {
-    "id": 3278,
-    "symbol": "CRUDEOILM9200 CE",
-    "entry_price": 210,
-    "quantity": 10,
-    "stop_loss": 207.9,
-    "target_price": 214.2,
-    "exit_price": 199,
-    "instrument_type": "Crude Oil Mini",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T13:00:41.553Z",
-    "ltp": 199,
-    "gross_pnl": -110,
-    "net_pnl": -112.63,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.23,
-      "exchange_txn": 0.12,
-      "taxes": 1.28,
-      "total": 2.63
-    }
-  },
-  {
-    "id": 3279,
-    "symbol": "CRUDEOILM 7000 PE",
-    "entry_price": 112,
-    "quantity": 10,
-    "stop_loss": 110.85,
-    "target_price": 114.25,
-    "exit_price": 107,
-    "instrument_type": "Crude Oil Mini",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T12:58:37.435Z",
-    "ltp": 107,
-    "gross_pnl": -50,
-    "net_pnl": -51.41,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 0.66,
-      "exchange_txn": 0.07,
-      "taxes": 0.68,
-      "total": 1.41
-    }
-  },
-  {
-    "id": 3280,
-    "symbol": "CRUDEOILM9200 CE",
-    "entry_price": 189.9,
-    "quantity": 10,
-    "stop_loss": 188,
-    "target_price": 193.7,
-    "exit_price": 202.2,
-    "instrument_type": "Crude Oil Mini",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T12:36:18.701Z",
-    "ltp": 202.2,
-    "gross_pnl": 123,
-    "net_pnl": 120.45,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.18,
-      "exchange_txn": 0.12,
-      "taxes": 1.25,
-      "total": 2.55
-    }
-  },
-  {
-    "id": 3281,
-    "symbol": "CRUDEOILM 7000PE",
-    "entry_price": 122.3,
-    "quantity": 10,
-    "stop_loss": 121.05,
-    "target_price": 124.75,
-    "exit_price": 115.3,
-    "instrument_type": "Crude Oil Mini",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T12:35:58.895Z",
-    "ltp": 115.3,
-    "gross_pnl": -70,
-    "net_pnl": -71.53,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 0.71,
-      "exchange_txn": 0.07,
-      "taxes": 0.75,
-      "total": 1.53
-    }
-  },
-  {
-    "id": 3282,
-    "symbol": "CRUDEOILM 9200 CE",
-    "entry_price": 182,
-    "quantity": 10,
-    "stop_loss": 179.8,
-    "target_price": 186.4,
-    "exit_price": 178.95,
-    "instrument_type": "Crude Oil Mini",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T11:43:25.745Z",
-    "ltp": 178.95,
-    "gross_pnl": -30.5,
-    "net_pnl": -32.83,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.08,
-      "exchange_txn": 0.11,
-      "taxes": 1.14,
-      "total": 2.33
-    }
-  },
-  {
-    "id": 3283,
-    "symbol": "NATGASMINI 280 CE",
-    "entry_price": 10.25,
-    "quantity": 250,
-    "stop_loss": 10,
-    "target_price": 10.7,
-    "exit_price": 10.25,
-    "instrument_type": "Natural Gas Mini",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T10:53:10.496Z",
-    "ltp": 10.25,
-    "gross_pnl": 0,
-    "net_pnl": -3.32,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.54,
-      "exchange_txn": 0.15,
-      "taxes": 1.63,
-      "total": 3.32
-    }
-  },
-  {
-    "id": 3284,
-    "symbol": "NATGASMINI 260 PE",
-    "entry_price": 10.1,
-    "quantity": 250,
-    "stop_loss": 9.85,
-    "target_price": 10.55,
-    "exit_price": 9.75,
-    "instrument_type": "Natural Gas Mini",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T10:48:20.068Z",
-    "ltp": 9.75,
-    "gross_pnl": -87.5,
-    "net_pnl": -90.7,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.49,
-      "exchange_txn": 0.15,
-      "taxes": 1.56,
-      "total": 3.2
-    }
-  },
-  {
-    "id": 3285,
-    "symbol": "NIFTY 24100 CE",
-    "entry_price": 24.9,
-    "quantity": 65,
-    "stop_loss": 20.5,
-    "target_price": 33.65,
-    "exit_price": 30.75,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T08:43:54.999Z",
-    "ltp": 30.75,
-    "gross_pnl": 380.25,
-    "net_pnl": 377.87,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.09,
-      "exchange_txn": 0.11,
-      "taxes": 1.18,
-      "total": 2.38
-    }
-  },
-  {
-    "id": 3286,
-    "symbol": "NIFTY 23800 PE",
-    "entry_price": 17.95,
-    "quantity": 65,
-    "stop_loss": 14.8,
-    "target_price": 24.25,
-    "exit_price": 18.25,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T08:08:20.614Z",
-    "ltp": 18.25,
-    "gross_pnl": 19.5,
-    "net_pnl": 17.98,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 0.71,
-      "exchange_txn": 0.07,
-      "taxes": 0.74,
-      "total": 1.52
-    }
-  },
-  {
-    "id": 3287,
-    "symbol": "NIFTY 24100",
-    "entry_price": 19,
-    "quantity": 65,
-    "stop_loss": 15.65,
-    "target_price": 25.65,
-    "exit_price": 24.5,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T07:53:32.392Z",
-    "ltp": 24.5,
-    "gross_pnl": 357.5,
-    "net_pnl": 355.63,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 0.85,
-      "exchange_txn": 0.08,
-      "taxes": 0.94,
-      "total": 1.87
-    }
-  },
-  {
-    "id": 3288,
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 33.25,
-    "quantity": 65,
-    "stop_loss": 27.4,
-    "target_price": 44.9,
-    "exit_price": 31.25,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T07:53:20.628Z",
-    "ltp": 31.25,
-    "gross_pnl": -130,
-    "net_pnl": -132.7,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.26,
-      "exchange_txn": 0.12,
-      "taxes": 1.32,
-      "total": 2.7
-    }
-  },
-  {
-    "id": 3289,
-    "symbol": "NIFTY 23850 PE",
-    "entry_price": 28.8,
-    "quantity": 65,
-    "stop_loss": 23.75,
-    "target_price": 38.9,
-    "exit_price": 27.75,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T07:53:04.098Z",
-    "ltp": 27.75,
-    "gross_pnl": -68.25,
-    "net_pnl": -70.62,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.1,
-      "exchange_txn": 0.11,
-      "taxes": 1.16,
-      "total": 2.37
-    }
-  },
-  {
-    "id": 3290,
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 34.45,
-    "quantity": 65,
-    "stop_loss": 28.4,
-    "target_price": 46.55,
-    "exit_price": 33.55,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T07:52:32.383Z",
-    "ltp": 33.55,
-    "gross_pnl": -58.5,
-    "net_pnl": -61.35,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.33,
-      "exchange_txn": 0.13,
-      "taxes": 1.39,
-      "total": 2.85
-    }
-  },
-  {
-    "id": 3291,
-    "symbol": "NIFTY 24100",
-    "entry_price": 24,
-    "quantity": 65,
-    "stop_loss": 18.35,
-    "target_price": 30.15,
-    "exit_price": 22.3,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T07:51:26.628Z",
-    "ltp": 22.3,
-    "gross_pnl": -110.5,
-    "net_pnl": -112.44,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 0.9,
-      "exchange_txn": 0.09,
-      "taxes": 0.95,
-      "total": 1.94
-    }
-  },
-  {
-    "id": 3292,
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 36.35,
-    "quantity": 65,
-    "stop_loss": 29.95,
-    "target_price": 49.1,
-    "exit_price": 39.4,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T06:38:05.515Z",
-    "ltp": 39.4,
-    "gross_pnl": 198.25,
-    "net_pnl": 195.04,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.48,
-      "exchange_txn": 0.15,
-      "taxes": 1.58,
-      "total": 3.21
-    }
-  },
-  {
-    "id": 3293,
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 36.85,
-    "quantity": 65,
-    "stop_loss": 30.4,
-    "target_price": 49.75,
-    "exit_price": 34.8,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T06:37:52.571Z",
-    "ltp": 34.8,
-    "gross_pnl": -133.25,
-    "net_pnl": -136.25,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.4,
-      "exchange_txn": 0.14,
-      "taxes": 1.46,
-      "total": 3
-    }
-  },
-  {
-    "id": 3294,
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 32.5,
-    "quantity": 65,
-    "stop_loss": 26.8,
-    "target_price": 43.9,
-    "exit_price": 39.2,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T06:16:30.276Z",
-    "ltp": 39.2,
-    "gross_pnl": 435.5,
-    "net_pnl": 432.44,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.4,
-      "exchange_txn": 0.14,
-      "taxes": 1.52,
-      "total": 3.06
-    }
-  },
-  {
-    "id": 3295,
-    "symbol": "NIFTY 23800 PE",
-    "entry_price": 24.8,
-    "quantity": 65,
-    "stop_loss": 20.45,
-    "target_price": 33.5,
-    "exit_price": 24.8,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T06:16:15.540Z",
-    "ltp": 24.8,
-    "gross_pnl": 0,
-    "net_pnl": -2.09,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 0.97,
-      "exchange_txn": 0.1,
-      "taxes": 1.02,
-      "total": 2.09
-    }
-  },
-  {
-    "id": 3296,
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 31.2,
-    "quantity": 65,
-    "stop_loss": 25.7,
-    "target_price": 42.15,
-    "exit_price": 29.2,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T06:15:56.498Z",
-    "ltp": 29.2,
-    "gross_pnl": -130,
-    "net_pnl": -132.53,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.18,
-      "exchange_txn": 0.12,
-      "taxes": 1.23,
-      "total": 2.53
-    }
-  },
-  {
-    "id": 3297,
-    "symbol": "VBL",
-    "entry_price": 455.2,
-    "quantity": 22,
-    "stop_loss": 458.85,
-    "target_price": 447.9,
-    "exit_price": 457.15,
-    "instrument_type": "Intraday Short",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T05:16:22.297Z",
-    "ltp": 457.15,
-    "gross_pnl": -42.9,
-    "net_pnl": -55.89,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 6.02,
-      "exchange_txn": 0.6,
-      "taxes": 6.37,
-      "total": 12.99
-    }
-  },
-  {
-    "id": 3298,
-    "symbol": "NIFTY 23800 PE",
-    "entry_price": 30.45,
-    "quantity": 65,
-    "stop_loss": 25.1,
-    "target_price": 41.15,
-    "exit_price": 33.25,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T05:05:26.858Z",
-    "ltp": 33.25,
-    "gross_pnl": 182,
-    "net_pnl": 179.3,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.24,
-      "exchange_txn": 0.12,
-      "taxes": 1.34,
-      "total": 2.7
-    }
-  },
-  {
-    "id": 3299,
-    "symbol": "COALINDIA",
-    "entry_price": 430.1,
-    "quantity": 26,
-    "stop_loss": 426.65,
-    "target_price": 437,
-    "exit_price": 429.8,
-    "instrument_type": "Intraday",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T04:47:57.172Z",
-    "ltp": 429.8,
-    "gross_pnl": -7.8,
-    "net_pnl": -22.27,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 6.71,
-      "exchange_txn": 0.66,
-      "taxes": 7.1,
-      "total": 14.47
-    }
-  },
-  {
-    "id": 3300,
-    "symbol": "NIFTY 23850 PE",
-    "entry_price": 44.8,
-    "quantity": 65,
-    "stop_loss": 36.95,
-    "target_price": 60.5,
-    "exit_price": 44.2,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T04:47:29.756Z",
-    "ltp": 44.2,
-    "gross_pnl": -39,
-    "net_pnl": -42.74,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.74,
-      "exchange_txn": 0.17,
-      "taxes": 1.83,
-      "total": 3.74
-    }
-  },
-  {
-    "id": 3301,
-    "symbol": "NIFTY 23850 PE",
-    "entry_price": 40,
-    "quantity": 65,
-    "stop_loss": 33,
-    "target_price": 54,
-    "exit_price": 43.15,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T04:47:08.296Z",
-    "ltp": 43.15,
-    "gross_pnl": 204.75,
-    "net_pnl": 201.23,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.62,
-      "exchange_txn": 0.16,
-      "taxes": 1.74,
-      "total": 3.52
-    }
-  },
-  {
-    "id": 3302,
-    "symbol": "NIFTY 23850 PE",
-    "entry_price": 38.95,
-    "quantity": 65,
-    "stop_loss": 32.1,
-    "target_price": 52.6,
-    "exit_price": 44.2,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T04:46:01.339Z",
-    "ltp": 44.2,
-    "gross_pnl": 341.25,
-    "net_pnl": 337.72,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.62,
-      "exchange_txn": 0.16,
-      "taxes": 1.75,
-      "total": 3.53
-    }
-  },
-  {
-    "id": 3303,
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 39.9,
-    "quantity": 65,
-    "stop_loss": 32.9,
-    "target_price": 53.9,
-    "exit_price": 37.8,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T04:45:42.784Z",
-    "ltp": 37.8,
-    "gross_pnl": -136.5,
-    "net_pnl": -139.75,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.52,
-      "exchange_txn": 0.15,
-      "taxes": 1.58,
-      "total": 3.25
-    }
-  },
-  {
-    "id": 3304,
-    "symbol": "NIFTY 24050 CE",
-    "entry_price": 41.45,
-    "quantity": 65,
-    "stop_loss": 34.15,
-    "target_price": 56,
-    "exit_price": 39.4,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-27T04:45:23.799Z",
-    "ltp": 39.4,
-    "gross_pnl": -133.25,
-    "net_pnl": -136.64,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.58,
-      "exchange_txn": 0.16,
-      "taxes": 1.65,
-      "total": 3.39
-    }
-  },
-  {
-    "id": 3305,
-    "symbol": "CRUDEOIL",
-    "entry_price": 275,
-    "quantity": 10,
-    "stop_loss": 11.5,
-    "target_price": 18,
-    "exit_price": 265.25,
-    "instrument_type": "Crude Oil Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-24T11:38:24.549Z",
-    "ltp": 265.25,
-    "gross_pnl": -97.5,
-    "net_pnl": -149.93,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 40,
-      "exchange_txn": 2.7,
-      "taxes": 9.73,
-      "total": 52.43
-    }
-  },
-  {
-    "id": 3306,
-    "symbol": "TMPV",
-    "entry_price": 319.55,
-    "quantity": 38,
-    "stop_loss": null,
-    "target_price": null,
-    "exit_price": 319.55,
-    "instrument_type": "Intraday Short",
-    "status": "CLOSED",
-    "created_at": "2026-07-24T09:00:56.923Z",
-    "ltp": 319.55,
-    "gross_pnl": 0,
-    "net_pnl": -15.71,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 7.29,
-      "exchange_txn": 0.72,
-      "taxes": 7.7,
-      "total": 15.71
-    }
-  },
-  {
-    "id": 3307,
-    "symbol": "NIFTY 24100",
-    "entry_price": 30,
-    "quantity": 65,
-    "stop_loss": null,
-    "target_price": null,
-    "exit_price": 28.05,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-24T09:00:06.931Z",
-    "ltp": 28.05,
-    "gross_pnl": -126.75,
-    "net_pnl": -129.18,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.13,
-      "exchange_txn": 0.11,
-      "taxes": 1.19,
-      "total": 2.43
-    }
-  },
-  {
-    "id": 3308,
-    "symbol": "NIFTY 24050",
-    "entry_price": 35.15,
-    "quantity": 260,
-    "stop_loss": null,
-    "target_price": null,
-    "exit_price": 38.05,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-24T08:59:18.901Z",
-    "ltp": 38.05,
-    "gross_pnl": 754,
-    "net_pnl": 741.6,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 5.71,
-      "exchange_txn": 0.57,
-      "taxes": 6.12,
-      "total": 12.4
-    }
-  },
-  {
-    "id": 3309,
-    "symbol": "NIFTY 24000",
-    "entry_price": 35.7,
-    "quantity": 65,
-    "stop_loss": null,
-    "target_price": null,
-    "exit_price": 33.7,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-24T08:58:30.399Z",
-    "ltp": 33.7,
-    "gross_pnl": -130,
-    "net_pnl": -132.9,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.35,
-      "exchange_txn": 0.13,
-      "taxes": 1.42,
-      "total": 2.9
-    }
-  },
-  {
-    "id": 3310,
-    "symbol": "NIFTY 23950",
-    "entry_price": 36.9,
-    "quantity": 65,
-    "stop_loss": null,
-    "target_price": null,
-    "exit_price": 38.45,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-24T08:57:42.787Z",
-    "ltp": 38.45,
-    "gross_pnl": 100.75,
-    "net_pnl": 97.57,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.47,
-      "exchange_txn": 0.15,
-      "taxes": 1.56,
-      "total": 3.18
-    }
-  },
-  {
-    "id": 3311,
-    "symbol": "NIFTY 23350",
-    "entry_price": 31.95,
-    "quantity": 65,
-    "stop_loss": null,
-    "target_price": null,
-    "exit_price": 29.9,
-    "instrument_type": "Nifty Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-24T08:54:31.779Z",
-    "ltp": 29.9,
-    "gross_pnl": -133.25,
-    "net_pnl": -135.84,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 1.21,
-      "exchange_txn": 0.12,
-      "taxes": 1.26,
-      "total": 2.59
-    }
-  },
-  {
-    "id": 3312,
-    "symbol": "BHEL",
-    "entry_price": 402.95,
-    "quantity": 29,
-    "stop_loss": null,
-    "target_price": null,
-    "exit_price": 404.46,
-    "instrument_type": "Intraday Short",
-    "status": "CLOSED",
-    "created_at": "2026-07-24T05:43:50.633Z",
-    "ltp": 404.46,
-    "gross_pnl": -43.79,
-    "net_pnl": -58.95,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 7.02,
-      "exchange_txn": 0.7,
-      "taxes": 7.44,
-      "total": 15.16
-    }
-  },
-  {
-    "id": 3313,
-    "symbol": "TMPV",
-    "entry_price": 319.55,
-    "quantity": 38,
-    "stop_loss": null,
-    "target_price": null,
-    "exit_price": 319.75,
-    "instrument_type": "Intraday Short",
-    "status": "CLOSED",
-    "created_at": "2026-07-24T05:43:23.232Z",
-    "ltp": 319.75,
-    "gross_pnl": -7.6,
-    "net_pnl": -23.32,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 7.29,
-      "exchange_txn": 0.72,
-      "taxes": 7.71,
-      "total": 15.72
-    }
-  },
-  {
-    "id": 3314,
-    "symbol": "NATGASMINI 275 CE",
-    "entry_price": 14.47,
-    "quantity": 250,
-    "stop_loss": null,
-    "target_price": null,
-    "exit_price": 10.05,
-    "instrument_type": "Natural Gas Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-23T14:27:48.540Z",
-    "ltp": 10.05,
-    "gross_pnl": -1105,
-    "net_pnl": -1157.9,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 40,
-      "exchange_txn": 3.06,
-      "taxes": 9.84,
-      "total": 52.9
-    }
-  },
-  {
-    "id": 3317,
-    "symbol": "NATGASMINI 275 CE",
-    "entry_price": 11.05,
-    "quantity": 250,
-    "stop_loss": null,
-    "target_price": null,
-    "exit_price": 10.05,
-    "instrument_type": "Natural Gas Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-23T14:27:48.540Z",
-    "ltp": 10.05,
-    "gross_pnl": -250,
-    "net_pnl": -302.27,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 40,
-      "exchange_txn": 2.64,
-      "taxes": 9.63,
-      "total": 52.27
-    }
-  },
-  {
-    "id": 3315,
-    "symbol": "NATGASMINI 270 CE",
-    "entry_price": 12.5,
-    "quantity": 250,
-    "stop_loss": 11.5,
-    "target_price": 13.5,
-    "exit_price": 13.55,
-    "instrument_type": "Natural Gas Options",
-    "status": "CLOSED",
-    "created_at": "2026-07-22T12:31:46.131213",
-    "ltp": 13.55,
-    "gross_pnl": 262.5,
-    "net_pnl": 208.9,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 40,
-      "exchange_txn": 3.26,
-      "taxes": 10.34,
-      "total": 53.6
-    }
-  },
-  {
-    "id": 3316,
-    "symbol": "NMDC",
-    "entry_price": 83.5,
-    "quantity": 200,
-    "stop_loss": 84.5,
-    "target_price": 82.5,
-    "exit_price": 83.49,
-    "instrument_type": "Intraday Short",
-    "status": "CLOSED",
-    "created_at": "2026-07-22T09:50:43.088743",
-    "ltp": 83.49,
-    "gross_pnl": 2,
-    "net_pnl": -19.61,
-    "eod_analysis": null,
-    "charges_breakdown": {
-      "brokerage": 10.02,
-      "exchange_txn": 0.99,
-      "taxes": 10.6,
-      "total": 21.61
-    }
-  }
+[
+  {
+    "uuid": "fp_ms5wckzb_q0rbcpp",
+    "symbol": "SENSEX 78500 CE",
+    "entry_price": 17,
+    "quantity": 20,
+    "stop_loss": 14,
+    "target_price": 23,
+    "instrument_type": "Nifty Options",
+    "exit_price": 18.95,
+    "status": "CLOSED",
+    "created_at": "2026-07-29T09:43:01.175Z",
+    "updated_at": "2026-07-29T09:44:55.590Z"
+  },
+  {
+    "uuid": "fp_ms5wbyru_e9mtxpr",
+    "symbol": "SENSEX78300 CE",
+    "entry_price": 27.25,
+    "quantity": 20,
+    "stop_loss": 22.45,
+    "target_price": 36.8,
+    "instrument_type": "Nifty Options",
+    "exit_price": 22.5,
+    "status": "CLOSED",
+    "created_at": "2026-07-29T09:42:32.394Z",
+    "updated_at": "2026-07-29T09:44:47.134Z"
+  },
+  {
+    "uuid": "fp_ms5wb5f3_1va810y",
+    "symbol": "SENSEX 76600 PE",
+    "entry_price": 29.35,
+    "quantity": 20,
+    "stop_loss": 24.2,
+    "target_price": 39.65,
+    "instrument_type": "Nifty Options",
+    "exit_price": 28.35,
+    "status": "CLOSED",
+    "created_at": "2026-07-29T09:41:54.351Z",
+    "updated_at": "2026-07-29T09:44:37.144Z"
+  },
+  {
+    "uuid": "fp_ms5wa2rk_r6r61k9",
+    "symbol": "SENSEX 78200 CEQ",
+    "entry_price": 41,
+    "quantity": 20,
+    "stop_loss": 33.8,
+    "target_price": 55.35,
+    "instrument_type": "Nifty Options",
+    "exit_price": 36.9,
+    "status": "CLOSED",
+    "created_at": "2026-07-29T09:41:04.256Z",
+    "updated_at": "2026-07-29T09:44:22.417Z"
+  },
+  {
+    "uuid": "fp_ms5w95ou_rk9csv5",
+    "symbol": "SENSEX 78200 CE",
+    "entry_price": 41.45,
+    "quantity": 20,
+    "stop_loss": 34.15,
+    "target_price": 56,
+    "instrument_type": "Nifty Options",
+    "exit_price": 36.4,
+    "status": "CLOSED",
+    "created_at": "2026-07-29T09:40:21.390Z",
+    "updated_at": "2026-07-29T09:44:13.470Z"
+  },
+  {
+    "uuid": "fp_ms5w7fiq_qfqk4hq",
+    "symbol": "SENSEX 76800 PE",
+    "entry_price": 44.7,
+    "quantity": 20,
+    "stop_loss": 44.3,
+    "target_price": 45.45,
+    "instrument_type": "Intraday",
+    "exit_price": 42.1,
+    "status": "CLOSED",
+    "created_at": "2026-07-29T09:39:00.818Z",
+    "updated_at": "2026-07-29T09:44:00.814Z"
+  },
+  {
+    "uuid": "fp_ms5w6tl0_x3nzhut",
+    "symbol": "SENSEX 78200 CE",
+    "entry_price": 42,
+    "quantity": 20,
+    "stop_loss": 41.65,
+    "target_price": 42.7,
+    "instrument_type": "Intraday",
+    "exit_price": 37.9,
+    "status": "CLOSED",
+    "created_at": "2026-07-29T09:38:32.388Z",
+    "updated_at": "2026-07-29T09:43:47.851Z"
+  },
+  {
+    "uuid": "fp_ms5w69jx_ab06qd5",
+    "symbol": "SENSEX 78400 CE",
+    "entry_price": 20.75,
+    "quantity": 20,
+    "stop_loss": 17.1,
+    "target_price": 28.05,
+    "instrument_type": "Nifty Options",
+    "exit_price": 22.75,
+    "status": "CLOSED",
+    "created_at": "2026-07-29T09:38:06.430Z",
+    "updated_at": "2026-07-29T09:43:35.255Z"
+  },
+  {
+    "uuid": "fp_ms5w5j73_g1i2cpc",
+    "symbol": "NIFTY 24600 CE",
+    "entry_price": 16,
+    "quantity": 65,
+    "stop_loss": 13.15,
+    "target_price": 21.6,
+    "instrument_type": "Nifty Options",
+    "exit_price": 16.95,
+    "status": "CLOSED",
+    "created_at": "2026-07-29T09:37:32.271Z",
+    "updated_at": "2026-07-29T09:43:23.566Z"
+  },
+  {
+    "uuid": "fp_ms4dz17q_227t67m",
+    "symbol": "AHOKLEYLAND",
+    "entry_price": 157.39,
+    "quantity": 12,
+    "stop_loss": 156.1,
+    "target_price": 159.95,
+    "instrument_type": "Intraday",
+    "exit_price": 158.28,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:20:49.766Z",
+    "updated_at": "2026-07-28T08:25:04.255Z"
+  },
+  {
+    "uuid": "fp_ms4dy7px_ujsggzh",
+    "symbol": "NIFTY 24100 CE",
+    "entry_price": 9.9,
+    "quantity": 65,
+    "stop_loss": 8.15,
+    "target_price": 13.4,
+    "instrument_type": "Nifty Options",
+    "exit_price": 5.9,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:20:11.541Z",
+    "updated_at": "2026-07-28T08:24:56.008Z"
+  },
+  {
+    "uuid": "fp_ms4dxvwx_7394lac",
+    "symbol": "NIFTY 23950 PE",
+    "entry_price": 12.6,
+    "quantity": 65,
+    "stop_loss": 10.35,
+    "target_price": 17.05,
+    "instrument_type": "Nifty Options",
+    "exit_price": 11.1,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:19:56.241Z",
+    "updated_at": "2026-07-28T08:24:44.609Z"
+  },
+  {
+    "uuid": "fp_ms4dxi7h_u9ioh8z",
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 17.7,
+    "quantity": 65,
+    "stop_loss": 14.6,
+    "target_price": 23.9,
+    "instrument_type": "Nifty Options",
+    "exit_price": 13.2,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:19:38.477Z",
+    "updated_at": "2026-07-28T08:24:32.837Z"
+  },
+  {
+    "uuid": "fp_ms4dx6g3_wloeues",
+    "symbol": "NIFTY 23950 PE",
+    "entry_price": 11.55,
+    "quantity": 65,
+    "stop_loss": 9.5,
+    "target_price": 15.6,
+    "instrument_type": "Nifty Options",
+    "exit_price": 10.1,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:19:23.235Z",
+    "updated_at": "2026-07-28T08:24:20.346Z"
+  },
+  {
+    "uuid": "fp_ms4dwtkr_tf0r5f9",
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 16.25,
+    "quantity": 65,
+    "stop_loss": 13.4,
+    "target_price": 21.95,
+    "instrument_type": "Nifty Options",
+    "exit_price": 15.65,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:19:06.555Z",
+    "updated_at": "2026-07-28T08:24:08.056Z"
+  },
+  {
+    "uuid": "fp_ms4dwi8f_nv1680o",
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 17.75,
+    "quantity": 65,
+    "stop_loss": 14.6,
+    "target_price": 24,
+    "instrument_type": "Nifty Options",
+    "exit_price": 17,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:18:51.855Z",
+    "updated_at": "2026-07-28T08:23:48.643Z"
+  },
+  {
+    "uuid": "fp_ms4dvnwf_cdbs8xc",
+    "symbol": "NIFTY 24000 PE",
+    "entry_price": 24.5,
+    "quantity": 65,
+    "stop_loss": 20.2,
+    "target_price": 33.1,
+    "instrument_type": "Nifty Options",
+    "exit_price": 25.5,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:18:12.543Z",
+    "updated_at": "2026-07-28T08:23:37.496Z"
+  },
+  {
+    "uuid": "fp_ms4dv8e6_be2uuyi",
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 19,
+    "quantity": 65,
+    "stop_loss": 15.65,
+    "target_price": 25.65,
+    "instrument_type": "Nifty Options",
+    "exit_price": 19.2,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:17:52.446Z",
+    "updated_at": "2026-07-28T08:23:24.732Z"
+  },
+  {
+    "uuid": "fp_ms4duxkv_f2rg9ff",
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 16.55,
+    "quantity": 65,
+    "stop_loss": 13.65,
+    "target_price": 22.35,
+    "instrument_type": "Nifty Options",
+    "exit_price": 16.85,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:17:38.431Z",
+    "updated_at": "2026-07-28T08:23:15.325Z"
+  },
+  {
+    "uuid": "fp_ms4dul2y_s15rk2v",
+    "symbol": "NIFTY 23950 PE",
+    "entry_price": 22.2,
+    "quantity": 65,
+    "stop_loss": 15.25,
+    "target_price": 25,
+    "instrument_type": "Nifty Options",
+    "exit_price": 18.5,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:17:22.234Z",
+    "updated_at": "2026-07-28T08:23:01.146Z"
+  },
+  {
+    "uuid": "fp_ms4du9k1_3mo5k1f",
+    "symbol": "NIFTY 24000 CE",
+    "entry_price": 32.15,
+    "quantity": 65,
+    "stop_loss": 26.5,
+    "target_price": 43.45,
+    "instrument_type": "Nifty Options",
+    "exit_price": 30,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:17:07.297Z",
+    "updated_at": "2026-07-28T08:22:20.585Z"
+  },
+  {
+    "uuid": "fp_ms4dtyzj_u5egw2l",
+    "symbol": "NIFTY 24000 CE",
+    "entry_price": 29,
+    "quantity": 65,
+    "stop_loss": 23.9,
+    "target_price": 39.2,
+    "instrument_type": "Nifty Options",
+    "exit_price": 32.55,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:16:53.599Z",
+    "updated_at": "2026-07-28T08:22:07.921Z"
+  },
+  {
+    "uuid": "fp_ms4dti5x_2hn73qh",
+    "symbol": "NIFTY 24000 CE",
+    "entry_price": 26.4,
+    "quantity": 65,
+    "stop_loss": 21.75,
+    "target_price": 35.65,
+    "instrument_type": "Nifty Options",
+    "exit_price": 31.45,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:16:31.797Z",
+    "updated_at": "2026-07-28T08:21:56.665Z"
+  },
+  {
+    "uuid": "fp_ms4drfh7_g7r314b",
+    "symbol": "NIFTY 23950 PE",
+    "entry_price": 30.2,
+    "quantity": 65,
+    "stop_loss": 53.6,
+    "target_price": 87.75,
+    "instrument_type": "Nifty Options",
+    "exit_price": 28.65,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:14:55.003Z",
+    "updated_at": "2026-07-28T08:21:44.351Z"
+  },
+  {
+    "uuid": "fp_ms4dr0q4_zcxr5ue",
+    "symbol": "NIFTY 23900 PE",
+    "entry_price": 12.3,
+    "quantity": 65,
+    "stop_loss": 10.1,
+    "target_price": 16.65,
+    "instrument_type": "Nifty Options",
+    "exit_price": 7.05,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:14:35.884Z",
+    "updated_at": "2026-07-28T08:21:19.808Z"
+  },
+  {
+    "uuid": "fp_ms4dqsft_fiy6ga8",
+    "symbol": "NIFTY 24100 CE",
+    "entry_price": 12.8,
+    "quantity": 65,
+    "stop_loss": 10.1,
+    "target_price": 16.65,
+    "instrument_type": "Nifty Options",
+    "exit_price": 7.85,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:14:25.145Z",
+    "updated_at": "2026-07-28T08:21:31.450Z"
+  },
+  {
+    "uuid": "fp_ms4dqf2d_pq3d631",
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 35,
+    "quantity": 65,
+    "stop_loss": 53.6,
+    "target_price": 87.75,
+    "instrument_type": "Nifty Options",
+    "exit_price": 33.4,
+    "status": "CLOSED",
+    "created_at": "2026-07-28T08:14:07.813Z",
+    "updated_at": "2026-07-28T08:21:04.760Z"
+  },
+  {
+    "id": 3276,
+    "symbol": "CRUDEOILM 9400 CE",
+    "entry_price": 183,
+    "quantity": 10,
+    "stop_loss": 181.15,
+    "target_price": 186.7,
+    "exit_price": 175,
+    "instrument_type": "Crude Oil Mini",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T14:09:22.048Z",
+    "ltp": 175,
+    "gross_pnl": -80,
+    "net_pnl": -82.31,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.07,
+      "exchange_txn": 0.11,
+      "taxes": 1.13,
+      "total": 2.31
+    }
+  },
+  {
+    "id": 3277,
+    "symbol": "CRUDEOILM 7000 PE",
+    "entry_price": 111,
+    "quantity": 10,
+    "stop_loss": 109.85,
+    "target_price": 113.25,
+    "exit_price": 106.45,
+    "instrument_type": "Crude Oil Mini",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T13:58:04.563Z",
+    "ltp": 106.45,
+    "gross_pnl": -45.5,
+    "net_pnl": -46.9,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 0.65,
+      "exchange_txn": 0.06,
+      "taxes": 0.69,
+      "total": 1.4
+    }
+  },
+  {
+    "id": 3278,
+    "symbol": "CRUDEOILM9200 CE",
+    "entry_price": 210,
+    "quantity": 10,
+    "stop_loss": 207.9,
+    "target_price": 214.2,
+    "exit_price": 199,
+    "instrument_type": "Crude Oil Mini",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T13:00:41.553Z",
+    "ltp": 199,
+    "gross_pnl": -110,
+    "net_pnl": -112.63,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.23,
+      "exchange_txn": 0.12,
+      "taxes": 1.28,
+      "total": 2.63
+    }
+  },
+  {
+    "id": 3279,
+    "symbol": "CRUDEOILM 7000 PE",
+    "entry_price": 112,
+    "quantity": 10,
+    "stop_loss": 110.85,
+    "target_price": 114.25,
+    "exit_price": 107,
+    "instrument_type": "Crude Oil Mini",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T12:58:37.435Z",
+    "ltp": 107,
+    "gross_pnl": -50,
+    "net_pnl": -51.41,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 0.66,
+      "exchange_txn": 0.07,
+      "taxes": 0.68,
+      "total": 1.41
+    }
+  },
+  {
+    "id": 3280,
+    "symbol": "CRUDEOILM9200 CE",
+    "entry_price": 189.9,
+    "quantity": 10,
+    "stop_loss": 188,
+    "target_price": 193.7,
+    "exit_price": 202.2,
+    "instrument_type": "Crude Oil Mini",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T12:36:18.701Z",
+    "ltp": 202.2,
+    "gross_pnl": 123,
+    "net_pnl": 120.45,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.18,
+      "exchange_txn": 0.12,
+      "taxes": 1.25,
+      "total": 2.55
+    }
+  },
+  {
+    "id": 3281,
+    "symbol": "CRUDEOILM 7000PE",
+    "entry_price": 122.3,
+    "quantity": 10,
+    "stop_loss": 121.05,
+    "target_price": 124.75,
+    "exit_price": 115.3,
+    "instrument_type": "Crude Oil Mini",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T12:35:58.895Z",
+    "ltp": 115.3,
+    "gross_pnl": -70,
+    "net_pnl": -71.53,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 0.71,
+      "exchange_txn": 0.07,
+      "taxes": 0.75,
+      "total": 1.53
+    }
+  },
+  {
+    "id": 3282,
+    "symbol": "CRUDEOILM 9200 CE",
+    "entry_price": 182,
+    "quantity": 10,
+    "stop_loss": 179.8,
+    "target_price": 186.4,
+    "exit_price": 178.95,
+    "instrument_type": "Crude Oil Mini",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T11:43:25.745Z",
+    "ltp": 178.95,
+    "gross_pnl": -30.5,
+    "net_pnl": -32.83,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.08,
+      "exchange_txn": 0.11,
+      "taxes": 1.14,
+      "total": 2.33
+    }
+  },
+  {
+    "id": 3283,
+    "symbol": "NATGASMINI 280 CE",
+    "entry_price": 10.25,
+    "quantity": 250,
+    "stop_loss": 10,
+    "target_price": 10.7,
+    "exit_price": 10.25,
+    "instrument_type": "Natural Gas Mini",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T10:53:10.496Z",
+    "ltp": 10.25,
+    "gross_pnl": 0,
+    "net_pnl": -3.32,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.54,
+      "exchange_txn": 0.15,
+      "taxes": 1.63,
+      "total": 3.32
+    }
+  },
+  {
+    "id": 3284,
+    "symbol": "NATGASMINI 260 PE",
+    "entry_price": 10.1,
+    "quantity": 250,
+    "stop_loss": 9.85,
+    "target_price": 10.55,
+    "exit_price": 9.75,
+    "instrument_type": "Natural Gas Mini",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T10:48:20.068Z",
+    "ltp": 9.75,
+    "gross_pnl": -87.5,
+    "net_pnl": -90.7,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.49,
+      "exchange_txn": 0.15,
+      "taxes": 1.56,
+      "total": 3.2
+    }
+  },
+  {
+    "id": 3285,
+    "symbol": "NIFTY 24100 CE",
+    "entry_price": 24.9,
+    "quantity": 65,
+    "stop_loss": 20.5,
+    "target_price": 33.65,
+    "exit_price": 30.75,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T08:43:54.999Z",
+    "ltp": 30.75,
+    "gross_pnl": 380.25,
+    "net_pnl": 377.87,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.09,
+      "exchange_txn": 0.11,
+      "taxes": 1.18,
+      "total": 2.38
+    }
+  },
+  {
+    "id": 3286,
+    "symbol": "NIFTY 23800 PE",
+    "entry_price": 17.95,
+    "quantity": 65,
+    "stop_loss": 14.8,
+    "target_price": 24.25,
+    "exit_price": 18.25,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T08:08:20.614Z",
+    "ltp": 18.25,
+    "gross_pnl": 19.5,
+    "net_pnl": 17.98,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 0.71,
+      "exchange_txn": 0.07,
+      "taxes": 0.74,
+      "total": 1.52
+    }
+  },
+  {
+    "id": 3287,
+    "symbol": "NIFTY 24100",
+    "entry_price": 19,
+    "quantity": 65,
+    "stop_loss": 15.65,
+    "target_price": 25.65,
+    "exit_price": 24.5,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T07:53:32.392Z",
+    "ltp": 24.5,
+    "gross_pnl": 357.5,
+    "net_pnl": 355.63,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 0.85,
+      "exchange_txn": 0.08,
+      "taxes": 0.94,
+      "total": 1.87
+    }
+  },
+  {
+    "id": 3288,
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 33.25,
+    "quantity": 65,
+    "stop_loss": 27.4,
+    "target_price": 44.9,
+    "exit_price": 31.25,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T07:53:20.628Z",
+    "ltp": 31.25,
+    "gross_pnl": -130,
+    "net_pnl": -132.7,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.26,
+      "exchange_txn": 0.12,
+      "taxes": 1.32,
+      "total": 2.7
+    }
+  },
+  {
+    "id": 3289,
+    "symbol": "NIFTY 23850 PE",
+    "entry_price": 28.8,
+    "quantity": 65,
+    "stop_loss": 23.75,
+    "target_price": 38.9,
+    "exit_price": 27.75,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T07:53:04.098Z",
+    "ltp": 27.75,
+    "gross_pnl": -68.25,
+    "net_pnl": -70.62,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.1,
+      "exchange_txn": 0.11,
+      "taxes": 1.16,
+      "total": 2.37
+    }
+  },
+  {
+    "id": 3290,
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 34.45,
+    "quantity": 65,
+    "stop_loss": 28.4,
+    "target_price": 46.55,
+    "exit_price": 33.55,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T07:52:32.383Z",
+    "ltp": 33.55,
+    "gross_pnl": -58.5,
+    "net_pnl": -61.35,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.33,
+      "exchange_txn": 0.13,
+      "taxes": 1.39,
+      "total": 2.85
+    }
+  },
+  {
+    "id": 3291,
+    "symbol": "NIFTY 24100",
+    "entry_price": 24,
+    "quantity": 65,
+    "stop_loss": 18.35,
+    "target_price": 30.15,
+    "exit_price": 22.3,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T07:51:26.628Z",
+    "ltp": 22.3,
+    "gross_pnl": -110.5,
+    "net_pnl": -112.44,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 0.9,
+      "exchange_txn": 0.09,
+      "taxes": 0.95,
+      "total": 1.94
+    }
+  },
+  {
+    "id": 3292,
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 36.35,
+    "quantity": 65,
+    "stop_loss": 29.95,
+    "target_price": 49.1,
+    "exit_price": 39.4,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T06:38:05.515Z",
+    "ltp": 39.4,
+    "gross_pnl": 198.25,
+    "net_pnl": 195.04,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.48,
+      "exchange_txn": 0.15,
+      "taxes": 1.58,
+      "total": 3.21
+    }
+  },
+  {
+    "id": 3293,
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 36.85,
+    "quantity": 65,
+    "stop_loss": 30.4,
+    "target_price": 49.75,
+    "exit_price": 34.8,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T06:37:52.571Z",
+    "ltp": 34.8,
+    "gross_pnl": -133.25,
+    "net_pnl": -136.25,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.4,
+      "exchange_txn": 0.14,
+      "taxes": 1.46,
+      "total": 3
+    }
+  },
+  {
+    "id": 3294,
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 32.5,
+    "quantity": 65,
+    "stop_loss": 26.8,
+    "target_price": 43.9,
+    "exit_price": 39.2,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T06:16:30.276Z",
+    "ltp": 39.2,
+    "gross_pnl": 435.5,
+    "net_pnl": 432.44,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.4,
+      "exchange_txn": 0.14,
+      "taxes": 1.52,
+      "total": 3.06
+    }
+  },
+  {
+    "id": 3295,
+    "symbol": "NIFTY 23800 PE",
+    "entry_price": 24.8,
+    "quantity": 65,
+    "stop_loss": 20.45,
+    "target_price": 33.5,
+    "exit_price": 24.8,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T06:16:15.540Z",
+    "ltp": 24.8,
+    "gross_pnl": 0,
+    "net_pnl": -2.09,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 0.97,
+      "exchange_txn": 0.1,
+      "taxes": 1.02,
+      "total": 2.09
+    }
+  },
+  {
+    "id": 3296,
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 31.2,
+    "quantity": 65,
+    "stop_loss": 25.7,
+    "target_price": 42.15,
+    "exit_price": 29.2,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T06:15:56.498Z",
+    "ltp": 29.2,
+    "gross_pnl": -130,
+    "net_pnl": -132.53,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.18,
+      "exchange_txn": 0.12,
+      "taxes": 1.23,
+      "total": 2.53
+    }
+  },
+  {
+    "id": 3297,
+    "symbol": "VBL",
+    "entry_price": 455.2,
+    "quantity": 22,
+    "stop_loss": 458.85,
+    "target_price": 447.9,
+    "exit_price": 457.15,
+    "instrument_type": "Intraday Short",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T05:16:22.297Z",
+    "ltp": 457.15,
+    "gross_pnl": -42.9,
+    "net_pnl": -55.89,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 6.02,
+      "exchange_txn": 0.6,
+      "taxes": 6.37,
+      "total": 12.99
+    }
+  },
+  {
+    "id": 3298,
+    "symbol": "NIFTY 23800 PE",
+    "entry_price": 30.45,
+    "quantity": 65,
+    "stop_loss": 25.1,
+    "target_price": 41.15,
+    "exit_price": 33.25,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T05:05:26.858Z",
+    "ltp": 33.25,
+    "gross_pnl": 182,
+    "net_pnl": 179.3,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.24,
+      "exchange_txn": 0.12,
+      "taxes": 1.34,
+      "total": 2.7
+    }
+  },
+  {
+    "id": 3299,
+    "symbol": "COALINDIA",
+    "entry_price": 430.1,
+    "quantity": 26,
+    "stop_loss": 426.65,
+    "target_price": 437,
+    "exit_price": 429.8,
+    "instrument_type": "Intraday",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T04:47:57.172Z",
+    "ltp": 429.8,
+    "gross_pnl": -7.8,
+    "net_pnl": -22.27,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 6.71,
+      "exchange_txn": 0.66,
+      "taxes": 7.1,
+      "total": 14.47
+    }
+  },
+  {
+    "id": 3300,
+    "symbol": "NIFTY 23850 PE",
+    "entry_price": 44.8,
+    "quantity": 65,
+    "stop_loss": 36.95,
+    "target_price": 60.5,
+    "exit_price": 44.2,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T04:47:29.756Z",
+    "ltp": 44.2,
+    "gross_pnl": -39,
+    "net_pnl": -42.74,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.74,
+      "exchange_txn": 0.17,
+      "taxes": 1.83,
+      "total": 3.74
+    }
+  },
+  {
+    "id": 3301,
+    "symbol": "NIFTY 23850 PE",
+    "entry_price": 40,
+    "quantity": 65,
+    "stop_loss": 33,
+    "target_price": 54,
+    "exit_price": 43.15,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T04:47:08.296Z",
+    "ltp": 43.15,
+    "gross_pnl": 204.75,
+    "net_pnl": 201.23,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.62,
+      "exchange_txn": 0.16,
+      "taxes": 1.74,
+      "total": 3.52
+    }
+  },
+  {
+    "id": 3302,
+    "symbol": "NIFTY 23850 PE",
+    "entry_price": 38.95,
+    "quantity": 65,
+    "stop_loss": 32.1,
+    "target_price": 52.6,
+    "exit_price": 44.2,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T04:46:01.339Z",
+    "ltp": 44.2,
+    "gross_pnl": 341.25,
+    "net_pnl": 337.72,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.62,
+      "exchange_txn": 0.16,
+      "taxes": 1.75,
+      "total": 3.53
+    }
+  },
+  {
+    "id": 3303,
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 39.9,
+    "quantity": 65,
+    "stop_loss": 32.9,
+    "target_price": 53.9,
+    "exit_price": 37.8,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T04:45:42.784Z",
+    "ltp": 37.8,
+    "gross_pnl": -136.5,
+    "net_pnl": -139.75,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.52,
+      "exchange_txn": 0.15,
+      "taxes": 1.58,
+      "total": 3.25
+    }
+  },
+  {
+    "id": 3304,
+    "symbol": "NIFTY 24050 CE",
+    "entry_price": 41.45,
+    "quantity": 65,
+    "stop_loss": 34.15,
+    "target_price": 56,
+    "exit_price": 39.4,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-27T04:45:23.799Z",
+    "ltp": 39.4,
+    "gross_pnl": -133.25,
+    "net_pnl": -136.64,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.58,
+      "exchange_txn": 0.16,
+      "taxes": 1.65,
+      "total": 3.39
+    }
+  },
+  {
+    "id": 3305,
+    "symbol": "CRUDEOIL",
+    "entry_price": 275,
+    "quantity": 10,
+    "stop_loss": 11.5,
+    "target_price": 18,
+    "exit_price": 265.25,
+    "instrument_type": "Crude Oil Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-24T11:38:24.549Z",
+    "ltp": 265.25,
+    "gross_pnl": -97.5,
+    "net_pnl": -149.93,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 40,
+      "exchange_txn": 2.7,
+      "taxes": 9.73,
+      "total": 52.43
+    }
+  },
+  {
+    "id": 3306,
+    "symbol": "TMPV",
+    "entry_price": 319.55,
+    "quantity": 38,
+    "stop_loss": null,
+    "target_price": null,
+    "exit_price": 319.55,
+    "instrument_type": "Intraday Short",
+    "status": "CLOSED",
+    "created_at": "2026-07-24T09:00:56.923Z",
+    "ltp": 319.55,
+    "gross_pnl": 0,
+    "net_pnl": -15.71,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 7.29,
+      "exchange_txn": 0.72,
+      "taxes": 7.7,
+      "total": 15.71
+    }
+  },
+  {
+    "id": 3307,
+    "symbol": "NIFTY 24100",
+    "entry_price": 30,
+    "quantity": 65,
+    "stop_loss": null,
+    "target_price": null,
+    "exit_price": 28.05,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-24T09:00:06.931Z",
+    "ltp": 28.05,
+    "gross_pnl": -126.75,
+    "net_pnl": -129.18,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.13,
+      "exchange_txn": 0.11,
+      "taxes": 1.19,
+      "total": 2.43
+    }
+  },
+  {
+    "id": 3308,
+    "symbol": "NIFTY 24050",
+    "entry_price": 35.15,
+    "quantity": 260,
+    "stop_loss": null,
+    "target_price": null,
+    "exit_price": 38.05,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-24T08:59:18.901Z",
+    "ltp": 38.05,
+    "gross_pnl": 754,
+    "net_pnl": 741.6,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 5.71,
+      "exchange_txn": 0.57,
+      "taxes": 6.12,
+      "total": 12.4
+    }
+  },
+  {
+    "id": 3309,
+    "symbol": "NIFTY 24000",
+    "entry_price": 35.7,
+    "quantity": 65,
+    "stop_loss": null,
+    "target_price": null,
+    "exit_price": 33.7,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-24T08:58:30.399Z",
+    "ltp": 33.7,
+    "gross_pnl": -130,
+    "net_pnl": -132.9,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.35,
+      "exchange_txn": 0.13,
+      "taxes": 1.42,
+      "total": 2.9
+    }
+  },
+  {
+    "id": 3310,
+    "symbol": "NIFTY 23950",
+    "entry_price": 36.9,
+    "quantity": 65,
+    "stop_loss": null,
+    "target_price": null,
+    "exit_price": 38.45,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-24T08:57:42.787Z",
+    "ltp": 38.45,
+    "gross_pnl": 100.75,
+    "net_pnl": 97.57,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.47,
+      "exchange_txn": 0.15,
+      "taxes": 1.56,
+      "total": 3.18
+    }
+  },
+  {
+    "id": 3311,
+    "symbol": "NIFTY 23350",
+    "entry_price": 31.95,
+    "quantity": 65,
+    "stop_loss": null,
+    "target_price": null,
+    "exit_price": 29.9,
+    "instrument_type": "Nifty Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-24T08:54:31.779Z",
+    "ltp": 29.9,
+    "gross_pnl": -133.25,
+    "net_pnl": -135.84,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 1.21,
+      "exchange_txn": 0.12,
+      "taxes": 1.26,
+      "total": 2.59
+    }
+  },
+  {
+    "id": 3312,
+    "symbol": "BHEL",
+    "entry_price": 402.95,
+    "quantity": 29,
+    "stop_loss": null,
+    "target_price": null,
+    "exit_price": 404.46,
+    "instrument_type": "Intraday Short",
+    "status": "CLOSED",
+    "created_at": "2026-07-24T05:43:50.633Z",
+    "ltp": 404.46,
+    "gross_pnl": -43.79,
+    "net_pnl": -58.95,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 7.02,
+      "exchange_txn": 0.7,
+      "taxes": 7.44,
+      "total": 15.16
+    }
+  },
+  {
+    "id": 3313,
+    "symbol": "TMPV",
+    "entry_price": 319.55,
+    "quantity": 38,
+    "stop_loss": null,
+    "target_price": null,
+    "exit_price": 319.75,
+    "instrument_type": "Intraday Short",
+    "status": "CLOSED",
+    "created_at": "2026-07-24T05:43:23.232Z",
+    "ltp": 319.75,
+    "gross_pnl": -7.6,
+    "net_pnl": -23.32,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 7.29,
+      "exchange_txn": 0.72,
+      "taxes": 7.71,
+      "total": 15.72
+    }
+  },
+  {
+    "id": 3314,
+    "symbol": "NATGASMINI 275 CE",
+    "entry_price": 14.47,
+    "quantity": 250,
+    "stop_loss": null,
+    "target_price": null,
+    "exit_price": 10.05,
+    "instrument_type": "Natural Gas Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-23T14:27:48.540Z",
+    "ltp": 10.05,
+    "gross_pnl": -1105,
+    "net_pnl": -1157.9,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 40,
+      "exchange_txn": 3.06,
+      "taxes": 9.84,
+      "total": 52.9
+    }
+  },
+  {
+    "id": 3317,
+    "symbol": "NATGASMINI 275 CE",
+    "entry_price": 11.05,
+    "quantity": 250,
+    "stop_loss": null,
+    "target_price": null,
+    "exit_price": 10.05,
+    "instrument_type": "Natural Gas Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-23T14:27:48.540Z",
+    "ltp": 10.05,
+    "gross_pnl": -250,
+    "net_pnl": -302.27,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 40,
+      "exchange_txn": 2.64,
+      "taxes": 9.63,
+      "total": 52.27
+    }
+  },
+  {
+    "id": 3315,
+    "symbol": "NATGASMINI 270 CE",
+    "entry_price": 12.5,
+    "quantity": 250,
+    "stop_loss": 11.5,
+    "target_price": 13.5,
+    "exit_price": 13.55,
+    "instrument_type": "Natural Gas Options",
+    "status": "CLOSED",
+    "created_at": "2026-07-22T12:31:46.131213",
+    "ltp": 13.55,
+    "gross_pnl": 262.5,
+    "net_pnl": 208.9,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 40,
+      "exchange_txn": 3.26,
+      "taxes": 10.34,
+      "total": 53.6
+    }
+  },
+  {
+    "id": 3316,
+    "symbol": "NMDC",
+    "entry_price": 83.5,
+    "quantity": 200,
+    "stop_loss": 84.5,
+    "target_price": 82.5,
+    "exit_price": 83.49,
+    "instrument_type": "Intraday Short",
+    "status": "CLOSED",
+    "created_at": "2026-07-22T09:50:43.088743",
+    "ltp": 83.49,
+    "gross_pnl": 2,
+    "net_pnl": -19.61,
+    "eod_analysis": null,
+    "charges_breakdown": {
+      "brokerage": 10.02,
+      "exchange_txn": 0.99,
+      "taxes": 10.6,
+      "total": 21.61
+    }
+  }
 ]

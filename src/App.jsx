@@ -35,101 +35,6 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-const DEFAULT_NIFTY500_STOCKS = [
-  { symbol: 'SBIN', name: 'State Bank of India', aliases: ['sbi', 'sbin', 'state bank', 'state bank of india'] },
-  { symbol: 'TMPV', name: 'Tata Motors Passenger Vehicles Limited', aliases: ['tmpv', 'tmpvl', 'tata motors pv', 'tata passenger vehicles'] },
-  { symbol: 'TMCV', name: 'Tata Motors Commercial Vehicles Limited', aliases: ['tmcv', 'tmcvl', 'tata motors cv', 'tata commercial vehicles'] },
-  { symbol: 'TATASTEEL', name: 'Tata Steel Limited', aliases: ['tata steel', 'tatasteel'] },
-  { symbol: 'TATAPOWER', name: 'Tata Power Company Limited', aliases: ['tata power', 'tatapower'] },
-  { symbol: 'TCS', name: 'Tata Consultancy Services Limited', aliases: ['tcs', 'tata consultancy'] },
-  { symbol: 'INFY', name: 'Infosys Limited', aliases: ['infosys', 'infy'] },
-  { symbol: 'RELIANCE', name: 'Reliance Industries Limited', aliases: ['reliance', 'ril'] },
-  { symbol: 'HDFCBANK', name: 'HDFC Bank Limited', aliases: ['hdfc bank', 'hdfc', 'hdfcbank'] },
-  { symbol: 'ICICIBANK', name: 'ICICI Bank Limited', aliases: ['icici bank', 'icici', 'icicibank'] },
-  { symbol: 'AXISBANK', name: 'Axis Bank Limited', aliases: ['axis bank', 'axis'] },
-  { symbol: 'KOTAKBANK', name: 'Kotak Mahindra Bank Limited', aliases: ['kotak bank', 'kotak'] },
-  { symbol: 'LT', name: 'Larsen & Toubro Limited', aliases: ['lt', 'l&t', 'larsen', 'larsen & toubro'] },
-  { symbol: 'M&M', name: 'Mahindra & Mahindra Limited', aliases: ['m&m', 'mahindra', 'mnm'] },
-  { symbol: 'MARUTI', name: 'Maruti Suzuki India Limited', aliases: ['maruti', 'maruti suzuki'] },
-  { symbol: 'BAJFINANCE', name: 'Bajaj Finance Limited', aliases: ['bajaj finance', 'bajfinance'] },
-  { symbol: 'BAJAJFINSV', name: 'Bajaj Finserv Limited', aliases: ['bajaj finserv'] },
-  { symbol: 'BHARTIARTL', name: 'Bharti Airtel Limited', aliases: ['airtel', 'bharti', 'bharti airtel'] },
-  { symbol: 'ITC', name: 'ITC Limited', aliases: ['itc'] },
-  { symbol: 'HINDUNILVR', name: 'Hindustan Unilever Limited', aliases: ['hul', 'hindustan unilever'] },
-  { symbol: 'SUNPHARMA', name: 'Sun Pharmaceutical Industries Limited', aliases: ['sun pharma', 'sunpharma'] },
-  { symbol: 'TITAN', name: 'Titan Company Limited', aliases: ['titan'] },
-  { symbol: 'ULTRACEMCO', name: 'UltraTech Cement Limited', aliases: ['ultratech', 'ultracemco'] },
-  { symbol: 'ADANIENT', name: 'Adani Enterprises Limited', aliases: ['adani ent', 'adani enterprises'] },
-  { symbol: 'ADANIPORTS', name: 'Adani Ports and Special Economic Zone Limited', aliases: ['adani ports'] },
-  { symbol: 'ASIANPAINT', name: 'Asian Paints Limited', aliases: ['asian paints', 'asianpaint'] },
-  { symbol: 'POWERGRID', name: 'Power Grid Corporation of India Limited', aliases: ['power grid', 'powergrid'] },
-  { symbol: 'NTPC', name: 'NTPC Limited', aliases: ['ntpc'] },
-  { symbol: 'ONGC', name: 'Oil & Natural Gas Corporation Limited', aliases: ['ongc'] },
-  { symbol: 'COALINDIA', name: 'Coal India Limited', aliases: ['coal india'] },
-  { symbol: 'BEL', name: 'Bharat Electronics Limited', aliases: ['bel', 'bharat electronics'] },
-  { symbol: 'HAL', name: 'Hindustan Aeronautics Limited', aliases: ['hal', 'hindustan aeronautics'] },
-  { symbol: 'IOC', name: 'Indian Oil Corporation Limited', aliases: ['ioc', 'indian oil'] },
-  { symbol: 'BPCL', name: 'Bharat Petroleum Corporation Limited', aliases: ['bpcl', 'bharat petroleum'] },
-  { symbol: 'GAIL', name: 'GAIL (India) Limited', aliases: ['gail'] },
-  { symbol: 'NESTLEIND', name: 'Nestle India Limited', aliases: ['nestle'] },
-  { symbol: 'WIPRO', name: 'Wipro Limited', aliases: ['wipro'] },
-  { symbol: 'HCLTECH', name: 'HCL Technologies Limited', aliases: ['hcl', 'hcltech'] },
-  { symbol: 'TECHM', name: 'Tech Mahindra Limited', aliases: ['tech mahindra', 'techm'] },
-  { symbol: 'LTIM', name: 'LTIMindtree Limited', aliases: ['lti', 'mindtree', 'ltim'] },
-  { symbol: 'DIVISLAB', name: 'Divi\'s Laboratories Limited', aliases: ['divis lab', 'divis'] },
-  { symbol: 'DRREDDY', name: 'Dr. Reddy\'s Laboratories Limited', aliases: ['dr reddy', 'drreddy'] },
-  { symbol: 'CIPLA', name: 'Cipla Limited', aliases: ['cipla'] },
-  { symbol: 'APOLLOHOSP', name: 'Apollo Hospitals Enterprise Limited', aliases: ['apollo hospital', 'apollo'] },
-  { symbol: 'EICHERMOT', name: 'Eicher Motors Limited', aliases: ['eicher', 'royal enfield'] },
-  { symbol: 'HEROMOTOCO', name: 'Hero MotoCorp Limited', aliases: ['hero', 'heromotoco'] },
-  { symbol: 'TVSMOTOR', name: 'TVS Motor Company Limited', aliases: ['tvs', 'tvs motor'] },
-  { symbol: 'BAJAJ-AUTO', name: 'Bajaj Auto Limited', aliases: ['bajaj auto'] },
-  { symbol: 'GRASIM', name: 'Grasim Industries Limited', aliases: ['grasim'] },
-  { symbol: 'JSWSTEEL', name: 'JSW Steel Limited', aliases: ['jsw steel', 'jswsteel'] },
-  { symbol: 'HINDALCO', name: 'Hindalco Industries Limited', aliases: ['hindalco'] },
-  { symbol: 'VEDL', name: 'Vedanta Limited', aliases: ['vedanta', 'vedl'] },
-  { symbol: 'DLF', name: 'DLF Limited', aliases: ['dlf'] },
-  { symbol: 'GODREJPROP', name: 'Godrej Properties Limited', aliases: ['godrej properties', 'godrejprop'] },
-  { symbol: 'LODHA', name: 'Macrotech Developers Limited (Lodha)', aliases: ['lodha', 'macrotech'] },
-  { symbol: 'OBEROIRLTY', name: 'Oberoi Realty Limited', aliases: ['oberoi realty'] },
-  { symbol: 'TRENT', name: 'Trent Limited', aliases: ['trent', 'zudio', 'westside'] },
-  { symbol: 'ZOMATO', name: 'Zomato Limited', aliases: ['zomato', 'blinkit'] },
-  { symbol: 'PAYTM', name: 'One97 Communications Limited (Paytm)', aliases: ['paytm', 'one97'] },
-  { symbol: 'NYKAA', name: 'FSN E-Commerce Ventures Limited (Nykaa)', aliases: ['nykaa'] },
-  { symbol: 'POLICYBZR', name: 'PB Fintech Limited (Policybazaar)', aliases: ['policybazaar', 'pb fintech'] },
-  { symbol: 'SWIGGY', name: 'Swiggy Limited', aliases: ['swiggy'] },
-  { symbol: 'JIOFIN', name: 'Jio Financial Services Limited', aliases: ['jio fin', 'jiofinancial', 'jio'] },
-  { symbol: 'IRCTC', name: 'Indian Railway Catering and Tourism Corporation Limited', aliases: ['irctc'] },
-  { symbol: 'IRFC', name: 'Indian Railway Finance Corporation Limited', aliases: ['irfc'] },
-  { symbol: 'RVNL', name: 'Rail Vikas Nigam Limited', aliases: ['rvnl'] },
-  { symbol: 'REC', name: 'REC Limited', aliases: ['rec'] },
-  { symbol: 'PFC', name: 'Power Finance Corporation Limited', aliases: ['pfc'] },
-  { symbol: 'NHPC', name: 'NHPC Limited', aliases: ['nhpc'] },
-  { symbol: 'SJVN', name: 'SJVN Limited', aliases: ['sjvn'] },
-  { symbol: 'IREDA', name: 'Indian Renewable Energy Development Agency Limited', aliases: ['ireda'] },
-  { symbol: 'SUZLON', name: 'Suzlon Energy Limited', aliases: ['suzlon'] },
-  { symbol: 'IDFCFIRSTB', name: 'IDFC First Bank Limited', aliases: ['idfc', 'idfc first', 'idfc first bank'] },
-  { symbol: 'PNB', name: 'Punjab National Bank', aliases: ['pnb', 'punjab national bank'] },
-  { symbol: 'BANKBARODA', name: 'Bank of Baroda', aliases: ['bob', 'bank of baroda'] },
-  { symbol: 'CANBK', name: 'Canara Bank', aliases: ['canara bank', 'canara'] },
-  { symbol: 'FEDERALBNK', name: 'The Federal Bank Limited', aliases: ['federal bank', 'federalbnk'] },
-  { symbol: 'UNIONBANK', name: 'Union Bank of India', aliases: ['union bank'] },
-  { symbol: 'BANDHANBNK', name: 'Bandhan Bank Limited', aliases: ['bandhan bank'] },
-  { symbol: 'INDUSINDBK', name: 'IndusInd Bank Limited', aliases: ['indusind bank', 'indusind'] },
-  { symbol: 'YESBANK', name: 'Yes Bank Limited', aliases: ['yes bank'] },
-  { symbol: 'IDBI', name: 'IDBI Bank Limited', aliases: ['idbi'] },
-  { symbol: 'INDUSTOWER', name: 'Indus Towers Limited', aliases: ['indus towers'] },
-  { symbol: 'NAUKRI', name: 'Info Edge (India) Limited (Naukri)', aliases: ['naukri', 'info edge'] },
-  { symbol: 'EMMVEE', name: 'Emmvee Photovoltaic Power Limited', aliases: ['emmvee'] },
-  { symbol: 'ASHOKLEY', name: 'Ashok Leyland Limited', aliases: ['ashok leyland', 'ashokley'] },
-  { symbol: 'TATAGOLD', name: 'Tata Gold ETF', aliases: ['tatagold'] },
-  { symbol: 'NIFTYBEES', name: 'Nippon India ETF Nifty 50 BeES', aliases: ['nifty bees', 'niftybees'] },
-  { symbol: 'BANKBEES', name: 'Nippon India ETF Bank BeES', aliases: ['bank bees', 'bankbees'] },
-  { symbol: 'GOLDBEES', name: 'Nippon India ETF Gold BeES', aliases: ['gold bees', 'goldbees'] },
-  { symbol: 'SILVERBEES', name: 'Nippon India ETF Silver BeES', aliases: ['silver bees', 'silverbees'] },
-  { symbol: 'ITBEES', name: 'Nippon India ETF IT BeES', aliases: ['it bees', 'itbees'] },
-  { symbol: 'MON100', name: 'Motilal Oswal Nasdaq 100 ETF', aliases: ['mon100', 'nasdaq'] }
-];
 
 export default function App() {
   // Master Trade State
@@ -267,72 +172,95 @@ export default function App() {
   const [nifty500List, setNifty500List] = useState([]);
   const [showNiftyDropdown, setShowNiftyDropdown] = useState(false);
 
+  // Load bundled NSE stock list (2413 stocks with company names) for autocomplete
   useEffect(() => {
-    const fetchNifty500 = async () => {
+    const loadNseStocks = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/investment/nifty500`);
+        const res = await fetch('/nse_stocks.json');
         if (res.ok) {
           const data = await res.json();
-          if (data && data.stocks) {
-            setNifty500List(data.stocks);
+          if (Array.isArray(data) && data.length > 0) {
+            setNifty500List(data);
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Could not load bundled NSE stock list', e);
+      }
     };
-    fetchNifty500();
-  }, [API_BASE_URL]);
+    loadNseStocks();
+  }, []);
 
-  // Combined master stock list merging DEFAULT_NIFTY500_STOCKS and API list
+  // Combined master stock list from bundled NSE stocks JSON + API fallback
   const combinedStockList = React.useMemo(() => {
-    const list = [...DEFAULT_NIFTY500_STOCKS];
+    // nifty500List is loaded from /nse_stocks.json (bundled, 2413 stocks with real names)
     if (nifty500List && nifty500List.length > 0) {
-      nifty500List.forEach(s => {
-        const clean = (s.symbol || '').replace('.NS', '').toUpperCase();
-        if (!list.some(item => item.symbol.toUpperCase() === clean)) {
-          list.push({
-            symbol: clean,
-            name: s.name || clean,
-            aliases: [clean.toLowerCase(), (s.name || '').toLowerCase()]
-          });
-        }
-      });
+      return nifty500List.map(s => ({
+        symbol: s.s || s.symbol || '',
+        name: s.n || s.name || s.s || s.symbol || '',
+        aliases: [
+          (s.s || s.symbol || '').toLowerCase(),
+          (s.n || s.name || '').toLowerCase()
+        ]
+      }));
     }
-    return list;
+    return [];
   }, [nifty500List]);
 
-  // Ranked Nifty 500 suggestions with alias & prefix matching
+  // Ranked Nifty suggestions with alias & prefix matching (shared for SIP + MTF)
   const filteredNiftySuggestions = React.useMemo(() => {
     const query = newSipTicker.toLowerCase().replace('.ns', '').trim();
-    if (!query) return [];
-
+    if (!query || query.length < 2) return [];
     const scored = combinedStockList.map(s => {
       const sym = (s.symbol || '').toLowerCase();
       const name = (s.name || '').toLowerCase();
       const aliases = s.aliases || [];
-
       let score = 0;
-      if (sym === query || aliases.includes(query)) {
-        score = 100;
-      } else if (sym.startsWith(query)) {
-        score = 80;
-      } else if (aliases.some(a => a.startsWith(query))) {
-        score = 75;
-      } else if (name.startsWith(query)) {
-        score = 70;
-      } else if (sym.includes(query)) {
-        score = 50;
-      } else if (name.includes(query)) {
-        score = 40;
-      } else if (aliases.some(a => a.includes(query))) {
-        score = 35;
-      }
-
+      if (sym === query || aliases.includes(query)) score = 100;
+      else if (sym.startsWith(query)) score = 80;
+      else if (aliases.some(a => a.startsWith(query))) score = 75;
+      else if (name.startsWith(query)) score = 70;
+      else if (sym.includes(query)) score = 50;
+      else if (name.includes(query)) score = 40;
+      else if (aliases.some(a => a.includes(query))) score = 35;
       return { stock: s, score };
     }).filter(item => item.score > 0);
-
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 10).map(item => item.stock);
+    return scored.slice(0, 8).map(item => item.stock);
   }, [newSipTicker, combinedStockList]);
+
+  // MTF ticker autocomplete suggestions
+  const filteredMtfSuggestions = React.useMemo(() => {
+    const query = mtfTicker.toLowerCase().replace('.ns', '').trim();
+    if (!query || query.length < 2) return [];
+    const scored = combinedStockList.map(s => {
+      const sym = (s.symbol || '').toLowerCase();
+      const name = (s.name || '').toLowerCase();
+      const aliases = s.aliases || [];
+      let score = 0;
+      if (sym === query || aliases.includes(query)) score = 100;
+      else if (sym.startsWith(query)) score = 80;
+      else if (aliases.some(a => a.startsWith(query))) score = 75;
+      else if (name.startsWith(query)) score = 70;
+      else if (sym.includes(query)) score = 50;
+      else if (name.includes(query)) score = 40;
+      else if (aliases.some(a => a.includes(query))) score = 35;
+      return { stock: s, score };
+    }).filter(item => item.score > 0);
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 8).map(item => item.stock);
+  }, [mtfTicker, combinedStockList]);
+
+  // Auto-fill MTF buy price from live LTP when a suggestion is selected
+  useEffect(() => {
+    if (!mtfTicker.trim()) return;
+    if (filteredMtfSuggestions.length > 0) {
+      const top = filteredMtfSuggestions[0];
+      if (top.symbol.toLowerCase() === mtfTicker.toLowerCase().replace('.ns', '')) {
+        const ltp = liveLtps[top.symbol] || liveLtps[`${top.symbol}.NS`];
+        if (ltp && !mtfBuyPrice) setMtfBuyPrice(String(ltp));
+      }
+    }
+  }, [mtfTicker, filteredMtfSuggestions, liveLtps]);
 
   // Live auto-fill company name & default buy price when suggestion matches current input
   useEffect(() => {
@@ -364,6 +292,7 @@ export default function App() {
   const [mtfBrokerFundedPct, setMtfBrokerFundedPct] = useState('68.0');
   const [mtfBuyDate, setMtfBuyDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [mtfViewMode, setMtfViewMode] = useState('overall'); // 'overall', 'active', 'closed'
+  const [showMtfDropdown, setShowMtfDropdown] = useState(false);
 
   // Sync pullbackData from backend API on mount
   useEffect(() => {
@@ -4620,16 +4549,47 @@ export default function App() {
             </h3>
 
             <form onSubmit={handleRecordMtfTx} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-              <div>
+              <div style={{ position: 'relative' }}>
                 <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>TICKER SYMBOL</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. LODHA, INDUSTOWER, NAUKRI" 
-                  value={mtfTicker} 
-                  onChange={e => setMtfTicker(e.target.value)} 
-                  className="input-field" 
-                  required 
+                <input
+                  type="text"
+                  placeholder="Type 2+ letters: REL, HDFC, TATA..."
+                  value={mtfTicker}
+                  onChange={e => { setMtfTicker(e.target.value.toUpperCase()); setShowMtfDropdown(true); }}
+                  onFocus={() => setShowMtfDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowMtfDropdown(false), 180)}
+                  className="input-field"
+                  required
+                  autoComplete="off"
                 />
+                {showMtfDropdown && filteredMtfSuggestions.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999, background: 'rgba(15,15,30,0.98)', border: '1px solid rgba(99,102,241,0.4)', borderRadius: '8px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)', maxHeight: '220px', overflowY: 'auto' }}>
+                    {filteredMtfSuggestions.map(s => (
+                      <div
+                        key={s.symbol}
+                        onMouseDown={() => {
+                          setMtfTicker(s.symbol);
+                          setShowMtfDropdown(false);
+                          const ltp = liveLtps[s.symbol] || liveLtps[`${s.symbol}.NS`];
+                          if (ltp && !mtfBuyPrice) setMtfBuyPrice(String(ltp));
+                        }}
+                        style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.15)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#a5b4fc' }}>{s.symbol}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{s.name}</div>
+                        </div>
+                        {(liveLtps[s.symbol] || liveLtps[`${s.symbol}.NS`]) && (
+                          <div style={{ fontSize: '12px', fontWeight: 700, color: '#34d399' }}>
+                            ₹{(liveLtps[s.symbol] || liveLtps[`${s.symbol}.NS`]).toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
