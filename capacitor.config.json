@@ -1,5 +1,9 @@
 {
   "appId": "com.stockscreener.app",
   "appName": "Stock Screener",
-  "webDir": "www"
+  "webDir": "www",
+  "server": {
+    "url": "https://abhilash128912.github.io/FinPlus-/",
+    "cleartext": true
+  }
 }
