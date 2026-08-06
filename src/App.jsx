@@ -5466,6 +5466,16 @@ export default function App() {
                   <span style={{ color: '#c084fc' }}>Grand Total (Incl. SIP):</span>
                   <strong style={{ color: (cumulativeRealizedNetPnl + totalSipUnrealizedPnl) >= 0 ? '#34d399' : '#f87171' }}>{(cumulativeRealizedNetPnl + totalSipUnrealizedPnl) >= 0 ? '+' : ''}₹{(cumulativeRealizedNetPnl + totalSipUnrealizedPnl).toFixed(2)}</strong>
                 </div>
+                {/* Net Position after Risk Budget Allowance */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 900, borderTop: '2px solid rgba(251, 191, 36, 0.5)', paddingTop: '10px', marginTop: '4px', background: 'rgba(251, 191, 36, 0.06)', borderRadius: '8px', padding: '10px 12px' }}>
+                  <div>
+                    <div style={{ color: '#fbbf24' }}>Net After Risk Budget:</div>
+                    <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 500, marginTop: '2px' }}>Grand Total + Budget Earned (Day {currentDayCount} × ₹{dailyRiskLimit} = ₹{(currentDayCount * dailyRiskLimit).toFixed(0)})</div>
+                  </div>
+                  <strong style={{ fontSize: '20px', color: ((cumulativeRealizedNetPnl + totalSipUnrealizedPnl) + (currentDayCount * dailyRiskLimit)) >= 0 ? '#34d399' : '#f87171', alignSelf: 'center' }}>
+                    {((cumulativeRealizedNetPnl + totalSipUnrealizedPnl) + (currentDayCount * dailyRiskLimit)) >= 0 ? '+' : ''}₹{((cumulativeRealizedNetPnl + totalSipUnrealizedPnl) + (currentDayCount * dailyRiskLimit)).toFixed(2)}
+                  </strong>
+                </div>
               </div>
             </div>
           </div>
