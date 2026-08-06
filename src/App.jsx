@@ -2223,7 +2223,81 @@ export default function App() {
         {pnlViewMode === 'overall' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '20px' }}>
             
-            {/* Panel 1: Realized Net P&L Summary */}
+            {/* Panel 1: Total Portfolio Net Overview & Risk Allowance */}
+            <div className="glass-panel" style={{ padding: '24px', gridColumn: '1 / -1', borderLeft: '4px solid #a855f7', background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(99, 102, 241, 0.04) 100%)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ height: '8px', width: '8px', borderRadius: '50%', background: '#c084fc', boxShadow: '0 0 10px #c084fc' }}></span>
+                  <span style={{ fontSize: '14px', fontWeight: 800, color: '#c084fc', textTransform: 'uppercase' }}>
+                    ⚡ Total Portfolio Net Overview (Journal + MTF + SIP)
+                  </span>
+                </div>
+                <span style={{ fontSize: '11px', background: 'rgba(168, 85, 247, 0.2)', color: '#e9d5ff', padding: '3px 10px', borderRadius: '6px', fontWeight: 700 }}>
+                  Day {currentDayCount} of {totalChallengeDays} Budget Earned: ₹{(currentDayCount * dailyRiskLimit).toLocaleString('en-IN')}
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ fontSize: '11px', color: '#14b8a6', fontWeight: 700 }}>NET TRADING P&L</div>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
+                    {totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Journal Closed</div>
+                </div>
+
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 700 }}>NET MTF P&L</div>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: closedMtfNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
+                    {closedMtfNetPnl >= 0 ? '+' : ''}₹{closedMtfNetPnl.toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Closed MTF Leverage</div>
+                </div>
+
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ fontSize: '11px', color: '#00b4d8', fontWeight: 700 }}>SIP RUNNING P&L</div>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
+                    {totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>SIP Holdings Unrealized</div>
+                </div>
+
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+                  <div style={{ fontSize: '11px', color: '#c084fc', fontWeight: 700 }}>TOTAL NET P&L</div>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: (cumulativeRealizedNetPnl + totalSipUnrealizedPnl) >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
+                    {(cumulativeRealizedNetPnl + totalSipUnrealizedPnl) >= 0 ? '+' : ''}₹{(cumulativeRealizedNetPnl + totalSipUnrealizedPnl).toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Trading + MTF + SIP</div>
+                </div>
+              </div>
+
+              {/* Net Position After Risk Budget Allowance Banner */}
+              <div style={{ 
+                display: 'flex', 
+                justify: 'space-between', 
+                alignItems: 'center', 
+                flexWrap: 'wrap', 
+                gap: '12px',
+                background: 'rgba(251, 191, 36, 0.08)', 
+                border: '1px solid rgba(251, 191, 36, 0.4)', 
+                borderRadius: '10px', 
+                padding: '14px 18px' 
+              }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 800, color: '#fbbf24' }}>
+                    🛡️ Net After Risk Budget:
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>
+                    Total Net P&L + Earned Budget Allowance (Day {currentDayCount} × ₹{dailyRiskLimit} = ₹{(currentDayCount * dailyRiskLimit).toLocaleString('en-IN')})
+                  </div>
+                </div>
+                <div style={{ fontSize: '22px', fontWeight: 900, color: ((cumulativeRealizedNetPnl + totalSipUnrealizedPnl) + (currentDayCount * dailyRiskLimit)) >= 0 ? '#34d399' : '#f87171' }}>
+                  {((cumulativeRealizedNetPnl + totalSipUnrealizedPnl) + (currentDayCount * dailyRiskLimit)) >= 0 ? '+' : ''}₹{((cumulativeRealizedNetPnl + totalSipUnrealizedPnl) + (currentDayCount * dailyRiskLimit)).toFixed(2)}
+                </div>
+              </div>
+            </div>
+
+            {/* Panel 2: Realized Net P&L Summary */}
             <div className="glass-panel" style={{ padding: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                 <span style={{ height: '8px', width: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }}></span>
@@ -4779,10 +4853,8 @@ export default function App() {
           { key: 'home', label: 'Home', icon: Activity, color: '#6366f1' },
           { key: 'trades', label: 'Trades', icon: FileText, color: '#14b8a6' },
           { key: 'capital', label: 'Capital', icon: DollarSign, color: '#a855f7' },
-          { key: 'screener', label: 'Screener', icon: Search, color: '#ec4899' },
           { key: 'sip', label: 'SIP', icon: TrendingUp, color: '#00b4d8' },
-          { key: 'mtf', label: 'MTF', icon: Layers, color: '#f59e0b' },
-          { key: 'overview', label: 'Overview', icon: Eye, color: '#a855f7' }
+          { key: 'mtf', label: 'MTF', icon: Layers, color: '#f59e0b' }
         ].map(navItem => {
           const NavIcon = navItem.icon;
           const isActive = activeTab === navItem.key;
