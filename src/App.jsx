@@ -4127,8 +4127,12 @@ export default function App() {
                       <div style={{ fontSize: '13px', color: '#38bdf8' }}>📊 TOTAL PORTFOLIO</div>
                       <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 600 }}>Aligned with Zerodha Holdings</div>
                     </td>
-                    <td style={{ padding: '14px', fontSize: '11px', color: '#34d399' }}>6 Holdings</td>
-                    <td style={{ padding: '14px' }}>7</td>
+                    <td style={{ padding: '14px', fontSize: '11px', color: '#34d399' }}>
+                      {pullbackStockSummary.filter(s => s.netShares > 0).length} Holdings
+                    </td>
+                    <td style={{ padding: '14px' }}>
+                      {pullbackStockSummary.filter(s => s.netShares > 0).reduce((sum, s) => sum + (Number(s.netShares) || 0), 0)}
+                    </td>
                     <td style={{ padding: '14px', color: '#ffffff' }}>₹{totalSipDeployedCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td style={{ padding: '14px', color: '#38bdf8' }}>₹{totalSipCurrentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td style={{ padding: '14px', color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
