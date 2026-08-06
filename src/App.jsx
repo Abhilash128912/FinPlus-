@@ -134,7 +134,7 @@ const DEFAULT_NIFTY500_STOCKS = [
 export default function App() {
   // Master Trade State
   const [trades, setTrades] = useState(() => loadJournalEngine());
-  const [activeTab, setActiveTab] = useState('home'); // 'home' | 'trades' | 'capital' | 'sip' | 'mtf'
+  const [activeTab, setActiveTab] = useState('home'); // 'home' | 'trades' | 'capital' | 'screener' | 'sip' | 'mtf' | 'overview'
 
   // Screener States
   const [screenerData, setScreenerData] = useState([]);
@@ -2081,19 +2081,28 @@ export default function App() {
   const sortedPastDates = Object.keys(tradesByDate).filter(d => d < todayStr).sort();
 
   // Cumulative Carried Loss Engine:
-  // Total allowance = past trading days × ₹250 daily limit.
-  // Unused budget from low-loss days offsets bad days — far fairer than per-day excess method.
+  // Total CUMULATIVE allowance = days elapsed × ₹250 daily limit.
+  // This means after 15 days, the total risk budget is 15 × ₹250 = ₹3,750.
+  // Losses (Journal + closed MTF) are netted against this cumulative budget.
   const totalPastNetPnl = sortedPastDates.reduce((acc, d) => acc + (tradesByDate[d] || 0), 0);
+  // Also include closed MTF positions net P&L in the carried loss engine
+  const totalPastNetPnlWithMtf = totalPastNetPnl + closedMtfNetPnl;
+
+  // Cumulative budget earned so far (all days elapsed including today)
+  const totalCumulativeBudget = currentDayCount * dailyRiskLimit;
+  // Past budget (all days except today)
   const totalPastAllowance = sortedPastDates.length * dailyRiskLimit;
-  // Carried loss = how much total net loss exceeds the cumulative daily budget
-  const cumulativeCarriedLoss = Math.max(0, -(totalPastNetPnl) - totalPastAllowance);
+  // Carried loss = how much total net loss (journal + mtf) exceeds the cumulative daily budget so far
+  const cumulativeCarriedLoss = Math.max(0, -(totalPastNetPnlWithMtf) - totalPastAllowance);
 
   // Today's total realized PnL (closed trades only — unrealized excluded to avoid cross-day distortion)
   const todayTotalPnl = tradesByDate[todayStr] || 0;
   const todayCurrentLoss = todayTotalPnl < 0 ? Math.abs(todayTotalPnl) : 0;
   
-  // Today's Starting Risk Budget (Initial budget for today after deducting past carried losses)
-  const todayStartingRisk = Math.max(0, dailyRiskLimit - cumulativeCarriedLoss);
+  // Today's Starting Risk Budget = what's left of cumulative budget after subtracting all past losses
+  // Correct formula: (currentDayCount × dailyRiskLimit) - total losses so far (excl. today's intraday)
+  const totalLossesSoFar = Math.max(0, -(totalPastNetPnlWithMtf));
+  const todayStartingRisk = Math.max(0, totalCumulativeBudget - totalLossesSoFar);
 
   // Today's Available Risk Allowance Remaining
   const availableRiskLimitToday = Math.max(0, todayStartingRisk - todayCurrentLoss);
@@ -5348,6 +5357,122 @@ export default function App() {
         </div>
       )}
 
+      {/* ═══════════════════════════════════ NET OVERVIEW TAB ═══════════════════════════════════ */}
+      {activeTab === 'overview' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+          {/* Header */}
+          <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '16px' }}>
+            <h2 style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff', margin: 0 }}>📊 Total Portfolio Net Overview</h2>
+            <p style={{ fontSize: '13px', color: '#a5b4fc', margin: '4px 0 0' }}>Unified real P&L picture across all 3 segments — Trading Journal, MTF Leverage, and SIP Holdings.</p>
+          </div>
+
+          {/* Risk Budget Card */}
+          <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #f59e0b' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>🛡️ 1000-Day Cumulative Risk Budget</div>
+                <div style={{ fontSize: '13px', color: '#e2e8f0' }}>
+                  Day <strong style={{ color: '#fbbf24' }}>{currentDayCount}</strong> of 1000 &bull; Budget Earned: <strong style={{ color: '#34d399' }}>₹{(currentDayCount * dailyRiskLimit).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong> ({currentDayCount} × ₹{dailyRiskLimit})
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700 }}>REMAINING TODAY</div>
+                <div style={{ fontSize: '24px', fontWeight: 900, color: availableRiskLimitToday > 0 ? '#34d399' : '#f87171' }}>₹{availableRiskLimitToday.toFixed(2)}</div>
+                <div style={{ fontSize: '11px', color: '#a5b4fc' }}>Carried loss: ₹{cumulativeCarriedLoss.toFixed(2)}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3 Segment Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+
+            {/* Segment 1: Trading Journal */}
+            <div className="glass-panel" style={{ padding: '20px', borderTop: '4px solid #14b8a6' }}>
+              <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 800, textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FileText size={14} style={{ color: '#14b8a6' }} /> Trading Journal (Intraday / Swing)
+              </div>
+              <div style={{ fontSize: '28px', fontWeight: 900, color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>
+                {totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}
+              </div>
+              <div style={{ fontSize: '12px', color: '#a5b4fc', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span>Gross: ₹{totalGrossPnl.toFixed(2)}</span>
+                <span>Zerodha Charges: ₹{totalZerodhaCharges.toFixed(2)}</span>
+                <span>{closedTrades.length} closed trades &bull; Win Rate: {winRatePct}%</span>
+              </div>
+            </div>
+
+            {/* Segment 2: MTF Leverage */}
+            <div className="glass-panel" style={{ padding: '20px', borderTop: '4px solid #f59e0b' }}>
+              <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 800, textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Layers size={14} style={{ color: '#f59e0b' }} /> MTF Margin Positions (Closed)
+              </div>
+              <div style={{ fontSize: '28px', fontWeight: 900, color: closedMtfNetPnl >= 0 ? '#34d399' : '#f87171' }}>
+                {closedMtfNetPnl >= 0 ? '+' : ''}₹{closedMtfNetPnl.toFixed(2)}
+              </div>
+              <div style={{ fontSize: '12px', color: '#a5b4fc', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span>Gross: ₹{closedMtfGrossPnl.toFixed(2)}</span>
+                <span>Carrying Charges + Interest: ₹{closedMtfCarryingCharges.toFixed(2)}</span>
+                <span>{closedMtfTrades.length} closed MTF position(s)</span>
+              </div>
+              {overallMtfNetPnl !== closedMtfNetPnl && (
+                <div style={{ fontSize: '11px', color: '#fbbf24', marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                  Active MTF Running P&L: <strong style={{ color: activeMtfNetPnl >= 0 ? '#34d399' : '#f87171' }}>{activeMtfNetPnl >= 0 ? '+' : ''}₹{activeMtfNetPnl.toFixed(2)}</strong> (unrealized)
+                </div>
+              )}
+            </div>
+
+            {/* Segment 3: SIP Holdings */}
+            <div className="glass-panel" style={{ padding: '20px', borderTop: '4px solid #00b4d8' }}>
+              <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 800, textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <TrendingUp size={14} style={{ color: '#00b4d8' }} /> SIP / Pullback Holdings (Unrealized)
+              </div>
+              <div style={{ fontSize: '28px', fontWeight: 900, color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#f87171' }}>
+                {totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toFixed(2)}
+              </div>
+              <div style={{ fontSize: '12px', color: '#a5b4fc', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span>Invested: ₹{totalSipDeployedCost.toFixed(2)}</span>
+                <span>Current Value: ₹{totalSipCurrentVal.toFixed(2)}</span>
+                <span>{pullbackStockSummary.filter(s => s.netShares > 0).length} active holdings</span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Grand Total Realized P&L */}
+          <div className="glass-panel" style={{ padding: '24px', borderLeft: '4px solid #a855f7', background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.06) 0%, rgba(99, 102, 241, 0.04) 100%)' }}>
+            <div style={{ fontSize: '13px', color: '#a5b4fc', fontWeight: 800, textTransform: 'uppercase', marginBottom: '12px' }}>⚡ Total Net Realized P&L (Journal + MTF Closed)</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: '36px', fontWeight: 900, color: cumulativeRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>
+                  {cumulativeRealizedNetPnl >= 0 ? '+' : ''}₹{cumulativeRealizedNetPnl.toFixed(2)}
+                </div>
+                <div style={{ fontSize: '12px', color: '#a5b4fc', marginTop: '4px' }}>Realized (taxes & charges deducted)</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                  <span style={{ color: '#a5b4fc' }}>Journal Realized:</span>
+                  <strong style={{ color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>{totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                  <span style={{ color: '#a5b4fc' }}>MTF Closed:</span>
+                  <strong style={{ color: closedMtfNetPnl >= 0 ? '#34d399' : '#f87171' }}>{closedMtfNetPnl >= 0 ? '+' : ''}₹{closedMtfNetPnl.toFixed(2)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '8px' }}>
+                  <span style={{ color: '#a5b4fc' }}>SIP Unrealized:</span>
+                  <strong style={{ color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#f87171' }}>{totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toFixed(2)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 900, borderTop: '2px solid rgba(168, 85, 247, 0.4)', paddingTop: '8px' }}>
+                  <span style={{ color: '#c084fc' }}>Grand Total (Incl. SIP):</span>
+                  <strong style={{ color: (cumulativeRealizedNetPnl + totalSipUnrealizedPnl) >= 0 ? '#34d399' : '#f87171' }}>{(cumulativeRealizedNetPnl + totalSipUnrealizedPnl) >= 0 ? '+' : ''}₹{(cumulativeRealizedNetPnl + totalSipUnrealizedPnl).toFixed(2)}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      )}
+
       {/* Bottom Navigation Bar (Mobile App Style) */}
       <div style={{
         position: 'fixed',
@@ -5369,7 +5494,8 @@ export default function App() {
           { key: 'capital', label: 'Capital', icon: DollarSign, color: '#a855f7' },
           { key: 'screener', label: 'Screener', icon: Search, color: '#ec4899' },
           { key: 'sip', label: 'SIP', icon: TrendingUp, color: '#00b4d8' },
-          { key: 'mtf', label: 'MTF', icon: Layers, color: '#f59e0b' }
+          { key: 'mtf', label: 'MTF', icon: Layers, color: '#f59e0b' },
+          { key: 'overview', label: 'Overview', icon: Eye, color: '#a855f7' }
         ].map(navItem => {
           const NavIcon = navItem.icon;
           const isActive = activeTab === navItem.key;
