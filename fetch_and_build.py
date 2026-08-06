@@ -2036,24 +2036,18 @@ async function triggerAppScan() {
   const btnLog = document.getElementById('scanProgressLog');
   const barInner = document.getElementById('scanProgressBarInner');
 
-  // On mobile (Capacitor APK), port is empty - scan can only run from desktop
-  const isDesktop = window.location.port === '5000' || window.location.port === '3000';
+  const isDesktop = (window.location.port === '5000' || window.location.port === '3000');
 
   if (!isDesktop) {
-    // Mobile: show informational dialog, offer to reload
     const confirmed = confirm(
-      '\u26a1 Scan runs on your Desktop PC\n\n' +
-      'The full Nifty 500 scan takes 10-12 minutes and can only run from your PC.\n\n' +
-      'To trigger a scan:\n' +
-      '  1. Open your PC\n' +
-      '  2. Run \"Run Screener.bat\"\n\n' +
-      'Tap OK to reload the latest available data.'
+      '⚡ Cloud Auto-Scan Active\n\n' +
+      'GitHub Actions automatically runs the full Nifty 500 scan every weekday at 9:15 AM IST before market opens.\n\n' +
+      'Tap OK to reload and fetch the latest scan report.'
     );
     if (confirmed) window.location.reload();
     return;
   }
 
-  // Desktop only: call local scan server
   if (overlay) overlay.style.display = 'flex';
   if (btnText) btnText.textContent = 'Initializing live stock & commodity scan...';
   if (barInner) barInner.style.width = '20%';
@@ -2076,7 +2070,7 @@ async function triggerAppScan() {
   } catch (err) {
     console.warn('Direct scan endpoint failed or offline:', err);
     if (overlay) overlay.style.display = 'none';
-    alert("\u26a1 Python Scan Server is not running.\n\nPlease launch 'Run Screener.bat' to start the scan server.");
+    alert('⚡ Python Scan Server is not running.\n\nPlease launch "Run Screener.bat" on your PC to enable 1-click scanning.');
   }
 }
 
@@ -2244,56 +2238,6 @@ function autoAddTopSuggestions(silent = false) {
   }
 }
 
-// ── Live App Trigger Scan ───────────────────────────────────────────────────
-async function triggerAppScan() {
-  const overlay = document.getElementById('scanProgressOverlay');
-  const txt = document.getElementById('scanProgressText');
-  const logEl = document.getElementById('scanProgressLog');
-  const bar = document.getElementById('scanProgressBarInner');
-
-  const isDesktop = window.location.port === '5000' || window.location.port === '3000';
-
-  if (!isDesktop) {
-    const confirmed = confirm(
-      '⚡ Cloud Auto-Scan Active\n\n' +
-      'GitHub Actions automatically runs the full 10-12 minute Nifty 500 scan every morning at 9:15 AM IST before market opens.\n\n' +
-      'Tap OK to reload and fetch the latest scan report.'
-    );
-    if (confirmed) window.location.reload();
-    return;
-  }
-
-  if (overlay) overlay.style.display = 'flex';
-  if (txt) txt.textContent = 'Triggering Full Market Scan...';
-  if (logEl) logEl.textContent = 'Connecting to scanner server...';
-  if (bar) bar.style.width = '20%';
-
-  const sUrl = 'http://localhost:' + window.location.port + '/api/scan';
-
-  try {
-    if (bar) bar.style.width = '50%';
-    if (logEl) logEl.textContent = 'Running Nifty 500 & Commodity scan algorithm...';
-    const res = await fetch(sUrl, { method: 'POST' });
-    if (res.ok) {
-      if (bar) bar.style.width = '100%';
-      if (txt) txt.textContent = 'Scan Completed Successfully!';
-      if (logEl) logEl.textContent = 'Reloading report data...';
-      setTimeout(() => { window.location.reload(); }, 1000);
-      return;
-    } else {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.message || 'Server error during scan');
-    }
-  } catch (e) {
-    if (bar) bar.style.width = '100%';
-    if (txt) txt.textContent = 'Scan Server Unavailable';
-    if (logEl) logEl.innerHTML = `<span style="color:#ef4444">⚠ Error: ${e.message}<br>Make sure the Stock Screener Server is running.</span>`;
-    setTimeout(() => {
-      if (overlay) overlay.style.display = 'none';
-      alert('⚠ Could not run live scan. Make sure Python scan server is active on your PC.');
-    }, 2500);
-  }
-}
 
 // ── Live LTP Polling System ───────────────────────────────────────────────
 function updateLtpBadgeStatus() {
