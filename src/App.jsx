@@ -5359,7 +5359,7 @@ export default function App() {
 
       {/* ═══════════════════════════════════ NET OVERVIEW TAB ═══════════════════════════════════ */}
       {activeTab === 'overview' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '120px' }}>
 
           {/* Header */}
           <div style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '16px' }}>
