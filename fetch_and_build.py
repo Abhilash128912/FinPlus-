@@ -2251,29 +2251,34 @@ async function triggerAppScan() {
   const logEl = document.getElementById('scanProgressLog');
   const bar = document.getElementById('scanProgressBarInner');
 
+  const isDesktop = window.location.port === '5000' || window.location.port === '3000';
+
+  if (!isDesktop) {
+    const confirmed = confirm(
+      '⚡ Cloud Auto-Scan Active\n\n' +
+      'GitHub Actions automatically runs the full 10-12 minute Nifty 500 scan every morning at 9:15 AM IST before market opens.\n\n' +
+      'Tap OK to reload and fetch the latest scan report.'
+    );
+    if (confirmed) window.location.reload();
+    return;
+  }
+
   if (overlay) overlay.style.display = 'flex';
   if (txt) txt.textContent = 'Triggering Full Market Scan...';
   if (logEl) logEl.textContent = 'Connecting to scanner server...';
   if (bar) bar.style.width = '20%';
 
-  // Port check (not hostname) - Capacitor APK also uses hostname=localhost!
-  let sUrl = 'https://finplus-g0b5.onrender.com/api/scan';
-  if (window.location.port === '5000' || window.location.port === '3000') {
-    sUrl = 'http://localhost:' + window.location.port + '/api/scan';
-  }
+  const sUrl = 'http://localhost:' + window.location.port + '/api/scan';
 
   try {
     if (bar) bar.style.width = '50%';
     if (logEl) logEl.textContent = 'Running Nifty 500 & Commodity scan algorithm...';
-    
     const res = await fetch(sUrl, { method: 'POST' });
     if (res.ok) {
       if (bar) bar.style.width = '100%';
       if (txt) txt.textContent = 'Scan Completed Successfully!';
       if (logEl) logEl.textContent = 'Reloading report data...';
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      setTimeout(() => { window.location.reload(); }, 1000);
       return;
     } else {
       const data = await res.json().catch(() => ({}));
@@ -2285,7 +2290,7 @@ async function triggerAppScan() {
     if (logEl) logEl.innerHTML = `<span style="color:#ef4444">⚠ Error: ${e.message}<br>Make sure the Stock Screener Server is running.</span>`;
     setTimeout(() => {
       if (overlay) overlay.style.display = 'none';
-      alert('⚠ Could not run live scan. Make sure backend server is active at ' + sUrl);
+      alert('⚠ Could not run live scan. Make sure Python scan server is active on your PC.');
     }, 2500);
   }
 }
