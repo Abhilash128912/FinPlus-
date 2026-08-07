@@ -134,13 +134,7 @@ export default function App() {
       "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }], "local_peak": 84.80, "date_added": "2026-07-03", "initial_reference_price": 84.80 },
       "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }], "local_peak": 382.25, "date_added": "2026-07-03", "initial_reference_price": 382.25 },
       "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }], "local_peak": 191.53, "date_added": "2026-07-05", "initial_reference_price": 182.82 },
-      "mtf_trading": {
-        "trades": [
-          { "id": 0, "ticker": "LODHA.NS", "buy_date": "2026-07-06", "buy_price": 1091.70, "shares": 8, "margin_ratio": 0.2709, "margin_paid": 2366.00, "broker_funding": 6357.20, "status": "Closed", "sell_date": "2026-07-08", "sell_price": 1135.86 },
-          { "id": 1, "ticker": "INDUSTOWER.NS", "buy_date": "2026-07-08", "buy_price": 394.20, "shares": 34, "margin_ratio": 0.2923, "margin_paid": 3917.64, "broker_funding": 9485.16, "status": "Closed", "sell_date": "2026-07-08", "sell_price": 391.95 },
-          { "id": 2, "ticker": "NAUKRI.NS", "buy_date": "2026-07-08", "buy_price": 1198.00, "shares": 10, "margin_ratio": 0.3059, "margin_paid": 3664.68, "broker_funding": 8315.32, "status": "Closed", "sell_date": "2026-07-08", "sell_price": 1179.00 }
-        ]
-      }
+      "mtf_trading": []
     };
 
     const saved = localStorage.getItem('finplus_pullback_portfolio');
@@ -155,6 +149,16 @@ export default function App() {
         parsed["NMDC.NS"] = defaultData["NMDC.NS"];
         parsed["TATAPOWER.NS"] = defaultData["TATAPOWER.NS"];
         parsed["TATASTEEL.NS"] = defaultData["TATASTEEL.NS"];
+        
+        // Sanitize MTF trades to strip out stale hardcoded unlogged demo trades (LODHA, INDUSTOWER, NAUKRI)
+        if (parsed.mtf_trading) {
+          const mtfList = Array.isArray(parsed.mtf_trading)
+            ? parsed.mtf_trading
+            : (parsed.mtf_trading.trades || []);
+          const cleanMtf = mtfList.filter(t => t.ticker !== 'LODHA.NS' && t.ticker !== 'INDUSTOWER.NS' && t.ticker !== 'NAUKRI.NS');
+          parsed.mtf_trading = cleanMtf;
+        }
+
         localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(parsed));
         return parsed;
       } catch (e) {}
@@ -304,7 +308,14 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data && Object.keys(data).length > 0) {
+            if (data.mtf_trading) {
+              const mtfList = Array.isArray(data.mtf_trading)
+                ? data.mtf_trading
+                : (data.mtf_trading.trades || []);
+              data.mtf_trading = mtfList.filter(t => t.ticker !== 'LODHA.NS' && t.ticker !== 'INDUSTOWER.NS' && t.ticker !== 'NAUKRI.NS');
+            }
             setPullbackData(data);
+            localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(data));
           }
         }
       } catch (e) {}
@@ -1873,9 +1884,10 @@ export default function App() {
 
   // Cumulative budget earned so far (all days elapsed including today)
   const totalCumulativeBudget = currentDayCount * dailyRiskLimit;
-  // Past budget (all days except today)
-  const totalPastAllowance = sortedPastDates.length * dailyRiskLimit;
-  // Carried loss = how much total net loss (journal + mtf) exceeds the cumulative daily budget so far
+  // Past budget (all challenge days elapsed prior to today)
+  const pastChallengeDaysCount = Math.max(0, currentDayCount - 1);
+  const totalPastAllowance = pastChallengeDaysCount * dailyRiskLimit;
+  // Carried loss = how much total net loss (journal + mtf) exceeds the past cumulative daily budget
   const cumulativeCarriedLoss = Math.max(0, -(totalPastNetPnlWithMtf) - totalPastAllowance);
 
   // Today's total realized PnL (closed trades only — unrealized excluded to avoid cross-day distortion)

@@ -58,11 +58,7 @@ DEFAULT_PULLBACK_DATA = {
     "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }], "local_peak": 84.80, "initial_reference_price": 84.80 },
     "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }], "local_peak": 382.25, "initial_reference_price": 382.25 },
     "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }], "local_peak": 191.53, "initial_reference_price": 182.82 },
-    "mtf_trading": [
-        { "id": 0, "ticker": "LODHA.NS", "buy_date": "2026-07-06", "buy_price": 1091.70, "shares": 8, "margin_used": 2183.40, "status": "Active" },
-        { "id": 1, "ticker": "INDUSTOWER.NS", "buy_date": "2026-07-08", "buy_price": 394.20, "shares": 34, "margin_used": 3350.70, "status": "Active" },
-        { "id": 2, "ticker": "NAUKRI.NS", "buy_date": "2026-07-08", "buy_price": 1198.00, "shares": 10, "margin_used": 2396.00, "status": "Active" }
-    ]
+    "mtf_trading": []
 }
 
 NIFTY500_STOCKS = [
@@ -263,7 +259,8 @@ def load_from_github(filepath: str, repo_path: str) -> bool:
 
 def load_pullback_file() -> Dict[str, Any]:
     with file_lock:
-        load_from_github(PULLBACK_FILE, "pullback_data.json")
+        if not os.path.exists(PULLBACK_FILE):
+            load_from_github(PULLBACK_FILE, "pullback_data.json")
         if not os.path.exists(PULLBACK_FILE):
             with open(PULLBACK_FILE, "w", encoding="utf-8") as f:
                 json.dump(DEFAULT_PULLBACK_DATA, f, indent=2)
@@ -282,7 +279,8 @@ def save_pullback_file(data: Dict[str, Any]):
 
 def load_journal_file() -> List[Dict[str, Any]]:
     with file_lock:
-        load_from_github(JOURNAL_FILE, "finplus_journal_data.json")
+        if not os.path.exists(JOURNAL_FILE):
+            load_from_github(JOURNAL_FILE, "finplus_journal_data.json")
         if not os.path.exists(JOURNAL_FILE):
             return []
         try:

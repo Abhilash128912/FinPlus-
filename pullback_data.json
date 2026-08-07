@@ -1,168 +1,168 @@
-{
-  "capital_settings": {
-    "start_date": "2026-07-03",
-    "initial_capital": 3477.97,
-    "daily_rate": 200
-  },
-  "ASHOKLEY.NS": {
-    "name": "Ashok Leyland Limited",
-    "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-07-13",
-        "price": 160.53,
-        "shares": 2
-      }
-    ],
-    "local_peak": 177.7,
-    "date_added": "2026-07-03",
-    "initial_reference_price": 160.53
-  },
-  "BEL.NS": {
-    "name": "Bharat Electronics Limited",
-    "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-07-29",
-        "price": 403.52,
-        "shares": 3
-      }
-    ],
-    "local_peak": 403.52,
-    "date_added": "2026-07-03",
-    "initial_reference_price": 403.52
-  },
-  "EMMVEE.NS": {
-    "name": "Emmvee Photovoltaic Power Limited",
-    "category": "Growth",
-    "transactions": [
-      {
-        "date": "2026-08-03",
-        "price": 330.98,
-        "shares": 2
-      }
-    ],
-    "local_peak": 330.98,
-    "date_added": "2026-07-03",
-    "initial_reference_price": 330.98
-  },
-  "FEDERALBNK.NS": {
-    "name": "The Federal Bank Limited",
-    "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-08-03",
-        "price": 359.1,
-        "shares": 1
-      },
-      {
-        "date": "2026-08-06",
-        "price": 353.1,
-        "shares": 1
-      }
-    ],
-    "local_peak": 359.1,
-    "date_added": "2026-07-03",
-    "initial_reference_price": 359.1
-  },
-  "ITC.NS": {
-    "name": "ITC Limited",
-    "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-07-14",
-        "price": 275.45,
-        "shares": 1
-      }
-    ],
-    "local_peak": 287,
-    "date_added": "2026-07-03",
-    "initial_reference_price": 275.45
-  },
-  "NMDC.NS": {
-    "name": "NMDC Limited",
-    "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-08-03",
-        "price": 84.8,
-        "shares": 1
-      }
-    ],
-    "local_peak": 87.14,
-    "date_added": "2026-07-03",
-    "initial_reference_price": 84.8
-  },
-  "TATAPOWER.NS": {
-    "name": "Tata Power Company Limited",
-    "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-07-10",
-        "price": 382.25,
-        "shares": 1
-      }
-    ],
-    "local_peak": 383,
-    "date_added": "2026-07-03",
-    "initial_reference_price": 382.25
-  },
-  "TATASTEEL.NS": {
-    "name": "Tata Steel Limited",
-    "category": "Growth",
-    "transactions": [
-      {
-        "date": "2026-07-27",
-        "price": 182.82,
-        "shares": 1
-      }
-    ],
-    "local_peak": 192.99,
-    "date_added": "2026-07-05",
-    "initial_reference_price": 182.82
-  },
-  "mtf_trading": [
-    {
-      "id": 0,
-      "ticker": "GESHIP.NS",
-      "buy_date": "2026-08-03",
-      "buy_price": 1401,
-      "shares": 10,
-      "broker_funding_pct": 68,
-      "margin_ratio": 0.32,
-      "margin_paid": 4483.199999999999,
-      "broker_funding": 9526.800000000001,
-      "status": "Closed",
-      "sell_date": "2026-08-06",
-      "sell_price": 1348.67
-    }
-  ],
-  "UYFINCORP.NS": {
-    "name": "UYFINCORP",
-    "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-08-06",
-        "price": 19.33,
-        "shares": 12
-      }
-    ],
-    "local_peak": 19.58,
-    "date_added": "2026-08-06",
-    "initial_reference_price": 19.33
-  },
-  "BORANA.NS": {
-    "name": "BORANA",
-    "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-08-06",
-        "price": 342,
-        "shares": 1
-      }
-    ],
-    "local_peak": 353.95,
-    "date_added": "2026-08-06",
-    "initial_reference_price": 351
-  }
+{
+  "capital_settings": {
+    "start_date": "2026-07-03",
+    "initial_capital": 3477.97,
+    "daily_rate": 200
+  },
+  "ASHOKLEY.NS": {
+    "name": "Ashok Leyland Limited",
+    "category": "Core",
+    "transactions": [
+      {
+        "date": "2026-07-13",
+        "price": 160.53,
+        "shares": 2
+      }
+    ],
+    "local_peak": 177.7,
+    "date_added": "2026-07-03",
+    "initial_reference_price": 160.53
+  },
+  "BEL.NS": {
+    "name": "Bharat Electronics Limited",
+    "category": "Core",
+    "transactions": [
+      {
+        "date": "2026-07-29",
+        "price": 403.52,
+        "shares": 3
+      }
+    ],
+    "local_peak": 403.52,
+    "date_added": "2026-07-03",
+    "initial_reference_price": 403.52
+  },
+  "EMMVEE.NS": {
+    "name": "Emmvee Photovoltaic Power Limited",
+    "category": "Growth",
+    "transactions": [
+      {
+        "date": "2026-08-03",
+        "price": 330.98,
+        "shares": 2
+      }
+    ],
+    "local_peak": 330.98,
+    "date_added": "2026-07-03",
+    "initial_reference_price": 330.98
+  },
+  "FEDERALBNK.NS": {
+    "name": "The Federal Bank Limited",
+    "category": "Core",
+    "transactions": [
+      {
+        "date": "2026-08-03",
+        "price": 359.1,
+        "shares": 1
+      },
+      {
+        "date": "2026-08-06",
+        "price": 353.1,
+        "shares": 1
+      }
+    ],
+    "local_peak": 359.1,
+    "date_added": "2026-07-03",
+    "initial_reference_price": 359.1
+  },
+  "ITC.NS": {
+    "name": "ITC Limited",
+    "category": "Core",
+    "transactions": [
+      {
+        "date": "2026-07-14",
+        "price": 275.45,
+        "shares": 1
+      }
+    ],
+    "local_peak": 287,
+    "date_added": "2026-07-03",
+    "initial_reference_price": 275.45
+  },
+  "NMDC.NS": {
+    "name": "NMDC Limited",
+    "category": "Core",
+    "transactions": [
+      {
+        "date": "2026-08-03",
+        "price": 84.8,
+        "shares": 1
+      }
+    ],
+    "local_peak": 87.14,
+    "date_added": "2026-07-03",
+    "initial_reference_price": 84.8
+  },
+  "TATAPOWER.NS": {
+    "name": "Tata Power Company Limited",
+    "category": "Core",
+    "transactions": [
+      {
+        "date": "2026-07-10",
+        "price": 382.25,
+        "shares": 1
+      }
+    ],
+    "local_peak": 383,
+    "date_added": "2026-07-03",
+    "initial_reference_price": 382.25
+  },
+  "TATASTEEL.NS": {
+    "name": "Tata Steel Limited",
+    "category": "Growth",
+    "transactions": [
+      {
+        "date": "2026-07-27",
+        "price": 182.82,
+        "shares": 1
+      }
+    ],
+    "local_peak": 192.99,
+    "date_added": "2026-07-05",
+    "initial_reference_price": 182.82
+  },
+  "mtf_trading": [
+    {
+      "id": 0,
+      "ticker": "GESHIP.NS",
+      "buy_date": "2026-08-03",
+      "buy_price": 1401,
+      "shares": 10,
+      "broker_funding_pct": 68,
+      "margin_ratio": 0.32,
+      "margin_paid": 4483.199999999999,
+      "broker_funding": 9526.800000000001,
+      "status": "Closed",
+      "sell_date": "2026-08-06",
+      "sell_price": 1348.67
+    }
+  ],
+  "UYFINCORP.NS": {
+    "name": "UYFINCORP",
+    "category": "Core",
+    "transactions": [
+      {
+        "date": "2026-08-06",
+        "price": 19.33,
+        "shares": 12
+      }
+    ],
+    "local_peak": 19.58,
+    "date_added": "2026-08-06",
+    "initial_reference_price": 19.33
+  },
+  "BORANA.NS": {
+    "name": "BORANA",
+    "category": "Core",
+    "transactions": [
+      {
+        "date": "2026-08-06",
+        "price": 342,
+        "shares": 1
+      }
+    ],
+    "local_peak": 353.95,
+    "date_added": "2026-08-06",
+    "initial_reference_price": 351
+  }
 }
