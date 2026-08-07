@@ -308,14 +308,6 @@ def fetch_live_price_only(ticker: str) -> float | None:
                 return float(price)
     except Exception:
         pass
-    # Fallback: standard yfinance fast_info
-    try:
-        t = yf.Ticker(ticker)
-        p = t.fast_info.get("lastPrice") or t.fast_info.get("regularMarketPrice")
-        if p and float(p) > 0:
-            return float(p)
-    except Exception:
-        pass
     return None
 
 
@@ -335,6 +327,11 @@ def fetch_ticker_data(ticker: str) -> dict | None:
                     cached["cached_at"] = datetime.datetime.now().isoformat()
                     save_cache(ticker, cached)
         return cached
+
+    # Primary fetcher: direct browser-impersonated curl_cffi (bypass Yahoo 401 Crumb error & rate limits)
+    cffi_res = fetch_via_curl_cffi(ticker)
+    if cffi_res is not None:
+        return cffi_res
 
     try:
         t = yf.Ticker(ticker)
@@ -366,7 +363,7 @@ def fetch_ticker_data(ticker: str) -> dict | None:
     except Exception:
         pass
 
-    return fetch_via_curl_cffi(ticker)
+    return None
 
 
 def history_from_records(records: list) -> pd.DataFrame:
@@ -883,6 +880,7 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
             res = result_map[sym]
             item["current_score"] = res["total_score"]
             item["current_ltp"] = res["ltp"]
+            item["ltp"] = res["ltp"]
             st = check_top_pick_status(res)
             if not item.get("is_pre_market"):
                 item["status"] = st["status"]
@@ -899,6 +897,7 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
             if top_pick.get("symbol") in result_map:
                 res = result_map[top_pick["symbol"]]
                 top_pick["current_ltp"] = res["ltp"]
+                top_pick["ltp"] = res["ltp"]
                 top_pick["pe"] = res.get("pe")
                 top_pick["rsi"] = res.get("rsi")
 
@@ -965,11 +964,13 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
     # If open price is missing (e.g., laptop/app was off during 09:15 AM open), fetch official exchange candle Open from history
     if not top_open or float(top_open) <= 0:
         try:
-            h = yf.Ticker(top["ticker"]).history(period="5d")
-            if not h.empty and "Open" in h and len(h["Open"]) > 0:
-                top_open = float(h["Open"].iloc[-1])
-                if not top_prev_close and len(h["Close"]) > 1:
-                    top_prev_close = float(h["Close"].iloc[-2])
+            top_data = fetch_via_curl_cffi(top["ticker"])
+            if top_data and top_data.get("history_close"):
+                hc = top_data["history_close"]
+                if len(hc) > 0:
+                    top_open = float(hc[-1].get("open", 0))
+                    if not top_prev_close and len(hc) > 1:
+                        top_prev_close = float(hc[-2].get("close", 0))
         except Exception:
             pass
 
@@ -2405,6 +2406,7 @@ async function refreshLiveLTP(manual = false) {
     renderTable();
     renderWatchlist();
     if (typeof renderFnoTab === 'function') renderFnoTab();
+    if (typeof renderTopPickCard === 'function') renderTopPickCard();
     flashUpdatedPrices();
   }
 }
@@ -2780,6 +2782,27 @@ function renderTopPick() {
     `<li style="margin-bottom:6px;display:flex;align-items:center;gap:8px"><span>✅</span><span>${h}</span></li>`
   ).join('');
 
+  const heroCurrentPrice = TOP_PICK.current_ltp || TOP_PICK.ltp || TOP_PICK.ltp_at_pick || 0;
+  let heroPrevClose = TOP_PICK.prev_close;
+  if ((!heroPrevClose || Math.abs(heroPrevClose - (TOP_PICK.ltp_at_pick || heroCurrentPrice)) < 0.05) && DAILY_PICKS_HISTORY && DAILY_PICKS_HISTORY.length > 1) {
+    const prev = DAILY_PICKS_HISTORY[1];
+    heroPrevClose = prev.session_close || prev.close || prev.ltp_at_pick;
+  }
+
+  let heroGapHtml = '⚪ Flat Open (0.00%)';
+  let heroGapCls = 'badge-gray';
+  if (heroPrevClose && heroPrevClose > 0) {
+    const refPickPrice = TOP_PICK.ltp_at_pick || heroCurrentPrice;
+    const gAmt = refPickPrice - heroPrevClose;
+    const gPct = (gAmt / heroPrevClose) * 100;
+    if (Math.abs(gPct) >= 0.01) {
+      heroGapCls = gPct > 0 ? 'badge-green' : 'badge-red';
+      const gIcon = gPct > 0 ? '▲' : '▼';
+      const gTag = gAmt > 0 ? 'Gap Up' : 'Gap Down';
+      heroGapHtml = `${gIcon} ${gTag} ${gPct >= 0 ? '+' : ''}${gPct.toFixed(2)}% (${gAmt >= 0 ? '+' : ''}₹${gAmt.toFixed(2)})`;
+    }
+  }
+
   const historyRows = (DAILY_PICKS_HISTORY || []).map((h, idx, arr) => {
     const pickPrice = h.ltp_at_pick || h.ltp || 0;
     const curPrice = h.current_ltp || h.ltp || pickPrice;
@@ -2833,26 +2856,6 @@ function renderTopPick() {
     </tr>`;
   }).join('');
 
-  let heroPrevClose = TOP_PICK.prev_close;
-  if ((!heroPrevClose || Math.abs(heroPrevClose - (TOP_PICK.ltp_at_pick || TOP_PICK.ltp)) < 0.05) && DAILY_PICKS_HISTORY && DAILY_PICKS_HISTORY.length > 1) {
-    const prev = DAILY_PICKS_HISTORY[1];
-    heroPrevClose = prev.session_close || prev.close || prev.ltp_at_pick;
-  }
-
-  let heroGapHtml = '⚪ Flat Open (0.00%)';
-  let heroGapCls = 'badge-gray';
-  const entryPrice = TOP_PICK.ltp_at_pick || TOP_PICK.ltp || 0;
-  if (heroPrevClose && entryPrice > 0) {
-    const gAmt = entryPrice - heroPrevClose;
-    const gPct = (gAmt / heroPrevClose) * 100;
-    if (Math.abs(gAmt) >= 0.05) {
-      heroGapCls = gAmt > 0 ? 'badge-green' : 'badge-red';
-      const gIcon = gAmt > 0 ? '🟢' : '🔻';
-      const gTag = gAmt > 0 ? 'Gap Up' : 'Gap Down';
-      heroGapHtml = `${gIcon} ${gTag} ${gPct >= 0 ? '+' : ''}${gPct.toFixed(2)}% (${gAmt >= 0 ? '+' : ''}₹${gAmt.toFixed(2)})`;
-    }
-  }
-
   container.innerHTML = `
     ${mktBannerHtml}
 
@@ -2891,7 +2894,7 @@ function renderTopPick() {
           <div style="font-size:28px;font-weight:800;color:var(--white)">${TOP_PICK.symbol} <span style="font-size:16px;font-weight:400;color:var(--muted)">— ${TOP_PICK.name || ''}</span></div>
           <div style="font-size:13px;color:var(--accent2);margin-top:2px">${TOP_PICK.sector || ''}</div>
           <div style="font-size:26px;font-weight:700;margin:12px 0">
-            <span class="price">₹${(TOP_PICK.ltp || TOP_PICK.ltp_at_pick || 0).toFixed(2)}</span>
+            <span class="price">₹${heroCurrentPrice.toFixed(2)}</span>
           </div>
 
           <!-- Fundamental Badges -->
@@ -2907,7 +2910,7 @@ function renderTopPick() {
             <div style="font-size:12px;font-weight:700;color:var(--accent2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">⚡ Overnight Price Fluctuation & Gap Analysis</div>
             <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:13px">
               <div><span style="color:var(--muted)">Prev Session Close:</span> <strong>₹${heroPrevClose ? heroPrevClose.toFixed(2) : '—'}</strong></div>
-              <div><span style="color:var(--muted)">Pick Price (Open Entry):</span> <strong>₹${(TOP_PICK.ltp_at_pick || TOP_PICK.ltp || 0).toFixed(2)}</strong></div>
+              <div><span style="color:var(--muted)">Pick Price (Open Entry):</span> <strong>₹${(TOP_PICK.ltp_at_pick || heroCurrentPrice).toFixed(2)}</strong></div>
               <div><span style="color:var(--muted)">Overnight Fluctuation:</span> <span class="badge ${heroGapCls}" style="font-weight:700">${heroGapHtml}</span></div>
             </div>
           </div>
@@ -3815,18 +3818,51 @@ init();
 </html>"""
 
 
+def fetch_15m_history_cffi(ticker: str) -> pd.DataFrame:
+    try:
+        from curl_cffi import requests
+        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?interval=15m&range=5d"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        r = requests.get(url, impersonate="chrome120", headers=headers, timeout=8)
+        if r.status_code == 200:
+            res = r.json().get("chart", {}).get("result", [{}])[0]
+            timestamps = res.get("timestamp", [])
+            quote = res.get("indicators", {}).get("quote", [{}])[0]
+            opens = quote.get("open", [])
+            highs = quote.get("high", [])
+            lows = quote.get("low", [])
+            closes = quote.get("close", [])
+            vols = quote.get("volume", [])
+            data = []
+            if timestamps and closes:
+                for idx, (t, c) in enumerate(zip(timestamps, closes)):
+                    if c is not None:
+                        o_val = opens[idx] if idx < len(opens) and opens[idx] is not None else c
+                        h_val = highs[idx] if idx < len(highs) and highs[idx] is not None else c
+                        l_val = lows[idx] if idx < len(lows) and lows[idx] is not None else c
+                        v_val = vols[idx] if idx < len(vols) and vols[idx] is not None else 1
+                        data.append({
+                            "Date": pd.to_datetime(t, unit="s"),
+                            "Open": float(o_val),
+                            "High": float(h_val),
+                            "Low": float(l_val),
+                            "Close": float(c),
+                            "Volume": float(v_val)
+                        })
+            if data:
+                return pd.DataFrame(data).set_index("Date")
+    except Exception:
+        pass
+    return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
+
+
 def fetch_commodity_signals() -> dict:
     log("Fetching 15m intraday commodity data (Crude Oil & Natural Gas)...")
     from screener_engine import calculate_ema_crossover_15m
 
-    # Fetch live USD/INR exchange rate
-    usdinr_rate = 86.50
-    try:
-        usdinr_t = yf.Ticker("USDINR=X")
-        usdinr_rate = float(usdinr_t.fast_info.get('lastPrice') or 86.50)
-        log(f"  Live USD/INR Rate: ₹{usdinr_rate:.2f}")
-    except Exception as e:
-        log(f"  ⚠ USDINR rate fetch error: {e}, using default 86.50")
+    # Fetch live USD/INR exchange rate via curl_cffi
+    usdinr_rate = fetch_live_price_only("USDINR=X") or 86.50
+    log(f"  Live USD/INR Rate: ₹{usdinr_rate:.2f}")
 
     items = [
         {"id": "crude", "name": "Crude Oil (WTI)", "ticker": "CL=F", "unit": "$", "icon": "🛢️"},
@@ -3836,10 +3872,13 @@ def fetch_commodity_signals() -> dict:
 
     for c in items:
         try:
-            t = yf.Ticker(c["ticker"])
-            df_15m = t.history(period="5d", interval="15m")
-            if df_15m is None or df_15m.empty:
-                df_15m = yf.download(c["ticker"], period="5d", interval="15m", progress=False)
+            df_15m = fetch_15m_history_cffi(c["ticker"])
+            if df_15m.empty:
+                try:
+                    t = yf.Ticker(c["ticker"])
+                    df_15m = t.history(period="5d", interval="15m")
+                except Exception:
+                    pass
 
             calc = calculate_ema_crossover_15m(df_15m)
             curr_usd = calc.get("curr_price")
@@ -3950,17 +3989,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             price = None
             if ticker:
                 try:
-                    import yfinance as yf
-                    tk = yf.Ticker(ticker)
-                    fast_info = getattr(tk, 'fast_info', None)
-                    if fast_info and hasattr(fast_info, 'last_price') and fast_info.last_price:
-                        price = float(fast_info.last_price)
-                    elif fast_info and 'lastPrice' in fast_info and fast_info['lastPrice']:
-                        price = float(fast_info['lastPrice'])
-                    else:
-                        hist = tk.history(period='1d')
-                        if not hist.empty and 'Close' in hist.columns:
-                            price = float(hist['Close'].iloc[-1])
+                    price = fetch_live_price_only(ticker)
                 except Exception as e:
                     pass
 

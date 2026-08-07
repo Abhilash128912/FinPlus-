@@ -123,9 +123,15 @@ def main():
                     })
                     
     if not all_new_stocks:
-        print("\n[ERROR] No stock data could be downloaded (Access Denied / Network Issue).")
-        print("Please run this script from your local residential machine.")
-        return
+        json_file = os.path.join(BASE_DIR, "nifty_stocks_auto.json")
+        if os.path.exists(json_file) or os.path.exists(EXCEL_PATH):
+            print("\n[INFO] Unable to download fresh index list from NSE (Access Denied / Network Block).")
+            print("       Continuing with existing local stock list file.")
+            return
+        else:
+            print("\n[ERROR] No stock data could be downloaded (Access Denied / Network Issue).")
+            print("Please run this script from your local residential machine.")
+            return
 
     print(f"\nTotal unique stocks fetched from downloads: {len({s['symbol'] for s in all_new_stocks})}")
     
