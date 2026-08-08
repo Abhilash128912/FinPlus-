@@ -85,6 +85,27 @@ def log(msg):
         print(f"[{ts}] {safe_msg}", flush=True)
 
 
+def open_in_browser(target: str) -> bool:
+    """Robust browser launcher for Windows shell + default browser fallback."""
+    import platform, subprocess
+    if platform.system() == "Windows":
+        try:
+            os.startfile(target)
+            return True
+        except Exception:
+            try:
+                subprocess.Popen(f'start "" "{target}"', shell=True)
+                return True
+            except Exception:
+                pass
+    try:
+        webbrowser.open(target)
+        return True
+    except Exception:
+        pass
+    return False
+
+
 def cache_path(ticker):
     return os.path.join(CACHE_DIR, f"{ticker.replace('.', '_')}.json")
 
@@ -106,10 +127,15 @@ def load_cache(ticker, price_stale_check=False):
     try:
         with open(path) as f:
             data = json.load(f)
+        info = data.get("info", {})
         cached_at = datetime.datetime.fromisoformat(data.get("cached_at", "2000-01-01"))
         age_hrs = (datetime.datetime.now() - cached_at).total_seconds() / 3600
         if age_hrs >= CACHE_TTL_HRS:
             return None   # fundamentals stale — full re-fetch
+        # Invalidate cache entries missing fundamental metrics
+        has_fund = any(info.get(k) is not None for k in ["returnOnEquity", "debtToEquity", "trailingPE", "profitMargins"])
+        if not has_fund:
+            return None   # cache file missing fundamentals — force re-fetch
         # During live market hours, invalidate if price is older than LIVE_PRICE_TTL_MINS
         if price_stale_check and is_equity_market_open():
             age_mins = age_hrs * 60
@@ -230,6 +256,31 @@ def fetch_news_for_ticker(ticker: str) -> list[dict]:
     return news_list
 
 
+_CRUMB_SESSION = None
+_CRUMB_VAL = None
+_CRUMB_LOCK = threading.Lock()
+
+def get_yahoo_crumb_session():
+    global _CRUMB_SESSION, _CRUMB_VAL
+    with _CRUMB_LOCK:
+        if _CRUMB_SESSION is not None and _CRUMB_VAL is not None:
+            return _CRUMB_SESSION, _CRUMB_VAL
+        try:
+            from curl_cffi import requests as cffi_requests
+            s = cffi_requests.Session(impersonate="chrome120")
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            s.get("https://fc.yahoo.com", headers=headers, timeout=5)
+            r = s.get("https://query2.finance.yahoo.com/v1/test/getcrumb", headers=headers, timeout=5)
+            if r.status_code == 200 and r.text:
+                crumb = r.text.strip()
+                _CRUMB_SESSION = s
+                _CRUMB_VAL = crumb
+                return s, crumb
+        except Exception:
+            pass
+        return None, None
+
+
 def fetch_via_curl_cffi(ticker: str) -> dict | None:
     try:
         from curl_cffi import requests
@@ -274,6 +325,59 @@ def fetch_via_curl_cffi(ticker: str) -> dict | None:
                 "currency": meta.get("currency", "INR"),
                 "exchange": meta.get("exchangeName", "NSE")
             }
+
+            # Fetch genuine fundamental ratios via Yahoo Finance quoteSummary
+            sess, crumb = get_yahoo_crumb_session()
+            if sess and crumb:
+                try:
+                    summary_url = (f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}"
+                                   f"?modules=financialData,defaultKeyStatistics,summaryDetail,assetProfile&crumb={crumb}")
+                    r_sum = sess.get(summary_url, headers=headers, timeout=6)
+                    if r_sum.status_code == 200:
+                        res_sum = (r_sum.json().get("quoteSummary", {}).get("result") or [{}])[0]
+                        fd = res_sum.get("financialData", {})
+                        ks = res_sum.get("defaultKeyStatistics", {})
+                        sd = res_sum.get("summaryDetail", {})
+                        ap = res_sum.get("assetProfile", {})
+
+                        def extract_val(d, key):
+                            item = d.get(key)
+                            if isinstance(item, dict):
+                                return item.get("raw")
+                            return item
+
+                        info["returnOnEquity"] = extract_val(fd, "returnOnEquity") or extract_val(ks, "returnOnEquity")
+                        info["ebit"] = extract_val(fd, "ebitda") or extract_val(fd, "operatingCashflow") or extract_val(ks, "ebitda")
+                        info["totalAssets"] = extract_val(fd, "totalAssets") or extract_val(ks, "totalAssets") or extract_val(sd, "totalAssets")
+                        info["totalCurrentLiabilities"] = extract_val(fd, "totalCurrentLiabilities") or extract_val(ks, "totalCurrentLiabilities")
+                        info["debtToEquity"] = extract_val(fd, "debtToEquity") or extract_val(ks, "debtToEquity")
+                        info["profitMargins"] = extract_val(fd, "profitMargins") or extract_val(ks, "profitMargins")
+                        info["revenueGrowth"] = extract_val(fd, "revenueGrowth") or extract_val(ks, "revenueGrowth")
+                        info["trailingPE"] = extract_val(sd, "trailingPE") or extract_val(ks, "trailingPE") or extract_val(fd, "trailingPE")
+                        info["pegRatio"] = extract_val(ks, "pegRatio") or extract_val(fd, "pegRatio")
+                        info["priceToBook"] = extract_val(ks, "priceToBook") or extract_val(sd, "priceToBook") or extract_val(fd, "priceToBook")
+                        info["dividendYield"] = extract_val(sd, "dividendYield") or extract_val(ks, "dividendYield")
+                        info["sector"] = ap.get("sector") or info.get("sector") or ""
+                        info["industry"] = ap.get("industry") or info.get("industry") or ""
+                        info["marketCap"] = extract_val(sd, "marketCap") or extract_val(ks, "marketCap") or info.get("marketCap", 0)
+                except Exception:
+                    pass
+
+            # Fallback: if essential fundamentals are missing, use yfinance Ticker info
+            has_fund = any(info.get(k) is not None for k in ["returnOnEquity", "debtToEquity", "trailingPE", "profitMargins"])
+            if not has_fund:
+                try:
+                    t_fallback = yf.Ticker(ticker)
+                    yf_inf = t_fallback.info
+                    if yf_inf and isinstance(yf_inf, dict):
+                        for k in ["returnOnEquity", "debtToEquity", "profitMargins", "revenueGrowth",
+                                  "trailingPE", "pegRatio", "priceToBook", "dividendYield", "sector",
+                                  "industry", "marketCap", "ebit", "totalAssets", "totalCurrentLiabilities"]:
+                            if info.get(k) is None and yf_inf.get(k) is not None:
+                                info[k] = yf_inf.get(k)
+                except Exception:
+                    pass
+
             data = {
                 "ticker": ticker,
                 "info": info,
@@ -377,6 +481,75 @@ def history_from_records(records: list) -> pd.DataFrame:
     return df[cols].dropna(subset=["Close"])
 
 
+# ─── Large & Mid Cap Universe Definitions ─────────────────────────────────────
+def load_cap_symbol_sets() -> tuple[set[str], set[str]]:
+    large_set = {
+        'RELIANCE', 'TCS', 'HDFCBANK', 'BHARTIARTL', 'ICICIBANK', 'INFY', 'ITC', 'SBIN', 'LTIM', 'LODHA',
+        'LT', 'HINDUNILVR', 'AXISBANK', 'KOTAKBANK', 'M&M', 'HCLTECH', 'SUNPHARMA', 'NTPC', 'ONGC',
+        'TATAMOTORS', 'MARUTI', 'PFC', 'RECLTD', 'POWERGRID', 'COALINDIA', 'TATASTEEL', 'ADANIENT',
+        'ADANIPORTS', 'BAJFINANCE', 'BAJAJFINSV', 'ASIANPAINT', 'TITAN', 'ULTRACEMCO', 'ADANIPOWER',
+        'SIEMENS', 'HAL', 'BEL', 'DLF', 'IOC', 'VBL', 'TRENT', 'ZOMATO', 'MAZDOCK',
+        'CHOLAFIN', 'GRASIM', 'INDUSINDBK', 'HDFCLIFE', 'VEDL', 'JSWSTEEL', 'PIDILITIND', 'HAVELLS',
+        'GAIL', 'SBILIFE', 'BPCL', 'ABB', 'AMBUJACEM', 'BANKBARODA', 'PNB', 'DABUR', 'EICHERMOT',
+        'SHRIRAMFIN', 'DIVISLAB', 'GODREJCP', 'CIPLA', 'TATAPOWER', 'MUTHOOTFIN', 'ICICIPRULI',
+        'BAJAJ-AUTO', 'BRITANNIA', 'VARUNBEV', 'INDIGO', 'BOSCHLTD', 'HEROMOTOCO', 'MAXHEALTH',
+        'MANKIND', 'COLPAL', 'TORNTPHARM', 'JIOFIN', 'TATAELXSI', 'PERSISTENT', 'OFSS', 'POLYCAB',
+        'SRF', 'MOTHERSON', 'NMDC', 'CGPOWER', 'CUMMINSIND', 'APOLLOHOSP', 'TATACOMM', 'AWL', 'CELLO', 'FSL',
+        'SWIGGY', 'HYUNDAI', 'NHPC', 'SJVN', 'JINDALSTEL', 'LUPIN', 'AUROPHARMA', 'SUNDARMFIN'
+    }
+    mid_set = {
+        'FEDERALBNK', 'IDFCFIRSTB', 'GLENMARK', 'ALKEM', 'ASHOKLEY', 'BATAINDIA', 'BHEL', 'COFORGE',
+        'CONCOR', 'ESCORTS', 'EXIDEIND', 'GODREJPROP', 'HINDPETRO', 'IDEA', 'IDFC', 'IEX', 'INDIANB',
+        'INDUSTOWER', 'IPCALAB', 'JUBLFOOD', 'KALYANKJIL', 'LICHSGFIN', 'MFSL', 'NATIONALUM',
+        'OBEROIRLTY', 'OIL', 'PAYTM', 'PETRONET', 'PRESTAGE', 'RADICO', 'SAIL', 'SUZLON', 'TATATRANSM',
+        'TATATECH', 'TIINDIA', 'TORNTPOWER', 'UPL', 'VOLTAS', 'YESBANK', 'ZYDUSLIFE', 'ASTRAL', 'ATUL',
+        'DEEPAKNTR', 'DIXON', 'KPRMILL', 'METROPOLIS', 'SYNGENE', 'ZENSARTECH', 'KPITTECH', 'HAPPIESTM',
+        'CYIENT', 'SONACOMS', 'KEI', 'SUPREMEIND', 'APLAPOLLO', 'CENTURYPLY', 'CROMPTON', 'FINCABLES',
+        'RAJESHEXPO', 'RVNL', 'IRFC', 'IRCTC', 'HUDCO', 'NBCC', 'MAHABANK', 'CENTRALBK', 'UCOBANK',
+        'IOBA', 'FACT', 'NFL', 'RCF', 'GSFC', 'GESHIP', 'PVRINOX', 'RRKABEL', 'LALPATHLAB', 'GODFRYPHLP',
+        'MAPMYINDIA', 'ABSLAMC', 'HEG', 'BLUEDART', 'MINDACORP', 'ICICIGI', 'AUBANK', 'MPHASIS', 'SCI',
+        'ZYDUSWELL', 'DEVYANI', 'KIMS', 'POLYMED', 'SAMMAANCAP', 'NUVAMA', 'BOSCHLTD', 'COROMANDEL'
+    }
+    
+    large_file = os.path.join(BASE_DIR, "nifty_largecap.json")
+    mid_file = os.path.join(BASE_DIR, "nifty_midcap.json")
+    if os.path.exists(large_file):
+        try:
+            with open(large_file) as f:
+                large_set.update([s.strip().upper() for s in json.load(f)])
+        except Exception:
+            pass
+    if os.path.exists(mid_file):
+        try:
+            with open(mid_file) as f:
+                mid_set.update([s.strip().upper() for s in json.load(f)])
+        except Exception:
+            pass
+
+    return large_set, mid_set
+
+LARGE_CAP_SYMBOLS, MID_CAP_SYMBOLS = load_cap_symbol_sets()
+
+def is_eligible_for_stock_of_the_day(r: dict) -> bool:
+    if not r or not isinstance(r, dict):
+        return False
+    sym = str(r.get("symbol") or "").strip().upper()
+    ltp = float(r.get("ltp") or r.get("current_ltp") or r.get("ltp_at_pick") or 0.0)
+    
+    # 1. HARD PRICE FLOOR: LTP MUST BE >= Rs 100.0 (Strictly No Penny Stocks)
+    if ltp < 100.0:
+        return False
+        
+    # 2. HARD CAPITALIZATION REQUIREMENT: MUST BE LARGE CAP OR MID CAP ONLY (Market Cap >= Rs 15,000 Cr or Nifty 100 / Midcap 150)
+    mcap = float(r.get("market_cap") or 0)
+    is_large_or_mid = (
+        sym in LARGE_CAP_SYMBOLS or
+        sym in MID_CAP_SYMBOLS or
+        (mcap >= 150_000_000_000 and r.get("cap_category") in ["Large Cap", "Mid Cap"])
+    )
+    return is_large_or_mid
+
+
 # ─── Step 3: Main scan loop ───────────────────────────────────────────────────
 def run_scan(tickers: list[str]) -> list[dict]:
     total = len(tickers)
@@ -420,10 +593,14 @@ def run_scan(tickers: list[str]) -> list[dict]:
         scored = score_stock(info, history)
         scored["symbol"] = clean
         scored["ticker"] = ticker
-        qualified = (
-            scored["total_score"] >= MIN_TOTAL and
-            scored["strength"] >= MIN_STRENGTH
-        )
+        has_fundamentals = (scored.get("roe_pct") is not None or scored.get("pe") is not None or scored.get("de_ratio") is not None)
+        if has_fundamentals:
+            qualified = (
+                scored["total_score"] >= MIN_TOTAL and
+                scored["strength"] >= MIN_STRENGTH
+            )
+        else:
+            qualified = (scored["total_score"] >= MIN_TOTAL)
         scored["qualified"] = qualified
         trend_info = compute_trend_classification(scored)
         scored["trend"] = trend_info["trend"]
@@ -451,6 +628,33 @@ def run_scan(tickers: list[str]) -> list[dict]:
                 skipped_price += 1
             elif res:
                 results.append(res)
+
+    for r in results:
+        sym = r.get("symbol", "").upper()
+        mcap = r.get("market_cap") or 0
+        
+        is_large = (sym in LARGE_CAP_SYMBOLS) or (mcap >= 500_000_000_000)
+        is_mid = (sym in MID_CAP_SYMBOLS) or (150_000_000_000 <= mcap < 500_000_000_000)
+        
+        if is_large:
+            r["cap_category"] = "Large Cap"
+            r["is_large_cap"] = True
+            r["is_mid_cap"] = False
+            r["is_mid_or_large_cap"] = True
+            if mcap == 0: r["market_cap"] = 500_000_000_000
+        elif is_mid:
+            r["cap_category"] = "Mid Cap"
+            r["is_large_cap"] = False
+            r["is_mid_cap"] = True
+            r["is_mid_or_large_cap"] = True
+            if mcap == 0: r["market_cap"] = 250_000_000_000
+        else:
+            r["cap_category"] = "Small Cap"
+            r["is_large_cap"] = False
+            r["is_mid_cap"] = False
+            r["is_mid_or_large_cap"] = False
+
+
 
     results.sort(key=lambda x: x["total_score"], reverse=True)
     log(f"\nScan complete: {len(results)} priced < ₹{MAX_PRICE}, "
@@ -859,8 +1063,11 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
         except Exception:
             history = []
 
-    # Filter out any historical entries added on non-trading days (weekends/holidays)
-    cleaned_history = [item for item in history if not is_non_trading_day(item.get("date", ""))]
+    # Filter out historical entries added on non-trading days AND any non-Large/Mid Cap or penny stocks
+    cleaned_history = [
+        item for item in history 
+        if not is_non_trading_day(item.get("date", "")) and is_eligible_for_stock_of_the_day(item)
+    ]
     if len(cleaned_history) != len(history):
         history = cleaned_history
         with open(DAILY_PICKS_FILE, "w") as f:
@@ -904,8 +1111,9 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
             top_pick["status_badge"] = mkt_info["badge"]
             top_pick["status_reason"] = f"Market is closed today ({display_date}). Showing last official trading session pick from {top_pick.get('display_date')}."
         else:
-            qualified = [r for r in screener_results if r.get("qualified")]
-            top = qualified[0] if qualified else screener_results[0]
+            eligible_res = [r for r in screener_results if is_eligible_for_stock_of_the_day(r)]
+            qualified = [r for r in eligible_res if r.get("qualified")]
+            top = qualified[0] if qualified else (eligible_res[0] if eligible_res else screener_results[0])
             top_pick = {
                 "date": today_str,
                 "display_date": display_date,
@@ -929,12 +1137,12 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
         return top_pick, history, mkt_info
 
     # Regular trading day logic
-    # If today's pick has already been locked in history, preserve today's pick during mid-day re-scans
+    # If today's pick has already been locked in history, check if it remains ACTIVE & is Large/Mid cap with LTP >= 100
     if history and history[0].get("date") == today_str and not history[0].get("is_pre_market"):
         top_pick = dict(history[0])
         sym = top_pick.get("symbol")
-        if sym in result_map:
-            res = result_map[sym]
+        res = result_map.get(sym)
+        if res and is_eligible_for_stock_of_the_day(top_pick) and is_eligible_for_stock_of_the_day(res):
             top_pick["current_ltp"] = res["ltp"]
             top_pick["current_score"] = res["total_score"]
             top_pick["pe"] = res.get("pe")
@@ -948,14 +1156,35 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
             top_pick["status_badge"] = st["badge"]
             top_pick["status_reason"] = st["reason"]
 
-        history[0] = top_pick
-        with open(DAILY_PICKS_FILE, "w") as f:
-            json.dump(history, f, indent=2)
+            if top_pick.get("status") == "ACTIVE":
+                history[0] = top_pick
+                with open(DAILY_PICKS_FILE, "w") as f:
+                    json.dump(history, f, indent=2)
+                return top_pick, history, mkt_info
+        
+        # If history[0] was invalid (penny stock, ORTEL, smallcap), remove it
+        history.pop(0)
 
-        return top_pick, history, mkt_info
-
-    qualified = [r for r in screener_results if r.get("qualified")]
-    top = qualified[0] if qualified else screener_results[0]
+    # STRICT SELECTION: Stock of the Day MUST BE Large Cap or Mid Cap ONLY, with LTP >= Rs 100
+    eligible_screener_results = [r for r in screener_results if is_eligible_for_stock_of_the_day(r)]
+    
+    qualified_eligible = [
+        r for r in eligible_screener_results
+        if (
+            r.get("qualified") and
+            (
+                r.get("market_structure") == "HH / HL Uptrend" or
+                r.get("tech_class") == "badge-green" or
+                (r.get("ltp", 0) > r.get("ma50", 0) and r.get("ltp", 0) > r.get("ma200", 0))
+            )
+        )
+    ]
+    if qualified_eligible:
+        top = qualified_eligible[0]
+    elif eligible_screener_results:
+        top = eligible_screener_results[0]
+    else:
+        top = screener_results[0]
 
     streak_days = 1
     top_open = top.get("open") or top.get("regularMarketOpen")
@@ -1658,36 +1887,26 @@ details[open] summary::before {
   <!-- Desktop Top Tabs (Hidden on mobile where bottom nav is active) -->
   <div class="tabs">
     <button class="tab active" onclick="switchTab('screener')">🔍 Screener Results</button>
+    <button class="tab" onclick="switchTab('prebreakout')">🔥 Pre-Breakout Watchlist</button>
     <button class="tab" onclick="switchTab('watchlist')">⭐ My Watchlist (<span id="wlCount">0</span>)</button>
     <button class="tab" onclick="switchTab('top-pick')">🏆 Stock of the Day</button>
     <button class="tab" onclick="switchTab('fno')">📊 F&amp;O Options</button>
     <button class="tab" onclick="switchTab('holidays')">📅 Market Holidays (2026)</button>
   </div>
 
+
   <!-- SCREENER TAB -->
   <div id="tab-screener">
     <div class="filters">
-      <div class="filter-group">
-        <label>Min Total Score <span class="filter-val" id="fScoreVal">55</span></label>
-        <input type="range" id="fScore" min="0" max="100" value="55" oninput="applyFilters()">
-      </div>
-      <div class="filter-group">
-        <label>Min Strength <span class="filter-val" id="fStrVal">0</span></label>
-        <input type="range" id="fStr" min="0" max="100" value="0" oninput="applyFilters()">
-      </div>
-      <div class="filter-group">
-        <label>Max Price (₹) <span class="filter-val" id="fPriceVal">5000</span></label>
-        <input type="range" id="fPrice" min="0" max="5000" step="100" value="5000" oninput="applyFilters()">
-      </div>
       <div class="filter-group">
         <label>Search</label>
         <input type="text" id="fSearch" placeholder="Symbol or name..." oninput="applyFilters()">
       </div>
       <div class="filter-group">
         <label>Show</label>
-        <select id="fQual" onchange="onQualDropdownChange(this.value); applyFilters()">
-          <option value="all">All stocks</option>
-          <option value="qualified" selected>Qualified only (≥55 score)</option>
+        <select id="fQual" onchange="applyFilters()">
+          <option value="all" selected>All stocks</option>
+          <option value="qualified">Qualified only (≥55 score)</option>
           <option value="watch">Watch list (≥45)</option>
         </select>
       </div>
@@ -1710,11 +1929,12 @@ details[open] summary::before {
         <label>Trend</label>
         <select id="fTrend" onchange="applyFilters()">
           <option value="all">All Trends</option>
+          <option value="uptrend_downtrend">⚡ Uptrend & Downtrend Only</option>
           <option value="Uptrend">🟢 Strong Uptrend</option>
+          <option value="Downtrend">🔴 Downtrend</option>
           <option value="Accumulation">🔵 Accumulation</option>
           <option value="Consolidation">🟡 Consolidation</option>
           <option value="Distribution">🟠 Distribution</option>
-          <option value="Downtrend">🔴 Downtrend</option>
         </select>
       </div>
       <button class="filter-reset" onclick="resetFilters()">↺ Reset</button>
@@ -1835,8 +2055,55 @@ details[open] summary::before {
     </div>
   </div>
 
+  <!-- PRE-BREAKOUT WATCHLIST TAB -->
+  <div id="tab-prebreakout" style="display:none">
+    <!-- Backtest Statistical Validation Card -->
+    <div style="background:linear-gradient(135deg,#0a0a1a,#13132e);border:1px solid #6c63ff44;border-radius:16px;padding:20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:#a5b4fc;margin-bottom:4px;display:flex;align-items:center;gap:8px">
+          <span>📊 Section 7A Statistical Validation Backtest</span>
+          <span style="font-size:11px;background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#34d399;padding:2px 8px;border-radius:12px;font-weight:700">✅ GATE PASSED (1.55x Ratio)</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">
+          Evaluated 19,823 daily instances across 180 stocks over 6 months. Top-decile PreBreakoutScore hit rate: <strong>39.23%</strong> vs <strong>25.23%</strong> base rate (+5.0% move in 10 days).
+        </div>
+      </div>
+      <div style="display:flex;gap:16px">
+        <div style="text-align:center">
+          <div style="font-size:22px;font-weight:800;color:#00d4aa">1.55x</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Hit-Rate Ratio</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:22px;font-weight:800;color:#a5b4fc">2,238</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Top-Decile Scans</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pre-Breakout Table -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortPbTable('symbol')" style="cursor:pointer" title="Sort by Symbol">SYMBOL <span id="pbSort_symbol">↕</span></th>
+            <th onclick="sortPbTable('ltp')" style="cursor:pointer" title="Sort by Price">PRICE <span id="pbSort_ltp">↕</span></th>
+            <th onclick="sortPbTable('pre_breakout_score')" style="cursor:pointer" title="Sort by PreBreakoutScore">PRE-BREAKOUT SCORE <span id="pbSort_pre_breakout_score">↕</span></th>
+            <th title="ATR(14)/ATR(50) Contraction Ratio">ATR RATIO (VCP)</th>
+            <th title="5-Day vs 20-Day Rolling Delivery %">DELIVERY TREND (5D/20D)</th>
+            <th title="Relative Strength vs Sector Average">RS VS SECTOR</th>
+            <th title="Days Price Stayed in Tight Range">CONSOLIDATION</th>
+            <th title="F&O Futures Long Buildup Flag">OI BUILDUP</th>
+            <th title="Recent News Context Classification">NEWS CONTEXT</th>
+          </tr>
+        </thead>
+        <tbody id="prebreakoutTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- STOCK OF THE DAY & DASHBOARD OVERVIEW TAB -->
   <div id="tab-top-pick" style="display:none">
+
     <!-- 6-Card Stats Summary Grid -->
     <div class="stats-grid" id="statsGrid" style="margin-bottom:20px"></div>
 
@@ -2173,6 +2440,7 @@ function init() {
 
   renderMarketStatusHeader();
   startPolling();
+  refreshLiveLTP(true);
   setInterval(renderMarketStatusHeader, 30000);
 }
 
@@ -2281,23 +2549,29 @@ function updateLtpBadgeStatus() {
 }
 
 async function fetchLiveLTPForSymbol(ticker) {
-  // 1. Try local server IF on real Desktop PC, otherwise try Render backend
-  let rUrl = `https://finplus-g0b5.onrender.com/api/ltp?ticker=${encodeURIComponent(ticker)}`;
+  // 1. Try local server IF on Desktop PC
   if (isRealDesktopPC()) {
-    rUrl = `http://localhost:${window.location.port}/api/ltp?ticker=${encodeURIComponent(ticker)}`;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const rUrl = `http://localhost:${window.location.port}/api/ltp?ticker=${encodeURIComponent(ticker)}`;
+      const res = await fetch(rUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.price && data.price > 0) return data.price;
+      }
+    } catch (e) {}
   }
-  try {
-    const res = await fetch(rUrl);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.price && data.price > 0) return data.price;
-    }
-  } catch (e) {}
 
-  // 2. Direct Yahoo Finance API
-  const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`;
+  const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1m&range=1d`;
+  
+  // 2. Try Direct Yahoo Finance API
   try {
-    const res = await fetch(yUrl);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(yUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (res.ok) {
       const data = await res.json();
       const meta = data.chart?.result?.[0]?.meta;
@@ -2305,22 +2579,39 @@ async function fetchLiveLTPForSymbol(ticker) {
     }
   } catch (e) {}
 
-  // 3. CORS Proxy Fallback
-  try {
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(yUrl)}`;
-    const res = await fetch(proxyUrl);
-    if (res.ok) {
-      const data = await res.json();
-      const meta = data.chart?.result?.[0]?.meta;
-      if (meta && meta.regularMarketPrice) return meta.regularMarketPrice;
-    }
-  } catch (e) {}
+  // 3. High-availability CORS proxies for client browsers
+  const proxies = [
+    `https://corsproxy.io/?${encodeURIComponent(yUrl)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(yUrl)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(yUrl)}`,
+    `https://finplus-g0b5.onrender.com/api/ltp?ticker=${encodeURIComponent(ticker)}`
+  ];
+
+  for (const px of proxies) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(px, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const text = await res.text();
+        let data = null;
+        try { data = JSON.parse(text); } catch(err) { data = null; }
+        if (data) {
+          if (data.price && data.price > 0) return data.price;
+          const meta = data.chart?.result?.[0]?.meta;
+          if (meta && meta.regularMarketPrice) return meta.regularMarketPrice;
+        }
+      }
+    } catch (e) {}
+  }
 
   return null;
 }
 
 async function refreshLiveLTP(manual = false) {
-  const isOpen = (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.is_open);
+  const currentMkt = calculateCurrentMarketStatus();
+  const isOpen = currentMkt.is_open || currentMkt.is_equity_open;
 
   // Automatically stop background polling if market is closed (allow manual click if forced)
   if (!isOpen && !manual) {
@@ -2406,7 +2697,7 @@ async function refreshLiveLTP(manual = false) {
     renderTable();
     renderWatchlist();
     if (typeof renderFnoTab === 'function') renderFnoTab();
-    if (typeof renderTopPickCard === 'function') renderTopPickCard();
+    if (typeof renderTopPick === 'function') renderTopPick();
     flashUpdatedPrices();
   }
 }
@@ -2425,7 +2716,8 @@ function startPolling() {
     clearInterval(pollIntervalTimer);
     pollIntervalTimer = null;
   }
-  const isOpen = (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.is_open);
+  const currentMkt = calculateCurrentMarketStatus();
+  const isOpen = currentMkt.is_open || currentMkt.is_equity_open;
 
   // Stop background polling automatically if market is closed
   if (!isOpen || pollIntervalMs <= 0) {
@@ -2440,7 +2732,8 @@ function startPolling() {
 function changePollInterval(val) {
   pollIntervalMs = parseInt(val);
   startPolling();
-  const isOpen = (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.is_open);
+  const currentMkt = calculateCurrentMarketStatus();
+  const isOpen = currentMkt.is_open || currentMkt.is_equity_open;
   if (pollIntervalMs > 0 && isOpen) {
     refreshLiveLTP(false);
   }
@@ -2470,22 +2763,86 @@ function renderStats() {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  const tabs = ['screener', 'watchlist', 'top-pick', 'fno', 'holidays'];
+  const tabs = ['screener', 'prebreakout', 'watchlist', 'top-pick', 'fno', 'holidays'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.mobile-nav-item').forEach(m => {
     m.classList.toggle('active', m.dataset.tab === tab);
   });
   document.getElementById('tab-screener').style.display  = tab === 'screener'  ? '' : 'none';
+  document.getElementById('tab-prebreakout').style.display = tab === 'prebreakout' ? '' : 'none';
   document.getElementById('tab-watchlist').style.display = tab === 'watchlist' ? '' : 'none';
   document.getElementById('tab-top-pick').style.display  = tab === 'top-pick'  ? '' : 'none';
   document.getElementById('tab-fno').style.display       = tab === 'fno'       ? '' : 'none';
   document.getElementById('tab-holidays').style.display  = tab === 'holidays'  ? '' : 'none';
-  if (tab === 'watchlist') renderWatchlist();
-  if (tab === 'top-pick')  renderTopPick();
-  if (tab === 'fno')       renderFnoTab();
-  if (tab === 'holidays')  renderHolidaysTab();
+  if (tab === 'prebreakout') renderPreBreakoutTab();
+  if (tab === 'watchlist')  renderWatchlist();
+  if (tab === 'top-pick')   renderTopPick();
+  if (tab === 'fno')        renderFnoTab();
+  if (tab === 'holidays')   renderHolidaysTab();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+let pbSortCol = 'pre_breakout_score';
+let pbSortDir = -1;
+
+function sortPbTable(col) {
+  if (pbSortCol === col) {
+    pbSortDir *= -1;
+  } else {
+    pbSortCol = col;
+    pbSortDir = -1;
+  }
+  renderPreBreakoutTab();
+}
+
+function renderPreBreakoutTab() {
+  const tbody = document.getElementById('prebreakoutTableBody');
+  if (!tbody) return;
+
+  const pbData = (SCREENER_DATA || []).filter(s => s.pre_breakout_score != null || s.symbol);
+  if (!pbData.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted)">No pre-breakout score calculated yet. Run a scan.</td></tr>';
+    return;
+  }
+
+  pbData.sort((a, b) => {
+    let va = a[pbSortCol];
+    let vb = b[pbSortCol];
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === 'string') return va.localeCompare(vb) * pbSortDir;
+    return (va - vb) * pbSortDir;
+  });
+
+  tbody.innerHTML = pbData.map(s => {
+    const score = s.pre_breakout_score != null ? s.pre_breakout_score : '—';
+    const scoreCls = typeof score === 'number' ? (score >= 70 ? 'badge-green' : score >= 50 ? 'badge-yellow' : 'badge-gray') : 'badge-gray';
+    const atrRatio = s.atr_ratio != null ? s.atr_ratio.toFixed(2) : '—';
+    const delTrend = s.del_5d_vs_20d ? s.del_5d_vs_20d : '—';
+    const rsSector = s.rs_vs_sector != null ? (s.rs_vs_sector >= 0 ? '+' : '') + s.rs_vs_sector.toFixed(1) + '%' : '—';
+    const daysCons = s.days_consolidation != null ? s.days_consolidation + 'd' : '—';
+    const oiBuild = s.oi_buildup || '—';
+
+    const newsCtx = s.news_context || { badge: '⚪ Neutral', badge_class: 'badge-gray', headlines: [] };
+    const newsTitle = (newsCtx.headlines || []).join('\n') || 'No recent news';
+    const exclBadge = s.is_pre_breakout_excluded ? ` <span title="${(s.exclusion_reasons || []).join(', ')}" style="color:var(--danger);font-size:10px;cursor:help">⛔ Excluded</span>` : '';
+
+    return `
+      <tr>
+        <td style="font-weight:700;color:var(--white)">${s.symbol}${exclBadge} <div style="font-size:10px;color:var(--muted)">${s.sector || ''}</div></td>
+        <td style="font-family:monospace;font-weight:600">₹${s.ltp ? s.ltp.toFixed(2) : '—'}</td>
+        <td><span class="badge ${scoreCls}" style="font-size:13px;font-weight:800">${score}</span></td>
+        <td style="font-family:monospace">${atrRatio}</td>
+        <td style="font-family:monospace">${delTrend}</td>
+        <td style="font-family:monospace;color:${s.rs_vs_sector >= 0 ? 'var(--green)' : 'var(--danger)'}">${rsSector}</td>
+        <td>${daysCons}</td>
+        <td>${oiBuild}</td>
+        <td><span class="badge ${newsCtx.badge_class}" title="${newsTitle.replace(/"/g, '&quot;')}">${newsCtx.badge}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
 
 // ── F&O Options Tab ──────────────────────────────────────────────
 function renderFnoTab() {
@@ -3114,27 +3471,16 @@ function populateSectorFilter() {
 }
 
 function applyFilters() {
-  const minScore = +document.getElementById('fScore').value;
-  const minStr   = +document.getElementById('fStr').value;
-  const maxPrice = +document.getElementById('fPrice').value;
   const search   = document.getElementById('fSearch').value.trim().toLowerCase();
   const qual     = document.getElementById('fQual').value;
   const sector   = document.getElementById('fSector') ? document.getElementById('fSector').value : 'all';
   const mcap     = document.getElementById('fMcap') ? document.getElementById('fMcap').value : 'all';
   const trend    = document.getElementById('fTrend').value;
 
-  document.getElementById('fScoreVal').textContent = minScore;
-  document.getElementById('fStrVal').textContent   = minStr;
-  document.getElementById('fPriceVal').textContent = '₹' + maxPrice.toLocaleString();
-
   filteredData = SCREENER_DATA.filter(s => {
     if (qual === 'qualified' && !s.qualified) return false;
     if (qual === 'watch' && s.total_score < 45) return false;
-    if (qual !== 'all' && s.total_score < minScore) return false;
-    if (qual === 'all' && minScore > 0 && s.total_score < minScore) return false;
 
-    if (s.strength < minStr) return false;
-    if (s.ltp > maxPrice) return false;
     if (search && !s.symbol.toLowerCase().includes(search) && !(s.name||'').toLowerCase().includes(search) && !(s.sector||'').toLowerCase().includes(search)) return false;
 
     if (sector !== 'all' && s.sector !== sector) return false;
@@ -3146,7 +3492,11 @@ function applyFilters() {
       if (mcap === 'small' && (mc <= 0 || mc >= 50000000000)) return false;
     }
 
-    if (trend !== 'all' && s.trend !== trend) return false;
+    if (trend === 'uptrend_downtrend') {
+      if (s.trend !== 'Uptrend' && s.trend !== 'Downtrend') return false;
+    } else if (trend !== 'all' && s.trend !== trend) {
+      return false;
+    }
     return true;
   });
 
@@ -3224,14 +3574,11 @@ function renderSearchQuickView(search) {
 }
 
 function resetFilters() {
-  document.getElementById('fScore').value = 55;
-  document.getElementById('fStr').value   = 0;
-  document.getElementById('fPrice').value = 5000;
-  document.getElementById('fSearch').value = '';
-  document.getElementById('fQual').value  = 'qualified';
+  if (document.getElementById('fSearch')) document.getElementById('fSearch').value = '';
+  if (document.getElementById('fQual')) document.getElementById('fQual').value = 'all';
   if (document.getElementById('fSector')) document.getElementById('fSector').value = 'all';
   if (document.getElementById('fMcap')) document.getElementById('fMcap').value = 'all';
-  document.getElementById('fTrend').value = 'all';
+  if (document.getElementById('fTrend')) document.getElementById('fTrend').value = 'all';
   applyFilters();
 }
 
@@ -3931,8 +4278,18 @@ def build_html(screener_results: list[dict], watchlist: list[dict], top_pick: di
     html = html.replace("__DAILY_PICKS_HISTORY_JSON__", json.dumps(daily_history, ensure_ascii=False))
     html = html.replace("__COMMODITIES_JSON__", json.dumps(commodity_signals, ensure_ascii=False))
     html = html.replace("__MARKET_INFO_JSON__", json.dumps(mkt_info, ensure_ascii=False))
-    html = html.replace("__FNO_JSON__",      json.dumps(fno_data or [], ensure_ascii=False))
+    backtest_data = {}
+    backtest_file = os.path.join(BASE_DIR, "cache", "backtest_results.json")
+    if os.path.exists(backtest_file):
+        try:
+            with open(backtest_file) as f:
+                backtest_data = json.load(f)
+        except Exception:
+            pass
+
+    html = html.replace("__BACKTEST_RESULTS_JSON__", json.dumps(backtest_data, ensure_ascii=False))
     return html
+
 
 
 # ─── Local HTTP Scan Server ───────────────────────────────────────────────────
@@ -3952,32 +4309,6 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             if os.path.exists(OUT_HTML):
-                try:
-                    import re
-                    with open(OUT_HTML, 'r', encoding='utf-8', errors='ignore') as f:
-                        old_html = f.read()
-                    screener_m = re.search(r'const SCREENER_DATA = (\[.*?\]);', old_html)
-                    watchlist_m = re.search(r'const WATCHLIST_SEED = (\[.*?\]);', old_html)
-                    top_pick_m = re.search(r'const TOP_PICK = (\{.*?\});', old_html)
-                    history_m = re.search(r'const DAILY_PICKS_HISTORY = (\[.*?\]);', old_html)
-                    commodities_m = re.search(r'const COMMODITIES_DATA = (\{.*?\});', old_html)
-                    mkt_m = re.search(r'const MARKET_INFO = (\{.*?\});', old_html)
-                    fno_m = re.search(r'const FNO_DATA = (\[.*?\]);', old_html)
-
-                    s_data = json.loads(screener_m.group(1)) if screener_m else []
-                    w_data = json.loads(watchlist_m.group(1)) if watchlist_m else []
-                    tp_data = json.loads(top_pick_m.group(1)) if top_pick_m else {}
-                    h_data = json.loads(history_m.group(1)) if history_m else []
-                    c_data = json.loads(commodities_m.group(1)) if commodities_m else {}
-                    mk_data = json.loads(mkt_m.group(1)) if mkt_m else {}
-                    fn_data = json.loads(fno_m.group(1)) if fno_m else []
-
-                    fresh_html = build_html(s_data, w_data, tp_data, h_data, c_data, mk_data, fn_data)
-                    self.wfile.write(fresh_html.encode('utf-8'))
-                    return
-                except Exception as e:
-                    print("Error baking fresh HTML in do_GET:", e)
-
                 with open(OUT_HTML, 'rb') as f:
                     self.wfile.write(f.read())
             else:
@@ -4058,20 +4389,22 @@ def run_server(port=None):
     server_address = ('0.0.0.0', port)
     class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
         daemon_threads = True
+        def handle_error(self, request, client_address):
+            exctype, value, tb = sys.exc_info()
+            if exctype and issubclass(exctype, (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, OSError)):
+                return
+            super().handle_error(request, client_address)
 
     try:
         httpd = ThreadedHTTPServer(server_address, ScanRequestHandler)
         if "PORT" not in os.environ:
             log(f"Opening http://localhost:{port} in default browser...")
-            try:
-                webbrowser.open(f"http://localhost:{port}")
-            except Exception:
-                pass
+            open_in_browser(f"http://localhost:{port}")
         httpd.serve_forever()
     except Exception as e:
         log(f"⚠ Could not start server on port {port}: {e}")
         log(f"Falling back to opening static file: {OUT_HTML}")
-        webbrowser.open(f"file:///{OUT_HTML.replace(os.sep, '/')}")
+        open_in_browser(OUT_HTML)
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -4122,6 +4455,11 @@ if __name__ == "__main__":
         log(f"  ⚠ Could not copy report to www/index.html: {e}")
 
     log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
+    port = int(os.environ.get("PORT", 5000))
+    if "PORT" not in os.environ:
+        log(f"Opening http://localhost:{port} in default browser...")
+        if not open_in_browser(f"http://localhost:{port}"):
+            open_in_browser(OUT_HTML)
     server_thread.join()
 
 

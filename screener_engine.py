@@ -240,9 +240,16 @@ def score_momentum(info: dict, history: pd.DataFrame) -> tuple[float, dict]:
 
     # 3. 52-week return → up to 15 pts
     wk52 = info.get("52WeekChange")
-    wk52_pts = 0
+    wk52_pct = None
     if wk52 is not None:
         wk52_pct = wk52 * 100
+    elif len(history) >= 150 and current_price > 0:
+        start_price = float(history["Close"].iloc[0])
+        if start_price > 0:
+            wk52_pct = ((current_price - start_price) / start_price) * 100
+
+    wk52_pts = 0
+    if wk52_pct is not None:
         if wk52_pct >= 40:   wk52_pts = 15
         elif wk52_pct >= 25: wk52_pts = 13
         elif wk52_pct >= 10: wk52_pts = 10
@@ -277,6 +284,11 @@ def score_momentum(info: dict, history: pd.DataFrame) -> tuple[float, dict]:
     # 5. Volume Spike Ratio → up to 15 pts
     vol = info.get("volume") or info.get("regularMarketVolume") or 0
     avg_vol_10d = info.get("averageVolume10days") or info.get("averageDailyVolume10Day") or 0
+
+    if (not vol or not avg_vol_10d) and len(history) >= 10 and "Volume" in history.columns:
+        vol = float(history["Volume"].iloc[-1])
+        avg_vol_10d = float(history["Volume"].tail(10).mean())
+
     vol_spike = 0.0
     vol_pts = 0
 
@@ -492,7 +504,18 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
     momentum, m_break = score_momentum(info, history)
     pa_score, pa_break = score_price_action_and_order_flow(history)
 
-    total = round((strength * 0.40) + (value * 0.35) + (momentum * 0.25), 1)
+    has_strength_data = any(v is not None for k, v in s_break.items() if not k.endswith("_pts"))
+    has_value_data = any(v is not None for k, v in v_break.items() if not k.endswith("_pts"))
+
+    if has_strength_data and has_value_data:
+        total = round((strength * 0.40) + (value * 0.35) + (momentum * 0.25), 1)
+    elif has_strength_data:
+        total = round((strength * 0.50) + (momentum * 0.30) + (pa_score * 0.20), 1)
+    elif has_value_data:
+        total = round((value * 0.50) + (momentum * 0.30) + (pa_score * 0.20), 1)
+    else:
+        # Technical & Order Flow Mode (when fundamental metrics are unavailable)
+        total = round((momentum * 0.60) + (pa_score * 0.40), 1)
 
     current_price = (
         info.get("currentPrice") or
@@ -543,6 +566,7 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
         "week_high_52": info.get("fiftyTwoWeekHigh") or 0,
         "week_low_52": info.get("fiftyTwoWeekLow") or 0,
     }
+
 
 
 def check_quality_alerts(current: dict, entry: dict) -> list:
