@@ -1952,7 +1952,6 @@ details[open] summary::before {
   <!-- Desktop Top Tabs (Hidden on mobile where bottom nav is active) -->
   <div class="tabs">
     <button class="tab active" onclick="switchTab('screener')">🔍 Screener Results</button>
-    <button class="tab" onclick="switchTab('prebreakout')">🔥 Pre-Breakout Watchlist</button>
     <button class="tab" onclick="switchTab('watchlist')">⭐ My Watchlist (<span id="wlCount">0</span>)</button>
     <button class="tab" onclick="switchTab('top-pick')">🏆 Stock of the Day</button>
     <button class="tab" onclick="switchTab('fno')">📊 F&amp;O Options</button>
@@ -2006,6 +2005,20 @@ details[open] summary::before {
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px" id="resultCount"></div>
     <div id="searchQuickView" style="margin-bottom:16px"></div>
+    <div class="pagination-bar" id="tablePagination" style="display:flex;align-items:center;justify-content:space-between;margin:12px 0;padding:10px 14px;background:var(--bg-card,#181c28);border:1px solid var(--border,#2b3245);border-radius:8px;font-size:13px;color:var(--text,#e1e7ef)">
+      <div id="paginationInfo" style="font-weight:500">Showing 1-50 of 0 stocks</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-sm" onclick="changePage(-1)" id="btnPrevPage" style="padding:4px 12px;background:var(--bg-card);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer">◀ Previous</button>
+        <span id="pageNumbers" style="font-weight:600;min-width:90px;text-align:center">Page 1 of 1</span>
+        <button class="btn btn-sm" onclick="changePage(1)" id="btnNextPage" style="padding:4px 12px;background:var(--bg-card);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer">Next ▶</button>
+        <select id="pageSizeSelect" onchange="changePageSize(this.value)" style="background:var(--bg-body,#0f121d);color:var(--text,#e1e7ef);border:1px solid var(--border,#2b3245);border-radius:4px;padding:4px 8px;font-size:12px">
+          <option value="25">25 per page</option>
+          <option value="50" selected>50 per page</option>
+          <option value="100">100 per page</option>
+          <option value="all">Show All</option>
+        </select>
+      </div>
+    </div>
     <div class="table-wrap">
       <table id="screenerTable">
         <thead>
@@ -2850,66 +2863,6 @@ function switchTab(tab) {
 let pbSortCol = 'pre_breakout_score';
 let pbSortDir = -1;
 
-function sortPbTable(col) {
-  if (pbSortCol === col) {
-    pbSortDir *= -1;
-  } else {
-    pbSortCol = col;
-    pbSortDir = -1;
-  }
-  renderPreBreakoutTab();
-}
-
-function renderPreBreakoutTab() {
-  const tbody = document.getElementById('prebreakoutTableBody');
-  if (!tbody) return;
-
-  const pbData = (SCREENER_DATA || []).filter(s => s.pre_breakout_score != null || s.symbol);
-  if (!pbData.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted)">No pre-breakout score calculated yet. Run a scan.</td></tr>';
-    return;
-  }
-
-  pbData.sort((a, b) => {
-    let va = a[pbSortCol];
-    let vb = b[pbSortCol];
-    if (va == null) return 1;
-    if (vb == null) return -1;
-    if (typeof va === 'string') return va.localeCompare(vb) * pbSortDir;
-    return (va - vb) * pbSortDir;
-  });
-
-  tbody.innerHTML = pbData.map(s => {
-    const score = s.pre_breakout_score != null ? s.pre_breakout_score : '—';
-    const scoreCls = typeof score === 'number' ? (score >= 70 ? 'badge-green' : score >= 50 ? 'badge-yellow' : 'badge-gray') : 'badge-gray';
-    const atrRatio = s.atr_ratio != null ? s.atr_ratio.toFixed(2) : '—';
-    const delTrend = s.del_5d_vs_20d ? s.del_5d_vs_20d : '—';
-    const rsSector = s.rs_vs_sector != null ? (s.rs_vs_sector >= 0 ? '+' : '') + s.rs_vs_sector.toFixed(1) + '%' : '—';
-    const daysCons = s.days_consolidation != null ? s.days_consolidation + 'd' : '—';
-    const oiBuild = s.oi_buildup || '—';
-
-    const newsCtx = s.news_context || { badge: '⚪ Neutral', badge_class: 'badge-gray', headlines: [] };
-    const newsTitle = (newsCtx.headlines || []).join('\n') || 'No recent news';
-    const exclBadge = s.is_pre_breakout_excluded ? ` <span title="${(s.exclusion_reasons || []).join(', ')}" style="color:var(--danger);font-size:10px;cursor:help">⛔ Excluded</span>` : '';
-
-    return `
-      <tr>
-        <td style="font-weight:700;color:var(--white)">${s.symbol}${exclBadge} <div style="font-size:10px;color:var(--muted)">${s.sector || ''}</div></td>
-        <td style="font-family:monospace;font-weight:600">₹${s.ltp ? s.ltp.toFixed(2) : '—'}</td>
-        <td><span class="badge ${scoreCls}" style="font-size:13px;font-weight:800">${score}</span></td>
-        <td style="font-family:monospace">${atrRatio}</td>
-        <td style="font-family:monospace">${delTrend}</td>
-        <td style="font-family:monospace;color:${s.rs_vs_sector >= 0 ? 'var(--green)' : 'var(--danger)'}">${rsSector}</td>
-        <td>${daysCons}</td>
-        <td>${oiBuild}</td>
-        <td><span class="badge ${newsCtx.badge_class}" title="${newsTitle.replace(/"/g, '&quot;')}">${newsCtx.badge}</span></td>
-      </tr>
-    `;
-  }).join('');
-}
-
-
-// ── F&O Options Tab ──────────────────────────────────────────────
 function renderFnoTab() {
   const container = document.getElementById('tab-fno');
   if (!container) return;
@@ -3663,7 +3616,36 @@ function sortTable(col) {
 function renderTable() {
   const inWl = new Set(watchlist.map(w=>w.symbol));
   const maxSlots = CONFIG.max_stocks;
-  const body = filteredData.map(s => {
+  const totalItems = filteredData.length;
+
+  let effectiveSize = (pageSize === 'all') ? totalItems : parseInt(pageSize || 50);
+  const totalPages = Math.max(1, Math.ceil(totalItems / (effectiveSize || 1)));
+
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
+
+  const startIdx = (pageSize === 'all') ? 0 : (currentPage - 1) * effectiveSize;
+  const endIdx = (pageSize === 'all') ? totalItems : Math.min(totalItems, startIdx + effectiveSize);
+  const pagedData = filteredData.slice(startIdx, endIdx);
+
+  const infoEl = document.getElementById('paginationInfo');
+  if (infoEl) {
+    infoEl.textContent = totalItems === 0
+      ? 'No stocks match current filter'
+      : `Showing ${startIdx + 1}-${endIdx} of ${totalItems} stocks`;
+  }
+
+  const numbersEl = document.getElementById('pageNumbers');
+  if (numbersEl) {
+    numbersEl.textContent = `Page ${currentPage} of ${totalPages}`;
+  }
+
+  const prevBtn = document.getElementById('btnPrevPage');
+  const nextBtn = document.getElementById('btnNextPage');
+  if (prevBtn) prevBtn.disabled = (currentPage <= 1);
+  if (nextBtn) nextBtn.disabled = (currentPage >= totalPages);
+
+  const body = pagedData.map(s => {
     const inWlSet = inWl.has(s.symbol);
     const full = watchlist.length >= maxSlots && !inWlSet;
     const badge = s.qualified
@@ -3691,22 +3673,38 @@ function renderTable() {
       <td>${fmt(s.rsi,'',0)}</td>
       <td>${s.volume_spike != null ? fmt(s.volume_spike, 'x', 2) : fmt(null)}</td>
       <td><span class="badge ${s.pa_class || 'badge-gray'}" style="font-size:10px;white-space:nowrap" title="${s.pa_pattern || ''}">${s.pa_badge || '⚪ Neutral Flow'}</span></td>
-      <td><span class="badge ${s.tech_class || 'badge-yellow'}" style="font-size:11px;white-space:nowrap">${s.tech_rating || '🟡 Consolidation'}</span></td>
+      <td><span class="badge ${s.tech_class || 'badge-yellow'}" style="font-size:11px;white-space:nowrap" title="${s.tech_trend || ''}">${s.tech_badge || '🟡 Rangebound'}</span></td>
       <td>${badge}</td>
       <td>
-        <button class="btn-add" onclick="openModal('${s.symbol}')" style="margin-bottom:4px">Detail</button><br>
-        <button class="btn-add" onclick="addToWl('${s.symbol}')"
-          ${inWlSet?'disabled':''}
-          ${full&&!inWlSet?'disabled title="20 slots full"':''}
-        >${inWlSet?'✓ In WL':'+ Watchlist'}</button>
+        <button class="btn btn-sm ${inWlSet ? 'btn-danger' : 'btn-primary'}"
+                onclick="toggleWatchlist('${s.symbol}')"
+                ${full ? 'disabled title="Watchlist is full (20/20)"' : ''}>
+          ${inWlSet ? '✓ Added' : '+ Add'}
+        </button>
       </td>
     </tr>`;
   }).join('');
 
-  document.getElementById('screenerBody').innerHTML = body || `<tr><td colspan="17" class="no-data">No stocks match the current filters.</td></tr>`;
+  const targetBody = document.getElementById('screenerBody') || document.getElementById('screenerTableBody');
+  if (targetBody) targetBody.innerHTML = body;
+
+  const countEl = document.getElementById('resultCount');
+  if (countEl) {
+    countEl.textContent = `Showing ${totalItems} stock${totalItems !== 1 ? 's' : ''}`;
+  }
 }
 
-// ── Watchlist ─────────────────────────────────────────────────────────────
+function changePage(delta) {
+  currentPage += delta;
+  renderTable();
+}
+
+function changePageSize(val) {
+  pageSize = val;
+  currentPage = 1;
+  renderTable();
+}
+
 function addToWl(symbol) {
   if (watchlist.length >= CONFIG.max_stocks) {
     alert('Phase 1 limit reached: 20 stocks maximum.');
