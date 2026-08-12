@@ -57,21 +57,87 @@ MAX_STOCKS      = cfg["max_stocks"]             # 20
 
 FORCE_REFRESH = "--refresh" in sys.argv or "--force-refresh" in sys.argv
 
-# ─── Live-market LTP cache TTL (minutes) ─────────────────────────────────────
-# During equity market hours, prices are re-fetched if cached data is older
-# than this many minutes.  Fundamentals still use the full 24-h cache.
-LIVE_PRICE_TTL_MINS = 15
+# Official NSE/BSE Equity Market Holidays for 2026
+NSE_HOLIDAYS_2026 = {
+    "2026-01-26": "Republic Day",
+    "2026-02-15": "Mahashivratri",
+    "2026-03-03": "Holi",
+    "2026-03-21": "Id-Ul-Fitr (Ramadan Eid)",
+    "2026-03-26": "Shri Ram Navami",
+    "2026-03-31": "Shri Mahavir Jayanti",
+    "2026-04-03": "Good Friday",
+    "2026-04-14": "Dr. Baba Saheb Ambedkar Jayanti",
+    "2026-05-01": "Maharashtra Day",
+    "2026-05-28": "Bakri Id",
+    "2026-06-26": "Muharram",
+    "2026-08-15": "Independence Day",
+    "2026-09-14": "Ganesh Chaturthi",
+    "2026-10-02": "Mahatma Gandhi Jayanti",
+    "2026-10-20": "Dussehra",
+    "2026-11-08": "Diwali Laxmi Pujan (Muhurat Trading)",
+    "2026-11-10": "Diwali-Balipratipada",
+    "2026-11-24": "Guru Nanak Jayanti",
+    "2026-12-25": "Christmas"
+}
+
+def is_non_trading_day(date_s: str) -> bool:
+    """Helper to check if a date string YYYY-MM-DD falls on a weekend or NSE holiday."""
+    try:
+        dt = datetime.datetime.strptime(date_s, "%Y-%m-%d")
+        if dt.weekday() >= 5:
+            return True
+    except Exception:
+        pass
+    if date_s in NSE_HOLIDAYS_2026:
+        return True
+    return False
 
 
 def is_equity_market_open() -> bool:
-    """Return True when NSE equity session is currently live (09:15–15:30 IST)."""
-    import datetime as _dt
-    ist_offset = _dt.timezone(_dt.timedelta(hours=5, minutes=30))
-    now = _dt.datetime.now(ist_offset)
-    if now.weekday() >= 5:          # Saturday / Sunday
+    """Return True when NSE equity session is currently live (09:15–15:30 IST on trading days)."""
+    ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    now = datetime.datetime.now(ist_offset)
+    if is_non_trading_day(now.strftime("%Y-%m-%d")):
         return False
     t = now.time()
-    return _dt.time(9, 15) <= t <= _dt.time(15, 30)
+    return datetime.time(9, 15) <= t <= datetime.time(15, 30)
+
+
+def is_price_stale(cached_at_str: str) -> bool:
+    """Return True if cached LTP is stale and needs refreshing.
+    
+    1. During live market (Mon-Fri 09:15-15:30 IST on trading days): Stale if older than 5 minutes.
+    2. When market is closed: Stale if cache was saved BEFORE the latest market close time (15:30 IST).
+       This guarantees that mid-day intraday caches (e.g. 14:01) are automatically refreshed to
+       the final closing price once market closes.
+    """
+    ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    now_ist = datetime.datetime.now(ist_offset)
+    try:
+        cached_dt = datetime.datetime.fromisoformat(cached_at_str)
+        if cached_dt.tzinfo is None:
+            cached_dt = cached_dt.replace(tzinfo=ist_offset)
+    except Exception:
+        return True
+
+    today_str = now_ist.strftime("%Y-%m-%d")
+    is_today_trading = not is_non_trading_day(today_str)
+
+    # 1. Market is live right now
+    if is_today_trading and datetime.time(9, 15) <= now_ist.time() <= datetime.time(15, 30):
+        return (now_ist - cached_dt).total_seconds() > 300  # 5 minutes
+
+    # 2. Market is closed: calculate exact datetime of the most recent market close
+    if is_today_trading and now_ist.time() >= datetime.time(15, 30):
+        last_trading_date = now_ist.date()
+    else:
+        check_date = now_ist.date() - datetime.timedelta(days=1)
+        while is_non_trading_day(check_date.strftime("%Y-%m-%d")):
+            check_date -= datetime.timedelta(days=1)
+        last_trading_date = check_date
+
+    last_market_close = datetime.datetime.combine(last_trading_date, datetime.time(15, 30), tzinfo=ist_offset)
+    return cached_dt < last_market_close
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -110,15 +176,8 @@ def cache_path(ticker):
     return os.path.join(CACHE_DIR, f"{ticker.replace('.', '_')}.json")
 
 
-def load_cache(ticker, price_stale_check=False):
-    """Load cached ticker data.
-
-    Args:
-        price_stale_check: When True and the equity market is currently open,
-            return None if the cached LTP is older than LIVE_PRICE_TTL_MINS.
-            This forces a fresh price fetch while still reusing fundamental
-            data from within the same cache file.
-    """
+def load_cache(ticker):
+    """Load cached ticker data. Revalidates fundamental metrics and 24h expiration."""
     if FORCE_REFRESH:
         return None
     path = cache_path(ticker)
@@ -136,11 +195,6 @@ def load_cache(ticker, price_stale_check=False):
         has_fund = any(info.get(k) is not None for k in ["returnOnEquity", "debtToEquity", "trailingPE", "profitMargins"])
         if not has_fund:
             return None   # cache file missing fundamentals — force re-fetch
-        # During live market hours, invalidate if price is older than LIVE_PRICE_TTL_MINS
-        if price_stale_check and is_equity_market_open():
-            age_mins = age_hrs * 60
-            if age_mins >= LIVE_PRICE_TTL_MINS:
-                return None   # trigger a fresh fetch for live LTP
         return data
     except Exception:
         pass
@@ -427,20 +481,18 @@ def fetch_live_price_only(ticker: str) -> float | None:
 
 
 def fetch_ticker_data(ticker: str) -> dict | None:
-    # During live market hours use a short price TTL so LTP is always fresh.
-    market_live = is_equity_market_open()
-    cached = load_cache(ticker, price_stale_check=market_live)
+    cached = load_cache(ticker)
     if cached:
-        if market_live:
+        cached_at_str = cached.get("cached_at", "2000-01-01")
+        if is_price_stale(cached_at_str):
             live_price = fetch_live_price_only(ticker)
             if live_price and live_price > 0:
-                old_price = (cached.get("info", {}).get("currentPrice")
-                             or cached.get("info", {}).get("regularMarketPrice") or 0)
-                if abs(old_price - live_price) > 0.01:
-                    cached["info"]["currentPrice"] = live_price
-                    cached["info"]["regularMarketPrice"] = live_price
-                    cached["cached_at"] = datetime.datetime.now().isoformat()
-                    save_cache(ticker, cached)
+                cached["info"]["currentPrice"] = live_price
+                cached["info"]["regularMarketPrice"] = live_price
+                if cached.get("history_close") and len(cached["history_close"]) > 0:
+                    cached["history_close"][-1]["close"] = live_price
+                cached["cached_at"] = datetime.datetime.now().isoformat()
+                save_cache(ticker, cached)
         return cached
 
     # Primary fetcher: direct browser-impersonated curl_cffi (bypass Yahoo 401 Crumb error & rate limits)
@@ -540,6 +592,22 @@ def load_cap_symbol_sets() -> tuple[set[str], set[str]]:
     return large_set, mid_set
 
 LARGE_CAP_SYMBOLS, MID_CAP_SYMBOLS = load_cap_symbol_sets()
+
+# ─── Load MTF (Margin Trading Facility) Quality Stocks ────────────────────────
+def load_mtf_symbols() -> set:
+    """Load Zerodha-approved quality equity symbols eligible for MTF / swing radar."""
+    mtf_file = os.path.join(BASE_DIR, "mtf_stocks.json")
+    mtf_set = set()
+    if os.path.exists(mtf_file):
+        try:
+            with open(mtf_file) as f:
+                mtf_set = {s.strip().upper() for s in json.load(f)}
+        except Exception:
+            pass
+    return mtf_set
+
+MTF_SYMBOLS = load_mtf_symbols()
+log(f"Loaded {len(MTF_SYMBOLS)} MTF quality equity symbols from mtf_stocks.json")
 
 def is_eligible_for_stock_of_the_day(r: dict) -> bool:
     if not r or not isinstance(r, dict):
@@ -664,6 +732,9 @@ def run_scan(tickers: list[str]) -> list[dict]:
             r["is_large_cap"] = False
             r["is_mid_cap"] = False
             r["is_mid_or_large_cap"] = False
+
+        # Tag MTF eligibility (Zerodha quality approved equity)
+        r["is_mtf"] = (sym in MTF_SYMBOLS)
 
     results.sort(key=lambda x: x["total_score"], reverse=True)
     log(f"\nScan complete: {len(results)} priced < ₹{MAX_PRICE}, "
@@ -869,40 +940,6 @@ def process_watchlist(screener_results: list[dict]) -> list[dict]:
 # ─── Step 4b: Market Timezone Awareness & Daily Top Pick Processing ────────────
 DAILY_PICKS_FILE = os.path.join(BASE_DIR, "daily_picks_history.json")
 
-# Official NSE/BSE Equity Market Holidays for 2026
-NSE_HOLIDAYS_2026 = {
-    "2026-01-26": "Republic Day",
-    "2026-02-15": "Mahashivratri",
-    "2026-03-03": "Holi",
-    "2026-03-21": "Id-Ul-Fitr (Ramadan Eid)",
-    "2026-03-26": "Shri Ram Navami",
-    "2026-03-31": "Shri Mahavir Jayanti",
-    "2026-04-03": "Good Friday",
-    "2026-04-14": "Dr. Baba Saheb Ambedkar Jayanti",
-    "2026-05-01": "Maharashtra Day",
-    "2026-05-28": "Bakri Id",
-    "2026-06-26": "Muharram",
-    "2026-08-15": "Independence Day",
-    "2026-09-14": "Ganesh Chaturthi",
-    "2026-10-02": "Mahatma Gandhi Jayanti",
-    "2026-10-20": "Dussehra",
-    "2026-11-08": "Diwali Laxmi Pujan (Muhurat Trading)",
-    "2026-11-10": "Diwali-Balipratipada",
-    "2026-11-24": "Guru Nanak Jayanti",
-    "2026-12-25": "Christmas"
-}
-
-def is_non_trading_day(date_s: str) -> bool:
-    """Helper to check if a date string YYYY-MM-DD falls on a weekend or NSE holiday."""
-    try:
-        dt = datetime.datetime.strptime(date_s, "%Y-%m-%d")
-        if dt.weekday() >= 5:
-            return True
-    except Exception:
-        pass
-    if date_s in NSE_HOLIDAYS_2026:
-        return True
-    return False
 
 def get_market_status() -> dict:
     """
@@ -1851,6 +1888,23 @@ details[open] summary::before {
 .fno-tech-pill{font-size:10px;padding:3px 8px;border-radius:10px;font-weight:600}
 .fno-lot-info{font-size:10px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;justify-content:space-between}
 .fno-no-data{text-align:center;padding:60px;color:var(--muted)}
+
+/* ── Swing Radar ── */
+.swing-pill{padding:7px 15px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid rgba(108,99,255,0.4);background:rgba(108,99,255,0.08);color:#a5b4fc;transition:all .2s;white-space:nowrap}
+.swing-pill:hover{background:rgba(108,99,255,0.2);border-color:#6c63ff;transform:translateY(-1px)}
+.swing-pill-active{background:linear-gradient(135deg,#6c63ff,#5b54e8)!important;color:#fff!important;border-color:#6c63ff!important;box-shadow:0 4px 14px rgba(108,99,255,0.4)!important}
+.swing-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;transition:all .2s;cursor:pointer;position:relative;overflow:hidden}
+.swing-card:hover{border-color:#6c63ff55;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.3)}
+.swing-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#6c63ff,#00d4aa)}
+.swing-card-blast::before{background:linear-gradient(90deg,#10b981,#34d399)}
+.swing-card-inflow::before{background:linear-gradient(90deg,#6366f1,#a78bfa)}
+.swing-card-momentum::before{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+.swing-card-pullback::before{background:linear-gradient(90deg,#3b82f6,#60a5fa)}
+.swing-score-ring{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;background:conic-gradient(var(--ring-color,#6c63ff) calc(var(--pct,0) * 1%),rgba(255,255,255,0.06) 0);position:relative}
+.swing-score-ring::after{content:attr(data-score);position:absolute;font-size:13px;font-weight:700;color:#fff}
+.swing-sl{color:#ef4444;font-weight:600}
+.swing-t1{color:#10b981;font-weight:600}
+.swing-t2{color:#00d4aa;font-weight:600}
 </style>
 </head>
 <body>
@@ -1896,6 +1950,7 @@ details[open] summary::before {
   <!-- Desktop Top Tabs (Hidden on mobile where bottom nav is active) -->
   <div class="tabs">
     <button class="tab active" onclick="switchTab('screener')">🔍 Screener Results</button>
+    <button class="tab" onclick="switchTab('swing')">🚀 Swing Radar</button>
     <button class="tab" onclick="switchTab('watchlist')">⭐ My Watchlist (<span id="wlCount">0</span>)</button>
     <button class="tab" onclick="switchTab('top-pick')">🏆 Stock of the Day</button>
     <button class="tab" onclick="switchTab('fno')">📊 F&amp;O Options</button>
@@ -1987,6 +2042,76 @@ details[open] summary::before {
           </tr>
         </thead>
         <tbody id="screenerBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SWING RADAR TAB -->
+  <div id="tab-swing" style="display:none">
+    <!-- Header Banner -->
+    <div style="background:linear-gradient(135deg,rgba(108,99,255,0.15),rgba(0,212,170,0.10));border:1px solid rgba(108,99,255,0.35);border-radius:16px;padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+      <div>
+        <div style="font-size:20px;font-weight:700;background:linear-gradient(90deg,#a78bfa,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent">🚀 Swing Trade Radar</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">MTF-quality stocks · Zerodha approved · Ranked by Swing Score</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="text-align:center">
+          <div id="swingMtfCount" style="font-size:20px;font-weight:700;color:#a78bfa">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">MTF Stocks</div>
+        </div>
+        <div style="text-align:center">
+          <div id="swingBlastCount" style="font-size:20px;font-weight:700;color:#10b981">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Blast Alerts</div>
+        </div>
+        <div style="text-align:center">
+          <div id="swingInflowCount" style="font-size:20px;font-weight:700;color:#6366f1">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Inflow Setups</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preset Filter Pills -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;align-items:center">
+      <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-right:4px">Quick Filters:</span>
+      <button id="swingPill-all" class="swing-pill swing-pill-active" onclick="setSwingPreset('all')">↺ All MTF</button>
+      <button id="swingPill-blast" class="swing-pill" onclick="setSwingPreset('blast')">💥 Volume Blast</button>
+      <button id="swingPill-inflow" class="swing-pill" onclick="setSwingPreset('inflow')">🏛️ Institutional Inflow</button>
+      <button id="swingPill-momentum" class="swing-pill" onclick="setSwingPreset('momentum')">🔥 High Momentum</button>
+      <button id="swingPill-pullback" class="swing-pill" onclick="setSwingPreset('pullback')">🔄 Pullback Buy</button>
+      <button id="swingPill-quality" class="swing-pill" onclick="setSwingPreset('quality')">🏆 Quality + Momentum</button>
+    </div>
+
+    <!-- Top 10 Swing Spotlight -->
+    <div style="margin-bottom:24px">
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:8px">
+        <span style="background:linear-gradient(135deg,#6c63ff,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent">⚡ Top 10 Swing Picks</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400">(current preset)</span>
+      </div>
+      <div id="swingSpotlight" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
+    </div>
+
+    <!-- Full Swing Table -->
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px" id="swingResultCount"></div>
+    <div class="table-wrap">
+      <table id="swingTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Symbol</th>
+            <th onclick="sortSwingTable('swing_score')" style="cursor:pointer">Swing Score ↕</th>
+            <th>Badge</th>
+            <th onclick="sortSwingTable('ltp')" style="cursor:pointer">LTP ↕</th>
+            <th onclick="sortSwingTable('volume_spike')" style="cursor:pointer">Vol Spike ↕</th>
+            <th onclick="sortSwingTable('rsi')" style="cursor:pointer">RSI ↕</th>
+            <th onclick="sortSwingTable('momentum')" style="cursor:pointer">Momentum ↕</th>
+            <th>Order Flow</th>
+            <th>SL</th>
+            <th>Target 1 (1:2)</th>
+            <th>Target 2 (1:3)</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody id="swingBody"></tbody>
       </table>
     </div>
   </div>
@@ -2363,6 +2488,186 @@ function renderCommodityBar() {
     `;
   }
   container.innerHTML = html;
+}
+
+// ── Swing Radar ───────────────────────────────────────────────────────────
+let swingPreset = 'all';
+let swingSortCol = 'swing_score';
+let swingSortDir = -1; // -1 = descending
+
+function getSwingData() {
+  // Base pool: only MTF stocks from screener data
+  const mtf = SCREENER_DATA.filter(s => s.is_mtf);
+  return mtf;
+}
+
+function applySwingPreset(data) {
+  switch (swingPreset) {
+    case 'blast':
+      return data.filter(s => s.is_blast || (s.volume_spike >= 2.0 && s.momentum >= 60));
+    case 'inflow':
+      return data.filter(s => s.is_order_flow_bull || (s.cmf >= 0.08 && s.clv >= 0.55));
+    case 'momentum':
+      return data.filter(s => s.is_momentum_surge || s.momentum >= 75);
+    case 'pullback':
+      return data.filter(s => s.is_pullback || (s.rsi >= 40 && s.rsi <= 53));
+    case 'quality':
+      return data.filter(s => s.total_score >= 55 && s.momentum >= 60);
+    default:
+      return data;
+  }
+}
+
+function setSwingPreset(preset) {
+  swingPreset = preset;
+  document.querySelectorAll('.swing-pill').forEach(p => p.classList.remove('swing-pill-active'));
+  const pill = document.getElementById('swingPill-' + preset);
+  if (pill) pill.classList.add('swing-pill-active');
+  renderSwingRadar();
+}
+
+function sortSwingTable(col) {
+  if (swingSortCol === col) { swingSortDir *= -1; }
+  else { swingSortCol = col; swingSortDir = -1; }
+  renderSwingRadar();
+}
+
+function getSwingCardClass(s) {
+  if (s.is_blast) return 'swing-card-blast';
+  if (s.is_order_flow_bull) return 'swing-card-inflow';
+  if (s.is_momentum_surge) return 'swing-card-momentum';
+  if (s.is_pullback) return 'swing-card-pullback';
+  return '';
+}
+
+function getSwingRingColor(s) {
+  if (s.is_blast) return '#10b981';
+  if (s.is_order_flow_bull) return '#6366f1';
+  if (s.is_momentum_surge) return '#f59e0b';
+  if (s.is_pullback) return '#3b82f6';
+  return '#6c63ff';
+}
+
+function renderSwingRadar() {
+  const allMtf = getSwingData();
+  const filtered = applySwingPreset(allMtf);
+
+  // Sort
+  const sorted = [...filtered].sort((a, b) => {
+    const av = a[swingSortCol] ?? -999;
+    const bv = b[swingSortCol] ?? -999;
+    return swingSortDir * (av - bv);
+  });
+
+  // Update banner counts
+  const mtfEl = document.getElementById('swingMtfCount');
+  const blastEl = document.getElementById('swingBlastCount');
+  const inflowEl = document.getElementById('swingInflowCount');
+  if (mtfEl) mtfEl.textContent = allMtf.length;
+  if (blastEl) blastEl.textContent = allMtf.filter(s => s.is_blast).length;
+  if (inflowEl) inflowEl.textContent = allMtf.filter(s => s.is_order_flow_bull).length;
+
+  // Result count
+  const rcEl = document.getElementById('swingResultCount');
+  if (rcEl) rcEl.textContent = `Showing ${sorted.length} MTF stocks matching current preset`;
+
+  // Top 10 Spotlight Cards
+  const spotlight = document.getElementById('swingSpotlight');
+  if (spotlight) {
+    const top10 = sorted.slice(0, 10);
+    if (top10.length === 0) {
+      spotlight.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px">No stocks match this filter.</div>';
+    } else {
+      spotlight.innerHTML = top10.map((s, i) => {
+        const score = s.swing_score || 0;
+        const ringColor = getSwingRingColor(s);
+        const cardClass = getSwingCardClass(s);
+        const volStr = s.volume_spike ? `${s.volume_spike.toFixed(1)}x` : 'N/A';
+        const rsiStr = s.rsi ? s.rsi.toFixed(0) : 'N/A';
+        const slStr = s.swing_sl ? `₹${s.swing_sl.toFixed(1)}` : 'N/A';
+        const t1Str = s.swing_t1 ? `₹${s.swing_t1.toFixed(1)}` : 'N/A';
+        const t2Str = s.swing_t2 ? `₹${s.swing_t2.toFixed(1)}` : 'N/A';
+        const slPct = s.swing_sl_pct ? `${s.swing_sl_pct}%` : '';
+        const t1Pct = s.swing_t1_pct ? `+${s.swing_t1_pct}%` : '';
+        return `
+        <div class="swing-card ${cardClass}" onclick="document.getElementById('fSearch').value='${s.symbol}';switchTab('screener');applyFilters()">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+            <div>
+              <div style="font-size:15px;font-weight:700;color:#fff">${i+1}. ${s.symbol}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:1px">${(s.name||'').substring(0,28)}</div>
+            </div>
+            <div style="text-align:center">
+              <div style="width:46px;height:46px;border-radius:50%;background:conic-gradient(${ringColor} ${score}%,rgba(255,255,255,0.06) 0);display:flex;align-items:center;justify-content:center">
+                <div style="width:34px;height:34px;border-radius:50%;background:var(--card);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">${score}</div>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:11px;margin-bottom:8px">
+            <span style="background:rgba(108,99,255,0.15);color:#a5b4fc;border:1px solid #6c63ff33;border-radius:10px;padding:3px 9px;font-weight:600">${s.swing_badge||'–'}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px;margin-bottom:10px">
+            <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
+              <div style="color:var(--muted)">LTP</div>
+              <div style="font-weight:700;color:#fff">₹${(s.ltp||0).toFixed(1)}</div>
+            </div>
+            <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
+              <div style="color:var(--muted)">Vol Spike</div>
+              <div style="font-weight:700;color:${parseFloat(volStr)>=2?'#10b981':'#e2e8f0'}">${volStr}</div>
+            </div>
+            <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
+              <div style="color:var(--muted)">RSI</div>
+              <div style="font-weight:700;color:#e2e8f0">${rsiStr}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px">
+            <div style="text-align:center">
+              <div style="color:#ef4444;font-size:10px">SL</div>
+              <div class="swing-sl">${slStr}<span style="font-size:9px;color:var(--muted)"> ${slPct}</span></div>
+            </div>
+            <div style="text-align:center">
+              <div style="color:#10b981;font-size:10px">T1 (1:2)</div>
+              <div class="swing-t1">${t1Str}<span style="font-size:9px;color:var(--muted)"> ${t1Pct}</span></div>
+            </div>
+            <div style="text-align:center">
+              <div style="color:#00d4aa;font-size:10px">T2 (1:3)</div>
+              <div class="swing-t2">${t2Str}</div>
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:8px;border-top:1px solid var(--border);padding-top:6px">${s.swing_reason||''}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Full table
+  const tbody = document.getElementById('swingBody');
+  if (!tbody) return;
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--muted)">No stocks match this filter.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = sorted.map((s, i) => {
+    const volStr = s.volume_spike ? `${s.volume_spike.toFixed(1)}x` : '–';
+    const rsiStr = s.rsi ? s.rsi.toFixed(0) : '–';
+    const cmfStr = s.cmf !== undefined ? (s.cmf >= 0 ? '+' : '') + s.cmf.toFixed(2) : '–';
+    const cmfColor = (s.cmf||0) >= 0.05 ? '#10b981' : (s.cmf||0) <= -0.05 ? '#ef4444' : '#94a3b8';
+    const volColor = (s.volume_spike||0) >= 2.0 ? '#10b981' : (s.volume_spike||0) >= 1.5 ? '#fbbf24' : '#94a3b8';
+    return `<tr>
+      <td>${i+1}</td>
+      <td><strong style="color:#e2e8f0">${s.symbol}</strong><br><span style="font-size:10px;color:var(--muted)">${(s.cap_category||'')}</span></td>
+      <td><span style="font-weight:700;color:#a78bfa;font-size:15px">${s.swing_score||0}</span></td>
+      <td><span style="font-size:11px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:10px;padding:3px 8px;white-space:nowrap">${s.swing_badge||'–'}</span></td>
+      <td>₹${(s.ltp||0).toFixed(2)}</td>
+      <td style="color:${volColor};font-weight:600">${volStr}</td>
+      <td>${rsiStr}</td>
+      <td>${(s.momentum||0).toFixed(0)}</td>
+      <td style="color:${cmfColor};font-weight:600">${cmfStr}<br><span style="font-size:10px;color:var(--muted)">${s.pa_badge||''}</span></td>
+      <td class="swing-sl">${s.swing_sl ? '₹' + s.swing_sl.toFixed(1) : '–'}<br><span style="font-size:10px;color:#ef4444">${s.swing_sl_pct||0}%</span></td>
+      <td class="swing-t1">${s.swing_t1 ? '₹' + s.swing_t1.toFixed(1) : '–'}<br><span style="font-size:10px;color:#10b981">+${s.swing_t1_pct||0}%</span></td>
+      <td class="swing-t2">${s.swing_t2 ? '₹' + s.swing_t2.toFixed(1) : '–'}<br><span style="font-size:10px;color:#00d4aa">+${s.swing_t2_pct||0}%</span></td>
+      <td style="font-size:11px;color:var(--muted);max-width:180px;white-space:normal">${s.swing_reason||'–'}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
@@ -2742,16 +3047,18 @@ function renderStats() {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  const tabs = ['screener', 'watchlist', 'top-pick', 'fno', 'holidays'];
+  const tabs = ['screener', 'swing', 'watchlist', 'top-pick', 'fno', 'holidays'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.mobile-nav-item').forEach(m => {
     m.classList.toggle('active', m.dataset.tab === tab);
   });
   document.getElementById('tab-screener').style.display  = tab === 'screener'  ? '' : 'none';
+  document.getElementById('tab-swing').style.display     = tab === 'swing'     ? '' : 'none';
   document.getElementById('tab-watchlist').style.display = tab === 'watchlist' ? '' : 'none';
   document.getElementById('tab-top-pick').style.display  = tab === 'top-pick'  ? '' : 'none';
   document.getElementById('tab-fno').style.display       = tab === 'fno'       ? '' : 'none';
   document.getElementById('tab-holidays').style.display  = tab === 'holidays'  ? '' : 'none';
+  if (tab === 'swing')      renderSwingRadar();
   if (tab === 'watchlist')  renderWatchlist();
   if (tab === 'top-pick')   renderTopPick();
   if (tab === 'fno')        renderFnoTab();

@@ -525,7 +525,7 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
     open_price = info.get("open") or info.get("regularMarketOpen")
     prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
 
-    return {
+    res_stock = {
         "total_score": total,
         "strength": strength,
         "value": value,
@@ -565,6 +565,172 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
         "market_cap": info.get("marketCap") or 0,
         "week_high_52": info.get("fiftyTwoWeekHigh") or 0,
         "week_low_52": info.get("fiftyTwoWeekLow") or 0,
+    }
+
+    swing_info = compute_swing_setup(res_stock, history)
+    res_stock.update(swing_info)
+
+    return res_stock
+
+
+def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
+    """
+    Computes a dedicated Swing Trade & Institutional Order Flow Setup Score (0-100)
+    for 3-7 day swing trades (e.g. explosive breakout setups like JINDALPOLY).
+    """
+    vol_spike = scored.get("volume_spike") or 0.0
+    cmf = scored.get("cmf") or 0.0
+    clv = scored.get("clv") or 0.5
+    momentum = scored.get("momentum") or 0.0
+    rsi = scored.get("rsi")
+    ltp = scored.get("ltp") or 0.0
+    ma50 = scored.get("ma50")
+    ma200 = scored.get("ma200")
+    market_structure = scored.get("market_structure") or "Neutral"
+    pa_pattern = scored.get("pa_pattern") or "None"
+
+    score = 0.0
+
+    # 1. Volume Explosion (up to 30 pts)
+    if vol_spike >= 3.0:
+        vol_pts = 30
+    elif vol_spike >= 2.0:
+        vol_pts = 25
+    elif vol_spike >= 1.5:
+        vol_pts = 18
+    elif vol_spike >= 1.2:
+        vol_pts = 12
+    elif vol_spike >= 0.9:
+        vol_pts = 6
+    else:
+        vol_pts = 0
+    score += vol_pts
+
+    # 2. Institutional Order Flow & CMF (up to 30 pts)
+    of_pts = 0
+    if cmf >= 0.15:
+        of_pts += 16
+    elif cmf >= 0.05:
+        of_pts += 12
+    elif cmf >= -0.05:
+        of_pts += 6
+    else:
+        of_pts += 0
+
+    if clv >= 0.65:
+        of_pts += 14
+    elif clv >= 0.50:
+        of_pts += 9
+    elif clv >= 0.35:
+        of_pts += 4
+    else:
+        of_pts += 0
+    score += of_pts
+
+    # 3. Momentum & RSI Sweet Spot (up to 25 pts)
+    mom_pts = round((momentum / 100.0) * 15, 1)
+    rsi_pts = 0
+    if rsi is not None:
+        if 50 <= rsi <= 68:
+            rsi_pts = 10  # Prime breakout velocity zone
+        elif 42 <= rsi < 50:
+            rsi_pts = 8   # Pullback zone
+        elif 68 < rsi <= 76:
+            rsi_pts = 6   # High momentum, near overbought
+        else:
+            rsi_pts = 2
+    else:
+        rsi_pts = 4
+    score += (mom_pts + rsi_pts)
+
+    # 4. Trend & Moving Average Structure (up to 15 pts)
+    ma_pts = 0
+    if ma50 and ltp >= ma50:
+        ma_pts += 5
+    if ma200 and ltp >= ma200:
+        ma_pts += 5
+    if market_structure == "HH / HL Uptrend":
+        ma_pts += 5
+    elif market_structure == "Consolidation Range":
+        ma_pts += 2
+    score += ma_pts
+
+    swing_score = round(min(100.0, score), 1)
+
+    # Specific Setup Classifications
+    is_blast = (vol_spike >= 2.0 and momentum >= 60)
+    is_order_flow_bull = (cmf >= 0.08 and clv >= 0.55)
+    is_momentum_surge = (momentum >= 75)
+    
+    dist_ma50_pct = round(((ltp - ma50) / ma50) * 100, 1) if (ma50 and ltp) else None
+    is_pullback = (rsi is not None and 40 <= rsi <= 53 and dist_ma50_pct is not None and -3.0 <= dist_ma50_pct <= 4.0 and (ma200 is None or ltp >= ma200))
+
+    # Badge and Reason assignment
+    if is_blast:
+        swing_badge = "🚀 BLAST ALERT"
+        swing_class = "badge-green"
+        swing_reason = f"Explosive {vol_spike:.1f}x volume spike with {momentum}/100 momentum"
+    elif is_order_flow_bull:
+        swing_badge = "🏛️ INSTITUTIONAL INFLOW"
+        swing_class = "badge-purple"
+        swing_reason = f"Heavy institutional accumulation (CMF +{cmf:+.2f}, {int(clv*100)}% buyer close)"
+    elif is_pullback:
+        swing_badge = "🔄 PULLBACK BUY"
+        swing_class = "badge-green"
+        swing_reason = f"Oversold dip (RSI {rsi}) retesting 50-DMA support"
+    elif is_momentum_surge:
+        swing_badge = "🔥 MOMENTUM SURGE"
+        swing_class = "badge-yellow"
+        swing_reason = f"High velocity momentum ({momentum}/100) above moving averages"
+    elif swing_score >= 60:
+        swing_badge = "🟢 BULLISH SWING"
+        swing_class = "badge-green"
+        swing_reason = "Balanced swing setup with positive order flow and structure"
+    else:
+        swing_badge = "⚪ NEUTRAL SETUP"
+        swing_class = "badge-gray"
+        swing_reason = "Consolidating or insufficient momentum for breakout"
+
+    # Stop-Loss (approx 3-4%) and Target calculations (1:2 and 1:3 RR)
+    if ltp > 0:
+        if ma50 and (ltp * 0.94 <= ma50 <= ltp * 0.99):
+            sl = round(ma50 * 0.985, 2)
+        else:
+            sl = round(ltp * 0.965, 2)
+            
+        risk = round(ltp - sl, 2)
+        if risk <= 0 or (risk / ltp) < 0.02:
+            risk = round(ltp * 0.035, 2)
+            sl = round(ltp - risk, 2)
+        elif (risk / ltp) > 0.07:
+            risk = round(ltp * 0.05, 2)
+            sl = round(ltp - risk, 2)
+
+        target1 = round(ltp + (2.0 * risk), 2)
+        target2 = round(ltp + (3.0 * risk), 2)
+        sl_pct = round(((sl - ltp) / ltp) * 100, 1)
+        t1_pct = round(((target1 - ltp) / ltp) * 100, 1)
+        t2_pct = round(((target2 - ltp) / ltp) * 100, 1)
+    else:
+        sl = target1 = target2 = None
+        sl_pct = t1_pct = t2_pct = 0.0
+
+    return {
+        "swing_score": swing_score,
+        "swing_badge": swing_badge,
+        "swing_class": swing_class,
+        "swing_reason": swing_reason,
+        "is_blast": is_blast,
+        "is_order_flow_bull": is_order_flow_bull,
+        "is_momentum_surge": is_momentum_surge,
+        "is_pullback": is_pullback,
+        "swing_sl": sl,
+        "swing_sl_pct": sl_pct,
+        "swing_t1": target1,
+        "swing_t1_pct": t1_pct,
+        "swing_t2": target2,
+        "swing_t2_pct": t2_pct,
+        "risk_reward": "1 : 2.0 / 1 : 3.0"
     }
 
 
