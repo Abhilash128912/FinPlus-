@@ -662,3 +662,9 @@ def get_screener_data():
 @app.get("/api/scan/status")
 def get_scan_status():
     return { "scan_in_progress": SCAN_IN_PROGRESS }
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("backend:app", host="0.0.0.0", port=port, reload=False)
+
