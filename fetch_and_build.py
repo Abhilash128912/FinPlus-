@@ -147,7 +147,6 @@ def load_cache(ticker, price_stale_check=False):
     return None
 
 
-
 def save_cache(ticker, data):
     data["cached_at"] = datetime.datetime.now().isoformat()
     try:
@@ -654,78 +653,11 @@ def run_scan(tickers: list[str]) -> list[dict]:
             r["is_mid_cap"] = False
             r["is_mid_or_large_cap"] = False
 
-
-
-    # Pre-Breakout Score Calculation Pass
-    try:
-        from pre_breakout_engine import (
-            compute_vcp_score, compute_stealth_accumulation,
-            compute_sector_rs, compute_tight_consolidation,
-            compute_pre_breakout_score, compute_exclusion_thresholds,
-            apply_exclusion_filter
-        )
-        from nse_delivery_fetcher import fetch_delivery_data
-        from news_context_fetcher import classify_news_context
-
-        excl_thresholds = compute_exclusion_thresholds(results, min_universe=50)
-
-        for r in results:
-            history_df = r.get("history_df")
-            if history_df is None or len(history_df) < 55:
-                r["pre_breakout_score"] = None
-                continue
-
-            is_excl, pen, reasons = apply_exclusion_filter(r, excl_thresholds)
-            r["is_pre_breakout_excluded"] = is_excl
-            r["exclusion_reasons"] = reasons
-
-            vcp, vcp_brk = compute_vcp_score(history_df)
-            stealth, stealth_brk = compute_stealth_accumulation(history_df, r.get("cmf_history"))
-
-            info = {"fiftyTwoWeekHigh": r.get("week_high_52")}
-            cons, cons_brk = compute_tight_consolidation(history_df, info)
-
-            stk_ret = r.get("wk52_return_pct")
-            sec_ret = 0.0
-            sec_rs, sec_brk = compute_sector_rs(stk_ret, sec_ret)
-
-            sym = r.get("symbol", "")
-            current_del_pct = fetch_delivery_data(sym)
-            del_score = current_del_pct  # raw delivery % used as score input (0–100 natural range)
-
-            is_fno = sym in ["MARUTI", "RELIANCE", "BAJAJ-AUTO", "ULTRACEMCO", "APOLLOHOSP", "TCS"]
-            fno_oi_score = None
-
-            pb_score, pb_brk = compute_pre_breakout_score(
-                vcp_score=vcp,
-                stealth_score=stealth,
-                delivery_score=del_score,
-                fno_oi_score=fno_oi_score,
-                sector_rs_score=sec_rs,
-                consolidation_score=cons,
-                is_fno=is_fno,
-                exclusion_penalty=pen
-            )
-
-            r["pre_breakout_score"] = pb_score
-            r["atr_ratio"] = vcp_brk.get("atr_ratio")
-            r["del_5d_vs_20d"] = f"{current_del_pct:.0f}% / —" if current_del_pct is not None else "—"
-            r["rs_vs_sector"] = sec_brk.get("rs_diff")
-            r["days_consolidation"] = cons_brk.get("days_in_consolidation")  # fixed key
-            r["oi_buildup"] = "🟢 Long Buildup" if is_fno else "—"
-
-            news_ctx = classify_news_context(r.get("name", ""), sym)
-            r["news_context"] = news_ctx
-
-    except Exception as e:
-        log(f"  ⚠ Pre-Breakout scoring pass skipped/failed: {e}")
-
     results.sort(key=lambda x: x["total_score"], reverse=True)
     log(f"\nScan complete: {len(results)} priced < ₹{MAX_PRICE}, "
         f"{sum(1 for r in results if r['qualified'])} qualified, "
         f"{skipped_price} excluded by price, {skipped_nodata} no-data\n")
     return results
-
 
 
 # ─── Step 3b: Process F&O stocks (bypass price cap, compute options signal) ────────
@@ -2133,51 +2065,6 @@ details[open] summary::before {
     </div>
   </div>
 
-  <!-- PRE-BREAKOUT WATCHLIST TAB -->
-  <div id="tab-prebreakout" style="display:none">
-    <!-- Backtest Statistical Validation Card -->
-    <div style="background:linear-gradient(135deg,#0a0a1a,#13132e);border:1px solid #6c63ff44;border-radius:16px;padding:20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
-      <div>
-        <div style="font-size:16px;font-weight:700;color:#a5b4fc;margin-bottom:4px;display:flex;align-items:center;gap:8px">
-          <span>📊 Section 7A Statistical Validation Backtest</span>
-          <span style="font-size:11px;background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#34d399;padding:2px 8px;border-radius:12px;font-weight:700">✅ GATE PASSED (1.55x Ratio)</span>
-        </div>
-        <div style="font-size:12px;color:var(--muted)">
-          Evaluated 19,823 daily instances across 180 stocks over 6 months. Top-decile PreBreakoutScore hit rate: <strong>39.23%</strong> vs <strong>25.23%</strong> base rate (+5.0% move in 10 days).
-        </div>
-      </div>
-      <div style="display:flex;gap:16px">
-        <div style="text-align:center">
-          <div style="font-size:22px;font-weight:800;color:#00d4aa">1.55x</div>
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Hit-Rate Ratio</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:22px;font-weight:800;color:#a5b4fc">2,238</div>
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Top-Decile Scans</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Pre-Breakout Table -->
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th onclick="sortPbTable('symbol')" style="cursor:pointer" title="Sort by Symbol">SYMBOL <span id="pbSort_symbol">↕</span></th>
-            <th onclick="sortPbTable('ltp')" style="cursor:pointer" title="Sort by Price">PRICE <span id="pbSort_ltp">↕</span></th>
-            <th onclick="sortPbTable('pre_breakout_score')" style="cursor:pointer" title="Sort by PreBreakoutScore">PRE-BREAKOUT SCORE <span id="pbSort_pre_breakout_score">↕</span></th>
-            <th title="ATR(14)/ATR(50) Contraction Ratio">ATR RATIO (VCP)</th>
-            <th title="5-Day vs 20-Day Rolling Delivery %">DELIVERY TREND (5D/20D)</th>
-            <th title="Relative Strength vs Sector Average">RS VS SECTOR</th>
-            <th title="Days Price Stayed in Tight Range">CONSOLIDATION</th>
-            <th title="F&O Futures Long Buildup Flag">OI BUILDUP</th>
-            <th title="Recent News Context Classification">NEWS CONTEXT</th>
-          </tr>
-        </thead>
-        <tbody id="prebreakoutTableBody"></tbody>
-      </table>
-    </div>
-  </div>
 
   <!-- STOCK OF THE DAY & DASHBOARD OVERVIEW TAB -->
   <div id="tab-top-pick" style="display:none">
@@ -2841,27 +2728,22 @@ function renderStats() {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  const tabs = ['screener', 'prebreakout', 'watchlist', 'top-pick', 'fno', 'holidays'];
+  const tabs = ['screener', 'watchlist', 'top-pick', 'fno', 'holidays'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.mobile-nav-item').forEach(m => {
     m.classList.toggle('active', m.dataset.tab === tab);
   });
   document.getElementById('tab-screener').style.display  = tab === 'screener'  ? '' : 'none';
-  document.getElementById('tab-prebreakout').style.display = tab === 'prebreakout' ? '' : 'none';
   document.getElementById('tab-watchlist').style.display = tab === 'watchlist' ? '' : 'none';
   document.getElementById('tab-top-pick').style.display  = tab === 'top-pick'  ? '' : 'none';
   document.getElementById('tab-fno').style.display       = tab === 'fno'       ? '' : 'none';
   document.getElementById('tab-holidays').style.display  = tab === 'holidays'  ? '' : 'none';
-  if (tab === 'prebreakout') renderPreBreakoutTab();
   if (tab === 'watchlist')  renderWatchlist();
   if (tab === 'top-pick')   renderTopPick();
   if (tab === 'fno')        renderFnoTab();
   if (tab === 'holidays')   renderHolidaysTab();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-
-let pbSortCol = 'pre_breakout_score';
-let pbSortDir = -1;
 
 function renderFnoTab() {
   const container = document.getElementById('tab-fno');
@@ -4353,8 +4235,6 @@ def build_html(screener_results: list[dict], watchlist: list[dict], top_pick: di
     html = html.replace("__BACKTEST_RESULTS_JSON__", json.dumps(backtest_data, ensure_ascii=False))
     html = html.replace("__FNO_JSON__", json.dumps(fno_data or [], ensure_ascii=False))
     return html
-
-
 
 
 # ─── Local HTTP Scan Server ───────────────────────────────────────────────────

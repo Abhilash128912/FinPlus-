@@ -6,7 +6,7 @@ echo   Source: D:\Nifty 500 stocks.xlsx
 echo ============================================
 echo.
 echo Step 1: Installing required packages...
-pip install yfinance pandas openpyxl requests curl_cffi numpy nsepython --quiet
+pip install yfinance pandas openpyxl requests curl_cffi --quiet
 echo.
 echo Step 2: Running screener (first run takes 8-15 min)...
 echo         Subsequent runs use cache and complete in under 1 min.

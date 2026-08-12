@@ -682,51 +682,6 @@ details[open] summary::before {
     </div>
   </div>
 
-  <!-- PRE-BREAKOUT WATCHLIST TAB -->
-  <div id="tab-prebreakout" style="display:none">
-    <!-- Backtest Statistical Validation Card -->
-    <div style="background:linear-gradient(135deg,#0a0a1a,#13132e);border:1px solid #6c63ff44;border-radius:16px;padding:20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
-      <div>
-        <div style="font-size:16px;font-weight:700;color:#a5b4fc;margin-bottom:4px;display:flex;align-items:center;gap:8px">
-          <span>📊 Section 7A Statistical Validation Backtest</span>
-          <span style="font-size:11px;background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#34d399;padding:2px 8px;border-radius:12px;font-weight:700">✅ GATE PASSED (1.55x Ratio)</span>
-        </div>
-        <div style="font-size:12px;color:var(--muted)">
-          Evaluated 19,823 daily instances across 180 stocks over 6 months. Top-decile PreBreakoutScore hit rate: <strong>39.23%</strong> vs <strong>25.23%</strong> base rate (+5.0% move in 10 days).
-        </div>
-      </div>
-      <div style="display:flex;gap:16px">
-        <div style="text-align:center">
-          <div style="font-size:22px;font-weight:800;color:#00d4aa">1.55x</div>
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Hit-Rate Ratio</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:22px;font-weight:800;color:#a5b4fc">2,238</div>
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Top-Decile Scans</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Pre-Breakout Table -->
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th onclick="sortPbTable('symbol')" style="cursor:pointer" title="Sort by Symbol">SYMBOL <span id="pbSort_symbol">↕</span></th>
-            <th onclick="sortPbTable('ltp')" style="cursor:pointer" title="Sort by Price">PRICE <span id="pbSort_ltp">↕</span></th>
-            <th onclick="sortPbTable('pre_breakout_score')" style="cursor:pointer" title="Sort by PreBreakoutScore">PRE-BREAKOUT SCORE <span id="pbSort_pre_breakout_score">↕</span></th>
-            <th title="ATR(14)/ATR(50) Contraction Ratio">ATR RATIO (VCP)</th>
-            <th title="5-Day vs 20-Day Rolling Delivery %">DELIVERY TREND (5D/20D)</th>
-            <th title="Relative Strength vs Sector Average">RS VS SECTOR</th>
-            <th title="Days Price Stayed in Tight Range">CONSOLIDATION</th>
-            <th title="F&O Futures Long Buildup Flag">OI BUILDUP</th>
-            <th title="Recent News Context Classification">NEWS CONTEXT</th>
-          </tr>
-        </thead>
-        <tbody id="prebreakoutTableBody"></tbody>
-      </table>
-    </div>
-  </div>
 
   <!-- STOCK OF THE DAY & DASHBOARD OVERVIEW TAB -->
   <div id="tab-top-pick" style="display:none">
@@ -1390,27 +1345,22 @@ function renderStats() {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  const tabs = ['screener', 'prebreakout', 'watchlist', 'top-pick', 'fno', 'holidays'];
+  const tabs = ['screener', 'watchlist', 'top-pick', 'fno', 'holidays'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.mobile-nav-item').forEach(m => {
     m.classList.toggle('active', m.dataset.tab === tab);
   });
   document.getElementById('tab-screener').style.display  = tab === 'screener'  ? '' : 'none';
-  document.getElementById('tab-prebreakout').style.display = tab === 'prebreakout' ? '' : 'none';
   document.getElementById('tab-watchlist').style.display = tab === 'watchlist' ? '' : 'none';
   document.getElementById('tab-top-pick').style.display  = tab === 'top-pick'  ? '' : 'none';
   document.getElementById('tab-fno').style.display       = tab === 'fno'       ? '' : 'none';
   document.getElementById('tab-holidays').style.display  = tab === 'holidays'  ? '' : 'none';
-  if (tab === 'prebreakout') renderPreBreakoutTab();
   if (tab === 'watchlist')  renderWatchlist();
   if (tab === 'top-pick')   renderTopPick();
   if (tab === 'fno')        renderFnoTab();
   if (tab === 'holidays')   renderHolidaysTab();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-
-let pbSortCol = 'pre_breakout_score';
-let pbSortDir = -1;
 
 function renderFnoTab() {
   const container = document.getElementById('tab-fno');
