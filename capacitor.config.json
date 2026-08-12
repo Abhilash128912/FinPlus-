@@ -1,5 +1,9 @@
 {
   "appId": "com.finplus.pnljournal",
   "appName": "finplus_journal",
-  "webDir": "dist"
+  "webDir": "dist",
+  "server": {
+    "cleartext": true,
+    "allowNavigation": ["*"]
+  }
 }

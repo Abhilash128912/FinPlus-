@@ -5,6 +5,7 @@ import base64
 import requests
 import sqlite3
 import threading
+import socket
 from typing import Dict, List, Any, Optional
 from fastapi import FastAPI, Request, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,14 +24,29 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PULLBACK_FILE = os.path.join(BASE_DIR, "pullback_data.json")
 JOURNAL_FILE = os.path.join(BASE_DIR, "finplus_journal_data.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "finplus_settings.json")
 DB_FILE = os.path.join(BASE_DIR, "trades_backup.db")
 
 # Thread lock for file operations
 file_lock = threading.Lock()
 
 # Price cache: { symbol: { "ltp": float, "change": float, "prev_close": float, "high": float, "low": float, "timestamp": float } }
-PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
-CACHE_TTL_SECONDS = 3.0
+PRICE_CACHE: Dict[str, Dict[str, Any]] = {
+    "ASHOKLEY.NS": { "ltp": 175.05, "change": -0.05, "change_percent": -0.03, "prev_close": 175.10, "high": 176.25, "low": 174.50, "timestamp": time.time() },
+    "BEL.NS": { "ltp": 400.60, "change": -5.25, "change_percent": -1.29, "prev_close": 405.85, "high": 406.00, "low": 399.50, "timestamp": time.time() },
+    "BORANA.NS": { "ltp": 325.00, "change": -5.45, "change_percent": -1.65, "prev_close": 330.45, "high": 335.00, "low": 322.00, "timestamp": time.time() },
+    "EMMVEE.NS": { "ltp": 314.15, "change": -4.55, "change_percent": -1.43, "prev_close": 318.70, "high": 322.00, "low": 312.00, "timestamp": time.time() },
+    "FEDERALBNK.NS": { "ltp": 355.75, "change": 0.75, "change_percent": 0.21, "prev_close": 355.00, "high": 358.00, "low": 354.00, "timestamp": time.time() },
+    "ITC.NS": { "ltp": 276.90, "change": -2.50, "change_percent": -0.89, "prev_close": 279.40, "high": 280.00, "low": 276.00, "timestamp": time.time() },
+    "NMDC.NS": { "ltp": 85.08, "change": -0.37, "change_percent": -0.43, "prev_close": 85.45, "high": 85.80, "low": 84.80, "timestamp": time.time() },
+    "PANAMAPET.NS": { "ltp": 507.25, "change": -38.25, "change_percent": -7.01, "prev_close": 545.50, "high": 548.00, "low": 505.00, "timestamp": time.time() },
+    "TATAPOWER.NS": { "ltp": 374.85, "change": -5.15, "change_percent": -1.36, "prev_close": 380.00, "high": 382.00, "low": 373.00, "timestamp": time.time() },
+    "TATASTEEL.NS": { "ltp": 183.95, "change": -4.45, "change_percent": -2.36, "prev_close": 188.40, "high": 189.00, "low": 183.00, "timestamp": time.time() },
+    "UYFINCORP.NS": { "ltp": 18.98, "change": -0.99, "change_percent": -4.96, "prev_close": 19.97, "high": 19.50, "low": 18.98, "timestamp": time.time() },
+    "GOLDBEES.NS": { "ltp": 74.20, "change": 0.15, "change_percent": 0.20, "prev_close": 74.05, "high": 74.50, "low": 74.00, "timestamp": time.time() },
+    "NIFTYBEES.NS": { "ltp": 286.50, "change": -1.20, "change_percent": -0.42, "prev_close": 287.70, "high": 288.00, "low": 286.10, "timestamp": time.time() }
+}
+CACHE_TTL_SECONDS = 20.0
 
 SYMBOL_MAP = {
     "NIFTY": "^NSEI",
@@ -50,14 +66,19 @@ SYMBOL_MAP = {
 
 DEFAULT_PULLBACK_DATA = {
     "capital_settings": { "start_date": "2026-07-03", "initial_capital": 3477.97, "daily_rate": 200.0 },
-    "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "transactions": [{ "date": "2026-07-13", "price": 160.53, "shares": 2 }], "local_peak": 176.25, "initial_reference_price": 160.53 },
-    "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "transactions": [{ "date": "2026-07-29", "price": 403.52, "shares": 3 }], "local_peak": 403.52, "initial_reference_price": 403.52 },
-    "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "transactions": [{ "date": "2026-08-03", "price": 330.98, "shares": 2 }], "local_peak": 330.98, "initial_reference_price": 330.98 },
-    "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 359.10, "shares": 1 }], "local_peak": 359.10, "initial_reference_price": 359.10 },
-    "ITC.NS": { "name": "ITC Limited", "category": "Core", "transactions": [{ "date": "2026-07-14", "price": 275.45, "shares": 1 }], "local_peak": 286.25, "initial_reference_price": 275.45 },
-    "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }], "local_peak": 84.80, "initial_reference_price": 84.80 },
-    "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }], "local_peak": 382.25, "initial_reference_price": 382.25 },
-    "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }], "local_peak": 191.53, "initial_reference_price": 182.82 },
+    "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "transactions": [{ "date": "2026-07-13", "price": 160.53, "shares": 2 }], "local_peak": 176.25, "date_added": "2026-07-03", "initial_reference_price": 175.05 },
+    "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "transactions": [{ "date": "2026-07-29", "price": 403.52, "shares": 3 }], "local_peak": 405.85, "date_added": "2026-07-03", "initial_reference_price": 400.60 },
+    "BORANA.NS": { "name": "BORANA", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 342.0, "shares": 1 }], "local_peak": 353.95, "date_added": "2026-08-06", "initial_reference_price": 325.00 },
+    "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "in_watchlist": False, "transactions": [{ "date": "2026-08-03", "price": 330.98, "shares": 2 }, { "date": "2026-08-12", "price": 314.10, "shares": -2, "type": "SELL" }], "local_peak": 330.98, "date_added": "2026-07-03", "initial_reference_price": 314.10 },
+    "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 359.10, "shares": 1 }, { "date": "2026-08-11", "price": 353.10, "shares": 1 }], "local_peak": 359.10, "date_added": "2026-07-03", "initial_reference_price": 355.75 },
+    "ITC.NS": { "name": "ITC Limited", "category": "Core", "transactions": [{ "date": "2026-07-14", "price": 275.45, "shares": 1 }], "local_peak": 286.25, "date_added": "2026-07-03", "initial_reference_price": 276.90 },
+    "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }, { "date": "2026-08-11", "price": 85.29, "shares": 5 }], "local_peak": 85.49, "date_added": "2026-07-03", "initial_reference_price": 85.08 },
+    "PANAMAPET.NS": { "name": "Panama Petrochem Limited", "category": "Growth", "in_watchlist": False, "transactions": [{ "date": "2026-08-11", "price": 544.95, "shares": 3 }, { "date": "2026-08-12", "price": 567.65, "shares": -3, "type": "SELL" }], "local_peak": 598.70, "date_added": "2026-08-11", "initial_reference_price": 506.15 },
+    "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }], "local_peak": 382.25, "date_added": "2026-07-03", "initial_reference_price": 374.85 },
+    "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }], "local_peak": 191.53, "date_added": "2026-07-05", "initial_reference_price": 183.95 },
+    "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 18.98 },
+    "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 277.21, "shares": 1 }], "local_peak": 286.50, "date_added": "2026-08-11", "initial_reference_price": 277.21 },
+    "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 126.19, "shares": 2 }], "local_peak": 126.18, "date_added": "2026-08-11", "initial_reference_price": 126.19 },
     "mtf_trading": []
 }
 
@@ -102,28 +123,78 @@ NIFTY500_STOCKS = [
     { "symbol": "TECHM", "name": "Tech Mahindra Limited", "aliases": ["techm"] },
     { "symbol": "ZOMATO", "name": "Zomato Limited", "aliases": ["zomato"] },
     { "symbol": "JIOFIN", "name": "Jio Financial Services Limited", "aliases": ["jiofin"] },
-    { "symbol": "GESHIP", "name": "The Great Eastern Shipping Company Limited", "aliases": ["geship", "great eastern", "shipping", "ge shipping"] }
+    { "symbol": "GESHIP", "name": "The Great Eastern Shipping Company Limited", "aliases": ["geship", "great eastern", "shipping", "ge shipping"] },
+    { "symbol": "GOLDBEES", "name": "Nippon India ETF Gold BeES", "aliases": ["gold", "goldb", "goldbees", "gold bees", "gold etf", "nippon gold", "gold be"] },
+    { "symbol": "NIFTYBEES", "name": "Nippon India ETF Nifty 50 BeES", "aliases": ["nifty", "niftyb", "niftybees", "nifty bees", "nifty 50", "nifty etf", "nippon nifty"] },
+    { "symbol": "BANKBEES", "name": "Nippon India ETF Nifty Bank BeES", "aliases": ["bank", "bankbees", "bank bees", "bank etf", "nifty bank", "banknifty etf"] },
+    { "symbol": "LIQUIDBEES", "name": "Nippon India ETF Liquid BeES", "aliases": ["liquid", "liquidbees", "liquid bees", "liquid etf", "cash", "park cash"] },
+    { "symbol": "SILVERBEES", "name": "Nippon India ETF Silver BeES", "aliases": ["silver", "silverbees", "silver bees", "silver etf", "nippon silver"] },
+    { "symbol": "ITBEES", "name": "Nippon India ETF Nifty IT", "aliases": ["it", "itbees", "it bees", "it etf", "tech etf", "nifty it"] },
+    { "symbol": "JUNIORBEES", "name": "Nippon India ETF Nifty Next 50", "aliases": ["junior", "juniorbees", "junior bees", "next 50", "nifty next 50"] },
+    { "symbol": "CPSEETF", "name": "CPSE ETF", "aliases": ["cpse", "cpse etf", "psu etf", "cpseetf"] },
+    { "symbol": "MON100", "name": "Motilal Oswal Nasdaq 100 ETF", "aliases": ["nasdaq", "mon100", "nasdaq 100", "us tech", "motilal nasdaq"] }
 ]
 
 def normalize_symbol(sym: str) -> str:
     cleaned = sym.strip().upper()
     if cleaned in SYMBOL_MAP:
         return SYMBOL_MAP[cleaned]
-    if "NIFTY" in cleaned:
+    
+    # Specific ETF checks - preserve NSE ETF ticker
+    if "BEES" in cleaned or "ETF" in cleaned:
+        if not cleaned.endswith(".NS") and not cleaned.endswith(".BO"):
+            return f"{cleaned}.NS"
+        return cleaned
+
+    # Futures / Indices (exact words or commodity trade names)
+    if cleaned in ["NIFTY", "NIFTY 50", "NIFTY50", "INDEX"]:
         return "^NSEI"
-    if "BANKNIFTY" in cleaned:
+    if cleaned in ["BANKNIFTY", "BANK NIFTY", "NIFTY BANK"]:
         return "^NSEBANK"
-    if "CRUDE" in cleaned:
+    if cleaned in ["CRUDE", "CRUDEOIL", "CRUDE OIL"]:
         return "CL=F"
-    if "NATGAS" in cleaned or "NATURAL" in cleaned:
+    if cleaned in ["NATGAS", "NATURALGAS", "NATURAL GAS", "NATGASMINI"]:
         return "NG=F"
-    if "GOLD" in cleaned:
+    if cleaned in ["GOLD", "MCX GOLD", "GOLDM"]:
         return "GC=F"
-    if "SILVER" in cleaned:
+    if cleaned in ["SILVER", "MCX SILVER", "SILVERM"]:
         return "SI=F"
+
     if not cleaned.endswith(".NS") and not cleaned.endswith(".BO") and "=" not in cleaned and "^" not in cleaned:
         return f"{cleaned}.NS"
     return cleaned
+
+def fetch_direct_yahoo(y_sym: str) -> Optional[Dict[str, Any]]:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{y_sym}?interval=1m&range=1d"
+    try:
+        res = requests.get(url, headers=headers, timeout=4)
+        if res.status_code == 200:
+            data = res.json()
+            meta = data.get("chart", {}).get("result", [{}])[0].get("meta", {})
+            ltp = meta.get("regularMarketPrice")
+            prev_close = meta.get("chartPreviousClose") or meta.get("previousClose") or ltp
+            high = meta.get("dayHigh") or ltp
+            low = meta.get("dayLow") or ltp
+            if ltp and ltp > 0:
+                ltp = round(float(ltp), 2)
+                prev_c = round(float(prev_close), 2) if prev_close else ltp
+                chg = round(ltp - prev_c, 2)
+                chg_pct = round((chg / prev_c) * 100, 2) if prev_c else 0.0
+                return {
+                    "ltp": ltp,
+                    "change": chg,
+                    "change_percent": chg_pct,
+                    "prev_close": prev_c,
+                    "high": round(float(high), 2) if high else ltp,
+                    "low": round(float(low), 2) if low else ltp,
+                    "timestamp": time.time()
+                }
+    except Exception as e:
+        print(f"[Direct Yahoo Fetch Error for {y_sym}]: {e}")
+    return None
 
 def fetch_yfinance_batch(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
     now = time.time()
@@ -192,6 +263,14 @@ def fetch_yfinance_batch(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
                     print(f"[YFinance Fetch Error for {y_sym}]: {ex}")
         except Exception as e:
             print(f"[YFinance Batch Error]: {e}")
+
+        # Direct HTTP chart fallback for any symbols that failed or hit rate limits
+        for y_sym in needed_y_symbols:
+            if y_sym not in results or not results[y_sym].get("ltp"):
+                direct_data = fetch_direct_yahoo(y_sym)
+                if direct_data:
+                    PRICE_CACHE[y_sym] = direct_data
+                    results[y_sym] = direct_data
 
     # Map results back to raw symbols requested
     final_output = {}
@@ -338,15 +417,57 @@ def save_journal_file(trades: List[Dict[str, Any]]):
         conn.close()
     except Exception as e:
         print(f"[SQLite Sync Error]: {e}")
+def get_local_ips() -> List[str]:
+    ips = []
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.5)
+        s.connect(("8.8.8.8", 80))
+        primary_ip = s.getsockname()[0]
+        s.close()
+        if primary_ip and primary_ip not in ips and not primary_ip.startswith("127."):
+            ips.append(primary_ip)
+    except Exception:
+        pass
+
+    try:
+        hostname = socket.gethostname()
+        for ip in socket.gethostbyname_ex(hostname)[2]:
+            if ip not in ips and not ip.startswith("127.") and not ip.startswith("169.254"):
+                ips.append(ip)
+    except Exception:
+        pass
+    return ips
+
+def load_settings_file() -> Dict[str, Any]:
+    with file_lock:
+        if not os.path.exists(SETTINGS_FILE):
+            load_from_github(SETTINGS_FILE, "finplus_settings.json")
+        if not os.path.exists(SETTINGS_FILE):
+            return {}
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+def save_settings_file(settings: Dict[str, Any]):
+    with file_lock:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+    push_to_github(SETTINGS_FILE, "finplus_settings.json")
 
 @app.get("/")
 @app.get("/health")
 def health_check():
+    local_ips = get_local_ips()
     return {
         "status": "online",
         "app": "Finplus PnL Independent Backend",
         "data_source": "yfinance",
-        "version": "2.0.0"
+        "version": "2.0.0",
+        "local_ips": local_ips,
+        "recommended_server_urls": [f"http://{ip}:8000" for ip in local_ips]
     }
 
 @app.get("/api/ltp")
@@ -421,13 +542,31 @@ async def save_pullback_data(request: Request):
         return { "status": "success", "message": "Pullback data saved" }
     return { "status": "error", "message": "Invalid JSON payload" }
 
+@app.get("/api/settings")
+def get_settings():
+    settings = load_settings_file()
+    return {
+        "status": "success",
+        "settings": settings
+    }
+
+@app.post("/api/settings")
+async def save_settings_endpoint(request: Request):
+    payload = await request.json()
+    if isinstance(payload, dict):
+        save_settings_file(payload)
+        return { "status": "success", "message": "Settings saved", "settings": payload }
+    return { "status": "error", "message": "Invalid JSON payload" }
+
 @app.get("/api/trades")
 @app.get("/api/trades/journal")
 def get_trades():
     trades = load_journal_file()
+    settings = load_settings_file()
     return {
         "status": "success",
         "trades": trades,
+        "settings": settings,
         "count": len(trades)
     }
 
@@ -438,15 +577,55 @@ def get_trades():
 async def sync_trades(request: Request):
     payload = await request.json()
     trades_list = []
+    settings_data = None
     if isinstance(payload, list):
         trades_list = payload
     elif isinstance(payload, dict):
         trades_list = payload.get("trades", [])
+        settings_data = payload.get("settings")
     
     if trades_list:
         save_journal_file(trades_list)
-        return { "status": "success", "synced_count": len(trades_list) }
-    return { "status": "success", "synced_count": 0 }
+    if settings_data and isinstance(settings_data, dict):
+        save_settings_file(settings_data)
+        
+    return { 
+        "status": "success", 
+        "synced_count": len(trades_list),
+        "settings_saved": bool(settings_data)
+    }
+
+@app.get("/api/sync/all")
+def get_all_sync_data():
+    return {
+        "status": "success",
+        "trades": load_journal_file(),
+        "pullback": load_pullback_file(),
+        "settings": load_settings_file(),
+        "timestamp": time.time()
+    }
+
+@app.post("/api/sync/all")
+async def post_all_sync_data(request: Request):
+    payload = await request.json()
+    if isinstance(payload, dict):
+        trades = payload.get("trades")
+        pullback = payload.get("pullback")
+        settings = payload.get("settings")
+        if isinstance(trades, list) and len(trades) > 0:
+            save_journal_file(trades)
+        if isinstance(pullback, dict) and len(pullback) > 0:
+            save_pullback_file(pullback)
+        if isinstance(settings, dict) and len(settings) > 0:
+            save_settings_file(settings)
+        return {
+            "status": "success",
+            "message": "Full dataset synchronized successfully",
+            "trades_count": len(trades) if isinstance(trades, list) else 0,
+            "pullback_keys": len(pullback) if isinstance(pullback, dict) else 0,
+            "settings_saved": bool(settings)
+        }
+    return { "status": "error", "message": "Invalid sync payload" }
 
 SCAN_IN_PROGRESS = False
 

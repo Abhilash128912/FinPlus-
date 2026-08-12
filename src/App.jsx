@@ -32,7 +32,13 @@ import {
   Layers,
   Search,
   Eye,
-  RefreshCw
+  RefreshCw,
+  Save,
+  Wifi,
+  WifiOff,
+  Copy,
+  Check,
+  Settings
 } from 'lucide-react';
 
 
@@ -113,12 +119,19 @@ export default function App() {
   const API_BASE_URL = serverUrl 
     || (isNativeMobileApp ? RENDER_BACKEND_URL : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000' : RENDER_BACKEND_URL));
   const [liveLtps, setLiveLtps] = useState({
-    "ASHOKLEY": 151.15, "ASHOKLEY.NS": 151.15,
-    "BEL": 405.05, "BEL.NS": 405.05,
-    "EMMVEE": 331.00, "EMMVEE.NS": 331.00,
-    "ITC": 283.60, "ITC.NS": 283.60,
-    "TATAPOWER": 374.55, "TATAPOWER.NS": 374.55,
-    "TATASTEEL": 182.70, "TATASTEEL.NS": 182.70
+    "ASHOKLEY": 175.05, "ASHOKLEY.NS": 175.05,
+    "BEL": 400.60, "BEL.NS": 400.60,
+    "BORANA": 325.00, "BORANA.NS": 325.00,
+    "EMMVEE": 314.15, "EMMVEE.NS": 314.15,
+    "FEDERALBNK": 355.75, "FEDERALBNK.NS": 355.75,
+    "ITC": 276.90, "ITC.NS": 276.90,
+    "NMDC": 85.08, "NMDC.NS": 85.08,
+    "PANAMAPET": 507.25, "PANAMAPET.NS": 507.25,
+    "TATAPOWER": 374.85, "TATAPOWER.NS": 374.85,
+    "TATASTEEL": 183.95, "TATASTEEL.NS": 183.95,
+    "UYFINCORP": 18.98, "UYFINCORP.NS": 18.98,
+    "GOLDBEES": 74.20, "GOLDBEES.NS": 74.20,
+    "NIFTYBEES": 286.50, "NIFTYBEES.NS": 286.50
   });
   const [toast, setToast] = useState(null);
 
@@ -126,14 +139,19 @@ export default function App() {
   const [pullbackData, setPullbackData] = useState(() => {
     const defaultData = {
       "capital_settings": { "start_date": "2026-07-03", "initial_capital": 3477.97, "daily_rate": 200.0 },
-      "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "transactions": [{ "date": "2026-07-13", "price": 160.53, "shares": 2 }], "local_peak": 176.25, "date_added": "2026-07-03", "initial_reference_price": 160.53 },
-      "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "transactions": [{ "date": "2026-07-29", "price": 403.52, "shares": 3 }], "local_peak": 403.52, "date_added": "2026-07-03", "initial_reference_price": 403.52 },
-      "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "transactions": [{ "date": "2026-08-03", "price": 330.98, "shares": 2 }], "local_peak": 330.98, "date_added": "2026-07-03", "initial_reference_price": 330.98 },
-      "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 359.10, "shares": 1 }], "local_peak": 359.10, "date_added": "2026-07-03", "initial_reference_price": 359.10 },
-      "ITC.NS": { "name": "ITC Limited", "category": "Core", "transactions": [{ "date": "2026-07-14", "price": 275.45, "shares": 1 }], "local_peak": 286.25, "date_added": "2026-07-03", "initial_reference_price": 275.45 },
-      "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }], "local_peak": 84.80, "date_added": "2026-07-03", "initial_reference_price": 84.80 },
-      "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }], "local_peak": 382.25, "date_added": "2026-07-03", "initial_reference_price": 382.25 },
-      "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }], "local_peak": 191.53, "date_added": "2026-07-05", "initial_reference_price": 182.82 },
+      "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "transactions": [{ "date": "2026-07-13", "price": 160.53, "shares": 2 }], "local_peak": 176.25, "date_added": "2026-07-03", "initial_reference_price": 175.05 },
+      "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "transactions": [{ "date": "2026-07-29", "price": 403.52, "shares": 3 }], "local_peak": 405.85, "date_added": "2026-07-03", "initial_reference_price": 400.60 },
+      "BORANA.NS": { "name": "BORANA", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 342.0, "shares": 1 }], "local_peak": 353.95, "date_added": "2026-08-06", "initial_reference_price": 325.00 },
+      "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "in_watchlist": false, "transactions": [{ "date": "2026-08-03", "price": 330.98, "shares": 2 }, { "date": "2026-08-12", "price": 314.10, "shares": -2, "type": "SELL" }], "local_peak": 330.98, "date_added": "2026-07-03", "initial_reference_price": 314.10 },
+      "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 359.10, "shares": 1 }, { "date": "2026-08-11", "price": 353.10, "shares": 1 }], "local_peak": 359.10, "date_added": "2026-07-03", "initial_reference_price": 355.75 },
+      "ITC.NS": { "name": "ITC Limited", "category": "Core", "transactions": [{ "date": "2026-07-14", "price": 275.45, "shares": 1 }], "local_peak": 286.25, "date_added": "2026-07-03", "initial_reference_price": 276.90 },
+      "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }, { "date": "2026-08-11", "price": 85.29, "shares": 5 }], "local_peak": 85.49, "date_added": "2026-07-03", "initial_reference_price": 85.08 },
+      "PANAMAPET.NS": { "name": "Panama Petrochem Limited", "category": "Growth", "in_watchlist": false, "transactions": [{ "date": "2026-08-11", "price": 544.95, "shares": 3 }, { "date": "2026-08-12", "price": 567.65, "shares": -3, "type": "SELL" }], "local_peak": 598.70, "date_added": "2026-08-11", "initial_reference_price": 506.15 },
+      "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }], "local_peak": 382.25, "date_added": "2026-07-03", "initial_reference_price": 374.85 },
+      "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }], "local_peak": 191.53, "date_added": "2026-07-05", "initial_reference_price": 183.95 },
+      "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 18.98 },
+      "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 277.21, "shares": 1 }], "local_peak": 286.50, "date_added": "2026-08-11", "initial_reference_price": 277.21 },
+      "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 126.19, "shares": 2 }], "local_peak": 126.18, "date_added": "2026-08-11", "initial_reference_price": 126.19 },
       "mtf_trading": []
     };
 
@@ -141,14 +159,6 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        parsed["ASHOKLEY.NS"] = defaultData["ASHOKLEY.NS"];
-        parsed["BEL.NS"] = defaultData["BEL.NS"];
-        parsed["EMMVEE.NS"] = defaultData["EMMVEE.NS"];
-        parsed["FEDERALBNK.NS"] = defaultData["FEDERALBNK.NS"];
-        parsed["ITC.NS"] = defaultData["ITC.NS"];
-        parsed["NMDC.NS"] = defaultData["NMDC.NS"];
-        parsed["TATAPOWER.NS"] = defaultData["TATAPOWER.NS"];
-        parsed["TATASTEEL.NS"] = defaultData["TATASTEEL.NS"];
         
         // Sanitize MTF trades to strip out stale hardcoded unlogged demo trades (LODHA, INDUSTOWER, NAUKRI)
         if (parsed.mtf_trading) {
@@ -159,8 +169,7 @@ export default function App() {
           parsed.mtf_trading = cleanMtf;
         }
 
-        localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(parsed));
-        return parsed;
+        return { ...defaultData, ...parsed };
       } catch (e) {}
     }
     return defaultData;
@@ -195,22 +204,53 @@ export default function App() {
   }, []);
 
   // Combined master stock list from bundled NSE stocks JSON + API fallback
+  // Master ETF & Index Fund List for Park category
+  const POPULAR_ETFS = React.useMemo(() => [
+    { symbol: "GOLDBEES", name: "Nippon India ETF Gold BeES", isEtf: true, aliases: ["gold", "goldb", "goldbees", "gold bees", "gold etf", "nippon gold", "gold be"] },
+    { symbol: "NIFTYBEES", name: "Nippon India ETF Nifty 50 BeES", isEtf: true, aliases: ["nifty", "niftyb", "niftybees", "nifty bees", "nifty 50", "nifty etf", "nippon nifty"] },
+    { symbol: "BANKBEES", name: "Nippon India ETF Nifty Bank BeES", isEtf: true, aliases: ["bank", "bankbees", "bank bees", "bank etf", "nifty bank", "banknifty etf"] },
+    { symbol: "LIQUIDBEES", name: "Nippon India ETF Liquid BeES", isEtf: true, aliases: ["liquid", "liquidbees", "liquid bees", "liquid etf", "cash", "park cash"] },
+    { symbol: "SILVERBEES", name: "Nippon India ETF Silver BeES", isEtf: true, aliases: ["silver", "silverbees", "silver bees", "silver etf", "nippon silver"] },
+    { symbol: "ITBEES", name: "Nippon India ETF Nifty IT", isEtf: true, aliases: ["it", "itbees", "it bees", "it etf", "tech etf", "nifty it"] },
+    { symbol: "JUNIORBEES", name: "Nippon India ETF Nifty Next 50", isEtf: true, aliases: ["junior", "juniorbees", "junior bees", "next 50", "nifty next 50"] },
+    { symbol: "CPSEETF", name: "CPSE ETF", isEtf: true, aliases: ["cpse", "cpse etf", "psu etf", "cpseetf"] },
+    { symbol: "MON100", name: "Motilal Oswal Nasdaq 100 ETF", isEtf: true, aliases: ["nasdaq", "mon100", "nasdaq 100", "us tech", "motilal nasdaq"] },
+    { symbol: "AUTOBEES", name: "Nippon India ETF Nifty Auto", isEtf: true, aliases: ["auto", "autobees", "auto bees", "auto etf"] },
+    { symbol: "PHARMABEES", name: "Nippon India ETF Nifty Pharma", isEtf: true, aliases: ["pharma", "pharmabees", "pharma bees", "pharma etf"] },
+    { symbol: "HDFCGOLD", name: "HDFC Gold ETF", isEtf: true, aliases: ["hdfc gold", "hdfc gold etf"] },
+    { symbol: "GOLDIETF", name: "ICICI Prudential Gold ETF", isEtf: true, aliases: ["icici gold", "goldietf", "icici prudential gold"] },
+    { symbol: "SETFNIF50", name: "SBI Nifty 50 ETF", isEtf: true, aliases: ["sbi nifty", "sbi nifty 50", "setfnif50"] }
+  ], []);
+
+  // Combined master stock list from bundled NSE stocks JSON + ETFs
   const combinedStockList = React.useMemo(() => {
-    // nifty500List is loaded from /nse_stocks.json (bundled, 2413 stocks with real names)
+    const etfMapped = POPULAR_ETFS.map(e => ({
+      symbol: e.symbol,
+      name: e.name,
+      isEtf: true,
+      aliases: [
+        e.symbol.toLowerCase(),
+        e.name.toLowerCase(),
+        ...(e.aliases || []).map(a => a.toLowerCase())
+      ]
+    }));
+
     if (nifty500List && nifty500List.length > 0) {
-      return nifty500List.map(s => ({
+      const stockMapped = nifty500List.map(s => ({
         symbol: s.s || s.symbol || '',
         name: s.n || s.name || s.s || s.symbol || '',
+        isEtf: false,
         aliases: [
           (s.s || s.symbol || '').toLowerCase(),
           (s.n || s.name || '').toLowerCase()
         ]
       }));
+      return [...etfMapped, ...stockMapped];
     }
-    return [];
-  }, [nifty500List]);
+    return etfMapped;
+  }, [nifty500List, POPULAR_ETFS]);
 
-  // Ranked Nifty suggestions with alias & prefix matching (shared for SIP + MTF)
+  // Ranked suggestions with alias & prefix matching (shared for SIP + MTF)
   const filteredNiftySuggestions = React.useMemo(() => {
     const query = newSipTicker.toLowerCase().replace('.ns', '').trim();
     if (!query || query.length < 2) return [];
@@ -220,18 +260,17 @@ export default function App() {
       const aliases = s.aliases || [];
       let score = 0;
       if (sym === query || aliases.includes(query)) score = 100;
-      else if (sym.startsWith(query)) score = 80;
-      else if (aliases.some(a => a.startsWith(query))) score = 75;
-      else if (name.startsWith(query)) score = 70;
-      else if (sym.includes(query)) score = 50;
+      else if (sym.startsWith(query)) score = 90;
+      else if (aliases.some(a => a.startsWith(query))) score = 85;
+      else if (name.startsWith(query)) score = 75;
+      else if (sym.includes(query)) score = 60;
+      else if (aliases.some(a => a.includes(query))) score = 55;
       else if (name.includes(query)) score = 40;
-      else if (aliases.some(a => a.includes(query))) score = 35;
       return { stock: s, score };
     }).filter(item => item.score > 0);
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, 8).map(item => item.stock);
   }, [newSipTicker, combinedStockList]);
-
 
   // Live auto-fill company name & default buy price when suggestion matches current input
   useEffect(() => {
@@ -248,6 +287,10 @@ export default function App() {
       if (ltp && !newSipBuyPrice) {
         setNewSipBuyPrice(String(ltp));
       }
+      // Auto-switch category to Park if it's an ETF
+      if (topMatch.isEtf || cleanSym.endsWith('BEES') || cleanSym.endsWith('ETF') || topMatch.name.toLowerCase().includes('etf')) {
+        setNewSipCategory('Park');
+      }
     }
   }, [newSipTicker, filteredNiftySuggestions, liveLtps]);
 
@@ -256,6 +299,29 @@ export default function App() {
   const [txDate, setTxDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [txPrice, setTxPrice] = useState('');
   const [txShares, setTxShares] = useState('1');
+
+  // SIP Form Mode ('BUY' or 'SELL') & SIP View Mode ('holdings' or 'sold')
+  const [sipFormMode, setSipFormMode] = useState('BUY'); // 'BUY' | 'SELL'
+  const [sipViewMode, setSipViewMode] = useState('holdings'); // 'holdings' | 'sold'
+
+  // SIP Sell Form State (in main SIP panel)
+  const [sipSellSelectedTicker, setSipSellSelectedTicker] = useState('');
+  const [sipSellFormShares, setSipSellFormShares] = useState('1');
+  const [sipSellFormPrice, setSipSellFormPrice] = useState('');
+  const [sipSellFormDate, setSipSellFormDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  // SIP Sell Modal State (quick action from table)
+  const [sipSellModalStock, setSipSellModalStock] = useState(null);
+  const [sipSellModalShares, setSipSellModalShares] = useState('1');
+  const [sipSellModalPrice, setSipSellModalPrice] = useState('');
+  const [sipSellModalDate, setSipSellModalDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  // SIP Edit Stock & Transactions Modal State
+  const [sipEditModalStock, setSipEditModalStock] = useState(null);
+  const [editSipName, setEditSipName] = useState('');
+  const [editSipCategory, setEditSipCategory] = useState('Core');
+  const [editSipPeak, setEditSipPeak] = useState('');
+  const [editSipTxs, setEditSipTxs] = useState([]);
 
   const [mtfTicker, setMtfTicker] = useState('');
   const [mtfBuyPrice, setMtfBuyPrice] = useState('');
@@ -300,54 +366,193 @@ export default function App() {
   }, [mtfTicker, filteredMtfSuggestions, liveLtps]);
 
 
-  // Sync pullbackData from backend API on mount
-  useEffect(() => {
-    const fetchPullbackData = async () => {
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [detectedIps, setDetectedIps] = useState([]);
+  const [lastSyncedTime, setLastSyncedTime] = useState(() => localStorage.getItem('finplus_last_synced_time') || '');
+
+  // Full Unified Bidirectional Sync with Server (Trades + Pullback Stocks + Capital & Risk Settings)
+  const handleSyncAll = async (targetUrl = null, silent = false) => {
+    setIsSyncing(true);
+    const activeCandidates = targetUrl 
+      ? [targetUrl] 
+      : Array.from(new Set([
+          serverUrl, 
+          API_BASE_URL, 
+          (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? `${window.location.protocol}//${window.location.hostname}:8000` : null),
+          'http://127.0.0.1:8000', 
+          'http://localhost:8000', 
+          RENDER_BACKEND_URL
+        ].filter(Boolean)));
+    
+    let syncSuccess = false;
+    let syncMsg = '';
+
+    for (const endpoint of activeCandidates) {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/investment/pullback`);
+        const cleanEndpoint = endpoint.trim().replace(/\/$/, '');
+        // 1. Fetch current server dataset
+        const res = await fetch(`${cleanEndpoint}/api/sync/all`, { method: 'GET' });
         if (res.ok) {
-          const data = await res.json();
-          if (data && Object.keys(data).length > 0) {
-            if (data.mtf_trading) {
-              const mtfList = Array.isArray(data.mtf_trading)
-                ? data.mtf_trading
-                : (data.mtf_trading.trades || []);
-              data.mtf_trading = mtfList.filter(t => t.ticker !== 'LODHA.NS' && t.ticker !== 'INDUSTOWER.NS' && t.ticker !== 'NAUKRI.NS');
+          const sData = await res.json();
+          if (sData && sData.status === 'success') {
+            // A. Merge Trades
+            let mergedTrades = trades;
+            if (Array.isArray(sData.trades)) {
+              mergedTrades = mergeJournalTrades(trades, sData.trades);
+              setTrades(mergedTrades);
+              saveJournalEngine(mergedTrades);
             }
-            setPullbackData(data);
-            localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(data));
+
+            // B. Merge Pullback Data & MTF
+            let mergedPullback = pullbackData;
+            if (sData.pullback && typeof sData.pullback === 'object') {
+              const currentSaved = localStorage.getItem('finplus_pullback_portfolio');
+              let localP = pullbackData;
+              if (currentSaved) {
+                try { localP = JSON.parse(currentSaved); } catch(e) {}
+              }
+              mergedPullback = { ...localP, ...sData.pullback };
+              
+              // Merge MTF array safely
+              const backendMtf = Array.isArray(sData.pullback.mtf_trading) ? sData.pullback.mtf_trading : (sData.pullback.mtf_trading?.trades || []);
+              const localMtf = Array.isArray(localP.mtf_trading) ? localP.mtf_trading : (localP.mtf_trading?.trades || []);
+              const mtfMap = new Map();
+              backendMtf.forEach(t => {
+                if (t) {
+                  const key = t.id !== undefined && t.id !== null ? `id_${t.id}` : `${t.ticker}_${t.buy_date}_${t.shares}`;
+                  mtfMap.set(key, t);
+                }
+              });
+              localMtf.forEach(t => {
+                if (t) {
+                  const key = t.id !== undefined && t.id !== null ? `id_${t.id}` : `${t.ticker}_${t.buy_date}_${t.shares}`;
+                  const existing = mtfMap.get(key);
+                  if (!existing) mtfMap.set(key, t);
+                  else mtfMap.set(key, { ...existing, ...t });
+                }
+              });
+              mergedPullback.mtf_trading = Array.from(mtfMap.values()).filter(t => t && t.ticker !== 'LODHA.NS' && t.ticker !== 'INDUSTOWER.NS' && t.ticker !== 'NAUKRI.NS');
+              setPullbackData(mergedPullback);
+              localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(mergedPullback));
+            }
+
+            // C. Merge Settings
+            if (sData.settings && typeof sData.settings === 'object' && Object.keys(sData.settings).length > 0) {
+              const st = sData.settings;
+              if (st.finplus_opening_capital) { setOpeningCapitalInput(st.finplus_opening_capital); localStorage.setItem('finplus_opening_capital', st.finplus_opening_capital); }
+              if (st.finplus_broker_adjustment !== undefined) { setBrokerAdjustmentInput(st.finplus_broker_adjustment); localStorage.setItem('finplus_broker_adjustment', st.finplus_broker_adjustment); }
+              if (st.finplus_deposits !== undefined) { setDepositsInput(st.finplus_deposits); localStorage.setItem('finplus_deposits', st.finplus_deposits); }
+              if (st.finplus_withdrawals !== undefined) { setWithdrawalsInput(st.finplus_withdrawals); localStorage.setItem('finplus_withdrawals', st.finplus_withdrawals); }
+              if (st.finplus_daily_risk_limit !== undefined) { setDailyRiskLimitInput(st.finplus_daily_risk_limit); localStorage.setItem('finplus_daily_risk_limit', st.finplus_daily_risk_limit); }
+              if (st.finplus_challenge_start_date) { setChallengeStartDateInput(st.finplus_challenge_start_date); localStorage.setItem('finplus_challenge_start_date', st.finplus_challenge_start_date); }
+              if (st.finplus_total_challenge_days) { setTotalChallengeDaysInput(st.finplus_total_challenge_days); localStorage.setItem('finplus_total_challenge_days', st.finplus_total_challenge_days); }
+              if (st.finplus_alloc_intraday) { setAllocIntraday(st.finplus_alloc_intraday); localStorage.setItem('finplus_alloc_intraday', st.finplus_alloc_intraday); }
+              if (st.finplus_alloc_natgas) { setAllocNatgas(st.finplus_alloc_natgas); localStorage.setItem('finplus_alloc_natgas', st.finplus_alloc_natgas); }
+              if (st.finplus_alloc_nifty) { setAllocNifty(st.finplus_alloc_nifty); localStorage.setItem('finplus_alloc_nifty', st.finplus_alloc_nifty); }
+              if (st.finplus_alloc_crude) { setAllocCrude(st.finplus_alloc_crude); localStorage.setItem('finplus_alloc_crude', st.finplus_alloc_crude); }
+              if (st.finplus_msl_intraday) { setMonthlySlIntraday(st.finplus_msl_intraday); localStorage.setItem('finplus_msl_intraday', st.finplus_msl_intraday); }
+              if (st.finplus_msl_natgas) { setMonthlySlNatgas(st.finplus_msl_natgas); localStorage.setItem('finplus_msl_natgas', st.finplus_msl_natgas); }
+              if (st.finplus_msl_nifty) { setMonthlySlNifty(st.finplus_msl_nifty); localStorage.setItem('finplus_msl_nifty', st.finplus_msl_nifty); }
+              if (st.finplus_msl_crude) { setMonthlySlCrude(st.finplus_msl_crude); localStorage.setItem('finplus_msl_crude', st.finplus_msl_crude); }
+            }
+
+            // 2. Push unified union back to server
+            const currentSettings = {
+              finplus_opening_capital: localStorage.getItem('finplus_opening_capital') || openingCapitalInput,
+              finplus_broker_adjustment: localStorage.getItem('finplus_broker_adjustment') || brokerAdjustmentInput,
+              finplus_deposits: localStorage.getItem('finplus_deposits') || depositsInput,
+              finplus_withdrawals: localStorage.getItem('finplus_withdrawals') || withdrawalsInput,
+              finplus_daily_risk_limit: localStorage.getItem('finplus_daily_risk_limit') || dailyRiskLimitInput,
+              finplus_challenge_start_date: localStorage.getItem('finplus_challenge_start_date') || challengeStartDateInput,
+              finplus_total_challenge_days: localStorage.getItem('finplus_total_challenge_days') || totalChallengeDaysInput,
+              finplus_alloc_intraday: localStorage.getItem('finplus_alloc_intraday') || allocIntraday,
+              finplus_alloc_natgas: localStorage.getItem('finplus_alloc_natgas') || allocNatgas,
+              finplus_alloc_nifty: localStorage.getItem('finplus_alloc_nifty') || allocNifty,
+              finplus_alloc_crude: localStorage.getItem('finplus_alloc_crude') || allocCrude,
+              finplus_msl_intraday: localStorage.getItem('finplus_msl_intraday') || monthlySlIntraday,
+              finplus_msl_natgas: localStorage.getItem('finplus_msl_natgas') || monthlySlNatgas,
+              finplus_msl_nifty: localStorage.getItem('finplus_msl_nifty') || monthlySlNifty,
+              finplus_msl_crude: localStorage.getItem('finplus_msl_crude') || monthlySlCrude
+            };
+
+            await fetch(`${cleanEndpoint}/api/sync/all`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                trades: mergedTrades,
+                pullback: mergedPullback,
+                settings: currentSettings
+              })
+            });
+
+            const timeStr = new Date().toLocaleTimeString();
+            setLastSyncedTime(timeStr);
+            localStorage.setItem('finplus_last_synced_time', timeStr);
+            setServerStatus('online');
+            syncSuccess = true;
+            const stockCount = Object.keys(mergedPullback).filter(k => k.includes('.NS')).length;
+            syncMsg = `Synced: ${mergedTrades.length} trades, ${stockCount} stocks & settings updated!`;
+            break;
           }
         }
       } catch (e) {}
-    };
-    fetchPullbackData();
-  }, [API_BASE_URL]);
+    }
+
+    setIsSyncing(false);
+    if (!silent) {
+      if (syncSuccess) {
+        showToast(syncMsg, 'success');
+      } else {
+        showToast('Could not connect to sync server. Check IP & Wi-Fi connection.', 'error');
+      }
+    }
+    return syncSuccess;
+  };
+
+  // Initial sync on mount
+  useEffect(() => {
+    handleSyncAll(null, true);
+  }, [API_BASE_URL, serverUrl]);
 
   // Server Health Status Check Effect
   useEffect(() => {
     const checkServerStatus = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/health`, { method: 'GET' });
-        if (res.ok) {
-          setServerStatus('online');
-        } else {
-          setServerStatus('offline');
-        }
-      } catch (e) {
-        setServerStatus('offline');
+      const candidates = Array.from(new Set([
+        serverUrl, 
+        API_BASE_URL, 
+        (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? `${window.location.protocol}//${window.location.hostname}:8000` : null),
+        'http://127.0.0.1:8000', 
+        'http://localhost:8000', 
+        RENDER_BACKEND_URL
+      ].filter(Boolean)));
+
+      for (const endpoint of candidates) {
+        try {
+          const res = await fetch(`${endpoint}/health`, { method: 'GET' });
+          if (res.ok) {
+            const data = await res.json();
+            setServerStatus('online');
+            if (data.local_ips && Array.isArray(data.local_ips)) {
+              setDetectedIps(data.local_ips);
+            }
+            return;
+          }
+        } catch (e) {}
       }
+      setServerStatus('offline');
     };
+
     checkServerStatus();
-    const interval = setInterval(checkServerStatus, 15000);
+    const interval = setInterval(checkServerStatus, 12000);
     return () => clearInterval(interval);
-  }, [API_BASE_URL]);
+  }, [API_BASE_URL, serverUrl]);
 
-
-  const handleSaveServerUrl = () => {
+  const handleSaveServerUrl = async () => {
     const trimmed = serverUrlInput.trim().replace(/\/$/, '');
     localStorage.setItem('finplus_server_url', trimmed);
     setServerUrl(trimmed);
-    showToast('Backend server URL saved successfully!');
+    showToast('Connecting and synchronizing with server...');
+    await handleSyncAll(trimmed, false);
   };
 
   const addStockToSipWatchlist = async (ticker, name, currentPrice) => {
@@ -382,13 +587,21 @@ export default function App() {
   // Periodically fetch live yfinance LTPs for all monitored stocks in Pullback SIP & MTF
   useEffect(() => {
     const fetchYfinanceLivePrices = async () => {
-      const tickers = Object.keys(pullbackData).filter(k => k.includes('.NS') || k.endsWith('.NS'));
+      const sipTickers = Object.keys(pullbackData).filter(k => k !== 'capital_settings' && k !== 'option_trading' && k !== 'mtf_trading');
+      let mtfList = [];
+      if (Array.isArray(pullbackData.mtf_trading)) {
+        mtfList = pullbackData.mtf_trading;
+      } else if (pullbackData.mtf_trading && Array.isArray(pullbackData.mtf_trading.trades)) {
+        mtfList = pullbackData.mtf_trading.trades;
+      }
+      const mtfTickers = mtfList.map(m => m.ticker).filter(Boolean);
+      const tickers = Array.from(new Set([...sipTickers, ...mtfTickers]));
       if (tickers.length === 0) return;
 
       const queryStr = tickers.join(',');
       let fetchedPrices = {};
 
-      const apiEndpoints = [API_BASE_URL, 'https://finplus.onrender.com', 'http://127.0.0.1:8000'];
+      const apiEndpoints = Array.from(new Set([API_BASE_URL, RENDER_BACKEND_URL, 'http://127.0.0.1:8000'].filter(Boolean)));
       for (const endpoint of apiEndpoints) {
         try {
           const res = await fetch(`${endpoint}/api/investment/yfinance-prices?tickers=${encodeURIComponent(queryStr)}`);
@@ -400,6 +613,7 @@ export default function App() {
                   const clean = sym.replace('.NS', '').trim();
                   fetchedPrices[sym] = info.ltp;
                   fetchedPrices[clean] = info.ltp;
+                  fetchedPrices[clean.toUpperCase()] = info.ltp;
                 }
               });
               if (Object.keys(fetchedPrices).length > 0) break;
@@ -436,17 +650,20 @@ export default function App() {
     return () => clearInterval(interval);
   }, [pullbackData]);
 
-  // Persist pullbackData to localStorage and backend
+  // Persist pullbackData to localStorage and backend (multi-endpoint sync)
   const savePullbackState = async (updatedData) => {
     setPullbackData(updatedData);
     localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(updatedData));
-    try {
-      await fetch(`${API_BASE_URL}/api/investment/pullback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedData)
-      });
-    } catch (e) {}
+    const endpoints = Array.from(new Set([API_BASE_URL, RENDER_BACKEND_URL, 'http://127.0.0.1:8000'].filter(Boolean)));
+    for (const endpoint of endpoints) {
+      try {
+        await fetch(`${endpoint}/api/investment/pullback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedData)
+        });
+      } catch (e) {}
+    }
   };
 
   // Pullback & MTF Top-Level Scope Calculations
@@ -494,15 +711,17 @@ export default function App() {
     totalSipRealizedProfit += realizedProfit;
 
     const cleanSym = ticker.replace('.NS', '').trim();
+    const category = details.category || 'Core';
+    const isPark = category === 'Park';
     const ltp = liveLtps[cleanSym] || liveLtps[ticker] || details.initial_reference_price || (txs.length > 0 ? txs[txs.length - 1].price : 0);
     const peak = details.local_peak || ltp;
-    const targetBuyPrice = peak * 0.95; // Exact 5% Pullback Target Price Level
+    const targetBuyPrice = isPark ? 0 : peak * 0.95; // 5% Pullback Target Price Level (disabled for Park)
     const currentVal = netShares * ltp;
     totalSipCurrentVal += currentVal;
 
     const unrealizedPnl = currentVal - netCost;
     const pnlPct = netCost > 0 ? (unrealizedPnl / netCost) * 100 : 0;
-    const pullbackPct = peak > 0 ? ((peak - ltp) / peak) * 100 : 0;
+    const pullbackPct = (peak > 0 && !isPark) ? ((peak - ltp) / peak) * 100 : 0;
 
     // Chronological Last Buy Transaction Date & Cool-down Math
     const buyTxs = txs.filter(t => Number(t.shares) > 0).sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -535,7 +754,10 @@ export default function App() {
     let systemStatus = '🟢 Active';
     let signalClass = 'active';
 
-    if (netShares === 0) {
+    if (isPark) {
+      systemStatus = '🅿️ Parked ETF / Reserve';
+      signalClass = 'park';
+    } else if (netShares === 0) {
       if (ltp <= targetBuyPrice || pullbackPct >= 5.0) {
         systemStatus = '🟢 BUY TRIGGERED';
         signalClass = 'buy';
@@ -630,6 +852,69 @@ export default function App() {
   const totalSipUnrealizedPnl = totalSipCurrentVal - totalSipDeployedCost;
   const totalSipNetPnl = totalSipUnrealizedPnl - totalSipDeliveryTaxes;
   const totalSipNetPnlPct = totalSipDeployedCost > 0 ? (totalSipNetPnl / totalSipDeployedCost) * 100 : 0;
+
+  // Detailed list of all historical SIP Sell transactions
+  const sipSoldTradesList = [];
+  let totalSipSellTaxes = 0;
+
+  stockTickersList.forEach(ticker => {
+    const details = pullbackData[ticker] || {};
+    const txs = details.transactions || [];
+    let runningShares = 0;
+    let runningCost = 0;
+
+    txs.forEach((t, idx) => {
+      const sh = Number(t.shares) || 0;
+      const pr = Number(t.price) || 0;
+      if (sh > 0) {
+        runningShares += sh;
+        runningCost += sh * pr;
+      } else if (sh < 0) {
+        const sellShares = Math.abs(sh);
+        const avgBuy = runningShares > 0 ? runningCost / runningShares : pr;
+        const grossProfit = (pr - avgBuy) * sellShares;
+        const profitPct = avgBuy > 0 ? ((pr - avgBuy) / avgBuy) * 100 : 0;
+
+        const amt = sellShares * pr;
+        const stt = amt * 0.001;
+        const txn = amt * 0.0000297;
+        const sebi = amt * 0.000001;
+        const gst = (txn + sebi) * 0.18;
+        const dp = 15.34; // ₹13 + 18% GST Zerodha DP charge
+        const sellTaxes = stt + txn + sebi + gst + dp;
+        const netProfit = grossProfit - sellTaxes;
+
+        totalSipSellTaxes += sellTaxes;
+
+        sipSoldTradesList.push({
+          id: `${ticker}-${idx}-${t.date}`,
+          ticker,
+          cleanSym: ticker.replace('.NS', '').trim(),
+          name: details.name || ticker,
+          category: details.category || 'Core',
+          sellDate: t.date,
+          sharesSold: sellShares,
+          avgBuyPrice: avgBuy,
+          sellPrice: pr,
+          sellValue: amt,
+          grossPnl: grossProfit,
+          grossPnlPct: profitPct,
+          taxes: sellTaxes,
+          netPnl: netProfit,
+          txIndex: idx
+        });
+
+        runningShares = Math.max(0, runningShares - sellShares);
+        runningCost = runningShares * avgBuy;
+      }
+    });
+  });
+
+  // Sort sold trades by date descending (most recent first)
+  sipSoldTradesList.sort((a, b) => new Date(b.sellDate) - new Date(a.sellDate));
+
+  const totalSipRealizedNetProfit = totalSipRealizedProfit - totalSipSellTaxes;
+  const totalSipCombinedNetPnl = (totalSipUnrealizedPnl + totalSipRealizedProfit) - totalSipDeliveryTaxes;
 
   const availableSipCash = Math.max(0, totalSipAccumulatedCap - totalSipDeployedCost + (totalSipRealizedProfit * 0.5));
   const mutualFundSweepProfit = totalSipRealizedProfit * 0.5;
@@ -963,36 +1248,193 @@ export default function App() {
 
   const handleDeleteStockFromWatchlist = (ticker) => {
     const cleanSym = ticker.replace('.NS', '').trim();
-    if (!window.confirm(`Are you sure you want to remove ${cleanSym} from your 5% SIP Watchlist?`)) return;
+    const stockObj = pullbackData[ticker] || {};
+    const hasTransactions = Array.isArray(stockObj.transactions) && stockObj.transactions.length > 0;
+
+    if (!window.confirm(`Are you sure you want to remove ${cleanSym} from your Active Watchlist?${hasTransactions ? ' (All historical buy & sell records will remain safely preserved in Sold History).' : ''}`)) return;
 
     const updated = { ...pullbackData };
-    delete updated[ticker];
+    if (hasTransactions) {
+      // Keep transaction history intact, but mark as hidden from active watchlist
+      updated[ticker] = {
+        ...stockObj,
+        in_watchlist: false
+      };
+      showToast(`Removed ${cleanSym} from Active Watchlist (past trade history preserved in Sold History)!`);
+    } else {
+      delete updated[ticker];
+      showToast(`Removed ${cleanSym} from 5% SIP Watchlist!`);
+    }
 
     savePullbackState(updated);
-    showToast(`Removed ${cleanSym} from 5% SIP Watchlist!`);
   };
 
-  const handleRecordSipTx = (e) => {
+  const handleRecordSipSellSubmit = (e) => {
     e.preventDefault();
-    if (!txTicker || !txPrice || parseFloat(txPrice) <= 0 || !txShares) return;
-    const pr = parseFloat(txPrice);
-    const sh = parseInt(txShares);
-    const sharesVal = txType === 'SELL' ? -Math.abs(sh) : Math.abs(sh);
+    if (!sipSellSelectedTicker) {
+      showToast("Please select a stock holding to sell.", "error");
+      return;
+    }
+    const holding = pullbackStockSummary.find(s => s.ticker === sipSellSelectedTicker);
+    if (!holding || holding.netShares <= 0) {
+      showToast("No shares available to sell for this stock.", "error");
+      return;
+    }
+    const sharesNum = parseInt(sipSellFormShares) || 0;
+    const priceNum = parseFloat(sipSellFormPrice) || 0;
+    const txDateStr = sipSellFormDate || new Date().toISOString().split('T')[0];
 
-    const stockObj = pullbackData[txTicker] || { name: txTicker, category: 'Core', transactions: [] };
+    if (sharesNum <= 0) {
+      showToast("Please enter a valid share quantity (> 0).", "error");
+      return;
+    }
+    if (sharesNum > holding.netShares) {
+      showToast(`Cannot sell ${sharesNum} shares. You currently hold ${holding.netShares} shares.`, "error");
+      return;
+    }
+    if (priceNum <= 0) {
+      showToast("Please enter a valid sell execution price (₹).", "error");
+      return;
+    }
+
+    const stockObj = pullbackData[sipSellSelectedTicker] || { name: sipSellSelectedTicker, category: 'Core', transactions: [] };
     const existingTxs = stockObj.transactions || [];
-    const newTx = { date: txDate, price: pr, shares: sharesVal };
+    const newTx = { date: txDateStr, price: priceNum, shares: -Math.abs(sharesNum), type: 'SELL' };
 
     const updated = {
       ...pullbackData,
-      [txTicker]: {
+      [sipSellSelectedTicker]: {
         ...stockObj,
-        transactions: [...existingTxs, newTx],
-        local_peak: Math.max(stockObj.local_peak || 0, pr)
+        transactions: [...existingTxs, newTx]
       }
     };
+
     savePullbackState(updated);
-    showToast(`Recorded ${txType} transaction for ${txTicker} (${Math.abs(sharesVal)} shares @ ₹${pr})!`);
+    const avgCost = holding.avgCost || priceNum;
+    const realizedProfit = (priceNum - avgCost) * sharesNum;
+    showToast(`Recorded SALE of ${sharesNum} share(s) of ${holding.cleanSym} @ ₹${priceNum.toFixed(2)} (Realized: ${realizedProfit >= 0 ? '+' : ''}₹${realizedProfit.toFixed(2)})!`);
+    
+    setSipSellFormShares('1');
+    setSipSellFormPrice('');
+  };
+
+  const handleConfirmSellModal = (e) => {
+    e.preventDefault();
+    if (!sipSellModalStock) return;
+    const ticker = sipSellModalStock.ticker;
+    const holding = pullbackStockSummary.find(s => s.ticker === ticker);
+    const availableShares = holding ? holding.netShares : (sipSellModalStock.netShares || 0);
+
+    const sharesNum = parseInt(sipSellModalShares) || 0;
+    const priceNum = parseFloat(sipSellModalPrice) || 0;
+    const txDateStr = sipSellModalDate || new Date().toISOString().split('T')[0];
+
+    if (sharesNum <= 0) {
+      showToast("Please enter a valid share quantity (> 0).", "error");
+      return;
+    }
+    if (sharesNum > availableShares) {
+      showToast(`Cannot sell ${sharesNum} shares. You currently hold ${availableShares} shares.`, "error");
+      return;
+    }
+    if (priceNum <= 0) {
+      showToast("Please enter a valid sell execution price (₹).", "error");
+      return;
+    }
+
+    const stockObj = pullbackData[ticker] || { name: ticker, category: 'Core', transactions: [] };
+    const existingTxs = stockObj.transactions || [];
+    const newTx = { date: txDateStr, price: priceNum, shares: -Math.abs(sharesNum), type: 'SELL' };
+
+    const updated = {
+      ...pullbackData,
+      [ticker]: {
+        ...stockObj,
+        transactions: [...existingTxs, newTx]
+      }
+    };
+
+    savePullbackState(updated);
+    const avgCost = sipSellModalStock.avgCost || (holding ? holding.avgCost : priceNum);
+    const realizedProfit = (priceNum - avgCost) * sharesNum;
+    showToast(`Recorded SALE of ${sharesNum} share(s) of ${sipSellModalStock.cleanSym} @ ₹${priceNum.toFixed(2)} (Realized: ${realizedProfit >= 0 ? '+' : ''}₹${realizedProfit.toFixed(2)})!`);
+
+    setSipSellModalStock(null);
+  };
+
+  const handleDeleteSipTx = (ticker, txIndex) => {
+    const stockObj = pullbackData[ticker];
+    if (!stockObj || !stockObj.transactions) return;
+    const tx = stockObj.transactions[txIndex];
+    const txLabel = tx ? `${tx.shares > 0 ? 'Buy' : 'Sell'} of ${Math.abs(tx.shares)} share(s) @ ₹${tx.price} on ${tx.date}` : 'transaction';
+    if (!window.confirm(`Are you sure you want to delete this ${txLabel} for ${ticker.replace('.NS', '')}?`)) return;
+
+    const updatedTxs = stockObj.transactions.filter((_, idx) => idx !== txIndex);
+    const updated = {
+      ...pullbackData,
+      [ticker]: {
+        ...stockObj,
+        transactions: updatedTxs
+      }
+    };
+
+    savePullbackState(updated);
+    showToast(`Deleted transaction for ${ticker.replace('.NS', '')}!`);
+  };
+
+  const handleOpenSipEditModal = (stock) => {
+    const ticker = stock.ticker;
+    const details = pullbackData[ticker] || {};
+    const txs = Array.isArray(details.transactions) ? details.transactions : [];
+    
+    setSipEditModalStock(stock);
+    setEditSipName(details.name || stock.name || stock.cleanSym);
+    setEditSipCategory(details.category || stock.category || 'Core');
+    setEditSipPeak(details.local_peak ? String(details.local_peak) : (stock.peak ? String(stock.peak) : ''));
+    setEditSipTxs(txs.map((t, idx) => ({
+      id: idx,
+      date: t.date || new Date().toISOString().split('T')[0],
+      shares: Math.abs(Number(t.shares) || 1),
+      price: Number(t.price) || 0,
+      type: (Number(t.shares) < 0 || t.type === 'SELL') ? 'SELL' : 'BUY'
+    })));
+  };
+
+  const handleSaveSipEdit = (e) => {
+    if (e) e.preventDefault();
+    if (!sipEditModalStock) return;
+    const ticker = sipEditModalStock.ticker;
+    const existing = pullbackData[ticker] || {};
+
+    const formattedTxs = editSipTxs
+      .filter(t => Math.abs(Number(t.shares)) > 0 && Number(t.price) > 0)
+      .map(t => {
+        const sharesNum = Math.abs(Number(t.shares));
+        const isSell = t.type === 'SELL';
+        return {
+          date: t.date || new Date().toISOString().split('T')[0],
+          price: parseFloat(t.price),
+          shares: isSell ? -sharesNum : sharesNum,
+          ...(isSell ? { type: 'SELL' } : {})
+        };
+      });
+
+    const peakNum = editSipPeak ? parseFloat(editSipPeak) : (existing.local_peak || 0);
+
+    const updated = {
+      ...pullbackData,
+      [ticker]: {
+        ...existing,
+        name: editSipName.trim() || ticker,
+        category: editSipCategory,
+        local_peak: peakNum,
+        transactions: formattedTxs
+      }
+    };
+
+    savePullbackState(updated);
+    setSipEditModalStock(null);
+    showToast(`Updated ${sipEditModalStock.cleanSym} successfully!`);
   };
 
   const handleRecordMtfTx = (e) => {
@@ -1106,6 +1548,7 @@ export default function App() {
   const SEGMENT_SL_CONFIG = {
     'Intraday': { slPct: 0.8, presets: [0.5, 0.8, 1.0], range: '0.5% – 1.0%', riskRule: 'Max 1% capital risk', label: 'Intraday Equities' },
     'Intraday Short': { slPct: 0.8, presets: [0.5, 0.8, 1.0], range: '0.5% – 1.0%', riskRule: 'Max 1% capital risk', label: 'Intraday Equities' },
+    'Stock Options': { slPct: 15.0, presets: [10.0, 15.0, 20.0], range: '10.0% – 20.0%', riskRule: 'Max 2%–3% of option buying pool', label: 'Stock Options (F&O)' },
     'Delivery': { slPct: 6.0, presets: [5.0, 6.0, 7.0], range: '5.0% – 7.0%', riskRule: 'Max 2% capital risk', label: 'Delivery / Swing Trading' },
     'Crude Oil Options': { slPct: 1.0, presets: [0.8, 1.0, 1.2], range: '0.8% – 1.2%', riskRule: 'Fixed capital risk (₹3,000–₹5,000)', label: 'Crude Oil Main' },
     'Crude Oil Mini': { slPct: 1.0, presets: [0.8, 1.0, 1.2], range: '0.8% – 1.2%', riskRule: 'Fixed capital risk (₹300–₹500)', label: 'Crude Oil Mini' },
@@ -1119,6 +1562,7 @@ export default function App() {
     const key = type.trim();
     if (SEGMENT_SL_CONFIG[key]) return SEGMENT_SL_CONFIG[key];
     const lower = key.toLowerCase();
+    if (lower.includes('stock option') || lower.includes('stock options')) return SEGMENT_SL_CONFIG['Stock Options'];
     if (lower.includes('delivery') || lower.includes('swing') || lower.includes('equity')) return SEGMENT_SL_CONFIG['Delivery'];
     if (lower.includes('crude') && lower.includes('mini')) return SEGMENT_SL_CONFIG['Crude Oil Mini'];
     if (lower.includes('crude')) return SEGMENT_SL_CONFIG['Crude Oil Options'];
@@ -1164,6 +1608,9 @@ export default function App() {
     const sym = (symbolStr || '').toUpperCase().trim();
     const type = (typeStr || '').trim();
 
+    if (type === 'Stock Options' || (type.includes('Stock') && type.includes('Option'))) {
+      return { lotSize: 500, label: 'Stock Option Lot (e.g. 500 qty)', defaultQty: '500' };
+    }
     if (type === 'Crude Oil Mini' || sym.includes('CRUDEOILM') || (sym.includes('CRUDE') && sym.includes('MINI'))) {
       return { lotSize: 10, label: '1 Lot = 10 qty (Crude Mini)', defaultQty: '10' };
     }
@@ -1209,6 +1656,9 @@ export default function App() {
     }
     if (s.includes('NIFTY') || s.includes('BANKNIFTY') || s.includes('FINNIFTY')) {
       return 'Nifty Options';
+    }
+    if (/\b(CE|PE)\b/.test(s) || s.endsWith('CE') || s.endsWith('PE')) {
+      return 'Stock Options';
     }
     return 'Intraday';
   };
@@ -1284,7 +1734,7 @@ export default function App() {
     saveJournalEngine(trades);
   }, [trades]);
 
-  // Sync capital management, segment allocations & monthly SL risk settings to localStorage
+  // Sync capital management, segment allocations & monthly SL risk settings to localStorage and backend
   useEffect(() => {
     localStorage.setItem('finplus_opening_capital', openingCapitalInput);
     localStorage.setItem('finplus_broker_adjustment', brokerAdjustmentInput);
@@ -1303,11 +1753,50 @@ export default function App() {
     localStorage.setItem('finplus_msl_natgas', monthlySlNatgas);
     localStorage.setItem('finplus_msl_nifty', monthlySlNifty);
     localStorage.setItem('finplus_msl_crude', monthlySlCrude);
+
+    const timer = setTimeout(() => {
+      const payload = {
+        finplus_opening_capital: openingCapitalInput,
+        finplus_broker_adjustment: brokerAdjustmentInput,
+        finplus_deposits: depositsInput,
+        finplus_withdrawals: withdrawalsInput,
+        finplus_daily_risk_limit: dailyRiskLimitInput,
+        finplus_challenge_start_date: challengeStartDateInput,
+        finplus_total_challenge_days: totalChallengeDaysInput,
+        finplus_alloc_intraday: allocIntraday,
+        finplus_alloc_natgas: allocNatgas,
+        finplus_alloc_nifty: allocNifty,
+        finplus_alloc_crude: allocCrude,
+        finplus_msl_intraday: monthlySlIntraday,
+        finplus_msl_natgas: monthlySlNatgas,
+        finplus_msl_nifty: monthlySlNifty,
+        finplus_msl_crude: monthlySlCrude
+      };
+      const candidateServers = Array.from(new Set([
+        serverUrl,
+        API_BASE_URL,
+        (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? `${window.location.protocol}//${window.location.hostname}:8000` : null),
+        'http://127.0.0.1:8000',
+        'http://localhost:8000',
+        RENDER_BACKEND_URL
+      ].filter(Boolean)));
+
+      for (const s of candidateServers) {
+        fetch(`${s}/api/settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).catch(() => {});
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
   }, [
     openingCapitalInput, brokerAdjustmentInput, depositsInput, withdrawalsInput,
     dailyRiskLimitInput, challengeStartDateInput, totalChallengeDaysInput,
     allocIntraday, allocNatgas, allocNifty, allocCrude,
-    monthlySlIntraday, monthlySlNatgas, monthlySlNifty, monthlySlCrude
+    monthlySlIntraday, monthlySlNatgas, monthlySlNifty, monthlySlCrude,
+    API_BASE_URL, serverUrl
   ]);
 
   // Master Live Price Polling Engine (Every 4 seconds via Independent YFinance Backend)
@@ -1336,38 +1825,45 @@ export default function App() {
         let fetchedMap = {};
         let backendUpdatedPeaks = false;
 
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/investment/yfinance-prices?tickers=${encodeURIComponent(queryStr)}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.prices) {
-              Object.entries(data.prices).forEach(([sym, info]) => {
-                if (info) {
-                  const ltpVal = typeof info === 'number' ? info : info.ltp;
-                  if (ltpVal) {
+        const endpointsToTry = Array.from(new Set([API_BASE_URL, RENDER_BACKEND_URL, 'http://127.0.0.1:8000'].filter(Boolean)));
+        for (const endpoint of endpointsToTry) {
+          try {
+            const res = await fetch(`${endpoint}/api/investment/yfinance-prices?tickers=${encodeURIComponent(queryStr)}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.prices) {
+                Object.entries(data.prices).forEach(([sym, info]) => {
+                  if (info) {
+                    const ltpVal = typeof info === 'number' ? info : info.ltp;
+                    if (ltpVal) {
+                      fetchedMap[sym] = ltpVal;
+                      const clean = sym.replace('.NS', '').trim();
+                      fetchedMap[clean] = ltpVal;
+                      fetchedMap[clean.toUpperCase()] = ltpVal;
+                    }
+                  }
+                });
+                backendUpdatedPeaks = !!data.updated_peaks;
+                if (Object.keys(fetchedMap).length > 0) break;
+              }
+            }
+          } catch (err) {
+            try {
+              const res = await fetch(`${endpoint}/api/ltp?symbols=${encodeURIComponent(queryStr)}`);
+              if (res.ok) {
+                const data = await res.json();
+                if (data && data.ltps) {
+                  Object.entries(data.ltps).forEach(([sym, ltpVal]) => {
                     fetchedMap[sym] = ltpVal;
                     const clean = sym.replace('.NS', '').trim();
                     fetchedMap[clean] = ltpVal;
-                  }
+                    fetchedMap[clean.toUpperCase()] = ltpVal;
+                  });
+                  if (Object.keys(fetchedMap).length > 0) break;
                 }
-              });
-              backendUpdatedPeaks = !!data.updated_peaks;
-            }
-          }
-        } catch (err) {
-          try {
-            const res = await fetch(`${API_BASE_URL}/api/ltp?symbols=${encodeURIComponent(queryStr)}`);
-            if (res.ok) {
-              const data = await res.json();
-              if (data && data.ltps) {
-                Object.entries(data.ltps).forEach(([sym, ltpVal]) => {
-                  fetchedMap[sym] = ltpVal;
-                  const clean = sym.replace('.NS', '').trim();
-                  fetchedMap[clean] = ltpVal;
-                });
               }
-            }
-          } catch (e) {}
+            } catch (e) {}
+          }
         }
 
         // Direct Yahoo Finance API browser fallback if any symbol unpriced
@@ -1383,6 +1879,7 @@ export default function App() {
                 if (price && price > 0) {
                   fetchedMap[sym] = price;
                   fetchedMap[clean] = price;
+                  fetchedMap[clean.toUpperCase()] = price;
                 }
               }
             } catch (e) {}
@@ -1985,6 +2482,49 @@ export default function App() {
         {/* Action Controls - Action Control Buttons */}
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button 
+            onClick={() => setActiveTab('settings')}
+            title="Open Cloud Synchronization & App Settings"
+            style={{
+              background: activeTab === 'settings' ? 'rgba(236, 72, 153, 0.25)' : 'rgba(99, 102, 241, 0.15)',
+              border: `1px solid ${activeTab === 'settings' ? '#ec4899' : 'rgba(99, 102, 241, 0.35)'}`,
+              color: activeTab === 'settings' ? '#f472b6' : '#a5b4fc',
+              padding: '10px 18px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontWeight: 700,
+              fontSize: '13px'
+            }}
+          >
+            <Settings size={16} />
+            Settings
+          </button>
+
+          <button 
+            onClick={() => handleSyncAll(null, false)}
+            disabled={isSyncing}
+            title={serverStatus === 'online' ? `Server Online${lastSyncedTime ? ' • Last synced: ' + lastSyncedTime : ''} (Click to Sync Now)` : 'Server Offline • Click to Reconnect / Sync'}
+            style={{
+              background: serverStatus === 'online' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+              border: `1px solid ${serverStatus === 'online' ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`,
+              color: serverStatus === 'online' ? '#34d399' : '#f87171',
+              padding: '10px 18px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontWeight: 700,
+              fontSize: '13px'
+            }}
+          >
+            <RefreshCw size={16} className={isSyncing ? 'spin-icon' : ''} />
+            {isSyncing ? 'Syncing...' : (serverStatus === 'online' ? '🟢 Synced' : '🔴 Sync: Offline')}
+          </button>
+
+          <button 
             onClick={handleExportJson}
             title="Export JSON master backup"
             style={{
@@ -2249,64 +2789,89 @@ export default function App() {
                 </span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ fontSize: '11px', color: '#14b8a6', fontWeight: 700 }}>NET TRADING P&L</div>
-                  <div style={{ fontSize: '18px', fontWeight: 900, color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
-                    {totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Journal Closed</div>
-                </div>
+              {(() => {
+                const hasActiveMtf = mtfTradeList.some(t => t.status === 'Active');
+                const mtfOverviewNetPnl = hasActiveMtf ? (closedMtfNetPnl + activeMtfNetPnl) : closedMtfNetPnl;
+                const overallPortfolioTotalNetPnl = totalRealizedNetPnl + mtfOverviewNetPnl + totalSipUnrealizedPnl;
+                const netAfterRiskBudget = overallPortfolioTotalNetPnl + (currentDayCount * dailyRiskLimit);
 
-                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 700 }}>NET MTF P&L</div>
-                  <div style={{ fontSize: '18px', fontWeight: 900, color: closedMtfNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
-                    {closedMtfNetPnl >= 0 ? '+' : ''}₹{closedMtfNetPnl.toFixed(2)}
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Closed MTF Leverage</div>
-                </div>
+                return (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                      <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ fontSize: '11px', color: '#14b8a6', fontWeight: 700 }}>NET TRADING P&L</div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
+                          {totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Journal Closed</div>
+                      </div>
 
-                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ fontSize: '11px', color: '#00b4d8', fontWeight: 700 }}>SIP RUNNING P&L</div>
-                  <div style={{ fontSize: '18px', fontWeight: 900, color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
-                    {totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toFixed(2)}
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>SIP Holdings Unrealized</div>
-                </div>
+                      <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: hasActiveMtf ? '1px solid rgba(52, 211, 153, 0.35)' : '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 700 }}>NET MTF P&L</div>
+                          {hasActiveMtf && (
+                            <span style={{ fontSize: '9px', color: '#34d399', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '3px', background: 'rgba(52, 211, 153, 0.15)', padding: '1px 5px', borderRadius: '4px' }}>
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#34d399', boxShadow: '0 0 6px #34d399' }}></span>
+                              LIVE
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: mtfOverviewNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
+                          {mtfOverviewNetPnl >= 0 ? '+' : ''}₹{mtfOverviewNetPnl.toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>
+                          {hasActiveMtf 
+                            ? `Closed (${closedMtfNetPnl >= 0 ? '+' : ''}₹${closedMtfNetPnl.toFixed(2)}) + Active (${activeMtfNetPnl >= 0 ? '+' : ''}₹${activeMtfNetPnl.toFixed(2)})` 
+                            : 'Closed MTF Leverage'}
+                        </div>
+                      </div>
 
-                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
-                  <div style={{ fontSize: '11px', color: '#c084fc', fontWeight: 700 }}>TOTAL NET P&L</div>
-                  <div style={{ fontSize: '18px', fontWeight: 900, color: (cumulativeRealizedNetPnl + totalSipUnrealizedPnl) >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
-                    {(cumulativeRealizedNetPnl + totalSipUnrealizedPnl) >= 0 ? '+' : ''}₹{(cumulativeRealizedNetPnl + totalSipUnrealizedPnl).toFixed(2)}
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Trading + MTF + SIP</div>
-                </div>
-              </div>
+                      <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ fontSize: '11px', color: '#00b4d8', fontWeight: 700 }}>SIP RUNNING P&L</div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
+                          {totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>SIP Holdings Unrealized</div>
+                      </div>
 
-              {/* Net Position After Risk Budget Allowance Banner */}
-              <div style={{ 
-                display: 'flex', 
-                justify: 'space-between', 
-                alignItems: 'center', 
-                flexWrap: 'wrap', 
-                gap: '12px',
-                background: 'rgba(251, 191, 36, 0.08)', 
-                border: '1px solid rgba(251, 191, 36, 0.4)', 
-                borderRadius: '10px', 
-                padding: '14px 18px' 
-              }}>
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 800, color: '#fbbf24' }}>
-                    🛡️ Net After Risk Budget:
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>
-                    Total Net P&L + Earned Budget Allowance (Day {currentDayCount} × ₹{dailyRiskLimit} = ₹{(currentDayCount * dailyRiskLimit).toLocaleString('en-IN')})
-                  </div>
-                </div>
-                <div style={{ fontSize: '22px', fontWeight: 900, color: ((cumulativeRealizedNetPnl + totalSipUnrealizedPnl) + (currentDayCount * dailyRiskLimit)) >= 0 ? '#34d399' : '#f87171' }}>
-                  {((cumulativeRealizedNetPnl + totalSipUnrealizedPnl) + (currentDayCount * dailyRiskLimit)) >= 0 ? '+' : ''}₹{((cumulativeRealizedNetPnl + totalSipUnrealizedPnl) + (currentDayCount * dailyRiskLimit)).toFixed(2)}
-                </div>
-              </div>
+                      <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+                        <div style={{ fontSize: '11px', color: '#c084fc', fontWeight: 700 }}>TOTAL NET P&L</div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: overallPortfolioTotalNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
+                          {overallPortfolioTotalNetPnl >= 0 ? '+' : ''}₹{overallPortfolioTotalNetPnl.toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>
+                          Trading + MTF {hasActiveMtf ? '(Live Active)' : ''} + SIP
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Net Position After Risk Budget Allowance Banner */}
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      flexWrap: 'wrap', 
+                      gap: '12px',
+                      background: 'rgba(251, 191, 36, 0.08)', 
+                      border: '1px solid rgba(251, 191, 36, 0.4)', 
+                      borderRadius: '10px', 
+                      padding: '14px 18px' 
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#fbbf24' }}>
+                          🛡️ Net After Risk Budget:
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>
+                          Total Net P&L + Earned Budget Allowance (Day {currentDayCount} × ₹{dailyRiskLimit} = ₹{(currentDayCount * dailyRiskLimit).toLocaleString('en-IN')})
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '22px', fontWeight: 900, color: netAfterRiskBudget >= 0 ? '#34d399' : '#f87171' }}>
+                        {netAfterRiskBudget >= 0 ? '+' : ''}₹{netAfterRiskBudget.toFixed(2)}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Panel 2: Realized Net P&L Summary */}
@@ -2348,7 +2913,15 @@ export default function App() {
                 <span>Taxes & Charges: ₹{cumulativeCharges.toFixed(2)}</span>
               </div>
               <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '6px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
-                Journal P&L: <strong style={{ color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>{totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}</strong> | MTF P&L: <strong style={{ color: closedMtfNetPnl >= 0 ? '#34d399' : '#f87171' }}>{closedMtfNetPnl >= 0 ? '+' : ''}₹{closedMtfNetPnl.toFixed(2)}</strong>
+                {(() => {
+                  const hasActiveMtf = mtfTradeList.some(t => t.status === 'Active');
+                  const mtfPnlVal = hasActiveMtf ? (closedMtfNetPnl + activeMtfNetPnl) : closedMtfNetPnl;
+                  return (
+                    <>
+                      Journal P&L: <strong style={{ color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>{totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}</strong> | MTF P&L: <strong style={{ color: mtfPnlVal >= 0 ? '#34d399' : '#f87171' }}>{mtfPnlVal >= 0 ? '+' : ''}₹{mtfPnlVal.toFixed(2)}</strong> {hasActiveMtf ? '(Live Active)' : ''}
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
@@ -2625,6 +3198,7 @@ export default function App() {
             >
               <option value="Intraday">Intraday Buy</option>
               <option value="Intraday Short">Intraday Short</option>
+              <option value="Stock Options">Stock Options (NSE F&O)</option>
               <option value="Crude Oil Options">Crude Oil Main (Lot: 100)</option>
               <option value="Crude Oil Mini">Crude Oil Mini (Lot: 10)</option>
               <option value="Natural Gas Options">Natural Gas Main (Lot: 1250)</option>
@@ -2817,6 +3391,82 @@ export default function App() {
         </span>
       </div>
 
+      {/* Active Positions Table */}
+      <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#818cf8', marginTop: '8px' }}>Active Open Positions ({activeTrades.length})</h2>
+      {true && (
+        <div className="glass-panel" style={{ padding: '24px', overflowX: 'auto' }}>
+          {activeTrades.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#a5b4fc' }}>
+              No open active positions. Log a trade above to start tracking.
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: '#a5b4fc', borderBottom: '1px solid rgba(99, 102, 241, 0.2)' }}>
+                  <th style={{ padding: '12px 8px' }}>Symbol</th>
+                  <th style={{ padding: '12px 8px' }}>Type</th>
+                  <th style={{ padding: '12px 8px' }}>Entry (₹)</th>
+                  <th style={{ padding: '12px 8px' }}>Qty</th>
+                  <th style={{ padding: '12px 8px' }}>Live LTP (₹)</th>
+                  <th style={{ padding: '12px 8px' }}>Unrealized P&L</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeTrades.map((t, idx) => {
+                  const sym = (t.symbol || '').trim();
+                  const ltp = liveLtps[sym] ?? liveLtps[sym.toUpperCase()] ?? liveLtps[t.symbol] ?? t.entry_price;
+                  const isShort = t.instrument_type === 'Intraday Short';
+                  const diff = isShort ? (t.entry_price - ltp) : (ltp - t.entry_price);
+                  const pnl = diff * t.quantity;
+
+                  return (
+                    <tr key={t.uuid || t.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                      <td style={{ padding: '16px 8px', fontWeight: 800, color: '#ffffff' }}>{t.symbol}</td>
+                      <td style={{ padding: '16px 8px' }}>
+                        <span style={{ background: 'rgba(99, 102, 241, 0.15)', padding: '4px 10px', borderRadius: '6px', fontSize: '12px' }}>{t.instrument_type}</span>
+                      </td>
+                      <td style={{ padding: '16px 8px', fontWeight: 600 }}>₹{t.entry_price.toFixed(2)}</td>
+                      <td style={{ padding: '16px 8px' }}>{t.quantity}</td>
+                      <td style={{ padding: '16px 8px', fontWeight: 800, color: '#67e8f9' }}>₹{ltp.toFixed(2)}</td>
+                      <td style={{ padding: '16px 8px', fontWeight: 800, color: pnl > 0 ? '#34d399' : (pnl < 0 ? '#f87171' : '#ffffff') }}>
+                        {pnl >= 0 ? '+' : ''}₹{pnl.toFixed(2)}
+                      </td>
+                      <td style={{ padding: '16px 8px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button 
+                            onClick={() => handleOpenEditModal(t)}
+                            title="Edit Trade Transaction Details"
+                            style={{ background: 'rgba(168, 85, 247, 0.2)', border: '1px solid rgba(168, 85, 247, 0.4)', color: '#c084fc', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <Edit3 size={13} /> Edit
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setEditingTrade(t);
+                              setExitPriceInput(ltp.toFixed(2));
+                            }}
+                            style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#34d399', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
+                          >
+                            Close Position
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteTrade(t)}
+                            style={{ background: 'rgba(239, 68, 68, 0.2)', border: 'none', color: '#f87171', padding: '6px 8px', borderRadius: '6px', cursor: 'pointer' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       {/* Closed Positions Table */}
       <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#14b8a6' }}>Realized Closed Positions ({pnlViewMode === 'daily' ? dailyClosedTrades.length : closedTrades.length})</h2>
       {true && (
@@ -2957,82 +3607,6 @@ export default function App() {
               </table>
             );
           })()}
-        </div>
-      )}
-
-      {/* Active Positions Table */}
-      <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#818cf8', marginTop: '8px' }}>Active Open Positions ({activeTrades.length})</h2>
-      {true && (
-        <div className="glass-panel" style={{ padding: '24px', overflowX: 'auto' }}>
-          {activeTrades.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#a5b4fc' }}>
-              No open active positions. Log a trade above to start tracking.
-            </div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', color: '#a5b4fc', borderBottom: '1px solid rgba(99, 102, 241, 0.2)' }}>
-                  <th style={{ padding: '12px 8px' }}>Symbol</th>
-                  <th style={{ padding: '12px 8px' }}>Type</th>
-                  <th style={{ padding: '12px 8px' }}>Entry (₹)</th>
-                  <th style={{ padding: '12px 8px' }}>Qty</th>
-                  <th style={{ padding: '12px 8px' }}>Live LTP (₹)</th>
-                  <th style={{ padding: '12px 8px' }}>Unrealized P&L</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeTrades.map((t, idx) => {
-                  const sym = (t.symbol || '').trim();
-                  const ltp = liveLtps[sym] ?? liveLtps[sym.toUpperCase()] ?? liveLtps[t.symbol] ?? t.entry_price;
-                  const isShort = t.instrument_type === 'Intraday Short';
-                  const diff = isShort ? (t.entry_price - ltp) : (ltp - t.entry_price);
-                  const pnl = diff * t.quantity;
-
-                  return (
-                    <tr key={t.uuid || t.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                      <td style={{ padding: '16px 8px', fontWeight: 800, color: '#ffffff' }}>{t.symbol}</td>
-                      <td style={{ padding: '16px 8px' }}>
-                        <span style={{ background: 'rgba(99, 102, 241, 0.15)', padding: '4px 10px', borderRadius: '6px', fontSize: '12px' }}>{t.instrument_type}</span>
-                      </td>
-                      <td style={{ padding: '16px 8px', fontWeight: 600 }}>₹{t.entry_price.toFixed(2)}</td>
-                      <td style={{ padding: '16px 8px' }}>{t.quantity}</td>
-                      <td style={{ padding: '16px 8px', fontWeight: 800, color: '#67e8f9' }}>₹{ltp.toFixed(2)}</td>
-                      <td style={{ padding: '16px 8px', fontWeight: 800, color: pnl > 0 ? '#34d399' : (pnl < 0 ? '#f87171' : '#ffffff') }}>
-                        {pnl >= 0 ? '+' : ''}₹{pnl.toFixed(2)}
-                      </td>
-                      <td style={{ padding: '16px 8px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                          <button 
-                            onClick={() => handleOpenEditModal(t)}
-                            title="Edit Trade Transaction Details"
-                            style={{ background: 'rgba(168, 85, 247, 0.2)', border: '1px solid rgba(168, 85, 247, 0.4)', color: '#c084fc', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}
-                          >
-                            <Edit3 size={13} /> Edit
-                          </button>
-                          <button 
-                            onClick={() => {
-                              setEditingTrade(t);
-                              setExitPriceInput(ltp.toFixed(2));
-                            }}
-                            style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#34d399', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
-                          >
-                            Close Position
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteTrade(t)}
-                            style={{ background: 'rgba(239, 68, 68, 0.2)', border: 'none', color: '#f87171', padding: '6px 8px', borderRadius: '6px', cursor: 'pointer' }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
         </div>
       )}
       </>)}
@@ -3176,6 +3750,393 @@ export default function App() {
                 />
                 <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Base daily risk limit (₹250/day)</div>
               </div>
+            </div>
+          </div>
+
+          {/* Quick Link to Cloud Sync & Settings */}
+          <div className="glass-panel" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.25)', borderRadius: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Settings size={20} style={{ color: '#ec4899' }} />
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#ffffff' }}>Mobile App Cloud Synchronization & Server Settings</div>
+                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '2px' }}>Configure Render Cloud Mode, Local Wi-Fi connection, or sync data.</div>
+              </div>
+            </div>
+            <button 
+              onClick={() => setActiveTab('settings')}
+              style={{ background: '#6366f1', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
+            >
+              Open Settings Tab →
+            </button>
+          </div>
+
+        </div>
+      )}
+
+      {/* Dedicated Application Settings & Cloud Synchronization Tab */}
+      {activeTab === 'settings' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          
+          {/* Settings Top Banner */}
+          <div className="glass-panel" style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', borderLeft: '4px solid #ec4899' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ background: 'rgba(236, 72, 153, 0.2)', padding: '10px', borderRadius: '10px', color: '#ec4899' }}>
+                <Settings size={24} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>Application Settings & Synchronization Hub</h2>
+                <div style={{ fontSize: '12px', color: '#a5b4fc', marginTop: '2px' }}>
+                  Cloud database sync via Render, Local Wi-Fi pairing, 1000-Day Challenge risk rules, and master backups.
+                </div>
+              </div>
+            </div>
+            <button 
+              onClick={() => handleSyncAll(null, false)}
+              disabled={isSyncing}
+              style={{ 
+                background: serverStatus === 'online' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', 
+                border: `1px solid ${serverStatus === 'online' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
+                color: serverStatus === 'online' ? '#34d399' : '#f87171', 
+                padding: '8px 16px', 
+                borderRadius: '6px', 
+                cursor: 'pointer', 
+                fontWeight: 700,
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <RefreshCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+              {isSyncing ? 'Syncing...' : (serverStatus === 'online' ? '🟢 Cloud Online' : '🔴 Offline')}
+            </button>
+          </div>
+
+          {/* Server Sync Configuration (For Mobile App Synchronization) */}
+          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', borderLeft: '4px solid #34d399' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {serverStatus === 'online' ? <Wifi size={20} style={{ color: '#34d399' }} /> : <WifiOff size={20} style={{ color: '#f87171' }} />}
+                <div>
+                  <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Mobile App Synchronization Hub</h2>
+                  <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '2px' }}>
+                    Bidirectional real-time sync for Trades, SIP/MTF Portfolios & Capital Settings
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {lastSyncedTime && (
+                  <span style={{ fontSize: '11px', color: '#a5b4fc' }}>
+                    Last synced: <strong style={{ color: '#ffffff' }}>{lastSyncedTime}</strong>
+                  </span>
+                )}
+                <span style={{ 
+                  fontSize: '11px', 
+                  fontWeight: 800, 
+                  background: serverStatus === 'online' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', 
+                  color: serverStatus === 'online' ? '#34d399' : '#f87171',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <span style={{ height: '6px', width: '6px', borderRadius: '50%', background: serverStatus === 'online' ? '#34d399' : '#f87171' }} />
+                  {serverStatus === 'online' ? 'Connected & Online' : 'Offline / Unreachable'}
+                </span>
+              </div>
+            </div>
+
+            {/* Detected Local PC IPs (Helper for Mobile App Setup) */}
+            {detectedIps.length > 0 && (
+              <div style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.25)', borderRadius: '8px', padding: '14px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#a5b4fc', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Activity size={14} style={{ color: '#38bdf8' }} />
+                  DETECTED PC SERVER IP ADDRESSES (Enter this into your Mobile App):
+                </div>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  {detectedIps.map(ip => {
+                    const fullUrl = `http://${ip}:8000`;
+                    return (
+                      <div key={ip} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '6px 12px', borderRadius: '6px' }}>
+                        <code style={{ fontSize: '13px', fontWeight: 700, color: '#34d399' }}>{fullUrl}</code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(fullUrl);
+                            showToast(`Copied ${fullUrl} to clipboard!`);
+                          }}
+                          style={{ background: 'rgba(99, 102, 241, 0.3)', border: 'none', color: '#ffffff', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          <Copy size={12} /> Copy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setServerUrlInput(fullUrl);
+                            handleSaveServerUrl();
+                          }}
+                          style={{ background: 'rgba(56, 189, 248, 0.2)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38bdf8', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 700 }}
+                        >
+                          Use this URL
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Mode Presets: Cloud Mode (Render) vs Local Wi-Fi */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+              <div 
+                style={{ 
+                  background: (serverUrl === 'https://finplus.onrender.com' || (!serverUrl && isNativeMobileApp)) ? 'rgba(99, 102, 241, 0.2)' : 'rgba(15, 23, 42, 0.5)', 
+                  border: `1px solid ${(serverUrl === 'https://finplus.onrender.com' || (!serverUrl && isNativeMobileApp)) ? '#818cf8' : 'rgba(99, 102, 241, 0.2)'}`, 
+                  borderRadius: '8px', 
+                  padding: '14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    ☁️ Cloud Mode (Render)
+                  </span>
+                  {(serverUrl === 'https://finplus.onrender.com' || (!serverUrl && isNativeMobileApp)) && (
+                    <span style={{ fontSize: '10px', fontWeight: 800, color: '#34d399', background: 'rgba(16, 185, 129, 0.2)', padding: '2px 8px', borderRadius: '10px' }}>
+                      ACTIVE
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '11px', color: '#a5b4fc', lineHeight: '1.4' }}>
+                  <strong>Ideal for traveling / anywhere:</strong> Syncs via <code>https://finplus.onrender.com</code> over 4G/5G mobile data or any Wi-Fi network worldwide.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setServerUrlInput('https://finplus.onrender.com');
+                    localStorage.setItem('finplus_server_url', 'https://finplus.onrender.com');
+                    setServerUrl('https://finplus.onrender.com');
+                    showToast('Switched to Cloud Mode (Render)! Connecting...');
+                    handleSyncAll('https://finplus.onrender.com', false);
+                  }}
+                  style={{
+                    background: '#6366f1',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    marginTop: '4px'
+                  }}
+                >
+                  Use Cloud Mode (Render)
+                </button>
+              </div>
+
+              <div 
+                style={{ 
+                  background: (serverUrl.includes('192.168.') || serverUrl.includes('10.') || serverUrl.includes('127.0.0.1') || serverUrl.includes('localhost')) ? 'rgba(16, 185, 129, 0.15)' : 'rgba(15, 23, 42, 0.5)', 
+                  border: `1px solid ${(serverUrl.includes('192.168.') || serverUrl.includes('10.') || serverUrl.includes('127.0.0.1') || serverUrl.includes('localhost')) ? '#34d399' : 'rgba(99, 102, 241, 0.2)'}`, 
+                  borderRadius: '8px', 
+                  padding: '14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    🏠 Local Wi-Fi Mode
+                  </span>
+                  {(serverUrl.includes('192.168.') || serverUrl.includes('10.') || serverUrl.includes('127.0.0.1') || serverUrl.includes('localhost')) && (
+                    <span style={{ fontSize: '10px', fontWeight: 800, color: '#34d399', background: 'rgba(16, 185, 129, 0.2)', padding: '2px 8px', borderRadius: '10px' }}>
+                      ACTIVE
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '11px', color: '#a5b4fc', lineHeight: '1.4' }}>
+                  <strong>Direct LAN connection:</strong> Connects directly to your PC when both devices are on the same home or office Wi-Fi network.
+                </div>
+                {detectedIps.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const localTarget = `http://${detectedIps[0]}:8000`;
+                      setServerUrlInput(localTarget);
+                      localStorage.setItem('finplus_server_url', localTarget);
+                      setServerUrl(localTarget);
+                      showToast(`Switched to Local Wi-Fi Mode (${localTarget})!`);
+                      handleSyncAll(localTarget, false);
+                    }}
+                    style={{
+                      background: 'rgba(16, 185, 129, 0.25)',
+                      border: '1px solid rgba(16, 185, 129, 0.5)',
+                      color: '#34d399',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      marginTop: '4px'
+                    }}
+                  >
+                    Use Local PC Wi-Fi (http://{detectedIps[0]}:8000)
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                  ACTIVE BACKEND SERVER URL (Cloud or Local)
+                </label>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <input 
+                    type="text" 
+                    value={serverUrlInput}
+                    onChange={e => setServerUrlInput(e.target.value)}
+                    className="input-field"
+                    style={{ flex: 1, minWidth: '220px' }}
+                    placeholder="e.g. https://finplus.onrender.com or http://10.54.126.26:8000"
+                  />
+                  <button 
+                    onClick={handleSaveServerUrl}
+                    style={{ 
+                      background: '#6366f1', 
+                      color: 'white', 
+                      border: 'none', 
+                      padding: '10px 18px', 
+                      borderRadius: '6px', 
+                      cursor: 'pointer', 
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <Save size={15} />
+                    Save & Connect
+                  </button>
+                  <button 
+                    onClick={() => handleSyncAll(null, false)}
+                    disabled={isSyncing}
+                    style={{ 
+                      background: 'rgba(16, 185, 129, 0.2)', 
+                      border: '1px solid rgba(16, 185, 129, 0.4)',
+                      color: '#34d399', 
+                      padding: '10px 18px', 
+                      borderRadius: '6px', 
+                      cursor: 'pointer', 
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <RefreshCw size={15} className={isSyncing ? 'spin-icon' : ''} />
+                    {isSyncing ? 'Syncing...' : 'Sync All Data Now'}
+                  </button>
+                </div>
+                <div style={{ fontSize: '12px', color: '#a5b4fc', marginTop: '10px', lineHeight: '1.6' }}>
+                  <strong>How to access your app from mobile while traveling:</strong>
+                  <ul style={{ paddingLeft: '20px', marginTop: '4px' }}>
+                    <li>Select <strong>Cloud Mode (Render)</strong> above or set URL to <code>https://finplus.onrender.com</code>.</li>
+                    <li>The app communicates securely with your cloud backend hosted on Render over 4G/5G mobile internet.</li>
+                    <li>All trades, portfolio additions, MTF positions, and capital settings sync automatically without needing to be on the same Wi-Fi.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 1000-Day Challenge Risk & Baseline Settings Card */}
+          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', borderLeft: '4px solid #6366f1' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
+              <DollarSign size={18} style={{ color: '#c084fc' }} />
+              <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Edit Capital Baseline & Challenge Risk Parameters</h2>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                  OPENING CAPITAL (₹)
+                </label>
+                <input 
+                  type="number" 
+                  step="100"
+                  value={openingCapitalInput}
+                  onChange={e => setOpeningCapitalInput(e.target.value)}
+                  className="input-field"
+                  placeholder="3933.52"
+                />
+                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Your starting account balance</div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                  BROKER ADJUSTMENT VARIATION (₹)
+                </label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  value={brokerAdjustmentInput}
+                  onChange={e => setBrokerAdjustmentInput(e.target.value)}
+                  className="input-field"
+                  placeholder="0.00"
+                />
+                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>DP charges, interest, manual variations</div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                  DEPOSITS / ADDITIONAL CAPITAL (₹)
+                </label>
+                <input 
+                  type="number" 
+                  step="100"
+                  value={depositsInput}
+                  onChange={e => setDepositsInput(e.target.value)}
+                  className="input-field"
+                  placeholder="0"
+                />
+                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>New funds added to trading account</div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                  WITHDRAWALS (₹)
+                </label>
+                <input 
+                  type="number" 
+                  step="100"
+                  value={withdrawalsInput}
+                  onChange={e => setWithdrawalsInput(e.target.value)}
+                  className="input-field"
+                  placeholder="0"
+                />
+                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Funds withdrawn from broker account</div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                  DAILY ROLLOVER RISK LIMIT (₹)
+                </label>
+                <input 
+                  type="number" 
+                  step="10"
+                  value={dailyRiskLimitInput}
+                  onChange={e => setDailyRiskLimitInput(e.target.value)}
+                  className="input-field"
+                  placeholder="250"
+                />
+                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Base daily risk limit (₹250/day)</div>
+              </div>
 
               <div>
                 <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
@@ -3192,58 +4153,73 @@ export default function App() {
             </div>
           </div>
 
-          {/* Server Sync Configuration (For Mobile App Synchronization) */}
-          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Activity size={18} style={{ color: '#34d399' }} />
-                <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Mobile App Sync Settings</h2>
-              </div>
-              <span style={{ 
-                fontSize: '11px', 
-                fontWeight: 800, 
-                background: serverStatus === 'online' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', 
-                color: serverStatus === 'online' ? '#34d399' : '#f87171',
-                padding: '3px 8px',
-                borderRadius: '6px'
-              }}>
-                ● {serverStatus === 'online' ? 'Connected' : 'Offline'}
-              </span>
+          {/* Backup & Data Transfer Center */}
+          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', borderLeft: '4px solid #14b8a6' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
+              <FileText size={18} style={{ color: '#14b8a6' }} />
+              <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Data Backup & Master Export / Import</h2>
             </div>
+            
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <button 
+                onClick={handleExportJson}
+                style={{
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                  color: '#34d399',
+                  padding: '10px 18px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontWeight: 700,
+                  fontSize: '13px'
+                }}
+              >
+                <Download size={16} />
+                Export Journal (.json)
+              </button>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  BACKEND SERVER URL (PC IP Address)
-                </label>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input 
-                    type="text" 
-                    value={serverUrlInput}
-                    onChange={e => setServerUrlInput(e.target.value)}
-                    className="input-field"
-                    style={{ flex: 1 }}
-                    placeholder="e.g. http://192.168.1.15:8000"
-                  />
-                  <button 
-                    onClick={handleSaveServerUrl}
-                    style={{ 
-                      background: '#6366f1', 
-                      color: 'white', 
-                      border: 'none', 
-                      padding: '8px 16px', 
-                      borderRadius: '6px', 
-                      cursor: 'pointer', 
-                      fontWeight: 700 
-                    }}
-                  >
-                    Save & Connect
-                  </button>
-                </div>
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '6px' }}>
-                  To sync with the mobile app, make sure your phone is on the same Wi-Fi network and enter your PC's IP address (e.g. <code>http://192.168.x.x:8000</code>). Find your PC's IP by running <code>ipconfig</code> in Command Prompt.
-                </div>
-              </div>
+              <label 
+                style={{
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  border: '1px solid rgba(99, 102, 241, 0.35)',
+                  color: '#a5b4fc',
+                  padding: '10px 18px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontWeight: 700,
+                  fontSize: '13px'
+                }}
+              >
+                <Upload size={16} />
+                Restore Journal (.json)
+                <input type="file" accept=".json" onChange={handleImportJsonFile} style={{ display: 'none' }} />
+              </label>
+
+              <button 
+                onClick={() => exportJournalCSV(trades)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  color: '#cbd5e1',
+                  padding: '10px 18px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontWeight: 600,
+                  fontSize: '13px'
+                }}
+              >
+                <FileText size={16} />
+                Export CSV (.csv)
+              </button>
             </div>
           </div>
 
@@ -3298,17 +4274,27 @@ export default function App() {
                       </span>
                     </td>
                     <td style={{ padding: '14px 16px', fontWeight: 600 }}>Fixed capital risk (e.g., ₹3,000–₹5,000)</td>
-                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '12px' }}>High tick value; mandatory hard SL per lot</td>
+                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '12px' }}>MCX high leverage; monitor inventory EIA data</td>
                   </tr>
                   <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#f43f5e' }}>Natural Gas Futures</td>
+                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#ef4444' }}>Natural Gas Futures</td>
                     <td style={{ padding: '14px 16px' }}>
-                      <span style={{ background: 'rgba(244, 63, 94, 0.15)', color: '#f43f5e', padding: '4px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                      <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', padding: '4px 8px', borderRadius: '6px', fontWeight: 700 }}>
                         1.5% to 2.5%
                       </span>
                     </td>
                     <td style={{ padding: '14px 16px', fontWeight: 600 }}>Fixed capital risk (extreme volatility)</td>
                     <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '12px' }}>Extreme intraday gaps & spikes; use strict position sizing</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', background: 'rgba(255, 255, 255, 0.02)' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#a855f7' }}>Stock Options (F&O)</td>
+                    <td style={{ padding: '14px 16px' }}>
+                      <span style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', padding: '4px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                        10.0% to 20.0% of premium
+                      </span>
+                    </td>
+                    <td style={{ padding: '14px 16px', fontWeight: 600 }}>Max 2% to 3% of option capital</td>
+                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '12px' }}>Zerodha Kite F&O rate: ₹20/order brokerage, 0.1% STT on sell premium</td>
                   </tr>
                   <tr style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
                     <td style={{ padding: '14px 16px', fontWeight: 700, color: '#c084fc' }}>Nifty Options (Buyers)</td>
@@ -3319,98 +4305,6 @@ export default function App() {
                     </td>
                     <td style={{ padding: '14px 16px', fontWeight: 600 }}>Max 2% to 3% of option buying pool</td>
                     <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '12px' }}>Protect against theta decay; slice risk relative to option capital</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Recommended Capital Allocation Strategy Matrix */}
-          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', borderLeft: '4px solid #10b981' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(16, 185, 129, 0.2)', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <TrendingUp size={20} style={{ color: '#34d399' }} />
-                <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Recommended Capital Allocation Percentages</h2>
-              </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#34d399', background: 'rgba(16, 185, 129, 0.15)', padding: '4px 10px', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-                Portfolio Risk Sizing
-              </span>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', color: '#a5b4fc', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    <th style={{ padding: '12px 16px' }}>Segment</th>
-                    <th style={{ padding: '12px 16px' }}>Experience Ranking</th>
-                    <th style={{ padding: '12px 16px' }}>Ideal Allocation (%)</th>
-                    <th style={{ padding: '12px 16px' }}>Est. Capital Pool (₹)</th>
-                    <th style={{ padding: '12px 16px' }}>Risk Profile & Rationale</th>
-                  </tr>
-                </thead>
-                <tbody style={{ color: '#e0e7ff' }}>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', background: 'rgba(16, 185, 129, 0.03)' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#34d399' }}>1) Intraday (Equities/Indices)</td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{ background: 'rgba(52, 211, 153, 0.2)', color: '#34d399', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
-                        #1 Most Profitable
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#34d399', fontSize: '14px' }}>40% – 50%</td>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#ffffff' }}>
-                      ₹{((closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum) * 0.4).toLocaleString('en-IN', { maximumFractionDigits: 0 })} – ₹{((closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum) * 0.5).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td style={{ padding: '14px 16px', color: '#cbd5e1', fontSize: '12px' }}>
-                      <strong style={{ color: '#34d399' }}>Core Income Engine:</strong> Maximizes exposure where your edge and win-rate are historically highest.
-                    </td>
-                  </tr>
-
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#38bdf8' }}>2) Natural Gas</td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{ background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
-                        #2 Moderately Profitable
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#38bdf8', fontSize: '14px' }}>20% – 25%</td>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#ffffff' }}>
-                      ₹{((closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum) * 0.2).toLocaleString('en-IN', { maximumFractionDigits: 0 })} – ₹{((closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum) * 0.25).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td style={{ padding: '14px 16px', color: '#cbd5e1', fontSize: '12px' }}>
-                      <strong style={{ color: '#38bdf8' }}>Growth Driver:</strong> High volatility requires strict position sizing despite your good profitability.
-                    </td>
-                  </tr>
-
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', background: 'rgba(255, 255, 255, 0.02)' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#c084fc' }}>3) Nifty Options</td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{ background: 'rgba(192, 132, 252, 0.2)', color: '#c084fc', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
-                        #3 Moderately Risky
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#c084fc', fontSize: '14px' }}>15% – 20%</td>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#ffffff' }}>
-                      ₹{((closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum) * 0.15).toLocaleString('en-IN', { maximumFractionDigits: 0 })} – ₹{((closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum) * 0.2).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td style={{ padding: '14px 16px', color: '#cbd5e1', fontSize: '12px' }}>
-                      <strong style={{ color: '#c084fc' }}>Asymmetric Risk:</strong> Capped risk (if buying) or high margin (if selling); requires restricted exposure.
-                    </td>
-                  </tr>
-
-                  <tr>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#fb923c' }}>4) Crude Oil</td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{ background: 'rgba(251, 146, 60, 0.2)', color: '#fb923c', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
-                        #4 Most Risky
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#fb923c', fontSize: '14px' }}>10%</td>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#ffffff' }}>
-                      ₹{((closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum) * 0.1).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td style={{ padding: '14px 16px', color: '#cbd5e1', fontSize: '12px' }}>
-                      <strong style={{ color: '#fb923c' }}>Protection Mode:</strong> Low exposure limits the damage from sharp gaps and overnight global news.
-                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -3765,35 +4659,29 @@ export default function App() {
         </div>
       )}
 
-      {/* Handlers for Pullback SIP & MTF */}
-      {(() => {
-        // Compute SIP & MTF Calculations for Tabs
-        return null;
-      })()}
-
       {/* Dynamic 5% Pullback SIP & Investment System Tab */}
       {activeTab === 'sip' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           {/* Top Executive Overview Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #00b4d8' }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+            <div className="glass-panel" style={{ padding: '18px', borderLeft: '4px solid #00b4d8' }}>
+              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
                 TOTAL AMOUNT INVESTED
               </div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: '#ffffff' }}>
+              <div style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff' }}>
                 ₹{totalSipDeployedCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>
-                Sum of (shares held × avg buy price)
+                Active open positions cost basis
               </div>
             </div>
 
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #10b981' }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>
+            <div className="glass-panel" style={{ padding: '18px', borderLeft: '4px solid #10b981' }}>
+              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
                 CURRENT PORTFOLIO VALUE
               </div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: '#34d399' }}>
+              <div style={{ fontSize: '22px', fontWeight: 900, color: '#34d399' }}>
                 ₹{totalSipCurrentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div style={{ fontSize: '11px', color: '#34d399', marginTop: '4px', fontWeight: 700 }}>
@@ -3801,36 +4689,57 @@ export default function App() {
               </div>
             </div>
 
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #f59e0b' }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>
-                ZERODHA TAXES & CHARGES
+            <div className="glass-panel" style={{ padding: '18px', borderLeft: `4px solid ${totalSipRealizedProfit >= 0 ? '#10b981' : '#fb7185'}` }}>
+              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
+                REALIZED P&L (SOLD STOCKS)
               </div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: '#fbbf24' }}>
-                ₹{totalSipDeliveryTaxes.toFixed(2)}
+              <div style={{ fontSize: '22px', fontWeight: 900, color: totalSipRealizedProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                {totalSipRealizedProfit >= 0 ? '+' : ''}₹{totalSipRealizedProfit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>
-                Brokerage: ₹0.00 | STT: ₹{totalSipStt.toFixed(2)} | Stamp: ₹{totalSipStampDuty.toFixed(2)} | Txn/GST: ₹{(totalSipExchangeTxn + totalSipGst).toFixed(2)}
+                {totalSipSellTxCount} sold trade(s) | Net: <span style={{ color: totalSipRealizedNetProfit >= 0 ? '#34d399' : '#fb7185', fontWeight: 800 }}>{totalSipRealizedNetProfit >= 0 ? '+' : ''}₹{totalSipRealizedNetProfit.toFixed(2)}</span>
               </div>
             </div>
 
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: `4px solid ${totalSipUnrealizedPnl >= 0 ? '#10b981' : '#fb7185'}` }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>
+            <div className="glass-panel" style={{ padding: '18px', borderLeft: `4px solid ${totalSipUnrealizedPnl >= 0 ? '#10b981' : '#fb7185'}` }}>
+              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
                 UNREALIZED PORTFOLIO P&L
               </div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
+              <div style={{ fontSize: '22px', fontWeight: 900, color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
                 {totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div style={{ fontSize: '11px', color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#fb7185', marginTop: '4px', fontWeight: 700 }}>
-                Gross: {totalSipDeployedCost > 0 ? `${totalSipUnrealizedPnl >= 0 ? '+' : ''}${((totalSipUnrealizedPnl / totalSipDeployedCost) * 100).toFixed(2)}% on stock cost` : '0.00%'}
+                Gross: {totalSipDeployedCost > 0 ? `${totalSipUnrealizedPnl >= 0 ? '+' : ''}${((totalSipUnrealizedPnl / totalSipDeployedCost) * 100).toFixed(2)}%` : '0.00%'}
               </div>
-              <div style={{ fontSize: '10px', color: '#cbd5e1', marginTop: '4px', fontWeight: 700 }}>
-                Net (after Zerodha taxes): <span style={{ color: totalSipNetPnl >= 0 ? '#34d399' : '#fb7185', fontWeight: 800 }}>{totalSipNetPnl >= 0 ? '+' : ''}₹{totalSipNetPnl.toFixed(2)} ({totalSipNetPnlPct >= 0 ? '+' : ''}{totalSipNetPnlPct.toFixed(2)}%)</span>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '18px', borderLeft: '4px solid #f59e0b' }}>
+              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
+                ZERODHA TAXES & CHARGES
+              </div>
+              <div style={{ fontSize: '22px', fontWeight: 900, color: '#fbbf24' }}>
+                ₹{totalSipDeliveryTaxes.toFixed(2)}
+              </div>
+              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>
+                STT: ₹{totalSipStt.toFixed(2)} | DP: ₹{totalSipDpCharges.toFixed(2)} | Txn+GST: ₹{(totalSipExchangeTxn + totalSipGst).toFixed(2)}
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '18px', borderLeft: `4px solid ${totalSipCombinedNetPnl >= 0 ? '#10b981' : '#fb7185'}` }}>
+              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
+                COMBINED NET SIP P&L
+              </div>
+              <div style={{ fontSize: '22px', fontWeight: 900, color: totalSipCombinedNetPnl >= 0 ? '#34d399' : '#fb7185' }}>
+                {totalSipCombinedNetPnl >= 0 ? '+' : ''}₹{totalSipCombinedNetPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px', fontWeight: 700 }}>
+                Realized ({totalSipRealizedProfit >= 0 ? '+' : ''}₹{totalSipRealizedProfit.toFixed(1)}) + Unrealized ({totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toFixed(1)}) − Tax
               </div>
             </div>
           </div>
 
           {/* 5% Pullback Trigger Signals Panel */}
-          {pullbackStockSummary.filter(s => s.pullbackPct >= 5.0 || s.daysSinceLastTx >= 25).length > 0 && (
+          {pullbackStockSummary.filter(s => (s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false)) && s.category !== 'Park' && (s.pullbackPct >= 5.0 || s.daysSinceLastBuyNum >= 25 || s.signalClass === 'buy' || s.signalClass === 'timeout')).length > 0 && (
             <div className="glass-panel" style={{ padding: '20px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                 <TrendingUp size={20} style={{ color: '#34d399' }} />
@@ -3839,7 +4748,7 @@ export default function App() {
                 </h3>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
-                {pullbackStockSummary.filter(s => s.pullbackPct >= 5.0 || s.daysSinceLastTx >= 25).map(s => (
+                {pullbackStockSummary.filter(s => (s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false)) && s.category !== 'Park' && (s.pullbackPct >= 5.0 || s.daysSinceLastBuyNum >= 25 || s.signalClass === 'buy' || s.signalClass === 'timeout')).map(s => (
                   <div key={s.ticker} style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '14px' }}>{s.cleanSym} ({s.name})</div>
@@ -3856,7 +4765,7 @@ export default function App() {
                       color: s.signalClass === 'buy' ? '#34d399' : (s.signalClass === 'timeout' ? '#fb923c' : '#fde047'),
                       border: `1px solid ${s.signalClass === 'buy' ? '#34d399' : (s.signalClass === 'timeout' ? '#fb923c' : '#fde047')}`
                     }}>
-                      {s.signalStatus}
+                      {s.systemStatus}
                     </span>
                   </div>
                 ))}
@@ -3864,346 +4773,931 @@ export default function App() {
             </div>
           )}
 
-          {/* SIP Watchlist & Holdings Table */}
-          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-              <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>📋 Pullback SIP Targets & Alerts</h2>
-                <p style={{ fontSize: '12px', color: '#a5b4fc', margin: 0 }}>
-                  Automated SIP triggers purchase whenever a stock pulls back 5% from its recent local peak (after a 7-day cool-down).
-                </p>
-              </div>
-              <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 700 }}>
-                {pullbackStockSummary.length} Stocks Monitored
-              </span>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', color: '#a5b4fc', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    <th style={{ padding: '12px 14px' }}>Stock (Ticker)</th>
-                    <th style={{ padding: '12px 14px' }}>Category</th>
-                    <th style={{ padding: '12px 14px' }}>Shares</th>
-                    <th style={{ padding: '12px 14px' }}>Cost Basis (Invested)</th>
-                    <th style={{ padding: '12px 14px' }}>LTP (Current Value)</th>
-                    <th style={{ padding: '12px 14px' }}>P&L</th>
-                    <th style={{ padding: '12px 14px' }}>Local Peak</th>
-                    <th style={{ padding: '12px 14px' }}>Target Buy Price</th>
-                    <th style={{ padding: '12px 14px' }}>Days Since Last Buy</th>
-                    <th style={{ padding: '12px 14px' }}>Allocation (%)</th>
-                    <th style={{ padding: '12px 14px' }}>System Status</th>
-                    <th style={{ padding: '12px 14px' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody style={{ color: '#e0e7ff' }}>
-                  {pullbackStockSummary.map((s, idx) => {
-                    const isBuyTriggered = s.signalClass === 'buy';
-                    const isCooldown = s.signalClass === 'cooldown';
-                    const isPending = s.signalClass === 'pending';
-                    const allocPct = totalSipDeployedCost > 0 ? ((s.netCost / totalSipDeployedCost) * 100).toFixed(1) : '0.0';
-
-                    let rowBg = idx % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent';
-                    if (isBuyTriggered) rowBg = 'rgba(52, 211, 153, 0.22)';
-                    else if (isCooldown) rowBg = 'rgba(245, 158, 11, 0.05)';
-                    else if (isPending) rowBg = 'rgba(168, 85, 247, 0.05)';
-
-                    return (
-                      <tr key={s.ticker} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: rowBg, borderLeft: isBuyTriggered ? '4px solid #34d399' : 'none' }}>
-                        <td style={{ padding: '14px', fontWeight: 800 }}>
-                          <div style={{ color: '#ffffff', fontSize: '14px' }}>{s.name} ({s.cleanSym})</div>
-                        </td>
-                        <td style={{ padding: '14px' }}>
-                          <span style={{ background: s.category === 'Core' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(168, 85, 247, 0.2)', color: s.category === 'Core' ? '#34d399' : '#c084fc', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
-                            {s.category}
-                          </span>
-                        </td>
-                        <td style={{ padding: '14px', fontWeight: 800, color: '#ffffff' }}>{s.netShares}</td>
-                        <td style={{ padding: '14px', fontWeight: 700 }}>
-                          {s.netShares > 0 ? `₹${s.avgCost.toFixed(2)} (₹${s.netCost.toFixed(2)})` : 'N/A'}
-                        </td>
-                        <td style={{ padding: '14px', fontWeight: 800, color: '#38bdf8' }}>
-                          {s.ltp > 0 ? `₹${s.ltp.toFixed(2)}` : 'Fetching...'} {s.netShares > 0 && `(₹${s.currentVal.toFixed(2)})`}
-                        </td>
-                        <td style={{ padding: '14px', fontWeight: 800, color: s.unrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                          {s.netShares > 0 ? `₹${s.unrealizedPnl.toFixed(2)} (${s.pnlPct >= 0 ? '+' : ''}${s.pnlPct.toFixed(2)}%)` : 'N/A'}
-                        </td>
-                        <td style={{ padding: '14px', fontWeight: 700, color: '#cbd5e1' }}>{s.peak > 0 ? `₹${s.peak.toFixed(2)}` : 'Fetching...'}</td>
-                        <td style={{ padding: '14px', fontWeight: 900, color: '#34d399', background: 'rgba(52, 211, 153, 0.08)' }}>
-                          {s.targetBuyPrice > 0 ? `₹${s.targetBuyPrice.toFixed(2)}` : 'Fetching...'}
-                        </td>
-                        <td style={{ padding: '14px', fontWeight: 700, color: isBuyTriggered ? '#34d399' : '#e2e8f0' }}>
-                          {s.daysSinceLastBuyStr}
-                        </td>
-                        <td style={{ padding: '14px', fontWeight: 800, color: '#a5b4fc' }}>
-                          {allocPct}%
-                        </td>
-                        <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
-                          <span style={{ 
-                            fontSize: '11px', 
-                            fontWeight: 800, 
-                            padding: '6px 12px', 
-                            borderRadius: '6px',
-                            whiteSpace: 'nowrap',
-                            display: 'inline-block',
-                            lineHeight: '1.4',
-                            background: isBuyTriggered ? '#10b981' : (isCooldown ? 'rgba(245, 158, 11, 0.2)' : (isPending ? 'rgba(168, 85, 247, 0.2)' : 'rgba(52, 211, 153, 0.15)')),
-                            color: isBuyTriggered ? '#ffffff' : (isCooldown ? '#fde047' : (isPending ? '#c084fc' : '#34d399')),
-                            border: `1px solid ${isBuyTriggered ? '#10b981' : (isCooldown ? '#fde047' : (isPending ? '#c084fc' : '#34d399'))}`
-                          }}>
-                            {s.systemStatus}
-                          </span>
-                        </td>
-                        <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                            <button
-                              onClick={() => {
-                                setNewSipTicker(s.ticker);
-                                setNewSipName(s.name);
-                                setNewSipShares('1');
-                                setNewSipBuyPrice(s.ltp > 0 ? s.ltp.toFixed(2) : '');
-                                setTimeout(() => {
-                                  const formEl = document.getElementById('sip-watchlist-form');
-                                  if (formEl) {
-                                    formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                  }
-                                  const priceInput = document.getElementById('new-sip-buy-price-input');
-                                  if (priceInput) priceInput.focus();
-                                }, 50);
-                              }}
-                              title="Log additional buy transaction for this stock"
-                              style={{
-                                background: 'rgba(52, 211, 153, 0.15)',
-                                color: '#34d399',
-                                border: '1px solid rgba(52, 211, 153, 0.3)',
-                                padding: '6px 10px',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontWeight: 700,
-                                fontSize: '11px'
-                              }}
-                            >
-                              <PlusCircle size={13} />
-                              Log Buy
-                            </button>
-                            <button
-                              onClick={() => handleDeleteStockFromWatchlist(s.ticker)}
-                              title="Remove stock from 5% SIP Watchlist"
-                              style={{
-                                background: 'rgba(239, 68, 68, 0.15)',
-                                color: '#f87171',
-                                border: '1px solid rgba(239, 68, 68, 0.3)',
-                                padding: '6px 10px',
-                                borderRadius: '6px',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontWeight: 700,
-                                fontSize: '11px'
-                              }}
-                            >
-                              <Trash2 size={13} />
-                              Remove
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr style={{ borderTop: '2px solid rgba(99, 102, 241, 0.5)', background: 'rgba(15, 23, 42, 0.95)', fontWeight: 900, color: '#ffffff' }}>
-                    <td style={{ padding: '14px' }}>
-                      <div style={{ fontSize: '13px', color: '#38bdf8' }}>📊 TOTAL PORTFOLIO</div>
-                      <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 600 }}>Aligned with Zerodha Holdings</div>
-                    </td>
-                    <td style={{ padding: '14px', fontSize: '11px', color: '#34d399' }}>
-                      {pullbackStockSummary.filter(s => s.netShares > 0).length} Holdings
-                    </td>
-                    <td style={{ padding: '14px' }}>
-                      {pullbackStockSummary.filter(s => s.netShares > 0).reduce((sum, s) => sum + (Number(s.netShares) || 0), 0)}
-                    </td>
-                    <td style={{ padding: '14px', color: '#ffffff' }}>₹{totalSipDeployedCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td style={{ padding: '14px', color: '#38bdf8' }}>₹{totalSipCurrentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td style={{ padding: '14px', color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                      <div>{totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({((totalSipUnrealizedPnl / totalSipDeployedCost) * 100).toFixed(2)}%)</div>
-                      <div style={{ fontSize: '10px', color: '#fbbf24', marginTop: '2px', fontWeight: 700 }}>Net: {totalSipNetPnl >= 0 ? '+' : ''}₹{totalSipNetPnl.toFixed(2)} (Tax: ₹{totalSipDeliveryTaxes.toFixed(2)})</div>
-                    </td>
-                    <td colSpan={6} style={{ padding: '14px', fontSize: '11px', color: '#a5b4fc' }}>
-                      Zerodha Brokerage: ₹0.00 | STT: ₹{totalSipStt.toFixed(2)} | Stamp: ₹{totalSipStampDuty.toFixed(2)} | Exchange Txn + SEBI + GST: ₹{(totalSipExchangeTxn + totalSipGst).toFixed(2)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-
           {/* Record SIP Transaction & Watchlist Management Section */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
-            {/* Form 1: Log Stock Transaction & Record Buy Entry */}
-            <form id="sip-watchlist-form" onSubmit={handleAddStockToWatchlist} className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                <span>⚙️ Record Stock Purchase / Add Watchlist</span>
-                <span style={{ fontSize: '11px', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.12)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
-                  Auto-Averages Existing Positions
-                </span>
-              </h3>
+          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            
+            {/* Mode Switcher: Buy / Add Watchlist vs Sell / Exit Stock */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Activity size={18} style={{ color: '#38bdf8' }} />
+                <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
+                  ⚙️ SIP Transaction Management
+                </h3>
+              </div>
 
-              <div style={{ position: 'relative' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700 }}>
-                    SEARCH NIFTY 500 TICKER / COMPANY
-                  </label>
-                  {filteredNiftySuggestions.length > 0 && newSipTicker.trim() && (
-                    <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 800, background: 'rgba(56, 189, 248, 0.12)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
-                      ✨ Match: {filteredNiftySuggestions[0].symbol.toUpperCase().replace('.NS', '')}.NS
-                    </span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setSipFormMode('BUY')}
+                  style={{
+                    background: sipFormMode === 'BUY' ? '#10b981' : 'rgba(255,255,255,0.06)',
+                    color: '#ffffff',
+                    border: `1px solid ${sipFormMode === 'BUY' ? '#34d399' : 'rgba(255,255,255,0.1)'}`,
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    fontWeight: 800,
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <PlusCircle size={14} />
+                  🛒 Buy / Add Stock
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSipFormMode('SELL');
+                    const firstHeld = pullbackStockSummary.find(s => s.netShares > 0);
+                    if (firstHeld && !sipSellSelectedTicker) {
+                      setSipSellSelectedTicker(firstHeld.ticker);
+                      setSipSellFormPrice(firstHeld.ltp > 0 ? String(firstHeld.ltp) : '');
+                      setSipSellFormShares('1');
+                    }
+                  }}
+                  style={{
+                    background: sipFormMode === 'SELL' ? '#f59e0b' : 'rgba(255,255,255,0.06)',
+                    color: '#ffffff',
+                    border: `1px solid ${sipFormMode === 'SELL' ? '#fbbf24' : 'rgba(255,255,255,0.1)'}`,
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    fontWeight: 800,
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <DollarSign size={14} />
+                  💰 Sell / Record Sold Stock
+                </button>
+              </div>
+            </div>
+
+            {/* FORM A: BUY / ADD WATCHLIST */}
+            {sipFormMode === 'BUY' && (
+              <form id="sip-watchlist-form" onSubmit={handleAddStockToWatchlist} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ position: 'relative' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700 }}>
+                      SEARCH NIFTY 500 TICKER / COMPANY
+                    </label>
+                    {filteredNiftySuggestions.length > 0 && newSipTicker.trim() && (
+                      <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 800, background: 'rgba(56, 189, 248, 0.12)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                        ✨ Match: {filteredNiftySuggestions[0].symbol.toUpperCase().replace('.NS', '')}.NS
+                      </span>
+                    )}
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="Type company or ticker (e.g. SBI, Tata Steel, Reliance, INFY)" 
+                    value={newSipTicker} 
+                    onChange={e => {
+                      setNewSipTicker(e.target.value);
+                      setShowNiftyDropdown(true);
+                    }}
+                    onFocus={() => setShowNiftyDropdown(true)}
+                    className="input-field" 
+                    required 
+                  />
+                  
+                  {/* Autocomplete Dropdown List */}
+                  {showNiftyDropdown && filteredNiftySuggestions.length > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      zIndex: 9999,
+                      background: '#0f172a',
+                      border: '1px solid rgba(99, 102, 241, 0.4)',
+                      borderRadius: '8px',
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                      boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                      marginTop: '4px'
+                    }}>
+                      {filteredNiftySuggestions.map(item => {
+                        const cleanSym = item.symbol.toUpperCase().replace('.NS', '');
+                        const formattedSym = `${cleanSym}.NS`;
+                        const isItemEtf = item.isEtf || cleanSym.endsWith('BEES') || cleanSym.endsWith('ETF') || (item.name && item.name.toLowerCase().includes('etf'));
+                        return (
+                          <div 
+                            key={item.symbol} 
+                            onClick={() => {
+                              setNewSipTicker(formattedSym);
+                              setNewSipName(item.name || item.symbol);
+                              if (isItemEtf) {
+                                setNewSipCategory('Park');
+                              }
+                              const ltp = liveLtps[cleanSym] || liveLtps[formattedSym];
+                              if (ltp) setNewSipBuyPrice(String(ltp));
+                              setShowNiftyDropdown(false);
+                            }}
+                            style={{
+                              padding: '10px 14px',
+                              borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.2)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <div>
+                              <div style={{ fontWeight: 800, color: isItemEtf ? '#38bdf8' : '#ffffff', fontSize: '13px' }}>
+                                {formattedSym}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                {item.name || item.symbol}
+                              </div>
+                            </div>
+                            <span style={{
+                              fontSize: '10px',
+                              color: isItemEtf ? '#38bdf8' : '#34d399',
+                              fontWeight: 800,
+                              background: isItemEtf ? 'rgba(56, 189, 248, 0.15)' : 'rgba(52, 211, 153, 0.1)',
+                              border: `1px solid ${isItemEtf ? 'rgba(56, 189, 248, 0.3)' : 'rgba(52, 211, 153, 0.2)'}`,
+                              padding: '2px 8px',
+                              borderRadius: '4px'
+                            }}>
+                              {isItemEtf ? '🅿️ ETF / Park' : 'Nifty 500'}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-                <input 
-                  type="text" 
-                  placeholder="Type company or ticker (e.g. SBI, Tata Steel, Reliance, INFY)" 
-                  value={newSipTicker} 
-                  onChange={e => {
-                    setNewSipTicker(e.target.value);
-                    setShowNiftyDropdown(true);
-                  }}
-                  onFocus={() => setShowNiftyDropdown(true)}
-                  className="input-field" 
-                  required 
-                />
-                
-                {/* Autocomplete Dropdown List */}
-                {showNiftyDropdown && filteredNiftySuggestions.length > 0 && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    zIndex: 9999,
-                    background: '#0f172a',
-                    border: '1px solid rgba(99, 102, 241, 0.4)',
-                    borderRadius: '8px',
-                    maxHeight: '220px',
-                    overflowY: 'auto',
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                    marginTop: '4px'
-                  }}>
-                    {filteredNiftySuggestions.map(item => {
-                      const cleanSym = item.symbol.toUpperCase().replace('.NS', '');
-                      const formattedSym = `${cleanSym}.NS`;
-                      return (
-                        <div 
-                          key={item.symbol} 
-                          onClick={() => {
-                            setNewSipTicker(formattedSym);
-                            setNewSipName(item.name || item.symbol);
-                            const ltp = liveLtps[cleanSym] || liveLtps[formattedSym];
-                            if (ltp) setNewSipBuyPrice(String(ltp));
-                            setShowNiftyDropdown(false);
-                          }}
-                          style={{
-                            padding: '10px 14px',
-                            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            justify: 'space-between',
-                            alignItems: 'center'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.2)'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                        >
-                          <div>
-                            <div style={{ fontWeight: 800, color: '#38bdf8', fontSize: '13px' }}>
-                              {formattedSym}
-                            </div>
-                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                              {item.name || item.symbol}
-                            </div>
+
+                <div>
+                  <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>COMPANY NAME (AUTO-FILLED)</label>
+                  <input type="text" placeholder="e.g. Infosys Limited" value={newSipName} onChange={e => setNewSipName(e.target.value)} className="input-field" />
+                </div>
+
+                {/* Purchase Details: Execution Price, Shares Qty, Buy Date */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800, display: 'block', marginBottom: '4px' }}>
+                      BUY PRICE (₹)
+                    </label>
+                    <input 
+                      id="new-sip-buy-price-input"
+                      type="number" 
+                      step="0.05" 
+                      placeholder="e.g. 275.45" 
+                      value={newSipBuyPrice} 
+                      onChange={e => setNewSipBuyPrice(e.target.value)} 
+                      className="input-field" 
+                      style={{ borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
+                    />
+                    <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
+                      Exact buy execution price
+                    </span>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#34d399', fontWeight: 800, display: 'block', marginBottom: '4px' }}>
+                      SHARES BOUGHT (QTY)
+                    </label>
+                    <input 
+                      type="number" 
+                      step="1" 
+                      min="0"
+                      placeholder="e.g. 1" 
+                      value={newSipShares} 
+                      onChange={e => setNewSipShares(e.target.value)} 
+                      className="input-field" 
+                      style={{ borderColor: 'rgba(52, 211, 153, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
+                    />
+                    <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
+                      0 = Watchlist only
+                    </span>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BUY DATE</label>
+                    <input 
+                      type="date" 
+                      value={newSipTxDate} 
+                      onChange={e => setNewSipTxDate(e.target.value)} 
+                      className="input-field" 
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>CATEGORY</label>
+                  <select value={newSipCategory} onChange={e => setNewSipCategory(e.target.value)} className="input-field">
+                    <option value="Core">Core (#1 High Edge Baseline)</option>
+                    <option value="Growth">Growth (#2 Momentum High Beta)</option>
+                    <option value="Park">Park (ETF / Liquid Cash Reserve — No 5% Signal)</option>
+                  </select>
+                </div>
+
+                <button type="submit" style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', marginTop: '6px', fontSize: '14px' }}>
+                  {Number(newSipShares) > 0 ? '➕ Record Stock Purchase' : '📌 Add Stock to Watchlist'}
+                </button>
+              </form>
+            )}
+
+            {/* FORM B: RECORD SALE OF STOCKS */}
+            {sipFormMode === 'SELL' && (() => {
+              const openHoldings = pullbackStockSummary.filter(s => s.netShares > 0);
+              const selectedHolding = openHoldings.find(s => s.ticker === sipSellSelectedTicker) || openHoldings[0];
+
+              if (openHoldings.length === 0) {
+                return (
+                  <div style={{ textAlign: 'center', padding: '32px 16px', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '8px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                    <AlertCircle size={28} style={{ color: '#f59e0b', margin: '0 auto 8px' }} />
+                    <div style={{ fontSize: '14px', fontWeight: 800, color: '#ffffff' }}>No Open Stock Positions to Sell</div>
+                    <p style={{ fontSize: '12px', color: '#94a3b8', maxWidth: '400px', margin: '6px auto 14px' }}>
+                      You currently have 0 active shares in your portfolio. Add stock purchases first using the "Buy / Add Stock" tab above.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setSipFormMode('BUY')}
+                      style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}
+                    >
+                      Go to Buy Form
+                    </button>
+                  </div>
+                );
+              }
+
+              const sellSharesNum = parseInt(sipSellFormShares) || 0;
+              const sellPriceNum = parseFloat(sipSellFormPrice) || (selectedHolding ? selectedHolding.ltp : 0);
+              const avgCost = selectedHolding ? selectedHolding.avgCost : 0;
+              const sellVal = sellSharesNum * sellPriceNum;
+              const costVal = sellSharesNum * avgCost;
+              const estGrossProfit = sellVal - costVal;
+              const estProfitPct = costVal > 0 ? (estGrossProfit / costVal) * 100 : 0;
+
+              // Zerodha Sell Charges estimation
+              const stt = sellVal * 0.001;
+              const txn = sellVal * 0.0000297;
+              const gst = txn * 0.18;
+              const dp = 15.34;
+              const estSellCharges = stt + txn + gst + dp;
+              const estNetProfit = estGrossProfit - estSellCharges;
+
+              return (
+                <form onSubmit={handleRecordSipSellSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 800, display: 'block', marginBottom: '6px' }}>
+                      SELECT STOCK POSITION TO SELL
+                    </label>
+                    <select
+                      value={sipSellSelectedTicker || (selectedHolding ? selectedHolding.ticker : '')}
+                      onChange={e => {
+                        const tick = e.target.value;
+                        setSipSellSelectedTicker(tick);
+                        const match = openHoldings.find(s => s.ticker === tick);
+                        if (match) {
+                          setSipSellFormPrice(match.ltp > 0 ? String(match.ltp) : '');
+                          setSipSellFormShares('1');
+                        }
+                      }}
+                      className="input-field"
+                      style={{ borderColor: 'rgba(245, 158, 11, 0.4)', background: 'rgba(15, 23, 42, 0.9)' }}
+                      required
+                    >
+                      {openHoldings.map(h => (
+                        <option key={h.ticker} value={h.ticker}>
+                          {h.cleanSym} — {h.name} ({h.netShares} share{h.netShares > 1 ? 's' : ''} held @ avg ₹{h.avgCost.toFixed(2)} | LTP: ₹{h.ltp.toFixed(2)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedHolding && (
+                    <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '12px 16px', borderRadius: '8px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>AVAILABLE SHARES</div>
+                        <div style={{ fontSize: '16px', fontWeight: 900, color: '#34d399' }}>{selectedHolding.netShares} sh</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>AVG BUY COST</div>
+                        <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff' }}>₹{selectedHolding.avgCost.toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>CURRENT MARKET LTP</div>
+                        <div style={{ fontSize: '16px', fontWeight: 900, color: '#38bdf8' }}>₹{selectedHolding.ltp.toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>CATEGORY</div>
+                        <div style={{ fontSize: '14px', fontWeight: 800, color: selectedHolding.category === 'Core' ? '#34d399' : '#c084fc' }}>{selectedHolding.category}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sell Inputs */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <label style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 800 }}>
+                          SHARES TO SELL
+                        </label>
+                        {selectedHolding && (
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            <button
+                              type="button"
+                              onClick={() => setSipSellFormShares('1')}
+                              style={{ fontSize: '9px', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#38bdf8', padding: '1px 5px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}
+                            >
+                              1
+                            </button>
+                            {selectedHolding.netShares > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setSipSellFormShares(String(Math.max(1, Math.floor(selectedHolding.netShares / 2))))}
+                                style={{ fontSize: '9px', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fbbf24', padding: '1px 5px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}
+                              >
+                                50%
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setSipSellFormShares(String(selectedHolding.netShares))}
+                              style={{ fontSize: '9px', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#34d399', padding: '1px 5px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}
+                            >
+                              All ({selectedHolding.netShares})
+                            </button>
                           </div>
-                          <span style={{ fontSize: '10px', color: '#34d399', fontWeight: 800, background: 'rgba(52, 211, 153, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
-                            Nifty 500
-                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        max={selectedHolding ? selectedHolding.netShares : 1}
+                        value={sipSellFormShares}
+                        onChange={e => setSipSellFormShares(e.target.value)}
+                        className="input-field"
+                        style={{ borderColor: 'rgba(245, 158, 11, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800 }}>
+                          SELL EXECUTION PRICE (₹)
+                        </label>
+                        {selectedHolding && selectedHolding.ltp > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSipSellFormPrice(String(selectedHolding.ltp))}
+                            style={{ fontSize: '9px', background: 'rgba(56, 189, 248, 0.15)', border: 'none', color: '#38bdf8', padding: '1px 6px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}
+                          >
+                            Set LTP
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="number"
+                        step="0.05"
+                        placeholder="e.g. 405.85"
+                        value={sipSellFormPrice}
+                        onChange={e => setSipSellFormPrice(e.target.value)}
+                        className="input-field"
+                        style={{ borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SELL DATE</label>
+                      <input
+                        type="date"
+                        value={sipSellFormDate}
+                        onChange={e => setSipSellFormDate(e.target.value)}
+                        className="input-field"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Real-time P&L Preview Banner */}
+                  {sellSharesNum > 0 && sellPriceNum > 0 && selectedHolding && (
+                    <div style={{ background: estGrossProfit >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', border: `1px solid ${estGrossProfit >= 0 ? 'rgba(52, 211, 153, 0.3)' : 'rgba(248, 113, 113, 0.3)'}`, padding: '12px 16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                      <div>
+                        <div style={{ fontSize: '11px', color: '#a5b4fc' }}>
+                          Proceeds: <strong style={{ color: '#ffffff' }}>₹{sellVal.toFixed(2)}</strong> (Cost: ₹{costVal.toFixed(2)}) | Zerodha Est. Charges: <strong style={{ color: '#fbbf24' }}>₹{estSellCharges.toFixed(2)}</strong> (STT + ₹15.34 DP)
                         </div>
+                        <div style={{ fontSize: '13px', fontWeight: 800, marginTop: '2px', color: estGrossProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                          Estimated Gross Realized P&L: {estGrossProfit >= 0 ? '+' : ''}₹{estGrossProfit.toFixed(2)} ({estProfitPct >= 0 ? '+' : ''}{estProfitPct.toFixed(2)}%)
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>ESTIMATED NET PROFIT</div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: estNetProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                          {estNetProfit >= 0 ? '+' : ''}₹{estNetProfit.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    style={{
+                      background: '#f59e0b',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      marginTop: '6px',
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <DollarSign size={16} />
+                    Confirm & Record Sale of {sellSharesNum} Share(s)
+                  </button>
+                </form>
+              );
+            })()}
+
+          </div>
+
+          {/* View Switcher: Active Holdings vs Sold Stocks Realized History */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', background: 'rgba(15, 23, 42, 0.4)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ fontSize: '14px', color: '#ffffff', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Filter size={16} style={{ color: '#38bdf8' }} />
+              SIP Portfolio View:
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setSipViewMode('holdings')}
+                style={{
+                  background: sipViewMode === 'holdings' ? '#10b981' : 'rgba(255,255,255,0.05)',
+                  border: `1px solid ${sipViewMode === 'holdings' ? '#34d399' : 'rgba(255,255,255,0.1)'}`,
+                  color: '#ffffff',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                📋 Active Holdings & Targets ({pullbackStockSummary.filter(s => s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false)).length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSipViewMode('sold')}
+                style={{
+                  background: sipViewMode === 'sold' ? '#f59e0b' : 'rgba(255,255,255,0.05)',
+                  border: `1px solid ${sipViewMode === 'sold' ? '#fbbf24' : 'rgba(255,255,255,0.1)'}`,
+                  color: '#ffffff',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                🏁 Sold Stocks & Realized History ({sipSoldTradesList.length})
+              </button>
+            </div>
+          </div>
+
+          {/* VIEW 1: ACTIVE HOLDINGS & WATCHLIST TABLE */}
+          {sipViewMode === 'holdings' && (
+            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>📋 Pullback SIP Targets & Alerts</h2>
+                  <p style={{ fontSize: '12px', color: '#a5b4fc', margin: 0 }}>
+                    Automated SIP triggers purchase whenever a stock pulls back 5% from its recent local peak (after a 7-day cool-down).
+                  </p>
+                </div>
+                <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 700 }}>
+                  {pullbackStockSummary.filter(s => s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false)).length} Stocks Monitored
+                </span>
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', color: '#a5b4fc', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <th style={{ padding: '12px 14px' }}>Stock (Ticker)</th>
+                      <th style={{ padding: '12px 14px' }}>Category</th>
+                      <th style={{ padding: '12px 14px' }}>Shares</th>
+                      <th style={{ padding: '12px 14px' }}>Cost Basis (Invested)</th>
+                      <th style={{ padding: '12px 14px' }}>LTP (Current Value)</th>
+                      <th style={{ padding: '12px 14px' }}>P&L</th>
+                      <th style={{ padding: '12px 14px' }}>Local Peak</th>
+                      <th style={{ padding: '12px 14px' }}>Target Buy Price</th>
+                      <th style={{ padding: '12px 14px' }}>Days Since Last Buy</th>
+                      <th style={{ padding: '12px 14px' }}>Allocation (%)</th>
+                      <th style={{ padding: '12px 14px' }}>System Status</th>
+                      <th style={{ padding: '12px 14px' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody style={{ color: '#e0e7ff' }}>
+                    {pullbackStockSummary
+                      .filter(s => s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false))
+                      .map((s, idx) => {
+                      const isBuyTriggered = s.signalClass === 'buy';
+                      const isCooldown = s.signalClass === 'cooldown';
+                      const isPending = s.signalClass === 'pending';
+                      const allocPct = totalSipDeployedCost > 0 ? ((s.netCost / totalSipDeployedCost) * 100).toFixed(1) : '0.0';
+
+                      let rowBg = idx % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent';
+                      if (isBuyTriggered) rowBg = 'rgba(52, 211, 153, 0.22)';
+                      else if (isCooldown) rowBg = 'rgba(245, 158, 11, 0.05)';
+                      else if (isPending) rowBg = 'rgba(168, 85, 247, 0.05)';
+
+                      return (
+                        <tr key={s.ticker} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: rowBg, borderLeft: isBuyTriggered ? '4px solid #34d399' : 'none' }}>
+                          <td style={{ padding: '14px', fontWeight: 800 }}>
+                            <div style={{ color: '#ffffff', fontSize: '14px' }}>{s.name} ({s.cleanSym})</div>
+                          </td>
+                          <td style={{ padding: '14px' }}>
+                            <span style={{
+                              background: s.category === 'Core' ? 'rgba(52, 211, 153, 0.2)' : (s.category === 'Growth' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(56, 189, 248, 0.2)'),
+                              color: s.category === 'Core' ? '#34d399' : (s.category === 'Growth' ? '#c084fc' : '#38bdf8'),
+                              border: `1px solid ${s.category === 'Core' ? 'rgba(52, 211, 153, 0.3)' : (s.category === 'Growth' ? 'rgba(168, 85, 247, 0.3)' : 'rgba(56, 189, 248, 0.3)')}`,
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: 800
+                            }}>
+                              {s.category === 'Park' ? '🅿️ Park' : s.category}
+                            </span>
+                          </td>
+                          <td style={{ padding: '14px', fontWeight: 800, color: '#ffffff' }}>{s.netShares}</td>
+                          <td style={{ padding: '14px', fontWeight: 700 }}>
+                            {s.netShares > 0 ? `₹${s.avgCost.toFixed(2)} (₹${s.netCost.toFixed(2)})` : 'N/A'}
+                          </td>
+                          <td style={{ padding: '14px', fontWeight: 800, color: '#38bdf8' }}>
+                            {s.ltp > 0 ? `₹${s.ltp.toFixed(2)}` : 'Fetching...'} {s.netShares > 0 && `(₹${s.currentVal.toFixed(2)})`}
+                          </td>
+                          <td style={{ padding: '14px', fontWeight: 800, color: s.unrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
+                            {s.netShares > 0 ? `₹${s.unrealizedPnl.toFixed(2)} (${s.pnlPct >= 0 ? '+' : ''}${s.pnlPct.toFixed(2)}%)` : 'N/A'}
+                          </td>
+                          <td style={{ padding: '14px', fontWeight: 700, color: '#cbd5e1' }}>{s.peak > 0 ? `₹${s.peak.toFixed(2)}` : 'Fetching...'}</td>
+                          <td style={{ padding: '14px', fontWeight: 900, color: s.category === 'Park' ? '#94a3b8' : '#34d399', background: s.category === 'Park' ? 'transparent' : 'rgba(52, 211, 153, 0.08)' }}>
+                            {s.category === 'Park' ? '— (Parked)' : (s.targetBuyPrice > 0 ? `₹${s.targetBuyPrice.toFixed(2)}` : 'Fetching...')}
+                          </td>
+                          <td style={{ padding: '14px', fontWeight: 700, color: isBuyTriggered ? '#34d399' : '#e2e8f0' }}>
+                            {s.daysSinceLastBuyStr}
+                          </td>
+                          <td style={{ padding: '14px', fontWeight: 800, color: '#a5b4fc' }}>
+                            {allocPct}%
+                          </td>
+                          <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
+                            <span style={{ 
+                              fontSize: '11px', 
+                              fontWeight: 800, 
+                              padding: '6px 12px', 
+                              borderRadius: '6px', 
+                              whiteSpace: 'nowrap',
+                              display: 'inline-block',
+                              lineHeight: '1.4',
+                              background: s.category === 'Park' ? 'rgba(56, 189, 248, 0.15)' : (isBuyTriggered ? '#10b981' : (isCooldown ? 'rgba(245, 158, 11, 0.2)' : (isPending ? 'rgba(168, 85, 247, 0.2)' : 'rgba(52, 211, 153, 0.15)'))),
+                              color: s.category === 'Park' ? '#38bdf8' : (isBuyTriggered ? '#ffffff' : (isCooldown ? '#fde047' : (isPending ? '#c084fc' : '#34d399'))),
+                              border: `1px solid ${s.category === 'Park' ? 'rgba(56, 189, 248, 0.3)' : (isBuyTriggered ? '#10b981' : (isCooldown ? '#fde047' : (isPending ? '#c084fc' : '#34d399')))}`
+                            }}>
+                              {s.systemStatus}
+                            </span>
+                          </td>
+                          <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                              <button
+                                onClick={() => handleOpenSipEditModal(s)}
+                                title="Edit stock details, category, or historical transactions"
+                                style={{
+                                  background: 'rgba(99, 102, 241, 0.15)',
+                                  color: '#818cf8',
+                                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                                  padding: '6px 10px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  fontWeight: 700,
+                                  fontSize: '11px'
+                                }}
+                              >
+                                <Edit3 size={13} />
+                                Edit
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setSipFormMode('BUY');
+                                  setNewSipTicker(s.ticker);
+                                  setNewSipName(s.name);
+                                  setNewSipShares('1');
+                                  setNewSipBuyPrice(s.ltp > 0 ? s.ltp.toFixed(2) : '');
+                                  setTimeout(() => {
+                                    const formEl = document.getElementById('sip-watchlist-form');
+                                    if (formEl) {
+                                      formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }
+                                    const priceInput = document.getElementById('new-sip-buy-price-input');
+                                    if (priceInput) priceInput.focus();
+                                  }, 50);
+                                }}
+                                title="Log additional buy transaction for this stock"
+                                style={{
+                                  background: 'rgba(52, 211, 153, 0.15)',
+                                  color: '#34d399',
+                                  border: '1px solid rgba(52, 211, 153, 0.3)',
+                                  padding: '6px 10px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  fontWeight: 700,
+                                  fontSize: '11px'
+                                }}
+                              >
+                                <PlusCircle size={13} />
+                                Log Buy
+                              </button>
+
+                              {s.netShares > 0 && (
+                                <button
+                                  onClick={() => {
+                                    setSipSellModalStock({
+                                      ticker: s.ticker,
+                                      cleanSym: s.cleanSym,
+                                      name: s.name,
+                                      category: s.category,
+                                      netShares: s.netShares,
+                                      avgCost: s.avgCost,
+                                      ltp: s.ltp
+                                    });
+                                    setSipSellModalShares('1');
+                                    setSipSellModalPrice(s.ltp > 0 ? String(s.ltp) : '');
+                                    setSipSellModalDate(new Date().toISOString().split('T')[0]);
+                                  }}
+                                  title="Record sold shares / exit position for this stock"
+                                  style={{
+                                    background: 'rgba(245, 158, 11, 0.15)',
+                                    color: '#fbbf24',
+                                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontWeight: 700,
+                                    fontSize: '11px'
+                                  }}
+                                >
+                                  <DollarSign size={13} />
+                                  Log Sell
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleDeleteStockFromWatchlist(s.ticker)}
+                                title="Remove stock from 5% SIP Watchlist"
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  color: '#f87171',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  padding: '6px 10px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  fontWeight: 700,
+                                  fontSize: '11px'
+                                }}
+                              >
+                                <Trash2 size={13} />
+                                Remove
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
                       );
                     })}
-                  </div>
-                )}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: '2px solid rgba(99, 102, 241, 0.5)', background: 'rgba(15, 23, 42, 0.95)', fontWeight: 900, color: '#ffffff' }}>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ fontSize: '13px', color: '#38bdf8' }}>📊 TOTAL PORTFOLIO</div>
+                        <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 600 }}>Aligned with Zerodha Holdings</div>
+                      </td>
+                      <td style={{ padding: '14px', fontSize: '11px', color: '#34d399' }}>
+                        {pullbackStockSummary.filter(s => s.netShares > 0).length} Holdings
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        {pullbackStockSummary.filter(s => s.netShares > 0).reduce((sum, s) => sum + (Number(s.netShares) || 0), 0)}
+                      </td>
+                      <td style={{ padding: '14px', color: '#ffffff' }}>₹{totalSipDeployedCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td style={{ padding: '14px', color: '#38bdf8' }}>₹{totalSipCurrentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td style={{ padding: '14px', color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
+                        <div>{totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({((totalSipUnrealizedPnl / totalSipDeployedCost) * 100).toFixed(2)}%)</div>
+                        <div style={{ fontSize: '10px', color: '#fbbf24', marginTop: '2px', fontWeight: 700 }}>Net: {totalSipNetPnl >= 0 ? '+' : ''}₹{totalSipNetPnl.toFixed(2)} (Tax: ₹{totalSipDeliveryTaxes.toFixed(2)})</div>
+                      </td>
+                      <td colSpan={6} style={{ padding: '14px', fontSize: '11px', color: '#a5b4fc' }}>
+                        Zerodha Brokerage: ₹0.00 | STT: ₹{totalSipStt.toFixed(2)} | Stamp: ₹{totalSipStampDuty.toFixed(2)} | Exchange Txn + SEBI + GST: ₹{(totalSipExchangeTxn + totalSipGst).toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
+            </div>
+          )}
 
-              <div>
-                <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>COMPANY NAME (AUTO-FILLED)</label>
-                <input type="text" placeholder="e.g. Infosys Limited" value={newSipName} onChange={e => setNewSipName(e.target.value)} className="input-field" />
-              </div>
-
-              {/* Purchase Details: Execution Price, Shares Qty, Buy Date */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
+          {/* VIEW 2: SOLD STOCKS & REALIZED HISTORY TABLE */}
+          {sipViewMode === 'sold' && (
+            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
-                  <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800, display: 'block', marginBottom: '4px' }}>
-                    BUY PRICE (₹)
-                  </label>
-                  <input 
-                    id="new-sip-buy-price-input"
-                    type="number" 
-                    step="0.05" 
-                    placeholder="e.g. 275.45" 
-                    value={newSipBuyPrice} 
-                    onChange={e => setNewSipBuyPrice(e.target.value)} 
-                    className="input-field" 
-                    style={{ borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
-                  />
-                  <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
-                    Exact buy execution price
+                  <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>🏁 Sold Stocks & Realized History</h2>
+                  <p style={{ fontSize: '12px', color: '#a5b4fc', margin: 0 }}>
+                    Chronological audit log of all sold shares with exact cost basis, realized profit/loss, and Zerodha delivery & DP charges.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 700 }}>
+                    {sipSoldTradesList.length} Sale Transaction(s)
                   </span>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '11px', color: '#34d399', fontWeight: 800, display: 'block', marginBottom: '4px' }}>
-                    SHARES BOUGHT (QTY)
-                  </label>
-                  <input 
-                    type="number" 
-                    step="1" 
-                    min="0"
-                    placeholder="e.g. 1" 
-                    value={newSipShares} 
-                    onChange={e => setNewSipShares(e.target.value)} 
-                    className="input-field" 
-                    style={{ borderColor: 'rgba(52, 211, 153, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
-                  />
-                  <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
-                    0 = Watchlist only
-                  </span>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BUY DATE</label>
-                  <input 
-                    type="date" 
-                    value={newSipTxDate} 
-                    onChange={e => setNewSipTxDate(e.target.value)} 
-                    className="input-field" 
-                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSipFormMode('SELL');
+                      const formEl = document.getElementById('sip-watchlist-form');
+                      if (formEl) formEl.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    style={{
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      color: '#fbbf24',
+                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <PlusCircle size={12} />
+                    Record New Sale
+                  </button>
                 </div>
               </div>
 
-              <div>
-                <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>CATEGORY</label>
-                <select value={newSipCategory} onChange={e => setNewSipCategory(e.target.value)} className="input-field">
-                  <option value="Core">Core (#1 High Edge Baseline)</option>
-                  <option value="Growth">Growth (#2 Momentum High Beta)</option>
-                </select>
-              </div>
+              {sipSoldTradesList.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '48px 16px', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '10px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                  <AlertCircle size={32} style={{ color: '#a5b4fc', margin: '0 auto 10px' }} />
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>No Sold Stock Transactions Recorded Yet</div>
+                  <p style={{ fontSize: '12px', color: '#94a3b8', maxWidth: '440px', margin: '8px auto 16px' }}>
+                    When you exit or sell shares from your SIP holdings, click "Log Sell" in the Active Holdings table or use the "Sell / Record Sold Stock" form above.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSipViewMode('holdings')}
+                    style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}
+                  >
+                    View Active Holdings
+                  </button>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', color: '#a5b4fc', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <th style={{ padding: '12px 14px' }}>Stock (Ticker)</th>
+                        <th style={{ padding: '12px 14px' }}>Category</th>
+                        <th style={{ padding: '12px 14px' }}>Sell Date</th>
+                        <th style={{ padding: '12px 14px' }}>Shares Sold</th>
+                        <th style={{ padding: '12px 14px' }}>Avg Buy Price</th>
+                        <th style={{ padding: '12px 14px' }}>Sell Price</th>
+                        <th style={{ padding: '12px 14px' }}>Sale Value</th>
+                        <th style={{ padding: '12px 14px' }}>Gross Realized P&L</th>
+                        <th style={{ padding: '12px 14px' }}>Zerodha Charges (incl. DP)</th>
+                        <th style={{ padding: '12px 14px' }}>Net Realized Profit</th>
+                        <th style={{ padding: '12px 14px' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody style={{ color: '#e0e7ff' }}>
+                      {sipSoldTradesList.map((st, idx) => {
+                        const isProfit = st.grossPnl >= 0;
+                        const isNetProfit = st.netPnl >= 0;
+                        return (
+                          <tr key={st.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: idx % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent' }}>
+                            <td style={{ padding: '14px', fontWeight: 800 }}>
+                              <div style={{ color: '#ffffff', fontSize: '14px' }}>{st.name}</div>
+                              <div style={{ color: '#38bdf8', fontSize: '11px' }}>{st.cleanSym}.NS</div>
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <span style={{ background: st.category === 'Core' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(168, 85, 247, 0.2)', color: st.category === 'Core' ? '#34d399' : '#c084fc', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
+                                {st.category}
+                              </span>
+                            </td>
+                            <td style={{ padding: '14px', color: '#cbd5e1', fontWeight: 700 }}>{st.sellDate}</td>
+                            <td style={{ padding: '14px', fontWeight: 800, color: '#fbbf24' }}>{st.sharesSold} sh</td>
+                            <td style={{ padding: '14px', color: '#cbd5e1' }}>₹{st.avgBuyPrice.toFixed(2)}</td>
+                            <td style={{ padding: '14px', fontWeight: 800, color: '#38bdf8' }}>₹{st.sellPrice.toFixed(2)}</td>
+                            <td style={{ padding: '14px', fontWeight: 700, color: '#ffffff' }}>₹{st.sellValue.toFixed(2)}</td>
+                            <td style={{ padding: '14px', fontWeight: 800, color: isProfit ? '#34d399' : '#fb7185' }}>
+                              {isProfit ? '+' : ''}₹{st.grossPnl.toFixed(2)} ({isProfit ? '+' : ''}{st.grossPnlPct.toFixed(2)}%)
+                            </td>
+                            <td style={{ padding: '14px', color: '#fbbf24', fontSize: '12px' }}>
+                              ₹{st.taxes.toFixed(2)}
+                            </td>
+                            <td style={{ padding: '14px', fontWeight: 900, color: isNetProfit ? '#34d399' : '#fb7185' }}>
+                              {isNetProfit ? '+' : ''}₹{st.netPnl.toFixed(2)}
+                            </td>
+                            <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
+                              <button
+                                onClick={() => handleDeleteSipTx(st.ticker, st.txIndex)}
+                                title="Undo / Delete this sold transaction"
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  color: '#f87171',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  padding: '6px 10px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  fontWeight: 700,
+                                  fontSize: '11px'
+                                }}
+                              >
+                                <Trash2 size={13} />
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      {(() => {
+                        const totalSoldShares = sipSoldTradesList.reduce((sum, st) => sum + st.sharesSold, 0);
+                        const totalSoldVal = sipSoldTradesList.reduce((sum, st) => sum + st.sellValue, 0);
+                        return (
+                          <tr style={{ borderTop: '2px solid rgba(99, 102, 241, 0.5)', background: 'rgba(15, 23, 42, 0.95)', fontWeight: 900, color: '#ffffff' }}>
+                            <td style={{ padding: '14px' }}>
+                              <div style={{ fontSize: '13px', color: '#fbbf24' }}>🏁 TOTAL REALIZED</div>
+                              <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 600 }}>All Sold Transactions</div>
+                            </td>
+                            <td style={{ padding: '14px', fontSize: '11px', color: '#38bdf8' }}>
+                              {sipSoldTradesList.length} Sales
+                            </td>
+                            <td style={{ padding: '14px' }}>-</td>
+                            <td style={{ padding: '14px', color: '#fbbf24' }}>{totalSoldShares} sh</td>
+                            <td style={{ padding: '14px' }}>-</td>
+                            <td style={{ padding: '14px' }}>-</td>
+                            <td style={{ padding: '14px', color: '#ffffff' }}>₹{totalSoldVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '14px', color: totalSipRealizedProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                              {totalSipRealizedProfit >= 0 ? '+' : ''}₹{totalSipRealizedProfit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '14px', color: '#fbbf24' }}>
+                              ₹{totalSipSellTaxes.toFixed(2)}
+                            </td>
+                            <td style={{ padding: '14px', color: totalSipRealizedNetProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                              {totalSipRealizedNetProfit >= 0 ? '+' : ''}₹{totalSipRealizedNetProfit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '14px' }}>-</td>
+                          </tr>
+                        );
+                      })()}
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
-              <button type="submit" style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', marginTop: '6px', fontSize: '14px' }}>
-                {Number(newSipShares) > 0 ? '➕ Record Stock Purchase' : '📌 Add Stock to Watchlist'}
-              </button>
-            </form>
-          </div>
         </div>
       )}
 
@@ -4347,6 +5841,119 @@ export default function App() {
               </div>
             );
           })()}
+
+          {/* Form: Record New MTF Trade (With Customizable Broker Funding %) */}
+          <div className="glass-panel" style={{ padding: '24px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff', marginBottom: '16px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '10px' }}>
+              ⚙️ Record New MTF Leveraged Trade
+            </h3>
+
+            <form onSubmit={handleRecordMtfTx} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+              <div style={{ position: 'relative' }}>
+                <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>TICKER SYMBOL</label>
+                <input
+                  type="text"
+                  placeholder="Type 2+ letters: REL, HDFC, TATA..."
+                  value={mtfTicker}
+                  onChange={e => { setMtfTicker(e.target.value.toUpperCase()); setShowMtfDropdown(true); }}
+                  onFocus={() => setShowMtfDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowMtfDropdown(false), 180)}
+                  className="input-field"
+                  required
+                  autoComplete="off"
+                />
+                {showMtfDropdown && filteredMtfSuggestions.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999, background: 'rgba(15,15,30,0.98)', border: '1px solid rgba(99,102,241,0.4)', borderRadius: '8px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)', maxHeight: '220px', overflowY: 'auto' }}>
+                    {filteredMtfSuggestions.map(s => (
+                      <div
+                        key={s.symbol}
+                        onMouseDown={() => {
+                          setMtfTicker(s.symbol);
+                          setShowMtfDropdown(false);
+                          const ltp = liveLtps[s.symbol] || liveLtps[`${s.symbol}.NS`];
+                          if (ltp && !mtfBuyPrice) setMtfBuyPrice(String(ltp));
+                        }}
+                        style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.15)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#a5b4fc' }}>{s.symbol}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{s.name}</div>
+                        </div>
+                        {(liveLtps[s.symbol] || liveLtps[`${s.symbol}.NS`]) && (
+                          <div style={{ fontSize: '12px', fontWeight: 700, color: '#34d399' }}>
+                            ₹{(liveLtps[s.symbol] || liveLtps[`${s.symbol}.NS`]).toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BUY PRICE (₹)</label>
+                <input 
+                  type="number" 
+                  step="0.05" 
+                  placeholder="e.g. 1091.70" 
+                  value={mtfBuyPrice} 
+                  onChange={e => setMtfBuyPrice(e.target.value)} 
+                  className="input-field" 
+                  required 
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#34d399', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SHARES (QTY)</label>
+                <input 
+                  type="number" 
+                  step="1" 
+                  min="1" 
+                  placeholder="e.g. 10" 
+                  value={mtfShares} 
+                  onChange={e => setMtfShares(e.target.value)} 
+                  className="input-field" 
+                  required 
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#818cf8', fontWeight: 800, display: 'block', marginBottom: '4px' }}>BROKER FUNDED (%)</label>
+                <input 
+                  type="number" 
+                  step="0.1" 
+                  placeholder="e.g. 68.0" 
+                  value={mtfBrokerFundedPct} 
+                  onChange={e => setMtfBrokerFundedPct(e.target.value)} 
+                  className="input-field" 
+                  style={{ borderColor: 'rgba(129, 140, 248, 0.4)' }}
+                  required 
+                />
+                <span style={{ fontSize: '10px', color: '#fbbf24', marginTop: '2px', display: 'block', fontWeight: 700 }}>
+                  Default 68.0% (You fund {(100.0 - (parseFloat(mtfBrokerFundedPct) || 68.0)).toFixed(1)}%)
+                </span>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BUY DATE</label>
+                <input 
+                  type="date" 
+                  value={mtfBuyDate} 
+                  onChange={e => setMtfBuyDate(e.target.value)} 
+                  className="input-field" 
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <button type="submit" style={{ width: '100%', background: '#6366f1', color: '#ffffff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', fontSize: '14px' }}>
+                  ➕ Record MTF Trade
+                </button>
+              </div>
+            </form>
+          </div>
 
           {/* MTF Positions Breakdown (INDmoney Style Cards) */}
           <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -4629,119 +6236,6 @@ export default function App() {
               );
             })()}
           </div>
-
-          {/* Form: Record New MTF Trade (With Customizable Broker Funding %) */}
-          <div className="glass-panel" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff', marginBottom: '16px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '10px' }}>
-              ⚙️ Record New MTF Leveraged Trade
-            </h3>
-
-            <form onSubmit={handleRecordMtfTx} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-              <div style={{ position: 'relative' }}>
-                <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>TICKER SYMBOL</label>
-                <input
-                  type="text"
-                  placeholder="Type 2+ letters: REL, HDFC, TATA..."
-                  value={mtfTicker}
-                  onChange={e => { setMtfTicker(e.target.value.toUpperCase()); setShowMtfDropdown(true); }}
-                  onFocus={() => setShowMtfDropdown(true)}
-                  onBlur={() => setTimeout(() => setShowMtfDropdown(false), 180)}
-                  className="input-field"
-                  required
-                  autoComplete="off"
-                />
-                {showMtfDropdown && filteredMtfSuggestions.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999, background: 'rgba(15,15,30,0.98)', border: '1px solid rgba(99,102,241,0.4)', borderRadius: '8px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)', maxHeight: '220px', overflowY: 'auto' }}>
-                    {filteredMtfSuggestions.map(s => (
-                      <div
-                        key={s.symbol}
-                        onMouseDown={() => {
-                          setMtfTicker(s.symbol);
-                          setShowMtfDropdown(false);
-                          const ltp = liveLtps[s.symbol] || liveLtps[`${s.symbol}.NS`];
-                          if (ltp && !mtfBuyPrice) setMtfBuyPrice(String(ltp));
-                        }}
-                        style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.15)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <div>
-                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#a5b4fc' }}>{s.symbol}</div>
-                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{s.name}</div>
-                        </div>
-                        {(liveLtps[s.symbol] || liveLtps[`${s.symbol}.NS`]) && (
-                          <div style={{ fontSize: '12px', fontWeight: 700, color: '#34d399' }}>
-                            ₹{(liveLtps[s.symbol] || liveLtps[`${s.symbol}.NS`]).toFixed(2)}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BUY PRICE (₹)</label>
-                <input 
-                  type="number" 
-                  step="0.05" 
-                  placeholder="e.g. 1091.70" 
-                  value={mtfBuyPrice} 
-                  onChange={e => setMtfBuyPrice(e.target.value)} 
-                  className="input-field" 
-                  required 
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', color: '#34d399', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SHARES (QTY)</label>
-                <input 
-                  type="number" 
-                  step="1" 
-                  min="1" 
-                  placeholder="e.g. 10" 
-                  value={mtfShares} 
-                  onChange={e => setMtfShares(e.target.value)} 
-                  className="input-field" 
-                  required 
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', color: '#818cf8', fontWeight: 800, display: 'block', marginBottom: '4px' }}>BROKER FUNDED (%)</label>
-                <input 
-                  type="number" 
-                  step="0.1" 
-                  placeholder="e.g. 68.0" 
-                  value={mtfBrokerFundedPct} 
-                  onChange={e => setMtfBrokerFundedPct(e.target.value)} 
-                  className="input-field" 
-                  style={{ borderColor: 'rgba(129, 140, 248, 0.4)' }}
-                  required 
-                />
-                <span style={{ fontSize: '10px', color: '#fbbf24', marginTop: '2px', display: 'block', fontWeight: 700 }}>
-                  Default 68.0% (You fund {(100.0 - (parseFloat(mtfBrokerFundedPct) || 68.0)).toFixed(1)}%)
-                </span>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BUY DATE</label>
-                <input 
-                  type="date" 
-                  value={mtfBuyDate} 
-                  onChange={e => setMtfBuyDate(e.target.value)} 
-                  className="input-field" 
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <button type="submit" style={{ width: '100%', background: '#6366f1', color: '#ffffff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', fontSize: '14px' }}>
-                  ➕ Record MTF Trade
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
 
@@ -4802,6 +6296,7 @@ export default function App() {
                   <select value={editType} onChange={e => setEditType(e.target.value)} className="input-field">
                     <option value="Intraday">Intraday Buy</option>
                     <option value="Intraday Short">Intraday Short</option>
+                    <option value="Stock Options">Stock Options (NSE F&O)</option>
                     <option value="Natural Gas Options">Natural Gas Options</option>
                     <option value="Crude Oil Options">Crude Oil Options</option>
                     <option value="Nifty Options">Nifty Options</option>
@@ -4844,6 +6339,409 @@ export default function App() {
         </div>
       )}
 
+      {/* SIP Quick Sell Stock Modal */}
+      {sipSellModalStock && (() => {
+        const holding = pullbackStockSummary.find(s => s.ticker === sipSellModalStock.ticker) || sipSellModalStock;
+        const availableShares = holding ? holding.netShares : (sipSellModalStock.netShares || 0);
+        const avgCost = holding ? holding.avgCost : (sipSellModalStock.avgCost || 0);
+        const ltp = holding ? holding.ltp : (sipSellModalStock.ltp || 0);
+
+        const sellSharesNum = parseInt(sipSellModalShares) || 0;
+        const sellPriceNum = parseFloat(sipSellModalPrice) || ltp;
+        const sellVal = sellSharesNum * sellPriceNum;
+        const costVal = sellSharesNum * avgCost;
+        const estGrossProfit = sellVal - costVal;
+        const estProfitPct = costVal > 0 ? (estGrossProfit / costVal) * 100 : 0;
+
+        // Zerodha Sell Charges
+        const stt = sellVal * 0.001;
+        const txn = sellVal * 0.0000297;
+        const gst = txn * 0.18;
+        const dp = 15.34;
+        const estSellCharges = stt + txn + gst + dp;
+        const estNetProfit = estGrossProfit - estSellCharges;
+
+        return (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 99999 }}>
+            <div className="glass-panel" style={{ padding: '28px', width: '100%', maxWidth: '480px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '18px', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(245, 158, 11, 0.2)', paddingBottom: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <DollarSign size={20} style={{ color: '#fbbf24' }} />
+                  <div>
+                    <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
+                      Record Stock Sale: {sipSellModalStock.cleanSym}
+                    </h3>
+                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{sipSellModalStock.name}</div>
+                  </div>
+                </div>
+                <button onClick={() => setSipSellModalStock(null)} style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer' }}><X size={20} /></button>
+              </div>
+
+              {/* Holding Info Pill */}
+              <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255,255,255,0.08)', padding: '12px 14px', borderRadius: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>AVAILABLE</div>
+                  <div style={{ fontSize: '15px', fontWeight: 900, color: '#34d399' }}>{availableShares} sh</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>AVG COST</div>
+                  <div style={{ fontSize: '15px', fontWeight: 900, color: '#ffffff' }}>₹{avgCost.toFixed(2)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>MARKET LTP</div>
+                  <div style={{ fontSize: '15px', fontWeight: 900, color: '#38bdf8' }}>₹{ltp.toFixed(2)}</div>
+                </div>
+              </div>
+
+              <form onSubmit={handleConfirmSellModal} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label style={{ fontSize: '11px', color: '#fbbf24', fontWeight: 800 }}>SHARES TO SELL</label>
+                      <div style={{ display: 'flex', gap: '3px' }}>
+                        <button type="button" onClick={() => setSipSellModalShares('1')} style={{ fontSize: '9px', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#38bdf8', padding: '1px 4px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}>1</button>
+                        {availableShares > 1 && (
+                          <button type="button" onClick={() => setSipSellModalShares(String(Math.max(1, Math.floor(availableShares / 2))))} style={{ fontSize: '9px', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fbbf24', padding: '1px 4px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}>50%</button>
+                        )}
+                        <button type="button" onClick={() => setSipSellModalShares(String(availableShares))} style={{ fontSize: '9px', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#34d399', padding: '1px 4px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}>All</button>
+                      </div>
+                    </div>
+                    <input
+                      type="number"
+                      step="1"
+                      min="1"
+                      max={availableShares}
+                      value={sipSellModalShares}
+                      onChange={e => setSipSellModalShares(e.target.value)}
+                      className="input-field"
+                      style={{ borderColor: 'rgba(245, 158, 11, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
+                      required
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800 }}>SELL PRICE (₹)</label>
+                      {ltp > 0 && (
+                        <button type="button" onClick={() => setSipSellModalPrice(String(ltp))} style={{ fontSize: '9px', background: 'rgba(56, 189, 248, 0.15)', border: 'none', color: '#38bdf8', padding: '1px 5px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}>Set LTP</button>
+                      )}
+                    </div>
+                    <input
+                      type="number"
+                      step="0.05"
+                      placeholder="e.g. 405.85"
+                      value={sipSellModalPrice}
+                      onChange={e => setSipSellModalPrice(e.target.value)}
+                      className="input-field"
+                      style={{ borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SELL EXECUTION DATE</label>
+                  <input
+                    type="date"
+                    value={sipSellModalDate}
+                    onChange={e => setSipSellModalDate(e.target.value)}
+                    className="input-field"
+                    required
+                  />
+                </div>
+
+                {/* Real-time P&L Preview Banner */}
+                {sellSharesNum > 0 && sellPriceNum > 0 && (
+                  <div style={{ background: estGrossProfit >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', border: `1px solid ${estGrossProfit >= 0 ? 'rgba(52, 211, 153, 0.3)' : 'rgba(248, 113, 113, 0.3)'}`, padding: '12px 14px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '11px', color: '#a5b4fc' }}>Gross Realized P&L:</span>
+                      <span style={{ fontSize: '13px', fontWeight: 800, color: estGrossProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                        {estGrossProfit >= 0 ? '+' : ''}₹{estGrossProfit.toFixed(2)} ({estProfitPct >= 0 ? '+' : ''}{estProfitPct.toFixed(2)}%)
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '11px', color: '#94a3b8' }}>
+                      <span>Zerodha Est. Taxes & DP:</span>
+                      <span style={{ color: '#fbbf24' }}>₹{estSellCharges.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#ffffff' }}>Estimated Net Gain:</span>
+                      <span style={{ fontSize: '16px', fontWeight: 900, color: estNetProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                        {estNetProfit >= 0 ? '+' : ''}₹{estNetProfit.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSipSellModalStock(null)}
+                    style={{ background: 'none', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#a5b4fc', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    style={{ background: '#f59e0b', color: '#ffffff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <DollarSign size={15} />
+                    Confirm Sale
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* SIP Edit Stock & Transactions Modal */}
+      {sipEditModalStock && (() => {
+        // Compute live net shares and average cost from editSipTxs
+        let runningShares = 0;
+        let runningCost = 0;
+        editSipTxs.forEach(t => {
+          const sh = Number(t.shares) || 0;
+          const pr = Number(t.price) || 0;
+          if (t.type === 'BUY') {
+            runningShares += sh;
+            runningCost += sh * pr;
+          } else {
+            const avg = runningShares > 0 ? runningCost / runningShares : pr;
+            runningShares = Math.max(0, runningShares - sh);
+            runningCost = runningShares * avg;
+          }
+        });
+        const calculatedAvg = runningShares > 0 ? runningCost / runningShares : 0;
+        const currentLtp = liveLtps[sipEditModalStock.cleanSym] || liveLtps[sipEditModalStock.ticker] || 0;
+
+        return (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 99999, padding: '16px' }}>
+            <div className="glass-panel" style={{ padding: '28px', width: '100%', maxWidth: '620px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '18px', border: '1px solid rgba(99, 102, 241, 0.4)' }}>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Edit3 size={20} style={{ color: '#818cf8' }} />
+                  <div>
+                    <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
+                      Edit Stock: {sipEditModalStock.cleanSym}
+                    </h3>
+                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{sipEditModalStock.ticker}</div>
+                  </div>
+                </div>
+                <button onClick={() => setSipEditModalStock(null)} style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer' }}><X size={20} /></button>
+              </div>
+
+              <form onSubmit={handleSaveSipEdit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                
+                {/* Stock Profile Inputs */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>COMPANY / ASSET NAME</label>
+                    <input
+                      type="text"
+                      value={editSipName}
+                      onChange={e => setEditSipName(e.target.value)}
+                      className="input-field"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>INVESTMENT CATEGORY</label>
+                    <select
+                      value={editSipCategory}
+                      onChange={e => setEditSipCategory(e.target.value)}
+                      className="input-field"
+                      style={{
+                        borderColor: editSipCategory === 'Core' ? 'rgba(52, 211, 153, 0.4)' : (editSipCategory === 'Growth' ? 'rgba(168, 85, 247, 0.4)' : 'rgba(56, 189, 248, 0.4)'),
+                        color: editSipCategory === 'Core' ? '#34d399' : (editSipCategory === 'Growth' ? '#c084fc' : '#38bdf8'),
+                        fontWeight: 800
+                      }}
+                    >
+                      <option value="Core" style={{ color: '#34d399' }}>Core (#1 High Edge Baseline)</option>
+                      <option value="Growth" style={{ color: '#c084fc' }}>Growth (#2 Momentum High Beta)</option>
+                      <option value="Park" style={{ color: '#38bdf8' }}>Park (ETF / Liquid Cash Reserve — No 5% Strategy)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>LOCAL PEAK PRICE (₹)</label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      placeholder="e.g. 405.85"
+                      value={editSipPeak}
+                      onChange={e => setEditSipPeak(e.target.value)}
+                      className="input-field"
+                    />
+                  </div>
+                </div>
+
+                {/* Live Holding Impact Pill */}
+                <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(255,255,255,0.08)', padding: '12px 16px', borderRadius: '10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>NET ACTIVE SHARES</div>
+                    <div style={{ fontSize: '16px', fontWeight: 900, color: runningShares > 0 ? '#34d399' : '#94a3b8' }}>{runningShares} sh</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>CALCULATED AVG COST</div>
+                    <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff' }}>₹{calculatedAvg.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>TOTAL INVESTED COST</div>
+                    <div style={{ fontSize: '16px', fontWeight: 900, color: '#fbbf24' }}>₹{runningCost.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>MARKET LTP</div>
+                    <div style={{ fontSize: '16px', fontWeight: 900, color: '#38bdf8' }}>₹{currentLtp.toFixed(2)}</div>
+                  </div>
+                </div>
+
+                {/* Transactions Editor Table */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label style={{ fontSize: '12px', color: '#ffffff', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FileText size={15} style={{ color: '#6366f1' }} />
+                      Buy / Sell Transaction History ({editSipTxs.length})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditSipTxs(prev => [
+                          ...prev,
+                          {
+                            id: Date.now(),
+                            date: new Date().toISOString().split('T')[0],
+                            shares: 1,
+                            price: currentLtp > 0 ? currentLtp : 0,
+                            type: 'BUY'
+                          }
+                        ]);
+                      }}
+                      style={{
+                        background: 'rgba(52, 211, 153, 0.15)',
+                        border: '1px solid rgba(52, 211, 153, 0.3)',
+                        color: '#34d399',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <PlusCircle size={13} />
+                      Add Transaction
+                    </button>
+                  </div>
+
+                  {editSipTxs.length === 0 ? (
+                    <div style={{ padding: '16px', textAlign: 'center', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '8px', border: '1px dashed rgba(255,255,255,0.1)', color: '#94a3b8', fontSize: '12px' }}>
+                      No transactions recorded (Watchlist stock with 0 shares). Click "Add Transaction" to log shares.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
+                      {editSipTxs.map((tx, idx) => (
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '95px 120px 85px 1fr 36px', gap: '8px', alignItems: 'center', background: 'rgba(15, 23, 42, 0.6)', border: `1px solid ${tx.type === 'BUY' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(245, 158, 11, 0.2)'}`, padding: '8px 10px', borderRadius: '6px' }}>
+                          <select
+                            value={tx.type}
+                            onChange={e => {
+                              const newType = e.target.value;
+                              setEditSipTxs(prev => prev.map((item, i) => i === idx ? { ...item, type: newType } : item));
+                            }}
+                            className="input-field"
+                            style={{ padding: '6px 8px', fontSize: '11px', fontWeight: 800, color: tx.type === 'BUY' ? '#34d399' : '#fbbf24' }}
+                          >
+                            <option value="BUY">🟢 BUY</option>
+                            <option value="SELL">🔴 SELL</option>
+                          </select>
+
+                          <input
+                            type="date"
+                            value={tx.date}
+                            onChange={e => {
+                              const newDate = e.target.value;
+                              setEditSipTxs(prev => prev.map((item, i) => i === idx ? { ...item, date: newDate } : item));
+                            }}
+                            className="input-field"
+                            style={{ padding: '6px 8px', fontSize: '11px' }}
+                            required
+                          />
+
+                          <input
+                            type="number"
+                            step="1"
+                            min="1"
+                            placeholder="Qty"
+                            value={tx.shares}
+                            onChange={e => {
+                              const newQty = e.target.value;
+                              setEditSipTxs(prev => prev.map((item, i) => i === idx ? { ...item, shares: newQty } : item));
+                            }}
+                            className="input-field"
+                            style={{ padding: '6px 8px', fontSize: '11px', fontWeight: 700 }}
+                            required
+                          />
+
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type="number"
+                              step="0.05"
+                              min="0"
+                              placeholder="Price ₹"
+                              value={tx.price}
+                              onChange={e => {
+                                const newPrice = e.target.value;
+                                setEditSipTxs(prev => prev.map((item, i) => i === idx ? { ...item, price: newPrice } : item));
+                              }}
+                              className="input-field"
+                              style={{ padding: '6px 8px', fontSize: '11px', fontWeight: 700 }}
+                              required
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditSipTxs(prev => prev.filter((_, i) => i !== idx));
+                            }}
+                            style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title="Delete transaction"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSipEditModalStock(null)}
+                    style={{ background: 'none', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#a5b4fc', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    style={{ background: '#6366f1', color: '#ffffff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Save size={15} />
+                    Save All Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
 
 
       {/* Bottom Navigation Bar (Mobile App Style) */}
@@ -4866,7 +6764,8 @@ export default function App() {
           { key: 'trades', label: 'Trades', icon: FileText, color: '#14b8a6' },
           { key: 'capital', label: 'Capital', icon: DollarSign, color: '#a855f7' },
           { key: 'sip', label: 'SIP', icon: TrendingUp, color: '#00b4d8' },
-          { key: 'mtf', label: 'MTF', icon: Layers, color: '#f59e0b' }
+          { key: 'mtf', label: 'MTF', icon: Layers, color: '#f59e0b' },
+          { key: 'settings', label: 'Settings', icon: Settings, color: '#ec4899' }
         ].map(navItem => {
           const NavIcon = navItem.icon;
           const isActive = activeTab === navItem.key;

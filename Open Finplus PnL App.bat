@@ -31,7 +31,7 @@ echo.
 
 REM --- Start FastAPI Backend Server on port 8000 ---
 echo  [1/3] Launching Backend Price Server on port 8000...
-start /b python -m uvicorn backend:app --host 127.0.0.1 --port 8000 >nul 2>&1
+start /b python -m uvicorn backend:app --host 0.0.0.0 --port 8000 >nul 2>&1
 
 REM --- Install node_modules if missing ---
 if not exist "node_modules" (

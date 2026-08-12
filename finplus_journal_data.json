@@ -1,5 +1,317 @@
 [
   {
+    "uuid": "fp_msohcyg2_34am4s2",
+    "symbol": "NIFTY  24500 CE",
+    "entry_price": 28.85,
+    "quantity": 65,
+    "stop_loss": 23.8,
+    "target_price": 38.95,
+    "instrument_type": "Nifty Options",
+    "exit_price": 25.65,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T09:51:01.730Z",
+    "updated_at": "2026-08-11T09:51:53.588Z"
+  },
+  {
+    "uuid": "fp_msohck2f_vxn0npn",
+    "symbol": "NIFTY 24500 CE",
+    "entry_price": 25.95,
+    "quantity": 65,
+    "stop_loss": 18.5,
+    "target_price": 30.35,
+    "instrument_type": "Nifty Options",
+    "exit_price": 22.45,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T09:50:43.095Z",
+    "updated_at": "2026-08-11T09:51:43.843Z"
+  },
+  {
+    "uuid": "fp_msohc3s8_pvt78gj",
+    "symbol": "NIFTY 24450 PE",
+    "entry_price": 24.85,
+    "quantity": 65,
+    "stop_loss": 20.5,
+    "target_price": 33.55,
+    "instrument_type": "Nifty Options",
+    "exit_price": 23.05,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T09:50:21.992Z",
+    "updated_at": "2026-08-11T09:51:33.283Z"
+  },
+  {
+    "uuid": "fp_msoe8q22_lgfzv33",
+    "symbol": "NIFTY 24450 PE",
+    "entry_price": 43.55,
+    "quantity": 65,
+    "stop_loss": 35.9,
+    "target_price": 58.8,
+    "instrument_type": "Nifty Options",
+    "exit_price": 44.3,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T08:23:45.386Z",
+    "updated_at": "2026-08-11T08:23:52.554Z"
+  },
+  {
+    "uuid": "fp_msoe6k64_rqq48y1",
+    "symbol": "NIFTY 24550 CE",
+    "entry_price": 34.55,
+    "quantity": 65,
+    "stop_loss": 28.5,
+    "target_price": 46.65,
+    "instrument_type": "Nifty Options",
+    "exit_price": 34,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T08:22:04.444Z",
+    "updated_at": "2026-08-11T08:22:12.744Z"
+  },
+  {
+    "uuid": "fp_msodqi72_z49259t",
+    "symbol": "NIFTY 24550 PE",
+    "entry_price": 38.9,
+    "quantity": 65,
+    "stop_loss": 32.05,
+    "target_price": 52.55,
+    "instrument_type": "Nifty Options",
+    "exit_price": 44.5,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T08:09:35.390Z",
+    "updated_at": "2026-08-11T08:13:08.385Z"
+  },
+  {
+    "uuid": "fp_msodq69p_jpu423h",
+    "symbol": "NIFTY 24550  CE",
+    "entry_price": 26.35,
+    "quantity": 65,
+    "stop_loss": 21.7,
+    "target_price": 35.6,
+    "instrument_type": "Nifty Options",
+    "exit_price": 24.65,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T08:09:19.933Z",
+    "updated_at": "2026-08-11T08:13:34.114Z"
+  },
+  {
+    "uuid": "fp_msodpmud_ctq4zak",
+    "symbol": "RELIANCE 1280 PE",
+    "entry_price": 5.4,
+    "quantity": 500,
+    "stop_loss": 4.55,
+    "target_price": 7.05,
+    "instrument_type": "Stock Options",
+    "exit_price": 5.4,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T08:08:54.757Z",
+    "updated_at": "2026-08-11T08:13:46.165Z"
+  },
+  {
+    "uuid": "fp_msodoryy_odqphvy",
+    "symbol": "NIFTY 24400 PE",
+    "entry_price": 25.5,
+    "quantity": 65,
+    "stop_loss": 21,
+    "target_price": 34.45,
+    "instrument_type": "Nifty Options",
+    "exit_price": 22.45,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T08:08:14.746Z",
+    "updated_at": "2026-08-11T08:23:02.564Z"
+  },
+  {
+    "uuid": "fp_msodoc84_d6ltc1n",
+    "symbol": "NIFTY 24550 CE",
+    "entry_price": 35,
+    "quantity": 65,
+    "stop_loss": 28.85,
+    "target_price": 47.25,
+    "instrument_type": "Nifty Options",
+    "exit_price": 34.5,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T08:07:54.340Z",
+    "updated_at": "2026-08-11T08:12:08.504Z"
+  },
+  {
+    "uuid": "fp_msodntv6_y6zaekf",
+    "symbol": "NIFTY 24550",
+    "entry_price": 35,
+    "quantity": 65,
+    "stop_loss": 28.5,
+    "target_price": 46.65,
+    "instrument_type": "Nifty Options",
+    "exit_price": 33.65,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T08:07:30.546Z",
+    "updated_at": "2026-08-11T08:21:40.036Z"
+  },
+  {
+    "uuid": "fp_msodnd9q_irfhhdv",
+    "symbol": "NIFTY 24550 CE",
+    "entry_price": 40.1,
+    "quantity": 65,
+    "stop_loss": 33.05,
+    "target_price": 54.15,
+    "instrument_type": "Nifty Options",
+    "exit_price": 34.25,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T08:07:09.038Z",
+    "updated_at": "2026-08-11T08:11:47.512Z"
+  },
+  {
+    "uuid": "fp_msodmqam_pgs5nye",
+    "symbol": "NIFTY 24600 CE",
+    "entry_price": 31.1,
+    "quantity": 65,
+    "stop_loss": 25.65,
+    "target_price": 42,
+    "instrument_type": "Nifty Options",
+    "exit_price": 24.95,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T08:06:39.262Z",
+    "updated_at": "2026-08-11T08:11:08.069Z"
+  },
+  {
+    "uuid": "fp_msodmb0c_pcp7837",
+    "symbol": "NIFTY 24400 PE",
+    "entry_price": 28.45,
+    "quantity": 65,
+    "stop_loss": 23.45,
+    "target_price": 38.45,
+    "instrument_type": "Nifty Options",
+    "exit_price": 29.2,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T08:06:19.452Z",
+    "updated_at": "2026-08-11T08:10:28.802Z"
+  },
+  {
+    "uuid": "fp_msodja2s_gpt5ypf",
+    "symbol": "NIFTY 24600",
+    "entry_price": 32.25,
+    "quantity": 65,
+    "stop_loss": 24.2,
+    "target_price": 39.65,
+    "instrument_type": "Nifty Options",
+    "exit_price": 29.35,
+    "status": "CLOSED",
+    "created_at": "2026-08-11T08:03:58.276Z",
+    "updated_at": "2026-08-11T08:05:37.763Z"
+  },
+  {
+    "uuid": "fp_msn2betw_3wjpjdc",
+    "symbol": "NIFTY 24850 CE",
+    "entry_price": 14.32,
+    "quantity": 195,
+    "stop_loss": 160.85,
+    "target_price": 263.25,
+    "instrument_type": "Nifty Options",
+    "exit_price": 13.68,
+    "status": "CLOSED",
+    "created_at": "2026-08-10T10:02:09.236Z",
+    "updated_at": "2026-08-10T10:03:00.532Z"
+  },
+  {
+    "uuid": "fp_msmxzihg_rpj84y8",
+    "symbol": "TCS 2200 PE",
+    "entry_price": 4.6,
+    "quantity": 225,
+    "stop_loss": 3.9,
+    "target_price": 6,
+    "instrument_type": "Stock Options",
+    "exit_price": 3.9,
+    "status": "CLOSED",
+    "created_at": "2026-08-10T08:00:55.636Z",
+    "updated_at": "2026-08-11T08:14:22.133Z"
+  },
+  {
+    "uuid": "fp_msmtrybp_irj6a2b",
+    "symbol": "NIFTY 24800 CE",
+    "entry_price": 16.4,
+    "quantity": 65,
+    "stop_loss": 13.5,
+    "target_price": 22.15,
+    "instrument_type": "Nifty Options",
+    "exit_price": 22.95,
+    "status": "CLOSED",
+    "created_at": "2026-08-10T06:03:04.453Z",
+    "updated_at": "2026-08-10T06:03:13.495Z"
+  },
+  {
+    "uuid": "fp_msinapu4_zcp1z0s",
+    "symbol": "MARUTI 12500 PE",
+    "entry_price": 14.46,
+    "quantity": 50,
+    "stop_loss": 11.9,
+    "target_price": 19.55,
+    "instrument_type": "Stock Options",
+    "exit_price": 14.7,
+    "status": "CLOSED",
+    "created_at": "2026-08-07T07:50:37.900Z",
+    "updated_at": "2026-08-07T14:01:27.899Z"
+  },
+  {
+    "uuid": "fp_msin2rna_8zis6t2",
+    "symbol": "NIFTY 24300 PE",
+    "entry_price": 32.85,
+    "quantity": 65,
+    "stop_loss": 27.1,
+    "target_price": 44.35,
+    "instrument_type": "Nifty Options",
+    "exit_price": 35.45,
+    "status": "CLOSED",
+    "created_at": "2026-08-07T07:44:26.998Z",
+    "updated_at": "2026-08-07T07:47:32.830Z"
+  },
+  {
+    "uuid": "fp_msin2b5w_ev5t14m",
+    "symbol": "NIFTY 24800 CE",
+    "entry_price": 51.8,
+    "quantity": 65,
+    "stop_loss": 41.8,
+    "target_price": 68.45,
+    "instrument_type": "Nifty Options",
+    "exit_price": 50.7,
+    "status": "CLOSED",
+    "created_at": "2026-08-07T07:44:05.636Z",
+    "updated_at": "2026-08-07T07:47:14.453Z"
+  },
+  {
+    "uuid": "fp_msin12ga_j8z2plq",
+    "symbol": "NIFTY 25000 CE",
+    "entry_price": 18.15,
+    "quantity": 65,
+    "stop_loss": 14.95,
+    "target_price": 24.55,
+    "instrument_type": "Nifty Options",
+    "exit_price": 17.15,
+    "status": "CLOSED",
+    "created_at": "2026-08-07T07:43:07.690Z",
+    "updated_at": "2026-08-07T07:46:07.663Z"
+  },
+  {
+    "uuid": "fp_msin0fnd_vekyf1k",
+    "symbol": "NIFTY 25000 CE",
+    "entry_price": 21.95,
+    "quantity": 65,
+    "stop_loss": 2.4,
+    "target_price": 4,
+    "instrument_type": "Nifty Options",
+    "exit_price": 19.7,
+    "status": "CLOSED",
+    "created_at": "2026-08-07T07:42:38.137Z",
+    "updated_at": "2026-08-07T07:45:42.786Z"
+  },
+  {
+    "uuid": "fp_msimzlhk_zgzo4tb",
+    "symbol": "NIFTY 24300 PUT",
+    "entry_price": 29.95,
+    "quantity": 65,
+    "stop_loss": 24.7,
+    "target_price": 40.45,
+    "instrument_type": "Nifty Options",
+    "exit_price": 35.3,
+    "status": "CLOSED",
+    "created_at": "2026-08-07T07:41:59.048Z",
+    "updated_at": "2026-08-07T07:46:41.667Z"
+  },
+  {
     "uuid": "fp_ms5wckzb_q0rbcpp",
     "symbol": "SENSEX 78500 CE",
     "entry_price": 17,
@@ -1008,7 +1320,8 @@
       "exchange_txn": 2.7,
       "taxes": 9.73,
       "total": 52.43
-    }
+    },
+    "uuid": "fp_mryv9p"
   },
   {
     "id": 3306,
@@ -1030,7 +1343,8 @@
       "exchange_txn": 0.72,
       "taxes": 7.7,
       "total": 15.71
-    }
+    },
+    "uuid": "fp_mrypn7"
   },
   {
     "id": 3307,
@@ -1052,7 +1366,8 @@
       "exchange_txn": 0.11,
       "taxes": 1.19,
       "total": 2.43
-    }
+    },
+    "uuid": "fp_mrypm5"
   },
   {
     "id": 3308,
@@ -1074,7 +1389,8 @@
       "exchange_txn": 0.57,
       "taxes": 6.12,
       "total": 12.4
-    }
+    },
+    "uuid": "fp_mrypl4"
   },
   {
     "id": 3309,
@@ -1096,7 +1412,8 @@
       "exchange_txn": 0.13,
       "taxes": 1.42,
       "total": 2.9
-    }
+    },
+    "uuid": "fp_mrypk2"
   },
   {
     "id": 3310,
@@ -1118,7 +1435,8 @@
       "exchange_txn": 0.15,
       "taxes": 1.56,
       "total": 3.18
-    }
+    },
+    "uuid": "fp_mrypj2"
   },
   {
     "id": 3311,
@@ -1140,7 +1458,8 @@
       "exchange_txn": 0.12,
       "taxes": 1.26,
       "total": 2.59
-    }
+    },
+    "uuid": "fp_mrypey"
   },
   {
     "id": 3312,
@@ -1162,7 +1481,8 @@
       "exchange_txn": 0.7,
       "taxes": 7.44,
       "total": 15.16
-    }
+    },
+    "uuid": "fp_mryilq"
   },
   {
     "id": 3313,
@@ -1184,7 +1504,8 @@
       "exchange_txn": 0.72,
       "taxes": 7.71,
       "total": 15.72
-    }
+    },
+    "uuid": "fp_mryil5"
   },
   {
     "id": 3314,
@@ -1206,7 +1527,8 @@
       "exchange_txn": 3.06,
       "taxes": 9.84,
       "total": 52.9
-    }
+    },
+    "uuid": "fp_20260723_trade1"
   },
   {
     "id": 3317,

@@ -102,8 +102,8 @@ export function calculateZerodhaCharges(trade) {
     // ── Equity / Currency F&O Options (NSE) ─────────────────────────────────
     // Brokerage: Flat ₹20 per executed order  [Source: zerodha.com/charges]
     brokerage = exit > 0 ? 40 : 20;
-    // STT: 0.15% on sell side (on premium)
-    stt = sellTurnover * 0.0015;
+    // STT: 0.1% on sell side premium
+    stt = sellTurnover * 0.001;
     // NSE Exchange Txn: 0.03553% (on premium)
     exchangeTxn = totalTurnover * 0.0003553;
     // Stamp duty: 0.003% on buy side
@@ -687,19 +687,28 @@ export function importJournalCSV(csvText, currentTrades = []) {
 }
 
 /**
- * 10. Real-time Cloud Synchronization Engine (Option A)
+ * 10. Real-time Cloud & LAN Synchronization Engine
  * Syncs trade journal state and capital settings automatically between Mobile APK & PC.
  */
-const getCloudSyncServers = () => {
+export const getCloudSyncServers = () => {
   const isNative = typeof window !== 'undefined' && (Boolean(window.Capacitor?.isNativePlatform?.()) || window.location.protocol === 'capacitor:');
   const defaultCloudUrl = 'https://finplus.onrender.com';
   const customUrl = typeof window !== 'undefined' && localStorage.getItem('finplus_server_url');
   
   const servers = [];
-  if (customUrl) servers.push(customUrl);
-  if (isNative) servers.push(defaultCloudUrl);
+  if (customUrl) {
+    const clean = customUrl.trim().replace(/\/$/, '');
+    if (clean) servers.push(clean);
+  }
+  if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && window.location.protocol.startsWith('http')) {
+    servers.push(`${window.location.protocol}//${window.location.hostname}:8000`);
+  }
   servers.push('http://127.0.0.1:8000');
-  return servers;
+  servers.push('http://localhost:8000');
+  if (isNative || !customUrl) {
+    servers.push(defaultCloudUrl);
+  }
+  return Array.from(new Set(servers.filter(Boolean)));
 };
 
 export async function pushJournalToCloud(trades, settings = {}) {
