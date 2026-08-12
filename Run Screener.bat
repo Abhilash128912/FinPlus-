@@ -1,5 +1,6 @@
 @echo off
 title Quality Stock Screener — Phase 1
+cd /d "%~dp0"
 echo ============================================
 echo   Quality Stock Screener  ^|  Phase 1
 echo   Source: D:\Nifty 500 stocks.xlsx
@@ -11,7 +12,7 @@ echo.
 echo Step 2: Running screener (first run takes 8-15 min)...
 echo         Subsequent runs use cache and complete in under 1 min.
 echo.
-python "%~dp0fetch_and_build.py"
+python fetch_and_build.py
 echo.
 echo Server active! The web app should have opened in your browser at:
 echo http://localhost:5000
