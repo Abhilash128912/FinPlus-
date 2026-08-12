@@ -14,24 +14,24 @@
     "roe_at_entry": 21.64,
     "de_at_entry": 344.74,
     "npm_at_entry": 6.16,
-    "current_score": 36.8,
+    "current_score": 34.3,
     "current_strength": 42.0,
-    "current_value": 353.22,
-    "current_momentum": 59.0,
-    "ltp": 176.61,
+    "current_value": 351.1,
+    "current_momentum": 49.0,
+    "ltp": 175.55,
     "sector": "Industrials",
-    "pe": 30.29,
+    "pe": 29.65,
     "roe_pct": 21.64,
     "de_ratio": 3.45,
     "npm_pct": 6.16,
-    "rsi": 80.3,
-    "ma200": 165.35,
-    "wk52_return_pct": 36.25,
+    "rsi": 83.8,
+    "ma200": 168.65,
+    "wk52_return_pct": 47.08,
     "alerts": [
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 36.8 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 34.3 (below 40 threshold)"
       },
       {
         "level": "ALERT",
@@ -39,86 +39,15 @@
         "message": "Debt Spiked \u2014 D/E ratio now 3.45 (was 344.74 at entry, threshold: 2.0)"
       }
     ],
-    "unrealised_pnl": 32.16,
-    "unrealised_pct": 10.02,
-    "volume_spike": 1.51,
-    "today_volume": 22898960,
-    "avg_volume_10d": 15189993,
-    "news": [
-      {
-        "title": "Ashok Leyland (NSEI:ASHOKLEY) Stock Fair Value Moves Lower On More Cautious Analyst Assumptions",
-        "summary": "Ashok Leyland\u2019s fair value estimate has been trimmed from about \u20b9197.79 to roughly \u20b9182.73 per share, a cut of around 7.6%. Analysts link this move to a tighter focus on execution quality, cash flow durability and how much investors may be willing to pay for those fundamentals through the cycle. As you read on, you will see how this updated price target fits into the broader analyst narrative and what to watch as that story evolves. Analyst Price Targets don't always capture the full story...",
-        "pubDate": "2026-06-13T22:10:17Z",
-        "provider": "Simply Wall St.",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/ashok-leyland-nsei-ashokley-stock-221017590.html"
-      },
-      {
-        "title": "How The Ashok Leyland (NSEI:ASHOKLEY) Investment Story Is Evolving With New Developments",
-        "summary": "Ashok Leyland\u2019s fair value estimate sits at \u20b9197.79, with the latest model update keeping this anchor unchanged. That kind of steady price target fits with broader analyst commentary on industrial stocks, where many firms are adjusting assumptions but largely sticking with their core views. As you read on, you will see how these subtle shifts can help you track the evolving story around Ashok Leyland and what to watch next. Analyst Price Targets don't always capture the full story. Head over...",
-        "pubDate": "2026-05-30T04:18:23Z",
-        "provider": "Simply Wall St.",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/ashok-leyland-nsei-ashokley-investment-041823258.html"
-      },
-      {
-        "title": "Ashok Leyland Ltd (BOM:500477) Q4 2026 Earnings Call Highlights: Record Revenue and Strategic ...",
-        "summary": "Ashok Leyland Ltd (BOM:500477) reports a robust Q4 with significant revenue growth and strategic advancements, despite facing commodity cost pressures and global uncertainties.",
-        "pubDate": "2026-05-30T01:01:27Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/ashok-leyland-ltd-bom-500477-010127252.html"
-      },
-      {
-        "title": "India's Ashok Leyland posts record quarterly profit, revenue on strong vehicle demand",
-        "summary": "May 28 (Reuters) - India's Ashok Leyland reported its highest ever quarterly profit on Thursday, helped by strong demand for commercial vehicles.",
-        "pubDate": "2026-05-28T11:57:31Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-ashok-leyland-posts-record-115731459.html"
-      },
-      {
-        "title": "Kross Ltd (NSE:KROSS) Q4 2026 Earnings Call Highlights: Strong Revenue Growth Amidst Supply ...",
-        "summary": "Kross Ltd (NSE:KROSS) reports an 8.5% top-line growth, driven by strategic investments and strong OEM partnerships, despite facing commodity price hikes and supply chain issues.",
-        "pubDate": "2026-05-14T01:03:27Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/kross-ltd-nse-kross-q4-010327048.html"
-      },
-      {
-        "title": "How The Ashok Leyland (NSEI:ASHOKLEY) Story Is Shifting With EV Plans And Valuation Tweaks",
-        "summary": "Ashok Leyland\u2019s fair value estimate has been trimmed from \u20b9206.32 to \u20b9202.27, a small reset that still keeps the stock closely aligned with prior valuation work. This change mirrors a research backdrop where views are mixed, with some analysts sounding more cautious and others still constructive, leading to an adjustment rather than a sweeping rethink. Read on to see what is driving this evolving narrative and how you can track future shifts in analyst assumptions. Analyst Price Targets don't...",
-        "pubDate": "2026-04-10T19:10:42Z",
-        "provider": "Simply Wall St.",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/ashok-leyland-nsei-ashokley-story-191042547.html"
-      },
-      {
-        "title": "How The Ashok Leyland (NSEI:ASHOKLEY) Story Is Shifting With Subtle Valuation Tweaks",
-        "summary": "Ashok Leyland now sits on a refreshed price target of \u20b9206.32, adjusted from \u20b9203.54, signalling a small recalibration in how the stock is being valued. Analysts link this revised figure to updated assumptions rather than any single new trigger, as they reassess how execution, profitability and valuation inputs fit together. As you read on, you will see how these shifts feed into the broader analyst narrative and what to watch as it continues to evolve. Stay updated as the Fair Value for...",
-        "pubDate": "2026-03-23T00:14:41Z",
-        "provider": "Simply Wall St.",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/ashok-leyland-nsei-ashokley-story-001441293.html"
-      },
-      {
-        "title": "How Recent Developments Are Shaping The Ashok Leyland (NSEI:ASHOKLEY) Investment Story",
-        "summary": "Ashok Leyland\u2019s fair value estimate in the updated model sits at about \u20b9203.54 per share, compared with roughly \u20b9202.99 per share previously, marking a very small shift in the price target. The change aligns with recent Street commentary on a similarly named company and how it treats valuation, where analysts fine tune targets while weighing earnings pressure, product pipelines and execution risks. As you read on, you will see how these moving pieces shape the evolving narrative around Ashok...",
-        "pubDate": "2026-03-08T14:05:35Z",
-        "provider": "Simply Wall St.",
-        "url": "https://finance.yahoo.com/news/recent-developments-shaping-ashok-leyland-140535144.html"
-      },
-      {
-        "title": "Ashok Leyland Ltd (BOM:500477) Q3 2026 Earnings Call Highlights: Record Growth and Strategic ...",
-        "summary": "Ashok Leyland Ltd (BOM:500477) reports robust financial performance with record volumes and strategic advancements in electric vehicles and non-truck segments.",
-        "pubDate": "2026-02-14T01:01:44Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/ashok-leyland-ltd-bom-500477-010144185.html"
-      },
-      {
-        "title": "India's Ashok Leyland misses quarterly profit view as higher costs hurt",
-        "summary": "Feb 11 (Reuters) - Indian automaker Ashok Leyland reported a smaller-than-expected rise in quarterly profit on Wednesday, as higher raw material costs outweighed the sales boost from a tax cut.",
-        "pubDate": "2026-02-11T08:44:43Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-ashok-leyland-misses-quarterly-084443181.html"
-      }
-    ],
+    "unrealised_pnl": 30.04,
+    "unrealised_pct": 9.36,
+    "volume_spike": 0.09,
+    "today_volume": 2029062.0,
+    "avg_volume_10d": 21450606.1,
+    "news": [],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 36.8 (<40)"
+    "signal_reason": "Quality score collapsed to 34.3 (<40)"
   },
   {
     "symbol": "BEL",
@@ -135,102 +64,45 @@
     "roe_at_entry": null,
     "de_at_entry": 0.27,
     "npm_at_entry": 21.4,
-    "current_score": 24.6,
+    "current_score": 29.3,
     "current_strength": 52.0,
-    "current_value": 775.2,
-    "current_momentum": 8.0,
-    "ltp": 387.6,
+    "current_value": 803.8,
+    "current_momentum": 27.0,
+    "ltp": 401.9,
     "sector": "Industrials",
-    "pe": 46.25,
+    "pe": 47.62,
     "roe_pct": null,
     "de_ratio": 0.0,
     "npm_pct": 21.4,
-    "rsi": 29.2,
-    "ma200": 419.3,
-    "wk52_return_pct": 0.31,
+    "rsi": 46.8,
+    "ma200": 419.78,
+    "wk52_return_pct": 5.67,
     "alerts": [
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 24.6 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 29.3 (below 40 threshold)"
       },
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9387.6 fell below 200-day MA \u20b9419.3"
+        "message": "Trend Broken \u2014 Price \u20b9401.9 fell below 200-day MA \u20b9419.78"
       }
     ],
-    "unrealised_pnl": -50.3,
-    "unrealised_pct": -6.09,
-    "volume_spike": 0.5,
-    "today_volume": 7168415,
-    "avg_volume_10d": 14468322,
-    "news": [
-      {
-        "title": "Bharat Electronics Ltd (BOM:500049) Q1 2027 Earnings Call Highlights: Robust Revenue Growth and ...",
-        "summary": "Bharat Electronics Ltd (BOM:500049) reports a 25.27% revenue increase and a strong order book position, despite challenges in order inflow timing.",
-        "pubDate": "2026-07-27T19:00:55Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/bharat-electronics-ltd-bom-500049-190055433.html"
-      },
-      {
-        "title": "Bharat Electronics Ltd (BOM:500049) Q4 2026 Earnings Call Highlights: Strong Revenue Growth and ...",
-        "summary": "Bharat Electronics Ltd (BOM:500049) reports a 16% revenue increase and focuses on new-age technologies amid supply chain challenges.",
-        "pubDate": "2026-05-20T19:00:26Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/bharat-electronics-ltd-bom-500049-190026774.html"
-      },
-      {
-        "title": "India's Cyient misses quarterly profit view on one-time charge, higher costs",
-        "summary": "April 23 (Reuters) - India's Cyient reported fourth-quarter profit below estimates on Thursday, hurt by a one-time charge and higher expenses, and approved a share buyback worth 7.2 billion rupees,",
-        "pubDate": "2026-04-23T13:09:23Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-cyient-misses-quarterly-profit-130923488.html"
-      },
-      {
-        "title": "Indo-Pacific Defence: the top-performing defence trade in Europe - and most investors are missing it",
-        "summary": "HANetf co-CEO Hector McNeil joined Proactive's Stephen Gunnion to make the case for the Future of Defence Indo-Pacific ex-China UCITS ETF (ISE:QUAD) - which he says is the best-performing defence product in Europe year to date. While European rearmament has grabbed the headlines, McNeil pointed to standout gains from South Korean names like LIG Nex1, Korea Aerospace and Hanwha, alongside structural growth across India, Japan, Singapore and Taiwan. India's \"Make in India\" policy is driving companies like Bharat Electronics, while Singapore is investing heavily in cybersecurity and smart defence systems. With individual stock and country caps built in, and Kotak providing local expertise on India, McNeil argued investors need to rebalance away from US dominance and look east for where the real defence growth is happening. For more insights like this, visit Proactive's YouTube channel, like this video, subscribe to the channel, and enable notifications so you never miss future updates. #HANetf #DefenceETF #IndoPacific #Investing #ETFs #AsiaMarkets #DefenceStocks #Geopolitics #SouthKorea #IndiaInvesting #Cybersecurity #GlobalMarkets #Proactive",
-        "pubDate": "2026-04-14T13:48:21Z",
-        "provider": "Proactive",
-        "url": "https://finance.yahoo.com/video/indo-pacific-defence-top-performing-134821848.html"
-      },
-      {
-        "title": "Astra Microwave Products Ltd (BOM:532493) Q3 2026 Earnings Call Highlights: Record Performance ...",
-        "summary": "Astra Microwave Products Ltd (BOM:532493) achieves its best-ever quarterly performance, bolstered by a robust order book and strategic collaborations, despite facing execution challenges.",
-        "pubDate": "2026-02-16T01:01:34Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/astra-microwave-products-ltd-bom-010134681.html"
-      },
-      {
-        "title": "Bharat Electronics Ltd (BOM:500049) Q3 2026 Earnings Call Highlights: Strong Revenue Growth and ...",
-        "summary": "Bharat Electronics Ltd (BOM:500049) reports a robust 19% revenue increase and a solid order book, despite challenges in supply chain and project execution.",
-        "pubDate": "2026-01-28T17:02:03Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/bharat-electronics-ltd-bom-500049-170203499.html"
-      },
-      {
-        "title": "India's BEL, France's Safran to produce air-to-ground weapons in India",
-        "summary": "NEW DELHI (Reuters) -India's Bharat Electronics Limited and France's Safran Electronics and Defence have signed an agreement to produce HAMMER smart precision-guided air-to-ground weapons in India,",
-        "pubDate": "2025-11-24T14:00:13Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-bel-frances-safran-produce-140013030.html"
-      },
-      {
-        "title": "India's space regulator picks Google-backed PixxelSpace for home-grown satellite constellation",
-        "summary": "The consortium, comprising local space tech firms Piersight Space, Satsure Analytics India and Dhruva Space, will design, build, and operate the satellites, the Indian National Space Promotion and Authorisation Centre (IN-SPACe) said. The PixxelSpace-led consortium won the project, outbidding Indian defence equipment makers Astra Microwave and Bharat Electronics. The Indian government wants to reduce its dependence on foreign systems, including the widely used U.S. Global Positioning System (GPS), and says its regional navigation satellite system, called NavIC (Navigation with Indian Constellation), provides more accurate domestic navigation and that its use would benefit the economy.",
-        "pubDate": "2025-08-12T09:46:10Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-space-regulator-picks-google-094610510.html"
-      }
-    ],
+    "unrealised_pnl": -21.7,
+    "unrealised_pct": -2.63,
+    "volume_spike": 0.16,
+    "today_volume": 1846484.0,
+    "avg_volume_10d": 11237111.8,
+    "news": [],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 24.6 (<40)"
+    "signal_reason": "Quality score collapsed to 29.3 (<40)"
   },
   {
     "symbol": "EMMVEE",
     "ticker": "EMMVEE.NS",
-    "name": "EMMVEE PHOTOVOLTAIC PWR L",
+    "name": "EMMVEE",
     "qty": 1,
     "avg_cost": 344.15,
     "total_invested": 344.15,
@@ -244,32 +116,24 @@
     "npm_at_entry": 22.84,
     "current_score": 44.4,
     "current_strength": 52.0,
-    "current_value": 326.3,
+    "current_value": 316.05,
     "current_momentum": 51.0,
-    "ltp": 326.3,
+    "ltp": 316.05,
     "sector": "Technology",
-    "pe": 17.72,
+    "pe": 17.19,
     "roe_pct": null,
     "de_ratio": 0.1,
     "npm_pct": 22.84,
-    "rsi": 45.6,
-    "ma200": 252.05,
-    "wk52_return_pct": 44.76,
+    "rsi": 47.8,
+    "ma200": 254.29,
+    "wk52_return_pct": 44.05,
     "alerts": [],
-    "unrealised_pnl": -17.85,
-    "unrealised_pct": -5.19,
-    "volume_spike": 0.29,
-    "today_volume": 672596,
-    "avg_volume_10d": 2321940,
-    "news": [
-      {
-        "title": "IPO-bound Emmvee Photovoltaic bets on India's solar boom with $625.75 million expansion",
-        "summary": "By Sethuraman N R NEW DELHI (Reuters) -Initial public offering-bound Indian solar panel maker Emmvee Photovoltaic Power plans to invest about 55 billion rupees ($625.75 million) to expand its",
-        "pubDate": "2025-11-07T03:25:05Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/ipo-bound-emmvee-photovoltaic-bets-032505960.html"
-      }
-    ],
+    "unrealised_pnl": -28.1,
+    "unrealised_pct": -8.17,
+    "volume_spike": 0.17,
+    "today_volume": 280910.0,
+    "avg_volume_10d": 1696496.4,
+    "news": [],
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Consolidating price & fundamentals"
@@ -289,24 +153,24 @@
     "roe_at_entry": 29.34,
     "de_at_entry": 3.29,
     "npm_at_entry": 26.23,
-    "current_score": 38.6,
+    "current_score": 34.6,
     "current_strength": 40.0,
-    "current_value": 286.0,
-    "current_momentum": 26.0,
-    "ltp": 286.0,
+    "current_value": 277.9,
+    "current_momentum": 10.0,
+    "ltp": 277.9,
     "sector": "Consumer Defensive",
-    "pe": 17.93,
+    "pe": 17.79,
     "roe_pct": null,
     "de_ratio": 0.03,
     "npm_pct": 25.94,
-    "rsi": 61.3,
-    "ma200": 320.57,
-    "wk52_return_pct": -32.15,
+    "rsi": 44.7,
+    "ma200": 326.94,
+    "wk52_return_pct": -33.25,
     "alerts": [
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 38.6 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 34.6 (below 40 threshold)"
       },
       {
         "level": "ALERT",
@@ -316,26 +180,18 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9286.0 fell below 200-day MA \u20b9320.57"
+        "message": "Trend Broken \u2014 Price \u20b9277.9 fell below 200-day MA \u20b9326.94"
       }
     ],
-    "unrealised_pnl": 10.55,
-    "unrealised_pct": 3.83,
-    "volume_spike": 0.42,
-    "today_volume": 7093103,
-    "avg_volume_10d": 16717018,
-    "news": [
-      {
-        "title": "British American Tobacco plans to offload stake in India's ITC Hotels",
-        "summary": "Dec 4 (Reuters) - British American Tobacco plans to offload its stake worth about $776 million in India's ITC Hotels, the company said on Thursday, as it looks to reduce debt and exit a non-strategic",
-        "pubDate": "2025-12-04T14:28:27Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/british-american-tobacco-plans-offload-142827642.html"
-      }
-    ],
+    "unrealised_pnl": 2.45,
+    "unrealised_pct": 0.89,
+    "volume_spike": 0.12,
+    "today_volume": 1743805.0,
+    "avg_volume_10d": 14769267.5,
+    "news": [],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 38.6 (<40)"
+    "signal_reason": "Quality score collapsed to 34.6 (<40)"
   },
   {
     "symbol": "TATAPOWER",
@@ -354,17 +210,17 @@
     "npm_at_entry": 6.09,
     "current_score": 19.9,
     "current_strength": 16.0,
-    "current_value": 380.75,
+    "current_value": 377.1,
     "current_momentum": 26.0,
-    "ltp": 380.75,
+    "ltp": 377.1,
     "sector": "Utilities",
-    "pe": 31.7,
+    "pe": 31.4,
     "roe_pct": null,
     "de_ratio": 1.68,
     "npm_pct": 6.09,
-    "rsi": 54.3,
-    "ma200": 389.22,
-    "wk52_return_pct": -1.26,
+    "rsi": 51.1,
+    "ma200": 390.8,
+    "wk52_return_pct": -1.91,
     "alerts": [
       {
         "level": "SELL",
@@ -374,86 +230,15 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9380.75 fell below 200-day MA \u20b9389.22"
+        "message": "Trend Broken \u2014 Price \u20b9377.1 fell below 200-day MA \u20b9390.8"
       }
     ],
-    "unrealised_pnl": -1.5,
-    "unrealised_pct": -0.39,
-    "volume_spike": 0.28,
-    "today_volume": 973195,
-    "avg_volume_10d": 3517278,
-    "news": [
-      {
-        "title": "India's Tata Power evaluating three sites for nuclear projects, exec says",
-        "summary": "By Sethuraman N R Feb 4 (Reuters) - India's Tata Power is examining potential sites in three states for future nuclear power projects but is awaiting further regulatory clarity before finalising plans",
-        "pubDate": "2026-02-04T14:19:42Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-tata-power-evaluating-three-141942641.html"
-      },
-      {
-        "title": "India's Tata Power reports lower quarterly profit as thermal segment softens",
-        "summary": "Feb 2 (Reuters) - India's Tata Power reported a 25.1% drop in quarterly net profit on Wednesday, hurt by a weakness in the thermal power segment due to the shutdown of a key plant.",
-        "pubDate": "2026-02-04T13:07:15Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-tata-power-reports-lower-130715727.html"
-      },
-      {
-        "title": "Tata Power unit plans 10GW ingot and wafer facility in southern India",
-        "summary": "The ingots and wafers plant will boost India\u2019s domestic manufacturing and reduce import dependence for critical components.",
-        "pubDate": "2026-01-08T10:41:57Z",
-        "provider": "Power Technology",
-        "url": "https://finance.yahoo.com/news/tata-power-unit-plans-10gw-104157469.html"
-      },
-      {
-        "title": "India proposes landmark nuclear law to end state monopoly and allow private sector operators",
-        "summary": "By Sarita Chaganti Singh NEW DELHI, Dec 15 (Reuters) - India on Monday set in motion steps to end decades of state control over nuclear power, by introducing a bill in parliament that would allow",
-        "pubDate": "2025-12-15T15:41:14Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/india-proposes-landmark-nuclear-law-154114315.html"
-      },
-      {
-        "title": "TPREL commissions NHPC\u2019s solar project in Rajasthan, India",
-        "summary": "The project will supply clean electricity to PSPCL, supporting the region\u2019s growing energy demand.",
-        "pubDate": "2025-11-18T09:36:51Z",
-        "provider": "Power Technology",
-        "url": "https://finance.yahoo.com/news/tprel-commissions-nhpc-solar-project-093651081.html"
-      },
-      {
-        "title": "Tata Power plans to set up India's largest solar wafers, ingots making plant",
-        "summary": "By Sethuraman N R (Reuters) -India's Tata Power plans to set up the country's largest solar wafers and ingots manufacturing plant with a capacity of 10 gigawatts, chief executive Praveer Sinha said on",
-        "pubDate": "2025-11-11T14:18:31Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/tata-power-plans-set-indias-141831678.html"
-      },
-      {
-        "title": "India's Tata Power posts lower quarterly profit on plant shutdown",
-        "summary": "(Reuters) -India's Tata Power on Tuesday reported a drop in second-quarter profit, hurt by lower electricity generation after the shutdown of its Mundra plant.",
-        "pubDate": "2025-11-11T13:17:39Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-tata-power-posts-lower-131739790.html"
-      },
-      {
-        "title": "India proposes to open up retail power sector nationwide to private firms, draft\u00a0bill shows",
-        "summary": "NEW DELHI (Reuters) -India plans to open up its retail electricity market for private companies nationwide, ending the dominance of state-run distributors in most states, a draft bill by the federal",
-        "pubDate": "2025-10-10T08:56:22Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/india-proposes-open-retail-power-085622923.html"
-      },
-      {
-        "title": "Tata Power signs agreement with Suzlon for wind turbines supply",
-        "summary": "The turbines will be distributed across the states of Karnataka, Maharashtra, and Tamil Nadu.",
-        "pubDate": "2025-09-17T09:30:17Z",
-        "provider": "Power Technology",
-        "url": "https://finance.yahoo.com/news/tata-power-signs-agreement-suzlon-093017374.html"
-      },
-      {
-        "title": "India's Reliance Infra to recover $3.25 billion in unpaid power dues from New Delhi consumers",
-        "summary": "The dues stem from historical tariff shortfalls, where electricity prices approved by regulators did not fully cover the cost of supply.  On Wednesday, the Supreme Court ordered electricity regulators across India to clear deferred costs and unpaid dues owed to power distribution companies.  Reliance Infra is part of the Anil Ambani-run Reliance Group.",
-        "pubDate": "2025-08-08T06:08:26Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-reliance-infra-recover-2-060826080.html"
-      }
-    ],
+    "unrealised_pnl": -5.15,
+    "unrealised_pct": -1.35,
+    "volume_spike": 0.23,
+    "today_volume": 598526.0,
+    "avg_volume_10d": 2556355.9,
+    "news": [],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Quality score collapsed to 19.9 (<40)"
@@ -473,106 +258,40 @@
     "roe_at_entry": 11.16,
     "de_at_entry": 89.02,
     "npm_at_entry": 4.65,
-    "current_score": 34.2,
+    "current_score": 30.7,
     "current_strength": 24.0,
-    "current_value": 191.37,
-    "current_momentum": 48.0,
-    "ltp": 191.37,
+    "current_value": 188.16,
+    "current_momentum": 34.0,
+    "ltp": 188.16,
     "sector": "Basic Materials",
-    "pe": 21.65,
+    "pe": 21.5,
     "roe_pct": null,
     "de_ratio": 0.89,
     "npm_pct": 4.6,
-    "rsi": 65.4,
-    "ma200": 188.78,
-    "wk52_return_pct": 18.84,
+    "rsi": 57.5,
+    "ma200": 192.31,
+    "wk52_return_pct": 17.48,
     "alerts": [
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 34.2 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 30.7 (below 40 threshold)"
+      },
+      {
+        "level": "ALERT",
+        "icon": "\u26a0\ufe0f",
+        "message": "Trend Broken \u2014 Price \u20b9188.16 fell below 200-day MA \u20b9192.31"
       }
     ],
-    "unrealised_pnl": 8.55,
-    "unrealised_pct": 4.68,
-    "volume_spike": 0.66,
-    "today_volume": 12618989,
-    "avg_volume_10d": 19003387,
-    "news": [
-      {
-        "title": "Tata Steel Ltd (FRA:HWHG) (Q1 2027) Earnings Call Highlights: Resilient India Performance ...",
-        "summary": "India EBITDA surges 32% YoY to INR9,900 crores, while UK losses narrow and Netherlands faces regulatory challenges.",
-        "pubDate": "2026-08-05T01:02:55Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/tata-steel-ltd-fra-hwhg-010255378.html"
-      },
-      {
-        "title": "India's Tata Steel beats profit view on improved steel prices",
-        "summary": "July 30 (Reuters) - Tata Steel, India's second-largest steelmaker by market capitalisation, reported a better-than-expected first-quarter profit on Thursday, as firm domestic steel prices and steady",
-        "pubDate": "2026-07-30T14:21:38Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-tata-steel-beats-profit-133038121.html"
-      },
-      {
-        "title": "Cheap Asian steel threatens British jobs, Tata warns",
-        "summary": "A flood of cheap steel from Asia is threatening jobs at British plants, the country\u2019s biggest producer has warned.",
-        "pubDate": "2026-07-26T16:02:11Z",
-        "provider": "The Telegraph",
-        "url": "https://finance.yahoo.com/news/cheap-asian-steel-threatens-british-160211451.html"
-      },
-      {
-        "title": "India's Odisha state approves corporate investments worth $475 million",
-        "summary": "BENGALURU, July 21 (Reuters) - India's Odisha state on Tuesday approved 23 industrial projects worth 45.74 billion rupees ($475.29 million) in investment by companies across sectors including",
-        "pubDate": "2026-07-21T14:19:11Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-odisha-state-approves-corporate-141911177.html"
-      },
-      {
-        "title": "Tata Steel Ltd (FRA:HWHG) Q4 2026 Earnings Call Highlights: Strong EBITDA Growth and Strategic ...",
-        "summary": "Tata Steel Ltd (FRA:HWHG) reports a robust 35% increase in EBITDA and outlines future growth strategies amidst global challenges.",
-        "pubDate": "2026-05-19T01:04:23Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/tata-steel-ltd-fra-hwhg-010423203.html"
-      },
-      {
-        "title": "Explainer-Why India\u2019s Tata Sons is under pressure to list as trust divisions emerge",
-        "summary": "By Jayshree P Upadhyay and Gopika Gopakumar MUMBAI, May 16 (Reuters) - India's Tata Sons, the umbrella organisation for 31 companies including TCS, Tata Motors and Tata Steel, is facing pressure to go",
-        "pubDate": "2026-05-16T04:47:11Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/explainer-why-indias-tata-sons-073258579.html"
-      },
-      {
-        "title": "Tata Steel misses quarterly profit view on increased raw materials costs, one-time charges",
-        "summary": "May 15 (Reuters) - Tata Steel, India's second-largest maker of steel by market capitalisation, posted a smaller-than-expected fourth quarter profit on Friday, hurt by increased raw materials costs and",
-        "pubDate": "2026-05-15T13:05:35Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/tata-steel-misses-quarterly-profit-130535113.html"
-      },
-      {
-        "title": "India's state-run SAIL wins court block on steel antitrust investigation",
-        "summary": "By Aditya Kalra NEW DELHI, April 24 (Reuters) - An Indian court has put an antitrust investigation into state-run Steel Authority of India on hold after the company challenged the Indian watchdog for",
-        "pubDate": "2026-04-24T14:43:01Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-state-run-sail-wins-095524428.html"
-      },
-      {
-        "title": "UK steel industry has \u2018two months to be saved\u2019, warns Tata Steel",
-        "summary": "He told Parliament\u2019s Business and Trade Committee that the sector is at threat due to fears of further cheap Chinese imports.",
-        "pubDate": "2026-02-10T17:11:30Z",
-        "provider": "PA Media: Money",
-        "url": "https://finance.yahoo.com/news/uk-steel-industry-two-months-171130252.html"
-      },
-      {
-        "title": "Indian Metals & Ferro Alloys Ltd (BOM:533047) Q3 2026 Earnings Call Highlights: Strong ...",
-        "summary": "Indian Metals & Ferro Alloys Ltd (BOM:533047) reports significant gains in EBITDA and PAT, bolstered by strategic acquisitions and robust production figures.",
-        "pubDate": "2026-02-10T01:04:36Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/indian-metals-ferro-alloys-ltd-010436817.html"
-      }
-    ],
+    "unrealised_pnl": 5.34,
+    "unrealised_pct": 2.92,
+    "volume_spike": 0.24,
+    "today_volume": 4963046.0,
+    "avg_volume_10d": 20852990.2,
+    "news": [],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 34.2 (<40)"
+    "signal_reason": "Quality score collapsed to 30.7 (<40)"
   },
   {
     "symbol": "GESHIP",
@@ -591,43 +310,39 @@
     "roe_at_entry": 18.85,
     "de_at_entry": 0.06,
     "npm_at_entry": 54.4,
-    "current_score": 66.1,
-    "current_strength": 73.0,
-    "current_value": 4224.0,
-    "current_momentum": 58.0,
-    "ltp": 1408.0,
-    "pe": 6.67,
-    "roe_pct": 18.85,
+    "current_score": 49.4,
+    "current_strength": 55.0,
+    "current_value": 3850.5,
+    "current_momentum": 20.0,
+    "ltp": 1283.5,
+    "pe": 5.04,
+    "roe_pct": null,
     "de_ratio": 0.06,
-    "npm_pct": 54.4,
-    "rsi": 54.6,
-    "ma200": 1301.02,
-    "wk52_return_pct": 46.07,
-    "volume_spike": 1.79,
-    "today_volume": 718152,
-    "avg_volume_10d": 402183,
-    "news": [
+    "npm_pct": 60.31,
+    "rsi": 25.9,
+    "ma200": 1317.98,
+    "wk52_return_pct": 31.78,
+    "volume_spike": 0.15,
+    "today_volume": 233451.0,
+    "avg_volume_10d": 1575923.9,
+    "news": [],
+    "alerts": [
       {
-        "title": "Great Eastern Shipping Co Ltd (BOM:500620) Q3 2026 Earnings Call Highlights: Strong Profits and ...",
-        "summary": "Despite undervaluation concerns and fleet aging issues, Great Eastern Shipping Co Ltd (BOM:500620) reports robust financial performance and strategic market positioning.",
-        "pubDate": "2026-02-06T01:00:36Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/great-eastern-shipping-co-ltd-010036146.html"
+        "level": "REVIEW",
+        "icon": "\ud83d\udfe0",
+        "message": "Weakening \u2014 Score dropped 16.3 pts since entry (65.7 \u2192 49.4)"
       },
       {
-        "title": "Great Eastern Shipping Co Ltd (BOM:500620) Q2 2026 Earnings Call Highlights: Strong ...",
-        "summary": "Despite a dip in net profit compared to last year, Great Eastern Shipping Co Ltd (BOM:500620) showcases robust financial health and strategic fleet management.",
-        "pubDate": "2025-11-11T09:01:14Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/great-eastern-shipping-co-ltd-090114643.html"
+        "level": "ALERT",
+        "icon": "\u26a0\ufe0f",
+        "message": "Trend Broken \u2014 Price \u20b91283.5 fell below 200-day MA \u20b91317.98"
       }
     ],
-    "alerts": [],
-    "unrealised_pnl": 111.9,
-    "unrealised_pct": 2.72,
-    "signal": "BUY",
-    "signal_badge": "\ud83d\udfe2 BUY",
-    "signal_reason": "Strong quality score (66.1) & solid fundamentals"
+    "unrealised_pnl": -261.6,
+    "unrealised_pct": -6.36,
+    "signal": "SELL",
+    "signal_badge": "\ud83d\udd34 SELL",
+    "signal_reason": "Score dropped 16.3 pts since entry"
   },
   {
     "symbol": "LUPIN",
@@ -646,105 +361,34 @@
     "roe_at_entry": 26.91,
     "de_at_entry": 0.29,
     "npm_at_entry": 19.07,
-    "current_score": 52.1,
-    "current_strength": 77.0,
-    "current_value": 4769.2,
-    "current_momentum": 46.0,
-    "ltp": 2384.6,
-    "pe": 20.32,
-    "roe_pct": 26.91,
+    "current_score": 39.4,
+    "current_strength": 52.0,
+    "current_value": 4521.0,
+    "current_momentum": 24.0,
+    "ltp": 2260.5,
+    "pe": 18.72,
+    "roe_pct": null,
     "de_ratio": 0.29,
-    "npm_pct": 19.07,
-    "rsi": 39.2,
-    "ma200": 2217.81,
-    "wk52_return_pct": 29.53,
-    "volume_spike": 1.12,
-    "today_volume": 1015977,
-    "avg_volume_10d": 910804,
-    "news": [
-      {
-        "title": "Update: BioMarin Pharmaceutical to Acquire Amicus Therapeutics for $4.8 Billion; Shares Jump",
-        "summary": "(Updates with share price movement in headline and last paragraph). BioMarin Pharmaceutical (BMRN",
-        "pubDate": "2025-12-19T15:03:21Z",
-        "provider": "MT Newswires",
-        "url": "https://finance.yahoo.com/news/biomarin-pharmaceutical-acquire-amicus-therapeutics-150321838.html"
-      },
-      {
-        "title": "BioMarin Pharmaceutical to Acquire Amicus Therapeutics for $4.8 billion",
-        "summary": "BioMarin Pharmaceutical (BMRN) has agreed to acquire Amicus Therapeutics (FOLD) for $14.50 per share",
-        "pubDate": "2025-12-19T13:33:14Z",
-        "provider": "MT Newswires",
-        "url": "https://finance.yahoo.com/news/biomarin-pharmaceutical-acquire-amicus-therapeutics-133314206.html"
-      },
-      {
-        "title": "Lupin Ltd (BOM:500257) Q2 2026 Earnings Call Highlights: Record Revenue and Strategic Growth ...",
-        "summary": "Lupin Ltd (BOM:500257) reports robust financial performance with significant US market growth and strategic expansions in Europe and emerging markets.",
-        "pubDate": "2025-11-08T07:00:45Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/lupin-ltd-bom-500257-q2-070045187.html"
-      },
-      {
-        "title": "India's Lupin posts surge in quarterly profit on strong respiratory drugs demand",
-        "summary": "(Reuters) -Indian drugmaker Lupin posted a 73.3% jump in second-quarter profit on Thursday, driven by strong demand for its respiratory drugs.",
-        "pubDate": "2025-11-06T14:10:32Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-lupin-posts-surge-quarterly-141032456.html"
-      },
-      {
-        "title": "India advances anti-dumping probe into tuberculosis drug imports from China, Thailand",
-        "summary": "NEW DELHI (Reuters) -India on Monday advanced an anti-dumping investigation into imports from China and Thailand of Ethambutol Hydrochloride, an active pharmaceutical ingredient used in anti-",
-        "pubDate": "2025-10-27T12:42:09Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/india-advances-anti-dumping-probe-124209456.html"
-      },
-      {
-        "title": "Gilead Resolves Patent Litigations for HIV Treatment Biktarvy",
-        "summary": "Gilead's settlement on Biktarvy patents delays generic entry until 2036, boosting investor confidence.",
-        "pubDate": "2025-10-07T13:37:00Z",
-        "provider": "Zacks",
-        "url": "https://finance.yahoo.com/news/gilead-resolves-patent-litigations-hiv-133700146.html"
-      },
-      {
-        "title": "Gilead Scores A 'Solid Win' For Its Biggest Moneymaker; Shares Jump",
-        "summary": "Gilead stock popped Monday after the biotech giant said it signed deals with three generic drugmakers to delay their Biktarvy copycats.",
-        "pubDate": "2025-10-06T21:18:05Z",
-        "provider": "Investor's Business Daily",
-        "url": "https://www.investors.com/news/technology/gilead-stock-biktarvy-patent-deal/?src=A00220&yptr=yahoo"
-      },
-      {
-        "title": "Gilead stock rises after settling Biktarvy patent disputes",
-        "summary": "Investing.com -- Gilead Sciences Inc. (NASDAQ:GILD) stock rose 4.5% Monday after the company announced it had settled patent disputes with multiple generic drugmakers over its HIV treatment Biktarvy.",
-        "pubDate": "2025-10-06T13:19:55Z",
-        "provider": "Investing.com",
-        "url": "https://finance.yahoo.com/news/gilead-stock-rises-settling-biktarvy-131955964.html"
-      },
-      {
-        "title": "ARS Pharmaceuticals (SPRY) Faces Patent Test as Lupin Files ANDA",
-        "summary": "ARS Pharmaceuticals, Inc. (NASDAQ:SPRY) is among the fastest growing small cap stocks to buy. Lupin Inc., a leading player in the healthcare sector, sent a Paragraph IV certification notice to ARS Pharmaceuticals, Inc. (NASDAQ:SPRY) on August 13, 2025, outlining that Lupin has submitted an Abbreviated New Drug Application (ANDA) to the FDA for approval of [\u2026]",
-        "pubDate": "2025-09-04T18:54:32Z",
-        "provider": "Insider Monkey",
-        "url": "https://finance.yahoo.com/news/ars-pharmaceuticals-spry-faces-patent-185432284.html"
-      },
-      {
-        "title": "Catalyst Pharmaceuticals, Inc. (CPRX) Secures FIRDAPSE Market Exclusivity Until 2035",
-        "summary": "We recently compiled a list of the 11 Cheap Biotech Stocks to Buy According to Hedge Funds. Catalyst Pharmaceuticals, Inc. is placed sixth among them. Catalyst Pharmaceuticals, Inc. (NASDAQ:CPRX) is a commercial-stage biopharmaceutical company specializing in treatments for rare and difficult-to-treat diseases. Its key products include FIRDAPSE (amifampridine), Fycompa, Ruzurgi, and AGAMREE, targeting neurological and [\u2026]",
-        "pubDate": "2025-08-29T08:54:10Z",
-        "provider": "Insider Monkey",
-        "url": "https://finance.yahoo.com/news/catalyst-pharmaceuticals-inc-cprx-secures-085410733.html"
-      }
-    ],
+    "npm_pct": 18.45,
+    "rsi": 30.7,
+    "ma200": 2242.13,
+    "wk52_return_pct": 16.29,
+    "volume_spike": 0.13,
+    "today_volume": 198656.0,
+    "avg_volume_10d": 1495467.2,
+    "news": [],
     "alerts": [
       {
-        "level": "REVIEW",
-        "icon": "\ud83d\udfe0",
-        "message": "Weakening \u2014 Score dropped 13.6 pts since entry (65.7 \u2192 52.1)"
+        "level": "SELL",
+        "icon": "\ud83d\udd34",
+        "message": "Quality Gone \u2014 Total score 39.4 (below 40 threshold)"
       }
     ],
-    "unrealised_pnl": -124.8,
-    "unrealised_pct": -2.55,
+    "unrealised_pnl": -373.0,
+    "unrealised_pct": -7.62,
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Score dropped 13.6 pts since entry"
+    "signal_reason": "Quality score collapsed to 39.4 (<40)"
   },
   {
     "symbol": "NMDC",
@@ -763,43 +407,28 @@
     "roe_at_entry": 23.36,
     "de_at_entry": 0.19,
     "npm_at_entry": 23.23,
-    "current_score": 60.0,
+    "current_score": 57.0,
     "current_strength": 74.0,
-    "current_value": 4921.3,
-    "current_momentum": 50.0,
-    "ltp": 84.85,
-    "pe": 10.16,
+    "current_value": 4968.86,
+    "current_momentum": 38.0,
+    "ltp": 85.67,
+    "pe": 10.11,
     "roe_pct": 23.36,
     "de_ratio": 0.19,
     "npm_pct": 23.23,
-    "rsi": 54.1,
-    "ma200": 81.57,
-    "wk52_return_pct": 18.24,
-    "volume_spike": 0.9,
-    "today_volume": 13828238,
-    "avg_volume_10d": 15383009,
-    "news": [
-      {
-        "title": "India explores Russian coking coal assets, more nickel supplies, sources say",
-        "summary": "By Neha Arora and Anastasia Lyrchikova NEW DELHI/MOSCOW, June 9 (Reuters) - India's state-owned Steel Authority of India (SAIL) and NMDC Ltd are exploring acquisitions of coking coal assets in Russia",
-        "pubDate": "2026-06-09T07:19:16Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/india-explores-russian-coking-coal-071916453.html"
-      },
-      {
-        "title": "NMDC Ltd (BOM:526371) Q4 2026 Earnings Call Highlights: Surpassing Production Milestones and ...",
-        "summary": "Despite challenges in EBITDA margins and cash flow, NMDC Ltd (BOM:526371) sets a strong growth trajectory with new mines and international acquisitions.",
-        "pubDate": "2026-06-02T01:04:39Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/nmdc-ltd-bom-526371-q4-010439005.html"
-      }
-    ],
+    "rsi": 65.3,
+    "ma200": 82.79,
+    "wk52_return_pct": 20.76,
+    "volume_spike": 0.27,
+    "today_volume": 4248838.0,
+    "avg_volume_10d": 15919449.4,
+    "news": [],
     "alerts": [],
-    "unrealised_pnl": -9.28,
-    "unrealised_pct": -0.19,
+    "unrealised_pnl": 38.28,
+    "unrealised_pct": 0.78,
     "signal": "BUY",
     "signal_badge": "\ud83d\udfe2 BUY",
-    "signal_reason": "Strong quality score (60.0) & solid fundamentals"
+    "signal_reason": "Strong quality score (57.0) & solid fundamentals"
   },
   {
     "symbol": "SHRIRAMFIN",
@@ -818,98 +447,27 @@
     "roe_at_entry": 18.5,
     "de_at_entry": 2.76,
     "npm_at_entry": 50.11,
-    "current_score": 51.8,
+    "current_score": 46.2,
     "current_strength": 53.0,
-    "current_value": 4398.8,
-    "current_momentum": 72.0,
-    "ltp": 1099.7,
-    "pe": 19.49,
+    "current_value": 4524.4,
+    "current_momentum": 61.0,
+    "ltp": 1131.1,
+    "pe": 20.11,
     "roe_pct": 18.5,
     "de_ratio": 2.76,
-    "npm_pct": 50.11,
-    "rsi": 66.4,
-    "ma200": 951.24,
-    "wk52_return_pct": 66.12,
-    "volume_spike": 0.61,
-    "today_volume": 3969770,
-    "avg_volume_10d": 6496796,
-    "news": [
-      {
-        "title": "Shriram Finance Ltd (BOM:511218) Q1 2027 Earnings Call Highlights: Robust Profit Growth and ...",
-        "summary": "Shriram Finance Ltd (BOM:511218) reports a significant 59.79% increase in profit after tax, driven by strong disbursement growth and strategic focus on new retail financing.",
-        "pubDate": "2026-07-24T21:02:52Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/shriram-finance-ltd-bom-511218-210252485.html"
-      },
-      {
-        "title": "India's Shriram Finance posts strong quarterly profit, expanding loanbook at lower cost",
-        "summary": "July 24 (Reuters) - India's Shriram Finance posted a 59.79% year-on-year rise in first quarter profit on Friday, boosted by a bigger loan book and wider lending margins as its borrowing costs eased.",
-        "pubDate": "2026-07-24T09:15:26Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-shriram-finance-posts-strong-091526978.html"
-      },
-      {
-        "title": "Mitsubishi UFJ Financial Group Q4 Earnings Call Highlights",
-        "summary": "Mitsubishi UFJ Financial Group (NYSE:MUFG) reported record fiscal 2025 profit and set a higher profit target for fiscal 2026, while management faced analyst questions about a drop in its capital ratio and the size of its planned share repurchase. Group CFO Togawa told investors on the online earnin",
-        "pubDate": "2026-05-18T15:05:39Z",
-        "provider": "MarketBeat",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/mitsubishi-ufj-financial-group-q4-150539930.html"
-      },
-      {
-        "title": "Shriram Finance Ltd (BOM:511218) Q4 2026 Earnings Call Highlights: Robust Profit Growth and ...",
-        "summary": "Shriram Finance Ltd (BOM:511218) reports a 40.86% increase in profit after tax, driven by strong net interest income and strategic capital moves.",
-        "pubDate": "2026-04-25T07:03:56Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/shriram-finance-ltd-bom-511218-070356537.html"
-      },
-      {
-        "title": "India's Shriram Finance beats profit forecasts, crosses 3 trillion rupees in AUM",
-        "summary": "BENGALURU, April 24 (Reuters) - India's Shriram Finance posted a bigger-than-expected fourth-quarter profit on Friday, bolstered by growth in lending for commercial and passenger vehicle purchases.",
-        "pubDate": "2026-04-24T10:43:18Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-shriram-finance-beats-quarterly-094332912.html"
-      },
-      {
-        "title": "MUFG lending head signals further Asia dealmaking",
-        "summary": "Masakazu Osawa told Bloomberg that non-bank financial companies could be potential targets.",
-        "pubDate": "2026-04-22T11:58:36Z",
-        "provider": "Retail Banker International",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/mufg-lending-head-signals-further-115836037.html"
-      },
-      {
-        "title": "Advent to buy 14.3% of Indian mortgage lender Aditya Birla Housing Finance for $304 million",
-        "summary": "Feb 3 (Reuters) - Private equity firm Advent International will buy a 14.3% stake in India's Aditya Birla Housing Finance Company for 27.5 billion rupees ($304.1 million), the latter's parent said on",
-        "pubDate": "2026-02-03T04:32:07Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/advent-buy-14-3-indian-043207222.html"
-      },
-      {
-        "title": "Japanese automakers rush to explore partnership with Shriram after MUFG investment, MUFG executive says",
-        "summary": "TOKYO, Jan 30 (Reuters) - Japan's Mitsubishi UFJ Financial Group has seen a surge in interest from Japanese automakers hoping to tap its 20% stake in Indian non-bank lender Shriram Finance to boost",
-        "pubDate": "2026-01-29T23:06:23Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/japanese-automakers-rush-explore-partnership-230623716.html"
-      },
-      {
-        "title": "Shriram Finance Ltd (BOM:511218) Q3 2026 Earnings Call Highlights: Robust Growth in ...",
-        "summary": "Shriram Finance Ltd (BOM:511218) reports strong financial performance with significant growth in disbursements and profit, despite facing challenges in certain segments.",
-        "pubDate": "2026-01-27T01:04:16Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/shriram-finance-ltd-bom-511218-010416648.html"
-      },
-      {
-        "title": "India's Shriram Finance beats third-quarter profit estimate",
-        "summary": "BENGALURU, Jan 23 - India's Shriram Finance posted a bigger-than-expected third-quarter profit on Friday, bolstered by strong loan growth.",
-        "pubDate": "2026-01-23T08:38:34Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-shriram-finance-beats-third-083834372.html"
-      }
-    ],
+    "npm_pct": 50.01,
+    "rsi": 70.6,
+    "ma200": 967.14,
+    "wk52_return_pct": 84.85,
+    "volume_spike": 0.28,
+    "today_volume": 1529001.0,
+    "avg_volume_10d": 5369283.6,
+    "news": [],
     "alerts": [
       {
         "level": "REVIEW",
         "icon": "\ud83d\udfe0",
-        "message": "Weakening \u2014 Score dropped 10.2 pts since entry (62.0 \u2192 51.8)"
+        "message": "Weakening \u2014 Score dropped 15.8 pts since entry (62.0 \u2192 46.2)"
       },
       {
         "level": "ALERT",
@@ -917,11 +475,11 @@
         "message": "Debt Spiked \u2014 D/E ratio now 2.76 (was 2.76 at entry, threshold: 2.0)"
       }
     ],
-    "unrealised_pnl": 220.0,
-    "unrealised_pct": 5.26,
+    "unrealised_pnl": 345.6,
+    "unrealised_pct": 8.27,
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Score dropped 10.2 pts since entry"
+    "signal_reason": "Score dropped 15.8 pts since entry"
   },
   {
     "symbol": "MARICO",
@@ -940,99 +498,34 @@
     "roe_at_entry": 41.39,
     "de_at_entry": 0.12,
     "npm_at_entry": 12.95,
-    "current_score": 52.8,
-    "current_strength": 73.0,
-    "current_value": 4274.25,
-    "current_momentum": 69.0,
-    "ltp": 854.85,
-    "pe": 63.42,
-    "roe_pct": 41.39,
+    "current_score": 36.2,
+    "current_strength": 48.0,
+    "current_value": 4220.5,
+    "current_momentum": 43.0,
+    "ltp": 844.1,
+    "pe": 57.85,
+    "roe_pct": null,
     "de_ratio": 0.12,
-    "npm_pct": 12.95,
-    "rsi": 57.3,
-    "ma200": 775.17,
-    "wk52_return_pct": 21.59,
-    "volume_spike": 1.72,
-    "today_volume": 3240661,
-    "avg_volume_10d": 1888649,
-    "news": [
+    "npm_pct": 13.16,
+    "rsi": 43.2,
+    "ma200": 781.2,
+    "wk52_return_pct": 19.88,
+    "volume_spike": 0.11,
+    "today_volume": 218725.0,
+    "avg_volume_10d": 2059798.9,
+    "news": [],
+    "alerts": [
       {
-        "title": "India's Marico expects annual revenue above view on premium push; margin pressure to weigh",
-        "summary": "By Surbhi Misra and Praveen Paramasivam May 5 (Reuters) - India's Marico forecast annual revenue above estimates on Tuesday, betting on steady volume growth and expansion in its premium segments, even",
-        "pubDate": "2026-05-05T11:34:45Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-marico-beats-quarterly-profit-082739913.html"
-      },
-      {
-        "title": "India's Marico to buy 60% stake in protein brand Cosmix",
-        "summary": "Feb 4 (Reuters) - Indian consumer firm Marico on Wednesday said it will buy a 60% stake in homegrown protein brand Cosmix in a 2.26 billion rupee ($24.99 million) deal.",
-        "pubDate": "2026-02-04T12:37:41Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-marico-buy-60-stake-123741371.html"
-      },
-      {
-        "title": "Marico snaps up India snacks firm Zea Maize",
-        "summary": "FMCG giant Marico, home to the Saffola food brand, sees \u201cimmense potential\u201d in Zea Maize\u2019s 4700BC snacks.",
-        "pubDate": "2026-01-28T12:24:27Z",
-        "provider": "Just Food",
-        "url": "https://finance.yahoo.com/news/marico-snaps-india-snacks-firm-122427538.html"
-      },
-      {
-        "title": "Marico Ltd (BOM:531642) Q3 2026 Earnings Call Highlights: Strategic Growth Amidst Pricing Challenges",
-        "summary": "Marico Ltd (BOM:531642) reports robust international growth and strategic investments, while navigating pricing pressures in key segments.",
-        "pubDate": "2026-01-27T19:00:50Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/marico-ltd-bom-531642-q3-190050234.html"
-      },
-      {
-        "title": "Indian consumer firm Marico beats profit estimates as tax cuts boost demand",
-        "summary": "Jan 27 (Reuters) - Indian consumer goods maker Marico reported a bigger-than-expected quarterly profit on Tuesday as consumption tax cuts helped boost demand.",
-        "pubDate": "2026-01-27T11:06:38Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indian-consumer-firm-marico-beats-110638567.html"
-      },
-      {
-        "title": "Indian consumer firm Marico expects third-quarter revenue jump",
-        "summary": "BENGALURU, Jan 2 (Reuters) - India's Marico expects third-quarter consolidated revenue to rise in the high twenties percent from a year earlier, as easing inflation and tax cuts have boosted sales,",
-        "pubDate": "2026-01-02T11:22:57Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indian-consumer-firm-marico-expects-112257878.html"
-      },
-      {
-        "title": "Marico Ltd (BOM:531642) Q2 2026 Earnings Call Highlights: Resilient Growth Amidst Market Challenges",
-        "summary": "Marico Ltd (BOM:531642) reports robust volume growth and strategic advancements despite facing GST disruptions and copra price inflation.",
-        "pubDate": "2025-11-14T19:01:18Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/marico-ltd-bom-531642-q2-190118261.html"
-      },
-      {
-        "title": "India's Marico misses profit estimates on higher raw material costs",
-        "summary": "(Reuters) -Indian fast-moving consumer goods firm Marico reported a quarterly profit that fell short of estimates on Friday, hurt by a surge in expenses, including for raw materials such as copra and",
-        "pubDate": "2025-11-14T08:28:28Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-marico-misses-profit-estimates-082828059.html"
-      },
-      {
-        "title": "India's AWL Agri Business bets on packaged foods to protect margins from volatile oils",
-        "summary": "By Praveen Paramasivam (Reuters) -India's AWL Agri Business plans to boost its higher-margin packaged foods segment to cut reliance on its volatile edible oil business, aiming to increase the",
-        "pubDate": "2025-11-04T06:44:34Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-awl-agri-business-bets-064434261.html"
-      },
-      {
-        "title": "India\u2019s Patanjali Foods quarterly profit surges on strong edible oil demand",
-        "summary": "(Reuters) -India's Patanjali Foods posted a 67.4% increase in quarterly profit on Friday, on strong demand for its edible oils.",
-        "pubDate": "2025-10-31T12:24:44Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/india-patanjali-foods-quarterly-profit-122444300.html"
+        "level": "SELL",
+        "icon": "\ud83d\udd34",
+        "message": "Quality Gone \u2014 Total score 36.2 (below 40 threshold)"
       }
     ],
-    "alerts": [],
-    "unrealised_pnl": -152.5,
-    "unrealised_pct": -3.44,
-    "signal": "HOLD",
-    "signal_badge": "\ud83d\udfe1 HOLD",
-    "signal_reason": "Moderate quality score; maintain position"
+    "unrealised_pnl": -206.25,
+    "unrealised_pct": -4.66,
+    "signal": "SELL",
+    "signal_badge": "\ud83d\udd34 SELL",
+    "signal_reason": "Quality score collapsed to 36.2 (<40)"
   },
   {
     "symbol": "NATIONALUM",
@@ -1051,99 +544,28 @@
     "roe_at_entry": 29.42,
     "de_at_entry": 0.0,
     "npm_at_entry": 32.49,
-    "current_score": 55.0,
+    "current_score": 54.3,
     "current_strength": 55.0,
-    "current_value": 5322.8,
-    "current_momentum": 72.0,
-    "ltp": 380.2,
-    "pe": 11.37,
+    "current_value": 5854.1,
+    "current_momentum": 69.0,
+    "ltp": 418.15,
+    "pe": 11.21,
     "roe_pct": null,
     "de_ratio": 0.0,
     "npm_pct": 34.91,
-    "rsi": 66.3,
-    "ma200": 345.71,
-    "wk52_return_pct": 86.93,
-    "volume_spike": 1.4,
-    "today_volume": 6765519,
-    "avg_volume_10d": 4839369,
-    "news": [
-      {
-        "title": "National Aluminium Co Ltd (BOM:532234) (Q1 2027) Earnings Call Highlights: Record Production ...",
-        "summary": "Robust Q1 growth with 39% revenue surge, but rising input costs and project delays temper the outlook for FY27.",
-        "pubDate": "2026-08-04T01:06:26Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/national-aluminium-co-ltd-bom-010626027.html"
-      },
-      {
-        "title": "NLCIL and NALCO partner on 1.08GW thermal plant in Odisha",
-        "summary": "The facility will comprise four 270MW units.",
-        "pubDate": "2026-07-09T13:12:37Z",
-        "provider": "Power Technology",
-        "url": "https://finance.yahoo.com/energy/articles/nlcil-nalco-partner-1-08gw-131237695.html"
-      },
-      {
-        "title": "Four Indian stocks added, four excluded from key global index in MSCI's May rejig",
-        "summary": "By Bharath Rajeswaran May 13 (Reuters) - Global index provider MSCI added four Indian stocks and removed four from its widely tracked Global Standard Index in its latest periodic review, announced",
-        "pubDate": "2026-05-13T06:22:59Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/four-indian-stocks-added-four-062259757.html"
-      },
-      {
-        "title": "National Aluminium Co Ltd (BOM:532234) Q4 2026 Earnings Call Highlights: Record Growth Amidst ...",
-        "summary": "Despite geopolitical tensions and declining alumina prices, National Aluminium Co Ltd (BOM:532234) reports robust financial and production growth in Q4 2026.",
-        "pubDate": "2026-05-01T19:01:18Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/national-aluminium-co-ltd-bom-190118786.html"
-      },
-      {
-        "title": "India's NALCO posts quarterly profit drop on alumina softness",
-        "summary": "April 30 (Reuters) - India's state-owned National Aluminium Company (NALCO) reported a 16.6% fall in fourth\u2011quarter profit on Thursday, as higher costs and weaker alumina prices weighed on earnings.",
-        "pubDate": "2026-04-30T10:31:36Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-nalco-posts-quarterly-profit-103136152.html"
-      },
-      {
-        "title": "NLCIL, NALCO sign thermal and renewable energy development deal",
-        "summary": "The agreement covers a thermal captive project and renewable energy to meet long-term industrial needs.",
-        "pubDate": "2026-02-16T11:13:31Z",
-        "provider": "Power Technology",
-        "url": "https://finance.yahoo.com/news/nlcil-nalco-sign-thermal-renewable-111331184.html"
-      },
-      {
-        "title": "National Aluminium Co Ltd (BOM:532234) Q3 2026 Earnings Call Highlights: Strong Revenue Growth ...",
-        "summary": "National Aluminium Co Ltd (BOM:532234) reports robust production and sales growth, despite facing alumina price declines and geopolitical challenges.",
-        "pubDate": "2026-02-04T01:01:48Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/national-aluminium-co-ltd-bom-010148778.html"
-      },
-      {
-        "title": "India's NALCO posts rise in quarterly profit on higher aluminium prices",
-        "summary": "Jan 30 (Reuters) - India's National Aluminium Company (NALCO) reported a marginal increase in third-quarter profit on Friday, helped by firm aluminium prices.",
-        "pubDate": "2026-01-30T10:11:06Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-nalco-posts-rise-quarterly-101106065.html"
-      },
-      {
-        "title": "NALCO: Integrated Operations, Export Growth, and Cost Efficiency Drive Strong Outlook",
-        "summary": "Attractive Valuation and Sustainable Long-Term Outlook",
-        "pubDate": "2025-11-29T13:24:50Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/nalco-integrated-operations-export-growth-132450701.html"
-      },
-      {
-        "title": "India's NALCO posts profit growth on higher commodity prices",
-        "summary": "(Reuters) -India's state-owned National Aluminium Company (NALCO) on Friday reported a profit rise on the back of higher commodity prices.",
-        "pubDate": "2025-11-07T11:31:07Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-nalco-posts-profit-growth-113107927.html"
-      }
-    ],
+    "rsi": 88.0,
+    "ma200": 352.58,
+    "wk52_return_pct": 124.19,
+    "volume_spike": 2.21,
+    "today_volume": 21336803.0,
+    "avg_volume_10d": 9660774.8,
+    "news": [],
     "alerts": [],
-    "unrealised_pnl": 497.0,
-    "unrealised_pct": 10.3,
-    "signal": "BUY",
-    "signal_badge": "\ud83d\udfe2 BUY",
-    "signal_reason": "Strong quality score (55.0) & solid fundamentals"
+    "unrealised_pnl": 1028.3,
+    "unrealised_pct": 21.31,
+    "signal": "HOLD",
+    "signal_badge": "\ud83d\udfe1 HOLD",
+    "signal_reason": "Moderate quality score; maintain position"
   },
   {
     "symbol": "WIPRO",
@@ -1164,100 +586,29 @@
     "npm_at_entry": 13.92,
     "current_score": 52.8,
     "current_strength": 61.0,
-    "current_value": 4849.0,
+    "current_value": 4776.46,
     "current_momentum": 28.0,
-    "ltp": 186.5,
-    "pe": 14.41,
+    "ltp": 183.71,
+    "pe": 14.66,
     "roe_pct": 16.13,
     "de_ratio": 0.27,
     "npm_pct": 13.92,
-    "rsi": 69.1,
-    "ma200": 210.97,
-    "wk52_return_pct": -25.32,
-    "volume_spike": 0.36,
-    "today_volume": 6659774,
-    "avg_volume_10d": 18723355,
-    "news": [
-      {
-        "title": "Meta Scales Back Wipro Outsourcing Following AI-Led Business Restructuring",
-        "summary": "Meta Platforms (NASDAQ:META) has reduced the volume of IT services outsourced to Wipro Ltd (NYSE:WIT) by at least 25% after an artificial intelligence-driven reorganisation that resulted in the closure of its digital marketing division, according to a report from Mint. Wipro\u2019s Revenue from Meta Expected to DeclineThe report, citing two people familiar with the matter, said Wipro now expects to generate approximately $75 million in annual revenue from Meta after the technology giant decided to br",
-        "pubDate": "2026-08-03T10:08:12Z",
-        "provider": "InvestorsHub",
-        "url": "https://finance.yahoo.com/technology/ai/articles/meta-scales-back-wipro-outsourcing-100812687.html"
-      },
-      {
-        "title": "Asian Equities Traded in the US as American Depositary Receipts Track Lower in Wednesday Trading",
-        "summary": "Asian equities traded in the US as American depositary receipts were tracking lower Wednesday mornin",
-        "pubDate": "2026-07-29T14:56:21Z",
-        "provider": "MT Newswires",
-        "url": "https://finance.yahoo.com/markets/world-indices/articles/asian-equities-traded-us-american-145621418.html"
-      },
-      {
-        "title": "Asian Equities Traded in the US as American Depositary Receipts Fall Sharply in Tuesday Trading",
-        "summary": "Asian equities traded in the US as American depositary receipts were falling sharply Tuesday morning",
-        "pubDate": "2026-07-28T14:49:00Z",
-        "provider": "MT Newswires",
-        "url": "https://finance.yahoo.com/markets/world-indices/articles/asian-equities-traded-us-american-144900423.html"
-      },
-      {
-        "title": "Asian Equities Traded in the US as American Depositary Receipts Decline in Friday Trading",
-        "summary": "Asian equities traded in the US as American depositary receipts were tracking lower Friday morning,",
-        "pubDate": "2026-07-24T14:40:31Z",
-        "provider": "MT Newswires",
-        "url": "https://finance.yahoo.com/markets/world-indices/articles/asian-equities-traded-us-american-144031292.html"
-      },
-      {
-        "title": "Asian Equities Traded in the US as American Depositary Receipts Decline in Thursday Trading",
-        "summary": "Asian equities traded in the US as American depositary receipts were trending lower Thursday morning",
-        "pubDate": "2026-07-23T14:33:44Z",
-        "provider": "MT Newswires",
-        "url": "https://finance.yahoo.com/markets/world-indices/articles/asian-equities-traded-us-american-143344950.html"
-      },
-      {
-        "title": "IT powers Indian shares to weekly gains; Reliance, bank earnings eyed",
-        "summary": "By Bharath Rajeswaran July 17 (Reuters) - Indian benchmarks rose on Friday, led by IT and financial stocks after upbeat results from Tech Mahindra and Jio Financial, swinging to weekly gains despite",
-        "pubDate": "2026-07-17T10:21:39Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indian-shares-seen-opening-flat-021956007.html"
-      },
-      {
-        "title": "India's Wipro slips as weak forecast deepens growth slowdown fears",
-        "summary": "By Kashish Tandon July 17 (Reuters) - Shares of India's Wipro fell as much as 2.4% on Friday after the IT services firm's quarterly earnings miss and sluggish outlook indicated the company may be",
-        "pubDate": "2026-07-17T09:45:19Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-wipro-slips-weak-forecast-040323545.html"
-      },
-      {
-        "title": "Wipro (WIT) Q1 2027 Earnings Call Transcript",
-        "summary": "Revenue growth slowed amid Americas weakness and margin pressure from AI investments.",
-        "pubDate": "2026-07-17T00:32:36Z",
-        "provider": "Motley Fool",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/wipro-wit-q1-2027-earnings-003236253.html"
-      },
-      {
-        "title": "Wipro Ltd (WIT) Q1 2027 Earnings Call Highlights: Navigating Growth and Challenges with ...",
-        "summary": "Wipro Ltd (WIT) reports a modest revenue increase and strong order bookings, while focusing on AI innovations amid macroeconomic headwinds.",
-        "pubDate": "2026-07-16T21:00:36Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/wipro-ltd-wit-q1-2027-210036427.html"
-      },
-      {
-        "title": "India's Wipro lags peers after earnings miss, weak forecast",
-        "summary": "By Haripriya Suresh and Sai Ishwarbharath B BENGALURU, July 16 (Reuters) - Wipro missed quarterly earnings estimates and forecast a weak recovery, raising fresh concerns about the Indian IT firm",
-        "pubDate": "2026-07-16T13:05:13Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-wipro-misses-first-quarter-102301446.html"
-      }
-    ],
+    "rsi": 65.7,
+    "ma200": 214.04,
+    "wk52_return_pct": -24.0,
+    "volume_spike": 0.13,
+    "today_volume": 1787856.0,
+    "avg_volume_10d": 14011206.6,
+    "news": [],
     "alerts": [
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9186.5 fell below 200-day MA \u20b9210.97"
+        "message": "Trend Broken \u2014 Price \u20b9183.71 fell below 200-day MA \u20b9214.04"
       }
     ],
-    "unrealised_pnl": 4.42,
-    "unrealised_pct": 0.09,
+    "unrealised_pnl": -68.12,
+    "unrealised_pct": -1.41,
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Moderate quality score; maintain position"
@@ -1279,85 +630,28 @@
     "roe_at_entry": 22.96,
     "de_at_entry": null,
     "npm_at_entry": 53.41,
-    "current_score": 58.2,
+    "current_score": 59.7,
     "current_strength": 57.0,
-    "current_value": 4959.99,
-    "current_momentum": 52.0,
-    "ltp": 78.73,
-    "pe": 8.16,
+    "current_value": 5116.86,
+    "current_momentum": 58.0,
+    "ltp": 81.22,
+    "pe": 8.29,
     "roe_pct": 22.96,
     "de_ratio": null,
     "npm_pct": 53.41,
-    "rsi": 47.2,
-    "ma200": 69.45,
-    "wk52_return_pct": 43.92,
-    "volume_spike": 0.71,
-    "today_volume": 7774026,
-    "avg_volume_10d": 10925191,
-    "news": [
-      {
-        "title": "Bank of Maharashtra (BOM:532525) Q1 2027 Earnings Call Highlights: Strong Growth Amidst Margin ...",
-        "summary": "Bank of Maharashtra (BOM:532525) reports robust business growth and asset quality, despite challenges in net interest income and deposit costs.",
-        "pubDate": "2026-07-10T19:00:40Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/bank-maharashtra-bom-532525-q1-190040244.html"
-      },
-      {
-        "title": "Bank of Maharashtra (BOM:532525) Q4 2026 Earnings Call Highlights: Robust Growth and Strategic ...",
-        "summary": "Bank of Maharashtra (BOM:532525) reports impressive growth across key metrics, with a focus on asset quality and strategic international expansion.",
-        "pubDate": "2026-04-21T07:00:44Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/bank-maharashtra-bom-532525-q4-070044269.html"
-      },
-      {
-        "title": "Indian financial crimes agency freezes Anil Ambani Group properties worth $63 million",
-        "summary": "March 12 (Reuters) - India's financial crimes agency has frozen 5.82 billion rupees ($63.07 million) worth of properties linked to Reliance Home Finance Limited and Reliance Commercial Finance, the",
-        "pubDate": "2026-03-12T14:31:30Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indian-financial-crimes-agency-freezes-143130208.html"
-      },
-      {
-        "title": "Bank of Maharashtra (BOM:532525) Q3 2026 Earnings Call Highlights: Record Profits and Robust ...",
-        "summary": "Bank of Maharashtra (BOM:532525) reports its highest ever quarterly profit and impressive growth across retail loans, despite challenges in deposit growth and treasury income.",
-        "pubDate": "2026-01-16T01:01:10Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/bank-maharashtra-bom-532525-q3-010110996.html"
-      },
-      {
-        "title": "India's federal investigator files new cases against Reliance Home Finance, Reliance Commercial",
-        "summary": "MUMBAI, Dec 9 (Reuters) - India's financial crime-fighting agency has filed new cases against Reliance Home Finance and Reliance Commercial Finance, the agency said on Tuesday.",
-        "pubDate": "2025-12-09T11:35:25Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-federal-investigator-files-cases-113525242.html"
-      },
-      {
-        "title": "India to sell up to 6% stake in Bank of Maharashtra",
-        "summary": "Dec 1 (Reuters) - India will sell a stake of up to 6% in Bank of Maharashtra, an exchange filing showed on Monday, moving the state-run lender closer to meeting minimum public shareholding rules.",
-        "pubDate": "2025-12-01T13:13:11Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/india-sell-6-stake-bank-131311073.html"
-      },
-      {
-        "title": "India targets streamlined banking sector with planned PSB mergers\u2013 report",
-        "summary": "The discussions regarding the consolidation are projected to extend into FY 2027.",
-        "pubDate": "2025-10-16T11:08:44Z",
-        "provider": "Retail Banker International",
-        "url": "https://finance.yahoo.com/news/india-targets-streamlined-banking-sector-110844173.html"
-      },
-      {
-        "title": "India plans minority stake sales in half a dozen state firms, official says",
-        "summary": "NEW DELHI (Reuters) -The Indian government is planning to sell minority stakes in about half a dozen state-run companies, divestment secretary Arunish Chawla told television channel CNBC-TV18 on Monday.  Chawla did not disclose which companies will be considered for the sale of stakes, but Reuters has previously reported that India has plans to sell shares in five public sector banks including UCO Bank and Bank of Maharashtra.  India also has to reduce its shareholding in the country's largest insurer, Life Insurance Corporation of India, to meet the market regulator's minimum public shareholding norms.",
-        "pubDate": "2025-09-22T08:03:35Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/india-plans-minority-stake-sales-080335635.html"
-      }
-    ],
+    "rsi": 61.7,
+    "ma200": 71.02,
+    "wk52_return_pct": 45.87,
+    "volume_spike": 1.16,
+    "today_volume": 10935569.0,
+    "avg_volume_10d": 9458638.4,
+    "news": [],
     "alerts": [],
-    "unrealised_pnl": -33.39,
-    "unrealised_pct": -0.67,
+    "unrealised_pnl": 123.48,
+    "unrealised_pct": 2.47,
     "signal": "BUY",
     "signal_badge": "\ud83d\udfe2 BUY",
-    "signal_reason": "Strong quality score (58.2) & solid fundamentals"
+    "signal_reason": "Strong quality score (59.7) & solid fundamentals"
   },
   {
     "symbol": "ARE&M",
@@ -1376,43 +670,28 @@
     "roe_at_entry": 11.57,
     "de_at_entry": 0.05,
     "npm_at_entry": 6.49,
-    "current_score": 58.7,
-    "current_strength": 50.0,
-    "current_value": 4763.0,
-    "current_momentum": 68.0,
-    "ltp": 952.6,
-    "pe": 19.7,
-    "roe_pct": 11.57,
+    "current_score": 53.5,
+    "current_strength": 42.0,
+    "current_value": 5008.75,
+    "current_momentum": 60.0,
+    "ltp": 1001.75,
+    "pe": 18.4,
+    "roe_pct": null,
     "de_ratio": 0.05,
-    "npm_pct": 6.49,
-    "rsi": 65.7,
-    "ma200": 867.53,
-    "wk52_return_pct": -4.32,
-    "volume_spike": 1.66,
-    "today_volume": 1309581,
-    "avg_volume_10d": 789229,
-    "news": [
-      {
-        "title": "Amara Raja Energy & Mobility Ltd (BOM:500008) Q4 2026 Earnings Call Highlights: Strong ...",
-        "summary": "Amara Raja Energy & Mobility Ltd (BOM:500008) reports a 15% revenue increase driven by robust battery business, while navigating challenges in raw material costs and export volumes.",
-        "pubDate": "2026-05-26T19:01:07Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/sectors/energy/articles/amara-raja-energy-mobility-ltd-190107813.html"
-      },
-      {
-        "title": "Amara Raja Energy & Mobility Ltd (BOM:500008) Q3 2026 Earnings Call Highlights: Navigating ...",
-        "summary": "Amara Raja Energy & Mobility Ltd (BOM:500008) reports robust growth in new energy business while tackling export and raw material challenges.",
-        "pubDate": "2026-02-12T21:08:28Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/amara-raja-energy-mobility-ltd-210828706.html"
-      }
-    ],
+    "npm_pct": 6.3,
+    "rsi": 73.2,
+    "ma200": 871.7,
+    "wk52_return_pct": 4.85,
+    "volume_spike": 1.37,
+    "today_volume": 2906555.0,
+    "avg_volume_10d": 2118857.4,
+    "news": [],
     "alerts": [],
-    "unrealised_pnl": 348.5,
-    "unrealised_pct": 7.89,
-    "signal": "BUY",
-    "signal_badge": "\ud83d\udfe2 BUY",
-    "signal_reason": "Strong quality score (58.7) & solid fundamentals"
+    "unrealised_pnl": 594.25,
+    "unrealised_pct": 13.46,
+    "signal": "HOLD",
+    "signal_badge": "\ud83d\udfe1 HOLD",
+    "signal_reason": "Moderate quality score; maintain position"
   },
   {
     "symbol": "AJANTPHARM",
@@ -1431,84 +710,34 @@
     "roe_at_entry": 25.39,
     "de_at_entry": 0.06,
     "npm_at_entry": 19.37,
-    "current_score": 38.8,
+    "current_score": 39.5,
     "current_strength": 52.0,
-    "current_value": 3434.7,
-    "current_momentum": 65.0,
-    "ltp": 3434.7,
-    "pe": 37.89,
+    "current_value": 3527.4,
+    "current_momentum": 68.0,
+    "ltp": 3527.4,
+    "pe": 38.84,
     "roe_pct": null,
     "de_ratio": 0.06,
     "npm_pct": 19.65,
-    "rsi": 48.6,
-    "ma200": 2892.74,
-    "wk52_return_pct": 31.47,
-    "volume_spike": 0.66,
-    "today_volume": 89786,
-    "avg_volume_10d": 135620,
-    "news": [
-      {
-        "title": "Ajanta Pharma Ltd (BOM:532331) (Q1 2027) Earnings Call Highlights: Strong Revenue Growth and ...",
-        "summary": "Ajanta Pharma Ltd (BOM:532331) reports a 25% revenue surge and 31% profit increase, driven by stellar India and Africa branded business, while navigating Asia disruptions and US pricing pressures.",
-        "pubDate": "2026-07-30T19:00:50Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/ajanta-pharma-ltd-bom-532331-190050897.html"
-      },
-      {
-        "title": "India Semaglutide Patent Expiry Could Drive 50% Price Drop in Weight-Loss Drugs",
-        "summary": "Novo Nordisk's semaglutide patent expires March 20 as Indian drugmakers prepare lower-cost versions and hospitals expand obesity clinics.",
-        "pubDate": "2026-03-16T13:33:09Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/india-semaglutide-patent-expiry-could-133309417.html"
-      },
-      {
-        "title": "Ajanta Pharma Ltd (BOM:532331) Q3 2026 Earnings Call Highlights: Strong Revenue Growth and ...",
-        "summary": "Ajanta Pharma Ltd (BOM:532331) reports a robust 20% revenue increase in Q3, driven by significant growth in the US generics market and strategic initiatives for future expansion.",
-        "pubDate": "2026-02-03T01:04:09Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/ajanta-pharma-ltd-bom-532331-010409604.html"
-      },
-      {
-        "title": "Inspira Global to buy stake in India's Burger King operator RBA for about $50.5 million",
-        "summary": "(Converts figures in paragraph 3 to billions of rupees, from crores of rupees) Jan 20 (Reuters) - Restaurant Brands Asia said on Tuesday that Inspira Global will acquire a controlling stake in the",
-        "pubDate": "2026-01-20T20:50:20Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/inspira-global-buy-stake-indias-191220155.html"
-      },
-      {
-        "title": "Everstone to sell stake in Restaurant Brands Asia \u2013 report",
-        "summary": "The family office of the founders of Ajanta Pharma in India may inject up to Rs8bn ($88m) into RBA.",
-        "pubDate": "2026-01-19T15:04:52Z",
-        "provider": "Verdict Food Service",
-        "url": "https://finance.yahoo.com/news/everstone-sell-stake-restaurant-brands-150452829.html"
-      },
-      {
-        "title": "Everstone to sell stake in India's Burger King operator Restaurant Brands Asia, sources say",
-        "summary": "By Aditya Kalra, Yantoultra Ngui and Vibhuti Sharma NEW DELHI/SINGAPORE, Jan 19 (Reuters) - Private equity firm Everstone will sell its entire 11.26% stake in Burger King's India and Indonesia",
-        "pubDate": "2026-01-19T10:33:00Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/everstone-sell-stake-indias-burger-103300334.html"
-      },
-      {
-        "title": "Ajanta Pharma Ltd (BOM:532331) Q2 2026 Earnings Call Highlights: Strong Revenue Growth Amidst ...",
-        "summary": "Ajanta Pharma Ltd (BOM:532331) reports robust revenue growth and strategic product launches, despite facing forex losses and increased personnel costs.",
-        "pubDate": "2025-11-04T11:00:34Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/ajanta-pharma-ltd-bom-532331-110034749.html"
-      }
-    ],
+    "rsi": 56.7,
+    "ma200": 2921.58,
+    "wk52_return_pct": 30.78,
+    "volume_spike": 0.14,
+    "today_volume": 16896.0,
+    "avg_volume_10d": 119031.1,
+    "news": [],
     "alerts": [
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 38.8 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 39.5 (below 40 threshold)"
       }
     ],
-    "unrealised_pnl": 38.2,
-    "unrealised_pct": 1.12,
+    "unrealised_pnl": 130.9,
+    "unrealised_pct": 3.85,
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 38.8 (<40)"
+    "signal_reason": "Quality score collapsed to 39.5 (<40)"
   },
   {
     "symbol": "INFY",
@@ -1527,110 +756,39 @@
     "roe_at_entry": 32.0,
     "de_at_entry": 0.1,
     "npm_at_entry": 16.37,
-    "current_score": 46.7,
+    "current_score": 45.2,
     "current_strength": 66.0,
-    "current_value": 4663.6,
-    "current_momentum": 32.0,
-    "ltp": 1165.9,
-    "pe": 15.24,
+    "current_value": 4713.6,
+    "current_momentum": 26.0,
+    "ltp": 1178.4,
+    "pe": 15.18,
     "roe_pct": 32.0,
     "de_ratio": 0.1,
     "npm_pct": 16.37,
-    "rsi": 65.2,
-    "ma200": 1321.32,
-    "wk52_return_pct": -22.61,
-    "volume_spike": 0.33,
-    "today_volume": 6056716,
-    "avg_volume_10d": 18166146,
-    "news": [
-      {
-        "title": "Infosys (NSEI:INFY) Stock Fair Value Falls After Analysts Cut Targets On Weaker Outlook",
-        "summary": "Infosys now sits on a lower implied fair value, with the updated price target in the model moving from about \u20b91,395.13 to roughly \u20b91,199.02, a cut of around 14%. This shift lines up with more cautious research coverage after the Q1 miss and guidance reset, as analysts weigh weaker organic growth, pricing pressure, and AI related productivity effects against the current valuation. As you read on, you will see how these target changes fit into the broader Infosys story and what to watch as the...",
-        "pubDate": "2026-07-31T22:08:59Z",
-        "provider": "Simply Wall St.",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/infosys-nsei-infy-stock-fair-220859737.html"
-      },
-      {
-        "title": "Asian Equities Traded in the US as American Depositary Receipts Fall Sharply in Tuesday Trading",
-        "summary": "Asian equities traded in the US as American depositary receipts were falling sharply Tuesday morning",
-        "pubDate": "2026-07-28T14:49:00Z",
-        "provider": "MT Newswires",
-        "url": "https://finance.yahoo.com/markets/world-indices/articles/asian-equities-traded-us-american-144900423.html"
-      },
-      {
-        "title": "Infosys Q1 Earnings Miss Estimates, Revenues Increase Y/Y",
-        "summary": "INFY's Q1 fiscal 2027 earnings and revenues miss estimates as soft volumes and a client exit offset growth and rising AI sales.",
-        "pubDate": "2026-07-24T16:05:00Z",
-        "provider": "Zacks",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/infosys-q1-earnings-miss-estimates-160500537.html"
-      },
-      {
-        "title": "Asian Equities Traded in the US as American Depositary Receipts Decline in Friday Trading",
-        "summary": "Asian equities traded in the US as American depositary receipts were tracking lower Friday morning,",
-        "pubDate": "2026-07-24T14:40:31Z",
-        "provider": "MT Newswires",
-        "url": "https://finance.yahoo.com/markets/world-indices/articles/asian-equities-traded-us-american-144031292.html"
-      },
-      {
-        "title": "SpaceX initiated, PayPal upgraded: Wall Street's top analyst calls",
-        "summary": "SpaceX initiated, PayPal upgraded: Wall Street's top analyst calls",
-        "pubDate": "2026-07-24T13:32:48Z",
-        "provider": "The Fly",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/spacex-initiated-paypal-upgraded-wall-133248895.html"
-      },
-      {
-        "title": "Infosys downgraded by JPMorgan, HSBC after earnings miss and weaker growth outlook",
-        "summary": "Investing.com -- Infosys drew fresh analyst downgrades from JPMorgan and HSBC after its first-quarter earnings missed expectations, management cut its fiscal 2027 revenue growth guidance for a second consecutive quarter, and announced a CEO transition, reinforcing concerns over slowing business momentum.",
-        "pubDate": "2026-07-24T13:24:14Z",
-        "provider": "Investing.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/infosys-downgraded-jpmorgan-hsbc-earnings-132414691.html"
-      },
-      {
-        "title": "Indian shares fall as crude tops $100; Infosys, IndiGo drop on subdued Q2 results",
-        "summary": "July 24 (Reuters) - Indian shares opened lower on Friday, pressured by the rise in Brent crude to above $100 per barrel as the Middle East crisis escalates, while a slide in IT company Infosys and",
-        "pubDate": "2026-07-24T03:51:20Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indian-shares-fall-crude-tops-035120511.html"
-      },
-      {
-        "title": "Infosys (INFY) Q1 2027 Earnings Call Transcript",
-        "summary": "CEO transition announced as AI services hit 8.2% of revenue with double-digit growth.",
-        "pubDate": "2026-07-24T00:47:28Z",
-        "provider": "Motley Fool",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/infosys-infy-q1-2027-earnings-004728746.html"
-      },
-      {
-        "title": "Infosys Ltd (INFY) Q1 2027 Earnings Call Highlights: AI Services Surge Amidst Revenue Challenges",
-        "summary": "Infosys Ltd (INFY) reports strong growth in AI services and large deals, but revises revenue guidance due to macroeconomic uncertainties.",
-        "pubDate": "2026-07-23T19:01:36Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/technology/ai/articles/infosys-ltd-infy-q1-2027-190136887.html"
-      },
-      {
-        "title": "Infosys Q1 Earnings Call Highlights",
-        "summary": "Infosys (NYSE:INFY) reported modest revenue growth for the first quarter of fiscal 2027 while lowering its full-year revenue outlook, citing softer-than-expected volumes, a client program termination and continued macroeconomic uncertainty. The company also announced a planned CEO transition, naming",
-        "pubDate": "2026-07-23T13:06:19Z",
-        "provider": "MarketBeat",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/infosys-q1-earnings-call-highlights-130619483.html"
-      }
-    ],
+    "rsi": 74.9,
+    "ma200": 1338.01,
+    "wk52_return_pct": -17.25,
+    "volume_spike": 0.19,
+    "today_volume": 1958664.0,
+    "avg_volume_10d": 10238553.7,
+    "news": [],
     "alerts": [
       {
         "level": "REVIEW",
         "icon": "\ud83d\udfe0",
-        "message": "Weakening \u2014 Score dropped 12.8 pts since entry (59.5 \u2192 46.7)"
+        "message": "Weakening \u2014 Score dropped 14.3 pts since entry (59.5 \u2192 45.2)"
       },
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b91165.9 fell below 200-day MA \u20b91321.32"
+        "message": "Trend Broken \u2014 Price \u20b91178.4 fell below 200-day MA \u20b91338.01"
       }
     ],
-    "unrealised_pnl": 41.2,
-    "unrealised_pct": 0.89,
+    "unrealised_pnl": 91.2,
+    "unrealised_pct": 1.97,
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Score dropped 12.8 pts since entry"
+    "signal_reason": "Score dropped 14.3 pts since entry"
   },
   {
     "symbol": "APTUS",
@@ -1649,63 +807,39 @@
     "roe_at_entry": 20.11,
     "de_at_entry": 1.56,
     "npm_at_entry": 61.47,
-    "current_score": 37.6,
+    "current_score": 33.6,
     "current_strength": 35.0,
-    "current_value": 4512.65,
-    "current_momentum": 23.0,
-    "ltp": 265.45,
-    "pe": 13.5,
+    "current_value": 4352.0,
+    "current_momentum": 7.0,
+    "ltp": 256.0,
+    "pe": 13.03,
     "roe_pct": null,
     "de_ratio": 1.56,
     "npm_pct": 61.76,
-    "rsi": 28.6,
-    "ma200": 265.04,
-    "wk52_return_pct": -23.8,
-    "volume_spike": 0.61,
-    "today_volume": 677688,
-    "avg_volume_10d": 1115148,
-    "news": [
-      {
-        "title": "Aptus Value Housing Finance India Ltd (BOM:543335) (Q1 2027) Earnings Call Highlights: Strong ...",
-        "summary": "Robust 21% AUM growth and 36% disbursement surge underscore momentum, while management navigates NBFC asset quality pressures and evaluates new product expansion.",
-        "pubDate": "2026-08-04T01:05:41Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/real-estate/articles/aptus-value-housing-finance-india-010541856.html"
-      },
-      {
-        "title": "Aptus Value Housing Finance India Ltd (BOM:543335) Q4 2026 Earnings Call Highlights: Record ...",
-        "summary": "Aptus Value Housing Finance India Ltd (BOM:543335) reports highest quarterly disbursements and a 26% profit increase, despite rising NPAs and competitive challenges.",
-        "pubDate": "2026-05-08T07:01:12Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/aptus-value-housing-finance-india-070112145.html"
-      },
-      {
-        "title": "Aptus Value Housing Finance India Ltd (BOM:543335) Q3 2026 Earnings Call Highlights: Strong ...",
-        "summary": "Aptus Value Housing Finance India Ltd (BOM:543335) reports a robust 26% profit increase and strategic branch expansion, while navigating competitive pressures and asset quality concerns.",
-        "pubDate": "2026-02-06T01:01:56Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/aptus-value-housing-finance-india-010156002.html"
-      },
-      {
-        "title": "Aptus Value Housing Finance India Ltd (BOM:543335) Q2 2026 Earnings Call Highlights: Strong ...",
-        "summary": "Despite challenges, Aptus Value Housing Finance India Ltd (BOM:543335) reports robust income growth and strategic expansions in Q2 2026.",
-        "pubDate": "2025-11-03T07:00:28Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/aptus-value-housing-finance-india-070028323.html"
-      }
-    ],
+    "rsi": 20.6,
+    "ma200": 265.6,
+    "wk52_return_pct": -25.7,
+    "volume_spike": 0.18,
+    "today_volume": 234842.0,
+    "avg_volume_10d": 1269759.7,
+    "news": [],
     "alerts": [
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 37.6 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 33.6 (below 40 threshold)"
+      },
+      {
+        "level": "ALERT",
+        "icon": "\u26a0\ufe0f",
+        "message": "Trend Broken \u2014 Price \u20b9256.0 fell below 200-day MA \u20b9265.6"
       }
     ],
-    "unrealised_pnl": -278.8,
-    "unrealised_pct": -5.82,
+    "unrealised_pnl": -439.45,
+    "unrealised_pct": -9.17,
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 37.6 (<40)"
+    "signal_reason": "Quality score collapsed to 33.6 (<40)"
   },
   {
     "symbol": "CAPLIPOINT",
@@ -1724,56 +858,28 @@
     "roe_at_entry": 19.94,
     "de_at_entry": 0.0,
     "npm_at_entry": 29.32,
-    "current_score": 47.4,
+    "current_score": 49.7,
     "current_strength": 71.0,
-    "current_value": 2542.1,
-    "current_momentum": 55.0,
-    "ltp": 2542.1,
-    "pe": 30.2,
+    "current_value": 2625.4,
+    "current_momentum": 64.0,
+    "ltp": 2625.4,
+    "pe": 31.1,
     "roe_pct": 19.94,
     "de_ratio": 0.0,
     "npm_pct": 29.32,
-    "rsi": 42.3,
-    "ma200": 1975.35,
-    "wk52_return_pct": 28.61,
-    "volume_spike": 0.29,
-    "today_volume": 33109,
-    "avg_volume_10d": 113918,
-    "news": [
-      {
-        "title": "Caplin Point Laboratories Ltd (BOM:524742) Q4 2026 Earnings Call Highlights: Robust Financial ...",
-        "summary": "Caplin Point Laboratories Ltd (BOM:524742) reports significant revenue and asset growth, with a strategic focus on innovation and market expansion.",
-        "pubDate": "2026-05-19T01:02:35Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/markets/stocks/articles/caplin-point-laboratories-ltd-bom-010235603.html"
-      },
-      {
-        "title": "Caplin Point Laboratories Ltd (BOM:524742) Q3 2026 Earnings Call Highlights: Navigating Growth ...",
-        "summary": "Caplin Point Laboratories Ltd (BOM:524742) reports robust revenue growth and strategic expansions, while addressing delays and market challenges.",
-        "pubDate": "2026-02-05T17:03:49Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/caplin-point-laboratories-ltd-bom-170349120.html"
-      },
-      {
-        "title": "Caplin Point Laboratories Ltd (BOM:524742) Q2 2026 Earnings Call Highlights: Strong Revenue ...",
-        "summary": "Caplin Point Laboratories Ltd (BOM:524742) reports robust financial performance with strategic plans for product expansion and acquisitions amidst market challenges.",
-        "pubDate": "2025-11-06T19:01:36Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/caplin-point-laboratories-ltd-bom-190136568.html"
-      }
-    ],
-    "alerts": [
-      {
-        "level": "REVIEW",
-        "icon": "\ud83d\udfe0",
-        "message": "Weakening \u2014 Score dropped 10.7 pts since entry (58.1 \u2192 47.4)"
-      }
-    ],
-    "unrealised_pnl": -71.1,
-    "unrealised_pct": -2.72,
-    "signal": "SELL",
-    "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Score dropped 10.7 pts since entry"
+    "rsi": 63.1,
+    "ma200": 1995.72,
+    "wk52_return_pct": 25.23,
+    "volume_spike": 0.45,
+    "today_volume": 28891.0,
+    "avg_volume_10d": 63511.6,
+    "news": [],
+    "alerts": [],
+    "unrealised_pnl": 12.2,
+    "unrealised_pct": 0.47,
+    "signal": "HOLD",
+    "signal_badge": "\ud83d\udfe1 HOLD",
+    "signal_reason": "Moderate quality score; maintain position"
   },
   {
     "symbol": "GLAND",
@@ -1792,76 +898,33 @@
     "roe_at_entry": 10.53,
     "de_at_entry": 0.03,
     "npm_at_entry": 15.97,
-    "current_score": 47.6,
+    "current_score": 43.6,
     "current_strength": 62.0,
-    "current_value": 2542.7,
-    "current_momentum": 73.0,
-    "ltp": 2542.7,
-    "pe": 40.91,
+    "current_value": 2879.0,
+    "current_momentum": 57.0,
+    "ltp": 2879.0,
+    "pe": 42.25,
     "roe_pct": 10.53,
     "de_ratio": 0.03,
     "npm_pct": 15.97,
-    "rsi": 56.4,
-    "ma200": 1940.0,
-    "wk52_return_pct": 27.39,
-    "volume_spike": 0.58,
-    "today_volume": 225674,
-    "avg_volume_10d": 385947,
-    "news": [
-      {
-        "title": "Gland Pharma Ltd (NSE:GLAND) Q4 2026 Earnings Call Highlights: Robust Revenue Growth and ...",
-        "summary": "Gland Pharma Ltd (NSE:GLAND) reports a strong Q4 with 22% revenue growth, driven by CDMO business and US market expansion.",
-        "pubDate": "2026-05-15T23:01:11Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/sectors/healthcare/articles/gland-pharma-ltd-nse-gland-230111046.html"
-      },
-      {
-        "title": "Gland Pharma Ltd (NSE:GLAND) Q3 2026 Earnings Call Highlights: Strong Revenue Growth and ...",
-        "summary": "Gland Pharma Ltd (NSE:GLAND) reports robust financial performance with significant product launches and expansion plans, despite margin pressures.",
-        "pubDate": "2026-01-28T19:00:35Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/gland-pharma-ltd-nse-gland-190035789.html"
-      },
-      {
-        "title": "India's Gland Pharma posts higher quarterly profit on strong US, Europe demand",
-        "summary": "Jan 28 () - India's Gland Pharma reported a nearly 28% jump in third-quarter profit on Wednesday, boosted by strong \u200bsales in the key European and U. The Hyderabad-based company \u200creported a consolidated net profit of 2.",
-        "pubDate": "2026-01-28T12:40:52Z",
-        "provider": "Reuters",
-        "url": "https://www.yahoo.com/news/articles/indias-gland-pharma-posts-higher-124052339.html"
-      },
-      {
-        "title": "Gland Pharma Ltd (NSE:GLAND) Q2 2026 Earnings Call Highlights: Strong Revenue Growth and ...",
-        "summary": "Gland Pharma Ltd (NSE:GLAND) reports a 6% revenue increase, driven by US market performance and strategic product launches.",
-        "pubDate": "2025-11-03T19:01:30Z",
-        "provider": "GuruFocus.com",
-        "url": "https://finance.yahoo.com/news/gland-pharma-ltd-nse-gland-190130984.html"
-      },
-      {
-        "title": "India's Gland Pharma posts higher quarterly profit on Cenexi boost",
-        "summary": "(Reuters) -India's Gland Pharma reported a 12% rise in second-quarter profit on Monday, as recovery at its European unit Cenexi bolstered margins.",
-        "pubDate": "2025-11-03T11:43:40Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-gland-pharma-posts-higher-114340948.html"
-      },
-      {
-        "title": "India's Gland Pharma posts quarterly profit rise on Cenexi recovery, Europe sales growth",
-        "summary": "India's Gland Pharma reported a nearly 50% jump in first-quarter profit on Tuesday, driven by better margins and a recovery at its European unit Cenexi. The company reported a consolidated net profit of 2.15 billion rupees ($24.50 million) for the quarter ended June 30, from 1.44 billion rupees in the year-ago quarter. Revenue from operations rose 7.4% to 15.06 billion rupees.",
-        "pubDate": "2025-08-05T11:51:37Z",
-        "provider": "Reuters",
-        "url": "https://finance.yahoo.com/news/indias-gland-pharma-posts-quarterly-115137418.html"
-      }
-    ],
+    "rsi": 82.8,
+    "ma200": 1963.47,
+    "wk52_return_pct": 48.91,
+    "volume_spike": 0.3,
+    "today_volume": 404427.0,
+    "avg_volume_10d": 1328738.6,
+    "news": [],
     "alerts": [
       {
         "level": "REVIEW",
         "icon": "\ud83d\udfe0",
-        "message": "Weakening \u2014 Score dropped 10.4 pts since entry (58.0 \u2192 47.6)"
+        "message": "Weakening \u2014 Score dropped 14.4 pts since entry (58.0 \u2192 43.6)"
       }
     ],
-    "unrealised_pnl": -1.0,
-    "unrealised_pct": -0.04,
+    "unrealised_pnl": 335.3,
+    "unrealised_pct": 13.18,
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Score dropped 10.4 pts since entry"
+    "signal_reason": "Score dropped 14.4 pts since entry"
   }
 ]

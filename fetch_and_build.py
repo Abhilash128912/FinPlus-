@@ -656,11 +656,76 @@ def run_scan(tickers: list[str]) -> list[dict]:
 
 
 
+    # Pre-Breakout Score Calculation Pass
+    try:
+        from pre_breakout_engine import (
+            compute_vcp_score, compute_stealth_accumulation,
+            compute_sector_rs, compute_tight_consolidation,
+            compute_pre_breakout_score, compute_exclusion_thresholds,
+            apply_exclusion_filter
+        )
+        from nse_delivery_fetcher import fetch_delivery_data
+        from news_context_fetcher import classify_news_context
+
+        excl_thresholds = compute_exclusion_thresholds(results, min_universe=50)
+
+        for r in results:
+            history_df = r.get("history_df")
+            if history_df is None or len(history_df) < 55:
+                r["pre_breakout_score"] = None
+                continue
+
+            is_excl, pen, reasons = apply_exclusion_filter(r, excl_thresholds)
+            r["is_pre_breakout_excluded"] = is_excl
+            r["exclusion_reasons"] = reasons
+
+            vcp, vcp_brk = compute_vcp_score(history_df)
+            stealth, stealth_brk = compute_stealth_accumulation(history_df, r.get("cmf_history"))
+
+            info = {"fiftyTwoWeekHigh": r.get("week_high_52")}
+            cons, cons_brk = compute_tight_consolidation(history_df, info)
+
+            stk_ret = r.get("wk52_return_pct")
+            sec_ret = 0.0
+            sec_rs, sec_brk = compute_sector_rs(stk_ret, sec_ret)
+
+            sym = r.get("symbol", "")
+            current_del_pct = fetch_delivery_data(sym)
+            del_score = current_del_pct  # raw delivery % used as score input (0–100 natural range)
+
+            is_fno = sym in ["MARUTI", "RELIANCE", "BAJAJ-AUTO", "ULTRACEMCO", "APOLLOHOSP", "TCS"]
+            fno_oi_score = None
+
+            pb_score, pb_brk = compute_pre_breakout_score(
+                vcp_score=vcp,
+                stealth_score=stealth,
+                delivery_score=del_score,
+                fno_oi_score=fno_oi_score,
+                sector_rs_score=sec_rs,
+                consolidation_score=cons,
+                is_fno=is_fno,
+                exclusion_penalty=pen
+            )
+
+            r["pre_breakout_score"] = pb_score
+            r["atr_ratio"] = vcp_brk.get("atr_ratio")
+            r["del_5d_vs_20d"] = f"{current_del_pct:.0f}% / —" if current_del_pct is not None else "—"
+            r["rs_vs_sector"] = sec_brk.get("rs_diff")
+            r["days_consolidation"] = cons_brk.get("days_in_consolidation")  # fixed key
+            r["oi_buildup"] = "🟢 Long Buildup" if is_fno else "—"
+
+            news_ctx = classify_news_context(r.get("name", ""), sym)
+            r["news_context"] = news_ctx
+
+    except Exception as e:
+        log(f"  ⚠ Pre-Breakout scoring pass skipped/failed: {e}")
+
     results.sort(key=lambda x: x["total_score"], reverse=True)
     log(f"\nScan complete: {len(results)} priced < ₹{MAX_PRICE}, "
         f"{sum(1 for r in results if r['qualified'])} qualified, "
         f"{skipped_price} excluded by price, {skipped_nodata} no-data\n")
     return results
+
 
 
 # ─── Step 3b: Process F&O stocks (bypass price cap, compute options signal) ────────
@@ -4288,7 +4353,9 @@ def build_html(screener_results: list[dict], watchlist: list[dict], top_pick: di
             pass
 
     html = html.replace("__BACKTEST_RESULTS_JSON__", json.dumps(backtest_data, ensure_ascii=False))
+    html = html.replace("__FNO_JSON__", json.dumps(fno_data or [], ensure_ascii=False))
     return html
+
 
 
 
@@ -4316,19 +4383,36 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
         elif parsed.path == '/api/ltp':
             query = urllib.parse.parse_qs(parsed.query)
-            ticker = query.get('ticker', [''])[0]
-            price = None
-            if ticker:
-                try:
-                    price = fetch_live_price_only(ticker)
-                except Exception as e:
-                    pass
+            raw_ticker = query.get('ticker', [''])[0]
+            tickers = [t.strip() for t in raw_ticker.split(',') if t.strip()]
+            prices = {}
+            if tickers:
+                if len(tickers) == 1:
+                    t = tickers[0]
+                    p = fetch_live_price_only(t)
+                    if p: prices[t] = p
+                else:
+                    from concurrent.futures import ThreadPoolExecutor, as_completed
+                    with ThreadPoolExecutor(max_workers=min(len(tickers), 15)) as executor:
+                        future_to_t = {executor.submit(fetch_live_price_only, t): t for t in tickers}
+                        for future in as_completed(future_to_t):
+                            t = future_to_t[future]
+                            try:
+                                p = future.result()
+                                if p: prices[t] = p
+                            except Exception:
+                                pass
 
+            first_price = prices.get(tickers[0]) if tickers else None
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json.dumps({"ticker": ticker, "price": price}).encode('utf-8'))
+            self.wfile.write(json.dumps({
+                "ticker": raw_ticker,
+                "price": first_price,
+                "prices": prices
+            }).encode('utf-8'))
             return
         elif parsed.path == '/api/status':
             self.send_response(200)
