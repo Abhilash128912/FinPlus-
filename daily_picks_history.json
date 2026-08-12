@@ -17,12 +17,12 @@
     "overnight_gap_pct": 0.32,
     "gap_badge": "\ud83d\udfe2 Gap Up +0.32% (+\u20b937.00)",
     "gap_class": "badge-green",
-    "current_ltp": 11498.0,
-    "pe": 14.34,
+    "current_ltp": 11442.0,
+    "pe": 14.27,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
     "npm_pct": 734.64,
-    "rsi": 75.7,
+    "rsi": 73.2,
     "rsi_status": "Overbought (>70)",
     "ma50": 10702.76,
     "ma200": 10782.98,
@@ -34,8 +34,8 @@
     "target2_pct": 12.0,
     "risk_reward_ratio": "1 : 2.0 (T1) / 1 : 3.0 (T2)",
     "timeframe": "3 to 7 Trading Days",
-    "dist_ma50_pct": 7.4,
-    "dist_ma200_pct": 6.6,
+    "dist_ma50_pct": 6.9,
+    "dist_ma200_pct": 6.1,
     "week_high_52": 14763.0,
     "week_low_52": 8588.0,
     "dist_52w_high_pct": -21.9,
@@ -44,7 +44,7 @@
     "tech_class": "badge-green",
     "status": "ACTIVE",
     "status_badge": "\ud83d\udfe2 ACTIVE",
-    "status_reason": "Qualified \u2014 Score 56.1/100, Strength 65.0/100",
+    "status_reason": "Qualified \u2014 Score 57.1/100, Strength 65.0/100",
     "streak_days": 3,
     "wk52_return_pct": -16.52,
     "volume_spike": 0.13,
@@ -56,8 +56,8 @@
       "Quality Score: 56.1/100 | Strength: 65.0/100",
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
-    "current_score": 56.1,
-    "ltp": 11498.0
+    "current_score": 57.1,
+    "ltp": 11442.0
   },
   {
     "date": "2026-08-11",
@@ -77,7 +77,7 @@
     "overnight_gap_pct": 2.02,
     "gap_badge": "\ud83d\udfe2 Gap Up +2.02% (+\u20b9227.00)",
     "gap_class": "badge-green",
-    "current_ltp": 11498.0,
+    "current_ltp": 11442.0,
     "pe": 14.54,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
@@ -104,7 +104,7 @@
     "tech_class": "badge-green",
     "status": "ACTIVE",
     "status_badge": "\ud83d\udfe2 ACTIVE",
-    "status_reason": "Qualified \u2014 Score 56.1/100, Strength 65.0/100",
+    "status_reason": "Qualified \u2014 Score 57.1/100, Strength 65.0/100",
     "streak_days": 2,
     "wk52_return_pct": -17.95,
     "volume_spike": 0.17,
@@ -116,8 +116,8 @@
       "Quality Score: 56.1/100 | Strength: 65.0/100",
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
-    "current_score": 56.1,
-    "ltp": 11498.0
+    "current_score": 57.1,
+    "ltp": 11442.0
   },
   {
     "date": "2026-08-10",
@@ -137,7 +137,7 @@
     "overnight_gap_pct": 0.0,
     "gap_badge": "\u26aa Flat Open (0.00%)",
     "gap_class": "badge-gray",
-    "current_ltp": 11498.0,
+    "current_ltp": 11442.0,
     "pe": 14.43,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
@@ -164,7 +164,7 @@
     "tech_class": "badge-green",
     "status": "ACTIVE",
     "status_badge": "\ud83d\udfe2 ACTIVE",
-    "status_reason": "Qualified \u2014 Score 56.1/100, Strength 65.0/100",
+    "status_reason": "Qualified \u2014 Score 57.1/100, Strength 65.0/100",
     "streak_days": 1,
     "wk52_return_pct": -19.14,
     "volume_spike": 0.1,
@@ -176,8 +176,8 @@
       "Quality Score: 57.1/100 | Strength: 65.0/100",
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
-    "current_score": 56.1,
-    "ltp": 11498.0
+    "current_score": 57.1,
+    "ltp": 11442.0
   },
   {
     "date": "2026-08-07",
@@ -197,7 +197,7 @@
     "overnight_gap_pct": -0.17,
     "gap_badge": "\ud83d\udd3b Gap Down -0.17% (-\u20b99.50)",
     "gap_class": "badge-red",
-    "current_ltp": 5902.0,
+    "current_ltp": 5894.0,
     "pe": 19.95,
     "roe_pct": 28.03,
     "de_ratio": 0.04,
@@ -237,7 +237,7 @@
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
     "current_score": 40.0,
-    "ltp": 5902.0
+    "ltp": 5894.0
   },
   {
     "date": "2026-08-05",
@@ -257,7 +257,7 @@
     "overnight_gap_pct": -1.86,
     "gap_badge": "\ud83d\udd3b Gap Down -1.86% (-\u20b926.70)",
     "gap_class": "badge-red",
-    "current_ltp": 1282.0,
+    "current_ltp": 1281.3,
     "pe": 6.67,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -312,7 +312,7 @@
       "Market Trend: \ud83d\udd35 Accumulation Phase"
     ],
     "current_score": 49.4,
-    "ltp": 1282.0
+    "ltp": 1281.3
   },
   {
     "date": "2026-08-04",
@@ -332,7 +332,7 @@
     "overnight_gap_pct": 13.72,
     "gap_badge": "\ud83d\udfe2 Gap Up +13.72% (+\u20b9191.90)",
     "gap_class": "badge-green",
-    "current_ltp": 1282.0,
+    "current_ltp": 1281.3,
     "pe": 7.03,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -387,7 +387,7 @@
       "Market Trend: \ud83d\udd35 Accumulation Phase"
     ],
     "current_score": 49.4,
-    "ltp": 1282.0
+    "ltp": 1281.3
   },
   {
     "date": "2026-08-03",
@@ -407,7 +407,7 @@
     "overnight_gap_pct": 0.56,
     "gap_badge": "\ud83d\udfe2 Gap Up +0.56% (+\u20b97.60)",
     "gap_class": "badge-green",
-    "current_ltp": 1282.0,
+    "current_ltp": 1281.3,
     "pe": 6.82,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -463,7 +463,7 @@
     ],
     "session_close": 1403.4,
     "current_score": 49.4,
-    "ltp": 1282.0
+    "ltp": 1281.3
   },
   {
     "date": "2026-07-31",
@@ -478,7 +478,7 @@
     "value": 64.0,
     "momentum": 41.0,
     "ltp_at_pick": 1350.4,
-    "current_ltp": 1282.0,
+    "current_ltp": 1281.3,
     "pe": 6.56,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -533,7 +533,7 @@
       "Market Trend: \ud83d\udfe1 Consolidation Phase"
     ],
     "current_score": 49.4,
-    "ltp": 1282.0
+    "ltp": 1281.3
   },
   {
     "date": "2026-07-30",
@@ -548,7 +548,7 @@
     "momentum": 48.0,
     "ltp_at_pick": 1374.0,
     "session_close": 1371.3,
-    "current_ltp": 1282.0,
+    "current_ltp": 1281.3,
     "pe": 6.67,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -595,6 +595,6 @@
       "Market Trend: \ud83d\udfe1 Consolidation Phase"
     ],
     "current_score": 49.4,
-    "ltp": 1282.0
+    "ltp": 1281.3
   }
 ]

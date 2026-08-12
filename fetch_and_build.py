@@ -2159,6 +2159,8 @@ let sortDir = -1;
 let filteredData = [];
 let pollIntervalTimer = null;
 let pollIntervalMs = 10000;
+let currentPage = 1;
+let pageSize = 50;
 
 function calculateCurrentMarketStatus() {
   const now = new Date();
@@ -4252,6 +4254,9 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
             self.end_headers()
             if os.path.exists(OUT_HTML):
                 with open(OUT_HTML, 'rb') as f:
@@ -4291,6 +4296,13 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "price": first_price,
                 "prices": prices
             }).encode('utf-8'))
+            return
+        elif parsed.path in ('/health', '/api/health'):
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "online", "app": "Stock Screener"}).encode('utf-8'))
             return
         elif parsed.path == '/api/status':
             self.send_response(200)
@@ -4369,59 +4381,62 @@ def run_server(port=None):
         open_in_browser(OUT_HTML)
 
 
+def background_initial_scan():
+    try:
+        log("Checking for Nifty stock list updates from NSE...")
+        try:
+            import download_nse_indices
+            download_nse_indices.main()
+        except Exception as e:
+            log(f"  ⚠ Stock list auto-update skipped: {e}")
+
+        tickers = read_stock_list()
+        screener_results = run_scan(tickers)
+
+        log("Processing watchlist stocks...")
+        wl_data = process_watchlist(screener_results)
+
+        log("Processing Stock of the Day & history...")
+        top_pick, daily_history, mkt_info = process_daily_top_pick(screener_results)
+
+        log("Fetching Commodity Intraday Signals (Crude Oil & Natural Gas)...")
+        commodity_signals = fetch_commodity_signals()
+
+        log("Processing F&O Options Signals (MARUTI, RELIANCE, BAJAJ-AUTO, ULTRACEMCO, APOLLOHOSP, TCS)...")
+        fno_data = process_fno_stocks(screener_results)
+
+        log("Building HTML report...")
+        html = build_html(screener_results, wl_data, top_pick, daily_history, commodity_signals, mkt_info, fno_data)
+        with open(OUT_HTML, "w", encoding="utf-8") as f:
+            f.write(html)
+        try:
+            os.makedirs(os.path.dirname(OUT_WWW_HTML), exist_ok=True)
+            with open(OUT_WWW_HTML, "w", encoding="utf-8") as f:
+                f.write(html)
+        except Exception as e:
+            log(f"  ⚠ Could not copy report to www/index.html: {e}")
+
+        log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
+    except Exception as e:
+        log(f"⚠ Background scan error: {e}")
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    import threading
+    port = int(os.environ.get("PORT", 5000))
     log("=" * 60)
-    log("  Quality Stock Screener — Phase 1")
+    log(f"  Quality Stock Screener — Phase 1 (Port {port})")
     log("  Source: Nifty 500 | Scoring: Strength + Value + Momentum")
     log("=" * 60)
 
-    # Launch web server immediately in background thread so Render detects port binding in <1s
-    log("⚡ Starting Web Server for cloud port binding...")
-    server_thread = threading.Thread(target=run_server, daemon=True)
-    server_thread.start()
+    # Launch background scan if needed
+    if not os.path.exists(OUT_HTML) or FORCE_REFRESH or "--scan" in sys.argv:
+        log("⚡ Launching initial scan in background thread...")
+        scan_t = threading.Thread(target=background_initial_scan, daemon=True)
+        scan_t.start()
 
-    # Automatically check and download Nifty index list updates first
-    log("Checking for Nifty stock list updates from NSE...")
-    try:
-        import download_nse_indices
-        download_nse_indices.main()
-    except Exception as e:
-        log(f"  ⚠ Stock list auto-update skipped: {e}")
+    # Run the HTTP server directly in main thread
+    run_server(port)
 
-    tickers = read_stock_list()
-    screener_results = run_scan(tickers)
-
-    log("Processing watchlist stocks...")
-    wl_data = process_watchlist(screener_results)
-
-    log("Processing Stock of the Day & history...")
-    top_pick, daily_history, mkt_info = process_daily_top_pick(screener_results)
-
-    log("Fetching Commodity Intraday Signals (Crude Oil & Natural Gas)...")
-    commodity_signals = fetch_commodity_signals()
-
-    log("Processing F&O Options Signals (MARUTI, RELIANCE, BAJAJ-AUTO, ULTRACEMCO, APOLLOHOSP, TCS)...")
-    fno_data = process_fno_stocks(screener_results)
-
-    log("Building HTML report...")
-    html = build_html(screener_results, wl_data, top_pick, daily_history, commodity_signals, mkt_info, fno_data)
-    with open(OUT_HTML, "w", encoding="utf-8") as f:
-        f.write(html)
-    try:
-        os.makedirs(os.path.dirname(OUT_WWW_HTML), exist_ok=True)
-        with open(OUT_WWW_HTML, "w", encoding="utf-8") as f:
-            f.write(html)
-    except Exception as e:
-        log(f"  ⚠ Could not copy report to www/index.html: {e}")
-
-    log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
-    port = int(os.environ.get("PORT", 5000))
-    if "PORT" not in os.environ:
-        log(f"Opening http://localhost:{port} in default browser...")
-        if not open_in_browser(f"http://localhost:{port}"):
-            open_in_browser(OUT_HTML)
-    server_thread.join()
 
 
