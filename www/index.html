@@ -2331,7 +2331,7 @@ function renderTable() {
     </tr>`;
   }).join('');
 
-  document.getElementById('screenerTableBody').innerHTML = body;
+  (document.getElementById('screenerBody') || document.getElementById('screenerTableBody')).innerHTML = body;
 
   const countEl = document.getElementById('resultCount');
   if (countEl) {
