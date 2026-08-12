@@ -183,8 +183,20 @@ def read_stock_list() -> list[str]:
         target_excel = auto_excel
 
     if not os.path.exists(target_excel):
-        log(f"ERROR: Stock list file not found: {target_excel}")
-        sys.exit(1)
+        log(f"⚠ Stock list excel not found at {target_excel}, using built-in Nifty index universe.")
+        default_nifty = [
+            "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "BHARTIARTL", "SBIN", "LICI",
+            "ITC", "HINDUNILVR", "LT", "BAJFINANCE", "HCLTECH", "MARUTI", "SUNPHARMA", "ONGC",
+            "NTPC", "TATAMOTORS", "AXISBANK", "ADANIENT", "KOTAKBANK", "TITAN", "COALINDIA",
+            "POWERGRID", "M&M", "BAJAJFINSV", "ULTRACEMCO", "ASIANPAINT", "TATASTEEL", "IOC",
+            "SIEMENS", "DLF", "BEL", "ADANIPORTS", "WIPRO", "NESTLEIND", "ZOMATO", "HAL",
+            "JSWSTEEL", "VBL", "GRASIM", "TECHM", "DIVISLAB", "CIPLA", "APOLLOHOSP", "DRREDDY",
+            "EICHERMOT", "BPCL", "HEROMOTOCO", "INDUSINDBK", "SBILIFE", "HDFCLIFE", "BRITANNIA",
+            "TATAPOWER", "VEDL", "ABB", "GAIL", "ASHOKLEY", "BORANA", "EMMVEE", "FEDERALBNK", "NMDC"
+        ]
+        custom_stocks = cfg.get("custom_stocks", [])
+        all_syms = list(set(default_nifty + [cs.replace(".NS", "") for cs in custom_stocks]))
+        return [f"{s}.NS" if not s.endswith(".NS") and not s.endswith(".BO") else s for s in all_syms]
 
     df = pd.read_excel(target_excel)
     log(f"  Columns found: {list(df.columns)}")
