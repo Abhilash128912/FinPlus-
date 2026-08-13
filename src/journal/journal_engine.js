@@ -170,6 +170,50 @@ export function calculateZerodhaCharges(trade) {
 
 const RECOVERED_RESERVE_TRADES = [
   {
+    "uuid": "fp_20260813_nifty24050pe",
+    "symbol": "NIFTY 24050 PE",
+    "instrument_type": "Nifty Options",
+    "entry_price": 11.15,
+    "quantity": 65,
+    "exit_price": 10.20,
+    "status": "CLOSED",
+    "gross_pnl": -61.75,
+    "created_at": "2026-08-13T09:45:00.000Z"
+  },
+  {
+    "uuid": "fp_20260813_nifty24750ce",
+    "symbol": "NIFTY 24750 CE",
+    "instrument_type": "Nifty Options",
+    "entry_price": 15.75,
+    "quantity": 65,
+    "exit_price": 14.90,
+    "status": "CLOSED",
+    "gross_pnl": -55.25,
+    "created_at": "2026-08-13T09:50:00.000Z"
+  },
+  {
+    "uuid": "fp_20260813_goldbees_mis",
+    "symbol": "GOLDBEES",
+    "instrument_type": "Intraday",
+    "entry_price": 125.06,
+    "quantity": 1,
+    "exit_price": 124.98,
+    "status": "CLOSED",
+    "gross_pnl": -0.08,
+    "created_at": "2026-08-13T09:55:00.000Z"
+  },
+  {
+    "uuid": "fp_20260813_niftybees_mis",
+    "symbol": "NIFTYBEES",
+    "instrument_type": "Intraday",
+    "entry_price": 278.50,
+    "quantity": 1,
+    "exit_price": 278.40,
+    "status": "CLOSED",
+    "gross_pnl": -0.10,
+    "created_at": "2026-08-13T10:00:00.000Z"
+  },
+  {
     "id": 1,
     "uuid": "fp_mryv9p",
     "symbol": "CRUDEOIL",

@@ -14,7 +14,7 @@
         "shares": 2
       }
     ],
-    "local_peak": 176.25,
+    "local_peak": 178,
     "date_added": "2026-07-03",
     "initial_reference_price": 160.53
   },
@@ -28,7 +28,7 @@
         "shares": 3
       }
     ],
-    "local_peak": 405.85,
+    "local_peak": 411.05,
     "date_added": "2026-07-03",
     "initial_reference_price": 403.52
   },
@@ -108,7 +108,7 @@
         "shares": 1
       }
     ],
-    "local_peak": 382.25,
+    "local_peak": 382.8,
     "date_added": "2026-07-03",
     "initial_reference_price": 382.25
   },
@@ -148,6 +148,11 @@
         "date": "2026-08-12",
         "price": 277.4,
         "shares": 3
+      },
+      {
+        "date": "2026-08-13",
+        "price": 278.05,
+        "shares": 3
       }
     ],
     "local_peak": 286.5,
@@ -162,6 +167,11 @@
         "date": "2026-08-12",
         "price": 126.25,
         "shares": 6
+      },
+      {
+        "date": "2026-08-13",
+        "price": 125.84,
+        "shares": 4
       }
     ],
     "local_peak": 126.39,

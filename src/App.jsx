@@ -119,19 +119,19 @@ export default function App() {
   const API_BASE_URL = serverUrl 
     || (isNativeMobileApp ? RENDER_BACKEND_URL : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000' : RENDER_BACKEND_URL));
   const [liveLtps, setLiveLtps] = useState({
-    "ASHOKLEY": 175.05, "ASHOKLEY.NS": 175.05,
-    "BEL": 400.60, "BEL.NS": 400.60,
-    "BORANA": 325.00, "BORANA.NS": 325.00,
+    "ASHOKLEY": 177.54, "ASHOKLEY.NS": 177.54,
+    "BEL": 410.40, "BEL.NS": 410.40,
+    "BORANA": 324.40, "BORANA.NS": 324.40,
     "EMMVEE": 314.15, "EMMVEE.NS": 314.15,
-    "FEDERALBNK": 355.75, "FEDERALBNK.NS": 355.75,
-    "ITC": 276.90, "ITC.NS": 276.90,
-    "NMDC": 85.08, "NMDC.NS": 85.08,
+    "FEDERALBNK": 352.65, "FEDERALBNK.NS": 352.65,
+    "ITC": 277.50, "ITC.NS": 277.50,
+    "NMDC": 84.77, "NMDC.NS": 84.77,
     "PANAMAPET": 507.25, "PANAMAPET.NS": 507.25,
-    "TATAPOWER": 374.85, "TATAPOWER.NS": 374.85,
-    "TATASTEEL": 183.95, "TATASTEEL.NS": 183.95,
-    "UYFINCORP": 18.98, "UYFINCORP.NS": 18.98,
-    "GOLDBEES": 74.20, "GOLDBEES.NS": 74.20,
-    "NIFTYBEES": 286.50, "NIFTYBEES.NS": 286.50
+    "TATAPOWER": 381.30, "TATAPOWER.NS": 381.30,
+    "TATASTEEL": 184.24, "TATASTEEL.NS": 184.24,
+    "UYFINCORP": 20.17, "UYFINCORP.NS": 20.17,
+    "GOLDBEES": 124.98, "GOLDBEES.NS": 124.98,
+    "NIFTYBEES": 278.40, "NIFTYBEES.NS": 278.40
   });
   const [toast, setToast] = useState(null);
 
@@ -139,19 +139,19 @@ export default function App() {
   const [pullbackData, setPullbackData] = useState(() => {
     const defaultData = {
       "capital_settings": { "start_date": "2026-07-03", "initial_capital": 3477.97, "daily_rate": 200.0 },
-      "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "transactions": [{ "date": "2026-07-13", "price": 160.53, "shares": 2 }], "local_peak": 176.25, "date_added": "2026-07-03", "initial_reference_price": 175.05 },
-      "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "transactions": [{ "date": "2026-07-29", "price": 403.52, "shares": 3 }], "local_peak": 405.85, "date_added": "2026-07-03", "initial_reference_price": 400.60 },
-      "BORANA.NS": { "name": "BORANA", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 342.0, "shares": 1 }], "local_peak": 353.95, "date_added": "2026-08-06", "initial_reference_price": 325.00 },
+      "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "transactions": [{ "date": "2026-07-13", "price": 160.53, "shares": 2 }], "local_peak": 177.85, "date_added": "2026-07-03", "initial_reference_price": 160.53 },
+      "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "transactions": [{ "date": "2026-07-29", "price": 403.52, "shares": 3 }], "local_peak": 410.45, "date_added": "2026-07-03", "initial_reference_price": 403.52 },
+      "BORANA.NS": { "name": "BORANA", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 342.0, "shares": 1 }], "local_peak": 353.95, "date_added": "2026-08-06", "initial_reference_price": 342.00 },
       "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "in_watchlist": false, "transactions": [{ "date": "2026-08-03", "price": 330.98, "shares": 2 }, { "date": "2026-08-12", "price": 314.10, "shares": -2, "type": "SELL" }], "local_peak": 330.98, "date_added": "2026-07-03", "initial_reference_price": 314.10 },
       "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 359.10, "shares": 1 }, { "date": "2026-08-11", "price": 353.10, "shares": 1 }], "local_peak": 359.10, "date_added": "2026-07-03", "initial_reference_price": 355.75 },
-      "ITC.NS": { "name": "ITC Limited", "category": "Core", "transactions": [{ "date": "2026-07-14", "price": 275.45, "shares": 1 }], "local_peak": 286.25, "date_added": "2026-07-03", "initial_reference_price": 276.90 },
-      "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }, { "date": "2026-08-11", "price": 85.29, "shares": 5 }], "local_peak": 85.49, "date_added": "2026-07-03", "initial_reference_price": 85.08 },
+      "ITC.NS": { "name": "ITC Limited", "category": "Core", "transactions": [{ "date": "2026-07-14", "price": 275.45, "shares": 1 }], "local_peak": 286.25, "date_added": "2026-07-03", "initial_reference_price": 275.45 },
+      "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }, { "date": "2026-08-11", "price": 85.29, "shares": 5 }], "local_peak": 85.49, "date_added": "2026-07-03", "initial_reference_price": 84.80 },
       "PANAMAPET.NS": { "name": "Panama Petrochem Limited", "category": "Growth", "in_watchlist": false, "transactions": [{ "date": "2026-08-11", "price": 544.95, "shares": 3 }, { "date": "2026-08-12", "price": 567.65, "shares": -3, "type": "SELL" }], "local_peak": 598.70, "date_added": "2026-08-11", "initial_reference_price": 506.15 },
-      "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }], "local_peak": 382.25, "date_added": "2026-07-03", "initial_reference_price": 374.85 },
-      "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }], "local_peak": 191.53, "date_added": "2026-07-05", "initial_reference_price": 183.95 },
-      "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 18.98 },
-      "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 277.21, "shares": 1 }], "local_peak": 286.50, "date_added": "2026-08-11", "initial_reference_price": 277.21 },
-      "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 126.19, "shares": 2 }], "local_peak": 126.18, "date_added": "2026-08-11", "initial_reference_price": 126.19 },
+      "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }], "local_peak": 382.25, "date_added": "2026-07-03", "initial_reference_price": 382.25 },
+      "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }], "local_peak": 191.53, "date_added": "2026-07-05", "initial_reference_price": 182.82 },
+      "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 19.33 },
+      "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 277.40, "shares": 3 }, { "date": "2026-08-13", "price": 278.05, "shares": 3 }], "local_peak": 286.50, "date_added": "2026-08-11", "initial_reference_price": 277.40 },
+      "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 126.25, "shares": 6 }, { "date": "2026-08-13", "price": 125.84, "shares": 4 }], "local_peak": 126.39, "date_added": "2026-08-11", "initial_reference_price": 126.25 },
       "mtf_trading": []
     };
 
@@ -5232,14 +5232,14 @@ export default function App() {
 
           </div>
 
-          {/* View Switcher: Active Holdings vs Sold Stocks Realized History */}
+          {/* View Switcher: Active Holdings vs Stock Allocation vs Sold History */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', background: 'rgba(15, 23, 42, 0.4)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div style={{ fontSize: '14px', color: '#ffffff', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Filter size={16} style={{ color: '#38bdf8' }} />
               SIP Portfolio View:
             </div>
 
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 onClick={() => setSipViewMode('holdings')}
@@ -5258,6 +5258,26 @@ export default function App() {
                 }}
               >
                 📋 Active Holdings & Targets ({pullbackStockSummary.filter(s => s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false)).length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSipViewMode('allocation')}
+                style={{
+                  background: sipViewMode === 'allocation' ? '#38bdf8' : 'rgba(255,255,255,0.05)',
+                  border: `1px solid ${sipViewMode === 'allocation' ? '#38bdf8' : 'rgba(255,255,255,0.1)'}`,
+                  color: '#ffffff',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                📊 Stock Invested Capital & Allocation ({pullbackStockSummary.filter(s => s.netShares > 0).length})
               </button>
 
               <button
@@ -5297,6 +5317,115 @@ export default function App() {
                 </span>
               </div>
 
+              {/* PORTFOLIO ALLOCATION & PERFORMANCE SUMMARY BANNER */}
+              {(() => {
+                const openHoldings = pullbackStockSummary.filter(s => s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false));
+                const totalCost = openHoldings.reduce((sum, s) => sum + (s.netCost || 0), 0);
+                const totalVal = openHoldings.reduce((sum, s) => sum + (s.currentVal || 0), 0);
+                const totalPnl = totalVal - totalCost;
+                const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
+
+                const parkCost = openHoldings.filter(s => s.category === 'Park').reduce((sum, s) => sum + (s.netCost || 0), 0);
+                const coreCost = openHoldings.filter(s => s.category === 'Core').reduce((sum, s) => sum + (s.netCost || 0), 0);
+                const growthCost = openHoldings.filter(s => s.category === 'Growth').reduce((sum, s) => sum + (s.netCost || 0), 0);
+
+                const parkPctNum = totalCost > 0 ? (parkCost / totalCost) * 100 : 0;
+                const corePctNum = totalCost > 0 ? (coreCost / totalCost) * 100 : 0;
+                const growthPctNum = totalCost > 0 ? (growthCost / totalCost) * 100 : 0;
+
+                const sortedByCost = [...openHoldings].filter(s => s.netShares > 0).sort((a, b) => (b.netCost || 0) - (a.netCost || 0));
+                const topStock = sortedByCost.length > 0 ? sortedByCost[0] : null;
+                const topStockAlloc = (topStock && totalCost > 0) ? ((topStock.netCost / totalCost) * 100).toFixed(1) : '0';
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '18px', borderRadius: '12px' }}>
+                    {/* Top Stat Cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '12px' }}>
+                      <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '12px 14px', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          TOTAL INVESTED AMOUNT
+                        </div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', marginTop: '2px' }}>
+                          ₹{totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
+                          {openHoldings.filter(s => s.netShares > 0).length} Open Stock Positions
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'rgba(52, 211, 153, 0.08)', border: '1px solid rgba(52, 211, 153, 0.25)', padding: '12px 14px', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '10px', color: '#34d399', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          TOTAL CURRENT VALUE
+                        </div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: '#34d399', marginTop: '2px' }}>
+                          ₹{totalVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
+                          Live Market Valuation
+                        </div>
+                      </div>
+
+                      <div style={{ background: totalPnl >= 0 ? 'rgba(52, 211, 153, 0.08)' : 'rgba(248, 113, 113, 0.08)', border: `1px solid ${totalPnl >= 0 ? 'rgba(52, 211, 153, 0.25)' : 'rgba(248, 113, 113, 0.25)'}`, padding: '12px 14px', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '10px', color: totalPnl >= 0 ? '#34d399' : '#fb7185', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          NET PROFIT / LOSS
+                        </div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: totalPnl >= 0 ? '#34d399' : '#fb7185', marginTop: '2px' }}>
+                          {totalPnl >= 0 ? '+' : ''}₹{totalPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({totalPnlPct >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%)
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
+                          Total Portfolio Return
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'rgba(168, 85, 247, 0.08)', border: '1px solid rgba(168, 85, 247, 0.25)', padding: '12px 14px', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '10px', color: '#c084fc', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          TOP ALLOCATED STOCK
+                        </div>
+                        <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff', marginTop: '2px' }}>
+                          {topStock ? `${topStock.cleanSym} (${topStockAlloc}%)` : 'N/A'}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#c084fc', marginTop: '2px' }}>
+                          Highest Capital Concentration
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Category Allocation Breakdown Bar */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '11px', fontWeight: 800 }}>
+                        <span style={{ color: '#a5b4fc' }}>PORTFOLIO ALLOCATION BREAKDOWN BY CATEGORY:</span>
+                        <div style={{ display: 'flex', gap: '14px' }}>
+                          <span style={{ color: '#38bdf8' }}>🅿️ Park: {parkPctNum.toFixed(1)}% (₹{parkCost.toFixed(0)})</span>
+                          <span style={{ color: '#34d399' }}>🛡️ Core: {corePctNum.toFixed(1)}% (₹{coreCost.toFixed(0)})</span>
+                          <span style={{ color: '#c084fc' }}>🚀 Growth: {growthPctNum.toFixed(1)}% (₹{growthCost.toFixed(0)})</span>
+                        </div>
+                      </div>
+                      <div style={{ height: '10px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '5px', overflow: 'hidden', display: 'flex' }}>
+                        <div style={{ width: `${parkPctNum}%`, background: '#38bdf8', height: '100%' }} title={`Park ETFs: ${parkPctNum.toFixed(1)}%`} />
+                        <div style={{ width: `${corePctNum}%`, background: '#34d399', height: '100%' }} title={`Core Stocks: ${corePctNum.toFixed(1)}%`} />
+                        <div style={{ width: `${growthPctNum}%`, background: '#c084fc', height: '100%' }} title={`Growth Stocks: ${growthPctNum.toFixed(1)}%`} />
+                      </div>
+                    </div>
+
+                    {/* Actionable Allocation Recommendation Box */}
+                    <div style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.25)', padding: '10px 14px', borderRadius: '8px', fontSize: '12px', color: '#e0e7ff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '16px' }}>💡</span>
+                      <div>
+                        <strong>Allocation Improvement Insights: </strong>
+                        {growthPctNum < 15 ? (
+                          <span>Growth stocks represent <strong>{growthPctNum.toFixed(1)}%</strong> (vs 15–20% target). Consider prioritizing Growth candidates (e.g. TATASTEEL, BORANA) when 5% pullback triggers fire to balance upside potential.</span>
+                        ) : (
+                          <span>Your category distribution (Park {parkPctNum.toFixed(1)}% | Core {corePctNum.toFixed(1)}% | Growth {growthPctNum.toFixed(1)}%) is well-balanced across defensive safety and capital growth.</span>
+                        )}
+                        {topStock && Number(topStockAlloc) > 20 && (
+                          <span style={{ marginLeft: '6px', color: '#fbbf24' }}>Notice: <strong>{topStock.cleanSym}</strong> has high single-stock weight ({topStockAlloc}%). Recommended single-stock cap: 15–20%.</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                   <thead>
@@ -5304,8 +5433,10 @@ export default function App() {
                       <th style={{ padding: '12px 14px' }}>Stock (Ticker)</th>
                       <th style={{ padding: '12px 14px' }}>Category</th>
                       <th style={{ padding: '12px 14px' }}>Shares</th>
-                      <th style={{ padding: '12px 14px' }}>Cost Basis (Invested)</th>
-                      <th style={{ padding: '12px 14px' }}>LTP (Current Value)</th>
+                      <th style={{ padding: '12px 14px' }}>Avg Price (₹)</th>
+                      <th style={{ padding: '12px 14px', color: '#34d399', background: 'rgba(52, 211, 153, 0.08)' }}>Total Invested (₹)</th>
+                      <th style={{ padding: '12px 14px' }}>LTP (₹)</th>
+                      <th style={{ padding: '12px 14px', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.08)' }}>Current Value (₹)</th>
                       <th style={{ padding: '12px 14px' }}>P&L</th>
                       <th style={{ padding: '12px 14px' }}>Local Peak</th>
                       <th style={{ padding: '12px 14px' }}>Target Buy Price</th>
@@ -5348,12 +5479,27 @@ export default function App() {
                             </span>
                           </td>
                           <td style={{ padding: '14px', fontWeight: 800, color: '#ffffff' }}>{s.netShares}</td>
-                          <td style={{ padding: '14px', fontWeight: 700 }}>
-                            {s.netShares > 0 ? `₹${s.avgCost.toFixed(2)} (₹${s.netCost.toFixed(2)})` : 'N/A'}
+
+                          {/* Distinct Avg Buy Price */}
+                          <td style={{ padding: '14px', fontWeight: 700, color: '#cbd5e1' }}>
+                            {s.netShares > 0 ? `₹${s.avgCost.toFixed(2)}` : 'N/A'}
                           </td>
-                          <td style={{ padding: '14px', fontWeight: 800, color: '#38bdf8' }}>
-                            {s.ltp > 0 ? `₹${s.ltp.toFixed(2)}` : 'Fetching...'} {s.netShares > 0 && `(₹${s.currentVal.toFixed(2)})`}
+
+                          {/* Standalone Explicit Total Invested Amount Column */}
+                          <td style={{ padding: '14px', fontWeight: 900, color: '#34d399', fontSize: '14px', background: 'rgba(52, 211, 153, 0.08)' }}>
+                            {s.netShares > 0 ? `₹${s.netCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}
                           </td>
+
+                          {/* Distinct LTP */}
+                          <td style={{ padding: '14px', fontWeight: 700, color: '#cbd5e1' }}>
+                            {s.ltp > 0 ? `₹${s.ltp.toFixed(2)}` : 'Fetching...'}
+                          </td>
+
+                          {/* Standalone Explicit Total Current Value Column */}
+                          <td style={{ padding: '14px', fontWeight: 900, color: '#38bdf8', fontSize: '14px', background: 'rgba(56, 189, 248, 0.08)' }}>
+                            {s.netShares > 0 ? `₹${s.currentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}
+                          </td>
+
                           <td style={{ padding: '14px', fontWeight: 800, color: s.unrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
                             {s.netShares > 0 ? `₹${s.unrealizedPnl.toFixed(2)} (${s.pnlPct >= 0 ? '+' : ''}${s.pnlPct.toFixed(2)}%)` : 'N/A'}
                           </td>
@@ -5364,8 +5510,18 @@ export default function App() {
                           <td style={{ padding: '14px', fontWeight: 700, color: isBuyTriggered ? '#34d399' : '#e2e8f0' }}>
                             {s.daysSinceLastBuyStr}
                           </td>
-                          <td style={{ padding: '14px', fontWeight: 800, color: '#a5b4fc' }}>
-                            {allocPct}%
+                          <td style={{ padding: '14px', minWidth: '120px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontWeight: 800, color: '#a5b4fc', fontSize: '12px', minWidth: '38px' }}>{allocPct}%</span>
+                              <div style={{ flex: 1, height: '6px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                                <div style={{ 
+                                  width: `${Math.min(100, Number(allocPct))}%`, 
+                                  height: '100%', 
+                                  background: s.category === 'Core' ? '#34d399' : (s.category === 'Growth' ? '#c084fc' : '#38bdf8'),
+                                  borderRadius: '3px'
+                                }} />
+                              </div>
+                            </div>
                           </td>
                           <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
                             <span style={{ 
@@ -5424,9 +5580,9 @@ export default function App() {
                                 }}
                                 title="Log additional buy transaction for this stock"
                                 style={{
-                                  background: 'rgba(52, 211, 153, 0.15)',
+                                  background: 'rgba(16, 185, 129, 0.15)',
                                   color: '#34d399',
-                                  border: '1px solid rgba(52, 211, 153, 0.3)',
+                                  border: '1px solid rgba(16, 185, 129, 0.3)',
                                   padding: '6px 10px',
                                   borderRadius: '6px',
                                   cursor: 'pointer',
@@ -5504,25 +5660,38 @@ export default function App() {
                     })}
                   </tbody>
                   <tfoot>
-                    <tr style={{ borderTop: '2px solid rgba(99, 102, 241, 0.5)', background: 'rgba(15, 23, 42, 0.95)', fontWeight: 900, color: '#ffffff' }}>
+                    <tr style={{ borderTop: '2px solid #38bdf8', background: 'rgba(15, 23, 42, 0.95)', fontWeight: 900, color: '#ffffff' }}>
                       <td style={{ padding: '14px' }}>
-                        <div style={{ fontSize: '13px', color: '#38bdf8' }}>📊 TOTAL PORTFOLIO</div>
+                        <div style={{ fontSize: '13px', color: '#38bdf8', fontWeight: 900 }}>📊 TOTAL PORTFOLIO</div>
                         <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 600 }}>Aligned with Zerodha Holdings</div>
                       </td>
-                      <td style={{ padding: '14px', fontSize: '11px', color: '#34d399' }}>
+                      <td style={{ padding: '14px', fontSize: '11px', color: '#34d399', fontWeight: 800 }}>
                         {pullbackStockSummary.filter(s => s.netShares > 0).length} Holdings
                       </td>
-                      <td style={{ padding: '14px' }}>
+                      <td style={{ padding: '14px', fontWeight: 900, color: '#ffffff' }}>
                         {pullbackStockSummary.filter(s => s.netShares > 0).reduce((sum, s) => sum + (Number(s.netShares) || 0), 0)}
                       </td>
-                      <td style={{ padding: '14px', color: '#ffffff' }}>₹{totalSipDeployedCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td style={{ padding: '14px', color: '#38bdf8' }}>₹{totalSipCurrentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td style={{ padding: '14px', color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                        <div>{totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({((totalSipUnrealizedPnl / totalSipDeployedCost) * 100).toFixed(2)}%)</div>
-                        <div style={{ fontSize: '10px', color: '#fbbf24', marginTop: '2px', fontWeight: 700 }}>Net: {totalSipNetPnl >= 0 ? '+' : ''}₹{totalSipNetPnl.toFixed(2)} (Tax: ₹{totalSipDeliveryTaxes.toFixed(2)})</div>
+                      <td style={{ padding: '14px', color: '#cbd5e1' }}>—</td>
+                      <td style={{ padding: '14px', fontWeight: 900, color: '#34d399', fontSize: '14px', background: 'rgba(52, 211, 153, 0.12)' }}>
+                        ₹{totalSipDeployedCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td colSpan={6} style={{ padding: '14px', fontSize: '11px', color: '#a5b4fc' }}>
-                        Zerodha Brokerage: ₹0.00 | STT: ₹{totalSipStt.toFixed(2)} | Stamp: ₹{totalSipStampDuty.toFixed(2)} | Exchange Txn + SEBI + GST: ₹{(totalSipExchangeTxn + totalSipGst).toFixed(2)}
+                      <td style={{ padding: '14px', color: '#cbd5e1' }}>—</td>
+                      <td style={{ padding: '14px', fontWeight: 900, color: '#38bdf8', fontSize: '14px', background: 'rgba(56, 189, 248, 0.12)' }}>
+                        ₹{totalSipCurrentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ padding: '14px', fontWeight: 900, color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
+                        <div>{totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({totalSipDeployedCost > 0 ? ((totalSipUnrealizedPnl / totalSipDeployedCost) * 100).toFixed(2) : '0.00'}%)</div>
+                      </td>
+                      <td style={{ padding: '14px', color: '#94a3b8' }}>—</td>
+                      <td style={{ padding: '14px', color: '#94a3b8' }}>—</td>
+                      <td style={{ padding: '14px', color: '#94a3b8' }}>—</td>
+                      <td style={{ padding: '14px', fontWeight: 900, color: '#38bdf8' }}>
+                        100.0%
+                      </td>
+                      <td colSpan={2} style={{ padding: '14px', fontSize: '11px', color: '#a5b4fc', whiteSpace: 'nowrap' }}>
+                        <span style={{ background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', padding: '4px 8px', borderRadius: '4px', border: '1px solid rgba(52, 211, 153, 0.3)', fontWeight: 800 }}>
+                          🟢 Live Portfolio Tracked
+                        </span>
                       </td>
                     </tr>
                   </tfoot>
