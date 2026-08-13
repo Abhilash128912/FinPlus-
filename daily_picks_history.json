@@ -3,57 +3,57 @@
     "date": "2026-08-13",
     "display_date": "13 August 2026",
     "is_pre_market": false,
-    "symbol": "NATCOPHARM",
-    "ticker": "NATCOPHARM.NS",
-    "name": "NATCO Pharma Limited",
-    "sector": "Healthcare",
-    "total_score": 59.1,
-    "strength": 58.0,
-    "value": 59.0,
-    "momentum": 61.0,
-    "ltp_at_pick": 920.25,
-    "prev_close": 915.2999877929688,
-    "overnight_gap_amt": 4.95,
-    "overnight_gap_pct": 0.54,
-    "gap_badge": "\ud83d\udfe2 Gap Up +0.54% (+\u20b94.95)",
+    "symbol": "SBIN",
+    "ticker": "SBIN.NS",
+    "name": "State Bank of India",
+    "sector": "Financial Services",
+    "total_score": 61.1,
+    "strength": 45.0,
+    "value": 84.0,
+    "momentum": 55.0,
+    "ltp_at_pick": 1083.0,
+    "prev_close": 1082.0,
+    "overnight_gap_amt": 1.0,
+    "overnight_gap_pct": 0.09,
+    "gap_badge": "\ud83d\udfe2 Gap Up +0.09% (+\u20b91.00)",
     "gap_class": "badge-green",
-    "current_ltp": 949.35,
-    "pe": 11.8,
-    "roe_pct": 16.85,
-    "de_ratio": 0.08,
-    "npm_pct": 34.78,
-    "rsi": 61.3,
-    "rsi_status": "Bullish Setup (45-65)",
-    "ma50": 918.1,
-    "ma200": 945.54,
-    "stop_loss": 899.74,
-    "stop_loss_pct": -2.2,
-    "target1": 961.27,
-    "target1_pct": 4.5,
-    "target2": 981.78,
-    "target2_pct": 6.7,
+    "current_ltp": 1082.6,
+    "pe": 11.57,
+    "roe_pct": 15.18,
+    "de_ratio": null,
+    "npm_pct": 22.38,
+    "rsi": 73.1,
+    "rsi_status": "Overbought (>70)",
+    "ma50": 1032.12,
+    "ma200": 1032.54,
+    "stop_loss": 1039.68,
+    "stop_loss_pct": -4.0,
+    "target1": 1169.64,
+    "target1_pct": 8.0,
+    "target2": 1212.96,
+    "target2_pct": 12.0,
     "risk_reward_ratio": "1 : 2.0 (T1) / 1 : 3.0 (T2)",
     "timeframe": "3 to 7 Trading Days",
-    "dist_ma50_pct": 3.4,
-    "dist_ma200_pct": 0.4,
-    "week_high_52": 1226.8,
-    "week_low_52": 789.0,
-    "dist_52w_high_pct": -22.6,
-    "dist_52w_low_pct": 20.3,
+    "dist_ma50_pct": 4.9,
+    "dist_ma200_pct": 4.8,
+    "week_high_52": 1234.7,
+    "week_low_52": 798.5,
+    "dist_52w_high_pct": -12.3,
+    "dist_52w_low_pct": 35.6,
     "tech_rating": "\ud83d\udfe2 Strong Uptrend",
     "tech_class": "badge-green",
-    "status": "ACTIVE",
-    "status_badge": "\ud83d\udfe2 ACTIVE",
-    "status_reason": "Qualified \u2014 Score 59.1/100, Strength 58.0/100",
+    "status": "INVALIDATED",
+    "status_badge": "\u26a0\ufe0f INVALIDATED",
+    "status_reason": "Score dropped to 61.1 (below 55 qualification threshold)",
     "streak_days": 1,
-    "wk52_return_pct": 4.99,
-    "volume_spike": 2.17,
-    "today_volume": 672404.0,
-    "avg_volume_10d": 310085.0,
+    "wk52_return_pct": 31.93,
+    "volume_spike": 1.33,
+    "today_volume": 17669105.0,
+    "avg_volume_10d": 13250998.1,
     "news": [],
     "highlights": [
       "#1 Highest-Scoring Stock for 13 August 2026",
-      "Quality Score: 59.1/100 | Strength: 58.0/100",
+      "Quality Score: 61.1/100 | Strength: 45.0/100",
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ]
   },
@@ -75,7 +75,7 @@
     "overnight_gap_pct": 0.32,
     "gap_badge": "\ud83d\udfe2 Gap Up +0.32% (+\u20b937.00)",
     "gap_class": "badge-green",
-    "current_ltp": 11505.0,
+    "current_ltp": 11507.0,
     "pe": 14.27,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
@@ -115,7 +115,7 @@
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
     "current_score": 56.1,
-    "ltp": 11505.0
+    "ltp": 11507.0
   },
   {
     "date": "2026-08-11",
@@ -135,7 +135,7 @@
     "overnight_gap_pct": 2.02,
     "gap_badge": "\ud83d\udfe2 Gap Up +2.02% (+\u20b9227.00)",
     "gap_class": "badge-green",
-    "current_ltp": 11505.0,
+    "current_ltp": 11507.0,
     "pe": 14.54,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
@@ -175,7 +175,7 @@
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
     "current_score": 56.1,
-    "ltp": 11505.0
+    "ltp": 11507.0
   },
   {
     "date": "2026-08-10",
@@ -195,7 +195,7 @@
     "overnight_gap_pct": 0.0,
     "gap_badge": "\u26aa Flat Open (0.00%)",
     "gap_class": "badge-gray",
-    "current_ltp": 11505.0,
+    "current_ltp": 11507.0,
     "pe": 14.43,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
@@ -235,7 +235,7 @@
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
     "current_score": 56.1,
-    "ltp": 11505.0
+    "ltp": 11507.0
   },
   {
     "date": "2026-08-07",
@@ -255,7 +255,7 @@
     "overnight_gap_pct": -0.17,
     "gap_badge": "\ud83d\udd3b Gap Down -0.17% (-\u20b99.50)",
     "gap_class": "badge-red",
-    "current_ltp": 5860.0,
+    "current_ltp": 5857.0,
     "pe": 19.95,
     "roe_pct": 28.03,
     "de_ratio": 0.04,
@@ -295,7 +295,7 @@
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
     "current_score": 41.0,
-    "ltp": 5860.0
+    "ltp": 5857.0
   },
   {
     "date": "2026-08-05",
@@ -315,7 +315,7 @@
     "overnight_gap_pct": -1.86,
     "gap_badge": "\ud83d\udd3b Gap Down -1.86% (-\u20b926.70)",
     "gap_class": "badge-red",
-    "current_ltp": 1268.6,
+    "current_ltp": 1269.1,
     "pe": 6.67,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -370,7 +370,7 @@
       "Market Trend: \ud83d\udd35 Accumulation Phase"
     ],
     "current_score": 49.4,
-    "ltp": 1268.6
+    "ltp": 1269.1
   },
   {
     "date": "2026-08-04",
@@ -390,7 +390,7 @@
     "overnight_gap_pct": 13.72,
     "gap_badge": "\ud83d\udfe2 Gap Up +13.72% (+\u20b9191.90)",
     "gap_class": "badge-green",
-    "current_ltp": 1268.6,
+    "current_ltp": 1269.1,
     "pe": 7.03,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -445,7 +445,7 @@
       "Market Trend: \ud83d\udd35 Accumulation Phase"
     ],
     "current_score": 49.4,
-    "ltp": 1268.6
+    "ltp": 1269.1
   },
   {
     "date": "2026-08-03",
@@ -465,7 +465,7 @@
     "overnight_gap_pct": 0.56,
     "gap_badge": "\ud83d\udfe2 Gap Up +0.56% (+\u20b97.60)",
     "gap_class": "badge-green",
-    "current_ltp": 1268.6,
+    "current_ltp": 1269.1,
     "pe": 6.82,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -521,7 +521,7 @@
     ],
     "session_close": 1403.4,
     "current_score": 49.4,
-    "ltp": 1268.6
+    "ltp": 1269.1
   },
   {
     "date": "2026-07-31",
@@ -536,7 +536,7 @@
     "value": 64.0,
     "momentum": 41.0,
     "ltp_at_pick": 1350.4,
-    "current_ltp": 1268.6,
+    "current_ltp": 1269.1,
     "pe": 6.56,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -591,7 +591,7 @@
       "Market Trend: \ud83d\udfe1 Consolidation Phase"
     ],
     "current_score": 49.4,
-    "ltp": 1268.6
+    "ltp": 1269.1
   },
   {
     "date": "2026-07-30",
@@ -606,7 +606,7 @@
     "momentum": 48.0,
     "ltp_at_pick": 1374.0,
     "session_close": 1371.3,
-    "current_ltp": 1268.6,
+    "current_ltp": 1269.1,
     "pe": 6.67,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -653,6 +653,6 @@
       "Market Trend: \ud83d\udfe1 Consolidation Phase"
     ],
     "current_score": 49.4,
-    "ltp": 1268.6
+    "ltp": 1269.1
   }
 ]
