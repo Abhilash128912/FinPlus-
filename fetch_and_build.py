@@ -4405,13 +4405,13 @@ function renderWatchlist() {
               </div>
               <div class="wl-name">${w.name||''}</div>
               <div class="wl-name" style="margin-top:2px;color:var(--accent2);font-size:11px">${w.sector||''} ${sigReason ? '· ' + sigReason : ''}</div>
-              <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-top:5px;flex-wrap:wrap">
+              <div onclick="editQtyModal('${w.symbol}')" title="Click to edit quantity or buy price for ${w.symbol}" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-top:6px;background:var(--card2);padding:4px 8px;border-radius:6px;border:1px solid #6c63ff44;cursor:pointer;user-select:none" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='#6c63ff44'">
                 <span>Holdings:</span>
-                <button onclick="adjustQty('${w.symbol}', -1)" title="Decrease Quantity" style="padding:0 6px;height:20px;line-height:18px;border-radius:4px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer;font-weight:700;font-size:12px">-</button>
+                <button onclick="event.stopPropagation();adjustQty('${w.symbol}', -1)" title="Decrease Quantity" style="padding:0 6px;height:18px;line-height:16px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-weight:700;font-size:11px">-</button>
                 <b style="color:var(--white);font-weight:700">${w.qty||1} Qty</b>
-                <button onclick="adjustQty('${w.symbol}', 1)" title="Increase Quantity" style="padding:0 6px;height:20px;line-height:18px;border-radius:4px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer;font-weight:700;font-size:12px">+</button>
+                <button onclick="event.stopPropagation();adjustQty('${w.symbol}', 1)" title="Increase Quantity" style="padding:0 6px;height:18px;line-height:16px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-weight:700;font-size:11px">+</button>
                 <span>@ <b style="color:var(--white)">₹${w.avg_cost?w.avg_cost.toFixed(2):'0.00'}</b></span>
-                <button onclick="editQtyModal('${w.symbol}')" title="Edit Quantity & Buy Price" style="padding:1px 7px;border-radius:4px;border:1px solid #6c63ff55;background:linear-gradient(135deg,#6c63ff22,#00d4aa22);color:#a5b4fc;cursor:pointer;font-size:10px;font-weight:600">✏️ Edit</button>
+                <span style="color:#a5b4fc;font-weight:600;font-size:10px;margin-left:2px">✏️ Edit</span>
               </div>
             </div>
             <div style="text-align:right">
