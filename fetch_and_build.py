@@ -866,10 +866,8 @@ def process_watchlist(screener_results: list[dict]) -> list[dict]:
 
     # ─── Auto-add top stock suggestions to fill empty watchlist slots ──────
     existing_symbols = {w["symbol"] for w in watchlist}
-    slots_available = MAX_STOCKS - len(watchlist)
-
-    if slots_available > 0:
-        log(f"\nChecking top stock suggestions to auto-add into watchlist ({slots_available} slots open)...")
+    if len(watchlist) == 0:
+        log(f"\nWatchlist is empty. Checking top stock suggestions to auto-add into watchlist ({MAX_STOCKS} slots open)...")
         for scored in screener_results:
             if len(watchlist) >= MAX_STOCKS:
                 break
