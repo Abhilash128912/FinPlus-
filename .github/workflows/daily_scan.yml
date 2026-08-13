@@ -57,6 +57,9 @@ jobs:
 
           print('Running scan (this takes 10-12 minutes)...')
           results = fb.run_scan(tickers)
+          if not results or len(results) < 10:
+              print('❌ Error: Scan yielded less than 10 results. It is likely that the request was rate-limited or blocked. Aborting to prevent overwriting the report with empty data.')
+              sys.exit(1)
 
           print('Processing watchlist...')
           wl_data = fb.process_watchlist(results)
