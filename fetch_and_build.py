@@ -672,14 +672,10 @@ def run_scan(tickers: list[str]) -> list[dict]:
         scored = score_stock(info, history)
         scored["symbol"] = clean
         scored["ticker"] = ticker
-        has_fundamentals = (scored.get("roe_pct") is not None or scored.get("pe") is not None or scored.get("de_ratio") is not None)
-        if has_fundamentals:
-            qualified = (
-                scored["total_score"] >= MIN_TOTAL and
-                scored["strength"] >= MIN_STRENGTH
-            )
-        else:
-            qualified = (scored["total_score"] >= MIN_TOTAL)
+        qualified = (
+            scored["total_score"] >= MIN_TOTAL and
+            scored["strength"] >= MIN_STRENGTH
+        )
         scored["qualified"] = qualified
         trend_info = compute_trend_classification(scored)
         scored["trend"] = trend_info["trend"]
