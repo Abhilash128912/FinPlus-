@@ -2867,27 +2867,34 @@ function init() {
   updateLtpBadgeStatus();
   renderCommodityBar();
   
-  // Clear any old stored watchlist from previous versions
+  // Clear legacy localStorage cache keys
   localStorage.removeItem('quality_watchlist_v1');
   localStorage.removeItem('quality_watchlist_v2');
   localStorage.removeItem('quality_watchlist_v3');
   localStorage.removeItem('quality_watchlist_v4');
   localStorage.removeItem('quality_watchlist_v5');
   localStorage.removeItem('quality_watchlist_v6');
+  localStorage.removeItem('quality_watchlist_v7');
 
-  const stored = localStorage.getItem('quality_watchlist_v7');
-  if (stored) {
-    try { watchlist = JSON.parse(stored); }
-    catch { watchlist = []; }
-  }
+  // Always initialize Watchlist directly from fresh server scan
+  const freshServerWatchlist = JSON.parse(JSON.stringify(WATCHLIST_SEED));
   
-  // If watchlist is empty (e.g. initial run or after version reset), load WATCHLIST_SEED
-  if (!watchlist || watchlist.length === 0) {
-    watchlist = JSON.parse(JSON.stringify(WATCHLIST_SEED));
-    localStorage.setItem('quality_watchlist_v7', JSON.stringify(watchlist));
+  // Preserve any custom user-added stocks from localStorage
+  const stored = localStorage.getItem('quality_watchlist_custom_items');
+  if (stored) {
+    try {
+      const customItems = JSON.parse(stored);
+      const serverSyms = new Set(freshServerWatchlist.map(s => s.symbol));
+      customItems.forEach(item => {
+        if (!serverSyms.has(item.symbol)) {
+          freshServerWatchlist.push(item);
+        }
+      });
+    } catch(e) {}
   }
+  watchlist = freshServerWatchlist;
 
-  // Update live data for watchlist items from scan
+  // Update live data and dynamic signals for all watchlist items from current scan
   watchlist.forEach(item => {
     const live = SCREENER_DATA.find(s => s.symbol === item.symbol);
     updateWatchlistSignalsAndAlerts(item, live);
@@ -3202,7 +3209,9 @@ function changePollInterval(val) {
 }
 
 function saveWatchlist() {
-  localStorage.setItem('quality_watchlist_v7', JSON.stringify(watchlist));
+  const seedSyms = new Set(WATCHLIST_SEED.map(s => s.symbol));
+  const customItems = watchlist.filter(w => !seedSyms.has(w.symbol));
+  localStorage.setItem('quality_watchlist_custom_items', JSON.stringify(customItems));
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────
