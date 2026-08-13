@@ -2795,6 +2795,7 @@ function clearAllWatchlist() {
   localStorage.removeItem('quality_watchlist_v1');
   localStorage.removeItem('quality_watchlist_v2');
   localStorage.removeItem('quality_watchlist_v3');
+  localStorage.removeItem('quality_watchlist_v4');
   saveWatchlist();
   renderWatchlist();
   updateWlCount();
@@ -2811,15 +2812,16 @@ function init() {
   // Clear any old stored watchlist from previous versions
   localStorage.removeItem('quality_watchlist_v1');
   localStorage.removeItem('quality_watchlist_v2');
+  localStorage.removeItem('quality_watchlist_v3');
 
-  const stored = localStorage.getItem('quality_watchlist_v3');
+  const stored = localStorage.getItem('quality_watchlist_v4');
   if (stored) {
     try { watchlist = JSON.parse(stored); }
     catch { watchlist = []; }
   } else {
     // Default load seed stocks (the user's 9 custom portfolio holdings)
     watchlist = JSON.parse(JSON.stringify(WATCHLIST_SEED));
-    localStorage.setItem('quality_watchlist_v3', JSON.stringify(watchlist));
+    localStorage.setItem('quality_watchlist_v4', JSON.stringify(watchlist));
   }
 
   // Update live data for watchlist items from scan
@@ -3149,7 +3151,7 @@ function changePollInterval(val) {
 }
 
 function saveWatchlist() {
-  localStorage.setItem('quality_watchlist_v3', JSON.stringify(watchlist));
+  localStorage.setItem('quality_watchlist_v4', JSON.stringify(watchlist));
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────
