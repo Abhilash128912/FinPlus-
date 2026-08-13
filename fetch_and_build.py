@@ -4899,11 +4899,10 @@ if __name__ == "__main__":
     log("  Source: Nifty 500 | Scoring: Strength + Value + Momentum")
     log("=" * 60)
 
-    # Launch background scan if needed
-    if not os.path.exists(OUT_HTML) or FORCE_REFRESH or "--scan" in sys.argv:
-        log("⚡ Launching initial scan in background thread...")
-        scan_t = threading.Thread(target=background_initial_scan, daemon=True)
-        scan_t.start()
+    # Always launch scan in background thread on startup
+    log("⚡ Launching scan of 2413 stocks in background thread...")
+    scan_t = threading.Thread(target=background_initial_scan, daemon=True)
+    scan_t.start()
 
     # Run the HTTP server directly in main thread
     run_server(port)
