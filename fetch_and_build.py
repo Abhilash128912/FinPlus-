@@ -1119,49 +1119,45 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
         return top_pick, history, mkt_info
 
     # Regular trading day logic
-    # If today's pick has already been locked in history, check if it remains ACTIVE & has not exceeded max streak limit
+    # If today's pick has already been locked in history, KEEP IT LOCKED FOR TODAY unless score drops severely below 45
     if history and history[0].get("date") == today_str and not history[0].get("is_pre_market"):
-        current_sym = history[0].get("symbol")
-        # Check how many consecutive previous days this symbol was picked before today
-        prev_streak = 0
-        for h_item in history[1:]:
-            if h_item.get("symbol") == current_sym:
-                prev_streak += 1
+        top_pick = dict(history[0])
+        sym = top_pick.get("symbol")
+        res = result_map.get(sym)
+        if res:
+            top_pick["current_ltp"] = res["ltp"]
+            top_pick["current_score"] = res["total_score"]
+            top_pick["pe"] = res.get("pe")
+            top_pick["rsi"] = res.get("rsi")
+            if res.get("ma50") and res["ltp"]:
+                top_pick["dist_ma50_pct"] = round(((res["ltp"] - res["ma50"]) / res["ma50"]) * 100, 1)
+            if res.get("ma200") and res["ltp"]:
+                top_pick["dist_ma200_pct"] = round(((res["ltp"] - res["ma200"]) / res["ma200"]) * 100, 1)
+            st = check_top_pick_status(res)
+            
+            # STABILITY CUSHION: If locked today, stay ACTIVE unless score falls below 45
+            if res.get("total_score", 0) >= 45.0 and res.get("strength", 0) >= 40.0:
+                top_pick["status"] = "ACTIVE"
+                top_pick["status_badge"] = "🟢 ACTIVE"
+                top_pick["status_reason"] = f"Locked Pick — Score {res['total_score']:.1f}/100, Strength {res.get('strength', 0):.1f}/100"
             else:
-                break
-                
-        if prev_streak >= 2:
-            log(f"🔄 Stock of the Day '{current_sym}' reached max streak ({prev_streak + 1} days). Force-rotating to a fresh candidate...")
-            history.pop(0)
-        else:
-            top_pick = dict(history[0])
-            sym = top_pick.get("symbol")
-            res = result_map.get(sym)
-            if res and is_eligible_for_stock_of_the_day(top_pick) and is_eligible_for_stock_of_the_day(res):
-                top_pick["current_ltp"] = res["ltp"]
-                top_pick["current_score"] = res["total_score"]
-                top_pick["pe"] = res.get("pe")
-                top_pick["rsi"] = res.get("rsi")
-                if res.get("ma50") and res["ltp"]:
-                    top_pick["dist_ma50_pct"] = round(((res["ltp"] - res["ma50"]) / res["ma50"]) * 100, 1)
-                if res.get("ma200") and res["ltp"]:
-                    top_pick["dist_ma200_pct"] = round(((res["ltp"] - res["ma200"]) / res["ma200"]) * 100, 1)
-                st = check_top_pick_status(res)
                 top_pick["status"] = st["status"]
                 top_pick["status_badge"] = st["badge"]
                 top_pick["status_reason"] = st["reason"]
 
-                if top_pick.get("status") == "ACTIVE":
-                    history[0] = top_pick
-                    with open(DAILY_PICKS_FILE, "w") as f:
-                        json.dump(history, f, indent=2)
-                    return top_pick, history, mkt_info
+            if top_pick.get("status") == "ACTIVE":
+                history[0] = top_pick
+                with open(DAILY_PICKS_FILE, "w") as f:
+                    json.dump(history, f, indent=2)
+                return top_pick, history, mkt_info
             
-            history.pop(0)
+        history.pop(0)
 
-    # STRICT SELECTION: Stock of the Day MUST BE Large Cap or Mid Cap ONLY, with LTP >= Rs 100
-    # STRICT SELECTION: Stock of the Day MUST BE Large Cap or Mid Cap ONLY, with LTP >= Rs 100
-    eligible_screener_results = [r for r in screener_results if is_eligible_for_stock_of_the_day(r)]
+    # STRICT SELECTION: Stock of the Day MUST BE Large Cap or Mid Cap ONLY & MUST BE QUALIFIED (Score >= 55 & Strength >= 50)
+    eligible_screener_results = [
+        r for r in screener_results 
+        if is_eligible_for_stock_of_the_day(r) and (r.get("qualified") or (r.get("total_score", 0) >= 55 and r.get("strength", 0) >= 50))
+    ]
     
     # Exclude any stock that has already been Stock of the Day for 2+ consecutive days to ensure fresh rotation
     overused_symbols = set()
@@ -1172,30 +1168,15 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
 
     qualified_eligible = [
         r for r in eligible_screener_results
-        if (
-            r.get("qualified") and
-            r.get("symbol") not in overused_symbols and
-            (r.get("momentum", 0) >= 40) and
-            (
-                r.get("market_structure") == "HH / HL Uptrend" or
-                r.get("tech_class") == "badge-green" or
-                (r.get("ltp", 0) > r.get("ma50", 0) and r.get("ltp", 0) > r.get("ma200", 0))
-            )
-        )
+        if r.get("symbol") not in overused_symbols
     ]
     
-    # Fallback to top eligible stock if no fresh candidate passes streak limit
     if qualified_eligible:
         top = qualified_eligible[0]
+    elif eligible_screener_results:
+        top = eligible_screener_results[0]
     else:
-        # Pick highest scoring qualified stock that is not sliding severely
-        non_sliding = [r for r in eligible_screener_results if r.get("qualified") and r.get("symbol") not in overused_symbols]
-        if non_sliding:
-            top = non_sliding[0]
-        elif eligible_screener_results:
-            top = eligible_screener_results[0]
-        else:
-            top = screener_results[0]
+        top = screener_results[0]
 
     streak_days = 1
     top_open = top.get("open") or top.get("regularMarketOpen")
