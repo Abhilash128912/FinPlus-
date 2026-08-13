@@ -1950,7 +1950,7 @@ details[open] summary::before {
   <!-- Desktop Top Tabs (Hidden on mobile where bottom nav is active) -->
   <div class="tabs">
     <button class="tab active" onclick="switchTab('screener')">🔍 Screener Results</button>
-    <button class="tab" onclick="switchTab('swing')">🚀 Swing Radar</button>
+    <button class="tab" onclick="switchTab('swing')">⚡ Swing Trading</button>
     <button class="tab" onclick="switchTab('watchlist')">⭐ My Watchlist (<span id="wlCount">0</span>)</button>
     <button class="tab" onclick="switchTab('top-pick')">🏆 Stock of the Day</button>
     <button class="tab" onclick="switchTab('fno')">📊 F&amp;O Options</button>
@@ -2109,6 +2109,7 @@ details[open] summary::before {
             <th>Target 1 (1:2)</th>
             <th>Target 2 (1:3)</th>
             <th>Reason</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody id="swingBody"></tbody>
@@ -2254,11 +2255,46 @@ details[open] summary::before {
   </div>
 </div>
 
+<!-- Swing Trade Calculator Modal -->
+<div class="modal-bg" id="swingCalcModalBg" style="display:none" onclick="if(event.target===this)closeSwingCalcModal()">
+  <div style="background:var(--card);border:1.5px solid var(--accent);border-radius:16px;padding:24px;width:90%;max-width:520px;box-shadow:0 12px 36px rgba(0,0,0,0.5)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h3 style="font-size:18px;font-weight:700;color:var(--white)">🧮 Swing Position Calculator</h3>
+      <button class="modal-close" onclick="closeSwingCalcModal()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">✕</button>
+    </div>
+    
+    <div id="swingCalcHeader" style="margin-bottom:16px;background:var(--card2);padding:12px;border-radius:10px;border:1px solid var(--border)">
+    </div>
+
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;text-transform:uppercase">ENTER TRADE CAPITAL (₹)</label>
+      <div style="display:flex;gap:8px">
+        <input type="number" id="swingCapitalInput" value="50000" step="5000" style="flex:1;background:var(--card2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:15px;font-weight:700;outline:none" oninput="recalcSwingPosition()">
+        <button class="btn-add" onclick="setCapitalPreset(25000)" style="padding:8px 12px;font-size:12px">₹25k</button>
+        <button class="btn-add" onclick="setCapitalPreset(50000)" style="padding:8px 12px;font-size:12px">₹50k</button>
+        <button class="btn-add" onclick="setCapitalPreset(100000)" style="padding:8px 12px;font-size:12px">₹1L</button>
+      </div>
+    </div>
+
+    <div id="swingCalcResults" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <button class="btn-add" style="flex:1;padding:10px;font-size:13px;background:var(--card2);border:1px solid var(--border);color:var(--text)" onclick="closeSwingCalcModal()">Close</button>
+      <button class="btn-add" id="swingCalcAddWlBtn" style="flex:1;padding:10px;font-size:13px;background:linear-gradient(135deg,#00d4aa,#10b981);color:#06060f;font-weight:700">⭐ Add to Watchlist</button>
+    </div>
+  </div>
+</div>
+
 <!-- Fixed Mobile Bottom Navigation Bar -->
 <div class="mobile-nav-bar">
   <button class="mobile-nav-item active" data-tab="screener" onclick="switchTab('screener')">
     <span class="mobile-nav-icon">🔍</span>
     <span>Screener</span>
+  </button>
+  <button class="mobile-nav-item" data-tab="swing" onclick="switchTab('swing')">
+    <span class="mobile-nav-icon">⚡</span>
+    <span>Swing</span>
   </button>
   <button class="mobile-nav-item" data-tab="watchlist" onclick="switchTab('watchlist')">
     <span class="mobile-nav-icon">⭐</span>
@@ -2496,9 +2532,9 @@ let swingSortCol = 'swing_score';
 let swingSortDir = -1; // -1 = descending
 
 function getSwingData() {
-  // Base pool: only MTF stocks from screener data
+  // Base pool: MTF stocks or all qualified swing candidates
   const mtf = SCREENER_DATA.filter(s => s.is_mtf);
-  return mtf;
+  return mtf.length > 0 ? mtf : SCREENER_DATA.filter(s => s.total_score >= 45 || s.momentum >= 50);
 }
 
 function applySwingPreset(data) {
@@ -2569,7 +2605,7 @@ function renderSwingRadar() {
 
   // Result count
   const rcEl = document.getElementById('swingResultCount');
-  if (rcEl) rcEl.textContent = `Showing ${sorted.length} MTF stocks matching current preset`;
+  if (rcEl) rcEl.textContent = `Showing ${sorted.length} swing stocks matching current preset`;
 
   // Top 10 Spotlight Cards
   const spotlight = document.getElementById('swingSpotlight');
@@ -2633,7 +2669,13 @@ function renderSwingRadar() {
               <div class="swing-t2">${t2Str}</div>
             </div>
           </div>
-          <div style="font-size:10px;color:var(--muted);margin-top:8px;border-top:1px solid var(--border);padding-top:6px">${s.swing_reason||''}</div>
+          <div style="display:flex;gap:6px;margin-top:8px;border-top:1px solid var(--border);padding-top:6px;align-items:center;justify-content:space-between">
+            <div style="font-size:10px;color:var(--muted)">${s.swing_reason||''}</div>
+            <div style="display:flex;gap:4px">
+              <button class="btn-add" onclick="event.stopPropagation();openSwingCalcModal('${s.symbol}')" style="padding:3px 8px;font-size:10px;background:var(--card2)">🧮 Calc</button>
+              <button class="btn-add" onclick="event.stopPropagation();addToWatchlist('${s.symbol}')" style="padding:3px 8px;font-size:10px;background:linear-gradient(135deg,#00d4aa,#10b981);color:#06060f;font-weight:700">⭐ +WL</button>
+            </div>
+          </div>
         </div>`;
       }).join('');
     }
@@ -2643,7 +2685,7 @@ function renderSwingRadar() {
   const tbody = document.getElementById('swingBody');
   if (!tbody) return;
   if (sorted.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--muted)">No stocks match this filter.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--muted)">No stocks match this filter.</td></tr>';
     return;
   }
   tbody.innerHTML = sorted.map((s, i) => {
@@ -2666,8 +2708,108 @@ function renderSwingRadar() {
       <td class="swing-t1">${s.swing_t1 ? '₹' + s.swing_t1.toFixed(1) : '–'}<br><span style="font-size:10px;color:#10b981">+${s.swing_t1_pct||0}%</span></td>
       <td class="swing-t2">${s.swing_t2 ? '₹' + s.swing_t2.toFixed(1) : '–'}<br><span style="font-size:10px;color:#00d4aa">+${s.swing_t2_pct||0}%</span></td>
       <td style="font-size:11px;color:var(--muted);max-width:180px;white-space:normal">${s.swing_reason||'–'}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn-add" onclick="openSwingCalcModal('${s.symbol}')" style="padding:3px 6px;font-size:10px;background:var(--card2)" title="Calculate Position Size">🧮</button>
+          <button class="btn-add" onclick="addToWatchlist('${s.symbol}')" style="padding:3px 6px;font-size:10px" title="Add to Watchlist">⭐</button>
+        </div>
+      </td>
     </tr>`;
   }).join('');
+}
+
+let currentCalcStock = null;
+
+function openSwingCalcModal(symbol) {
+  const stock = SCREENER_DATA.find(s => s.symbol === symbol);
+  if (!stock || !stock.ltp) {
+    alert('Invalid stock price for calculation');
+    return;
+  }
+  currentCalcStock = stock;
+  const header = document.getElementById('swingCalcHeader');
+  if (header) {
+    header.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--white)">${stock.symbol}</div>
+          <div style="font-size:11px;color:var(--muted)">${stock.name || ''}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:16px;font-weight:700;color:var(--accent2)">₹${stock.ltp.toFixed(2)}</div>
+          <div style="font-size:11px;color:var(--muted)">LTP</div>
+        </div>
+      </div>
+    `;
+  }
+  const addBtn = document.getElementById('swingCalcAddWlBtn');
+  if (addBtn) {
+    addBtn.onclick = function() {
+      addToWatchlist(stock.symbol);
+      closeSwingCalcModal();
+    };
+  }
+  recalcSwingPosition();
+  const modal = document.getElementById('swingCalcModalBg');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeSwingCalcModal() {
+  const modal = document.getElementById('swingCalcModalBg');
+  if (modal) modal.style.display = 'none';
+}
+
+function setCapitalPreset(amt) {
+  const inp = document.getElementById('swingCapitalInput');
+  if (inp) {
+    inp.value = amt;
+    recalcSwingPosition();
+  }
+}
+
+function recalcSwingPosition() {
+  if (!currentCalcStock) return;
+  const capital = parseFloat(document.getElementById('swingCapitalInput')?.value || 50000);
+  const ltp = currentCalcStock.ltp;
+  if (!ltp || ltp <= 0) return;
+
+  const qty = Math.max(1, Math.floor(capital / ltp));
+  const totalCost = qty * ltp;
+  
+  const slPrice = currentCalcStock.swing_sl || (ltp * 0.96);
+  const t1Price = currentCalcStock.swing_t1 || (ltp * 1.08);
+  const t2Price = currentCalcStock.swing_t2 || (ltp * 1.15);
+
+  const maxRiskAmt = Math.abs(ltp - slPrice) * qty;
+  const maxRiskPct = ((Math.abs(ltp - slPrice) / ltp) * 100).toFixed(1);
+  const profitT1 = (t1Price - ltp) * qty;
+  const profitT2 = (t2Price - ltp) * qty;
+
+  const resEl = document.getElementById('swingCalcResults');
+  if (resEl) {
+    resEl.innerHTML = `
+      <div style="background:var(--card2);padding:10px;border-radius:8px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Shares to Buy</div>
+        <div style="font-size:18px;font-weight:700;color:var(--white)">${qty} Shares</div>
+        <div style="font-size:10px;color:var(--muted)">Est. Outlay: ₹${Math.round(totalCost).toLocaleString('en-IN')}</div>
+      </div>
+      <div style="background:var(--card2);padding:10px;border-radius:8px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Max Risk (SL)</div>
+        <div style="font-size:18px;font-weight:700;color:#ef4444">-₹${Math.round(maxRiskAmt).toLocaleString('en-IN')}</div>
+        <div style="font-size:10px;color:var(--muted)">SL @ ₹${slPrice.toFixed(1)} (-${maxRiskPct}%)</div>
+      </div>
+      <div style="background:var(--card2);padding:10px;border-radius:8px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Target 1 Profit (+8%)</div>
+        <div style="font-size:18px;font-weight:700;color:#10b981">+₹${Math.round(profitT1).toLocaleString('en-IN')}</div>
+        <div style="font-size:10px;color:var(--muted)">Target: ₹${t1Price.toFixed(1)}</div>
+      </div>
+      <div style="background:var(--card2);padding:10px;border-radius:8px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Target 2 Profit (+15%)</div>
+        <div style="font-size:18px;font-weight:700;color:#00d4aa">+₹${Math.round(profitT2).toLocaleString('en-IN')}</div>
+        <div style="font-size:10px;color:var(--muted)">Target: ₹${t2Price.toFixed(1)}</div>
+      </div>
+    `;
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
@@ -4531,19 +4673,28 @@ def fetch_commodity_signals() -> dict:
 def build_html(screener_results: list[dict], watchlist: list[dict], top_pick: dict, daily_history: list[dict], commodity_signals: dict, mkt_info: dict, fno_data: list[dict] | None = None) -> str:
     run_time = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
 
+    def json_serializer(o):
+        if hasattr(o, 'item'):
+            return o.item()
+        if hasattr(o, 'isoformat'):
+            return o.isoformat()
+        if isinstance(o, (bool, type(True))):
+            return bool(o)
+        return str(o)
+
     html = HTML_TEMPLATE
     html = html.replace("__PHASE_LABEL__",   cfg["phase_label"])
     html = html.replace("__PHASE_BUDGET__",  f"{cfg['phase_budget_per_stock']:,}")
     html = html.replace("__MAX_STOCKS__",    str(cfg["max_stocks"]))
     html = html.replace("__TOTAL_BUDGET__",  f"{cfg['total_budget']:,}")
     html = html.replace("__RUN_TIME__",      run_time)
-    html = html.replace("__SCREENER_JSON__", json.dumps(screener_results, ensure_ascii=False))
-    html = html.replace("__WATCHLIST_JSON__", json.dumps(watchlist, ensure_ascii=False))
-    html = html.replace("__CONFIG_JSON__",   json.dumps(cfg, ensure_ascii=False))
-    html = html.replace("__TOP_PICK_JSON__", json.dumps(top_pick, ensure_ascii=False))
-    html = html.replace("__DAILY_PICKS_HISTORY_JSON__", json.dumps(daily_history, ensure_ascii=False))
-    html = html.replace("__COMMODITIES_JSON__", json.dumps(commodity_signals, ensure_ascii=False))
-    html = html.replace("__MARKET_INFO_JSON__", json.dumps(mkt_info, ensure_ascii=False))
+    html = html.replace("__SCREENER_JSON__", json.dumps(screener_results, ensure_ascii=False, default=json_serializer))
+    html = html.replace("__WATCHLIST_JSON__", json.dumps(watchlist, ensure_ascii=False, default=json_serializer))
+    html = html.replace("__CONFIG_JSON__",   json.dumps(cfg, ensure_ascii=False, default=json_serializer))
+    html = html.replace("__TOP_PICK_JSON__", json.dumps(top_pick, ensure_ascii=False, default=json_serializer))
+    html = html.replace("__DAILY_PICKS_HISTORY_JSON__", json.dumps(daily_history, ensure_ascii=False, default=json_serializer))
+    html = html.replace("__COMMODITIES_JSON__", json.dumps(commodity_signals, ensure_ascii=False, default=json_serializer))
+    html = html.replace("__MARKET_INFO_JSON__", json.dumps(mkt_info, ensure_ascii=False, default=json_serializer))
     backtest_data = {}
     backtest_file = os.path.join(BASE_DIR, "cache", "backtest_results.json")
     if os.path.exists(backtest_file):
@@ -4553,8 +4704,8 @@ def build_html(screener_results: list[dict], watchlist: list[dict], top_pick: di
         except Exception:
             pass
 
-    html = html.replace("__BACKTEST_RESULTS_JSON__", json.dumps(backtest_data, ensure_ascii=False))
-    html = html.replace("__FNO_JSON__", json.dumps(fno_data or [], ensure_ascii=False))
+    html = html.replace("__BACKTEST_RESULTS_JSON__", json.dumps(backtest_data, ensure_ascii=False, default=json_serializer))
+    html = html.replace("__FNO_JSON__", json.dumps(fno_data or [], ensure_ascii=False, default=json_serializer))
     return html
 
 
