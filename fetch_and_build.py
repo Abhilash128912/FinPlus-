@@ -2853,6 +2853,7 @@ function clearAllWatchlist() {
   localStorage.removeItem('quality_watchlist_v4');
   localStorage.removeItem('quality_watchlist_v5');
   localStorage.removeItem('quality_watchlist_v6');
+  localStorage.removeItem('quality_watchlist_v7');
   saveWatchlist();
   renderWatchlist();
   updateWlCount();
@@ -2872,8 +2873,9 @@ function init() {
   localStorage.removeItem('quality_watchlist_v3');
   localStorage.removeItem('quality_watchlist_v4');
   localStorage.removeItem('quality_watchlist_v5');
+  localStorage.removeItem('quality_watchlist_v6');
 
-  const stored = localStorage.getItem('quality_watchlist_v6');
+  const stored = localStorage.getItem('quality_watchlist_v7');
   if (stored) {
     try { watchlist = JSON.parse(stored); }
     catch { watchlist = []; }
@@ -2882,7 +2884,7 @@ function init() {
   // If watchlist is empty (e.g. initial run or after version reset), load WATCHLIST_SEED
   if (!watchlist || watchlist.length === 0) {
     watchlist = JSON.parse(JSON.stringify(WATCHLIST_SEED));
-    localStorage.setItem('quality_watchlist_v6', JSON.stringify(watchlist));
+    localStorage.setItem('quality_watchlist_v7', JSON.stringify(watchlist));
   }
 
   // Update live data for watchlist items from scan
@@ -3200,7 +3202,7 @@ function changePollInterval(val) {
 }
 
 function saveWatchlist() {
-  localStorage.setItem('quality_watchlist_v6', JSON.stringify(watchlist));
+  localStorage.setItem('quality_watchlist_v7', JSON.stringify(watchlist));
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────
