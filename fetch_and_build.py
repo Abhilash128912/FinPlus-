@@ -784,13 +784,15 @@ def process_fno_stocks(screener_results: list[dict]) -> list[dict]:
 
 # ─── Step 4: Score watchlist stocks & fill entry metrics ─────────────────────
 def process_watchlist(screener_results: list[dict]) -> list[dict]:
-    # Load or initialise watchlist from seed
-    if os.path.exists(WL_FILE):
+    # Always load master watchlist from seed
+    if os.path.exists(WL_SEED):
+        with open(WL_SEED) as f:
+            watchlist = json.load(f)
+    elif os.path.exists(WL_FILE):
         with open(WL_FILE) as f:
             watchlist = json.load(f)
     else:
-        with open(WL_SEED) as f:
-            watchlist = json.load(f)
+        watchlist = []
 
     result_map = {r["symbol"]: r for r in screener_results}
 
@@ -863,70 +865,6 @@ def process_watchlist(screener_results: list[dict]) -> list[dict]:
                 item["unrealised_pnl"]  = round((ltp - avg) * qty, 2)
                 item["unrealised_pct"]  = round(((ltp - avg) / avg) * 100, 2)
                 item["current_value"]   = round(ltp * qty, 2)
-
-    # ─── Auto-add top stock suggestions to fill empty watchlist slots ──────
-    existing_symbols = {w["symbol"] for w in watchlist}
-    if len(watchlist) == 0:
-        log(f"\nWatchlist is empty. Checking top stock suggestions to auto-add into watchlist ({MAX_STOCKS} slots open)...")
-        for scored in screener_results:
-            if len(watchlist) >= MAX_STOCKS:
-                break
-            sym = scored["symbol"]
-            if sym in existing_symbols:
-                continue
-
-            if scored.get("qualified") or (scored["total_score"] >= MIN_TOTAL and scored["strength"] >= MIN_STRENGTH):
-                ltp = scored["ltp"]
-                if ltp <= 0:
-                    continue
-                qty = max(1, int(PHASE_BUDGET / ltp))
-                avg_cost = ltp
-                tot_inv = round(ltp * qty, 2)
-                sig = compute_signal(scored, {})
-
-                new_item = {
-                    "symbol": sym,
-                    "ticker": scored["ticker"],
-                    "name": scored.get("name") or sym,
-                    "sector": scored.get("sector", ""),
-                    "qty": qty,
-                    "avg_cost": avg_cost,
-                    "total_invested": tot_inv,
-                    "added_at": datetime.date.today().isoformat(),
-                    "auto_added": True,
-                    "score_at_entry": scored["total_score"],
-                    "strength_at_entry": scored["strength"],
-                    "value_at_entry": scored["value"],
-                    "momentum_at_entry": scored["momentum"],
-                    "roe_at_entry": scored.get("roe_pct"),
-                    "de_at_entry": scored.get("de_ratio"),
-                    "npm_at_entry": scored.get("npm_pct"),
-                    "current_score": scored["total_score"],
-                    "current_strength": scored["strength"],
-                    "current_value": scored["value"],
-                    "current_momentum": scored["momentum"],
-                    "ltp": ltp,
-                    "pe": scored.get("pe"),
-                    "roe_pct": scored.get("roe_pct"),
-                    "de_ratio": scored.get("de_ratio"),
-                    "npm_pct": scored.get("npm_pct"),
-                    "rsi": scored.get("rsi"),
-                    "ma200": scored.get("ma200"),
-                    "wk52_return_pct": scored.get("wk52_return_pct"),
-                    "volume_spike": scored.get("volume_spike", 0.0),
-                    "today_volume": scored.get("today_volume", 0),
-                    "avg_volume_10d": scored.get("avg_volume_10d", 0),
-                    "news": scored.get("news", []),
-                    "alerts": check_quality_alerts(scored, {}),
-                    "signal": sig["signal"],
-                    "signal_badge": sig["badge"],
-                    "signal_reason": sig["reason"],
-                    "unrealised_pnl": 0.0,
-                    "unrealised_pct": 0.0,
-                }
-                watchlist.append(new_item)
-                existing_symbols.add(sym)
-                log(f"  ⚡ Auto-added top suggestion: {sym:<12} (Score: {scored['total_score']:>4.1f}, Signal: {sig['badge']}, LTP: ₹{ltp:>7.2f}, Qty: {qty:>2})")
 
     # Save updated watchlist
     with open(WL_FILE, "w") as f:
