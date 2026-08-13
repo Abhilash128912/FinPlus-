@@ -2799,12 +2799,13 @@ function setCapitalPreset(amt) {
 
 function recalcSwingPosition() {
   if (!currentCalcStock) return;
-  const capital = parseFloat(document.getElementById('swingCapitalInput')?.value || 50000);
+  const capital = parseFloat(document.getElementById('swingCapitalInput')?.value || 0);
   const ltp = currentCalcStock.ltp;
   if (!ltp || ltp <= 0) return;
 
-  const qty = Math.max(1, Math.floor(capital / ltp));
+  const qty = Math.floor(capital / ltp);
   const totalCost = qty * ltp;
+  const minRequired = Math.ceil(ltp);
   
   const slPrice = currentCalcStock.swing_sl || (ltp * 0.96);
   const t1Price = currentCalcStock.swing_t1 || (ltp * 1.08);
@@ -2817,28 +2818,38 @@ function recalcSwingPosition() {
 
   const resEl = document.getElementById('swingCalcResults');
   if (resEl) {
-    resEl.innerHTML = `
-      <div style="background:var(--card2);padding:10px;border-radius:8px">
-        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Shares to Buy</div>
-        <div style="font-size:18px;font-weight:700;color:var(--white)">${qty} Shares</div>
-        <div style="font-size:10px;color:var(--muted)">Est. Outlay: ₹${Math.round(totalCost).toLocaleString('en-IN')}</div>
-      </div>
-      <div style="background:var(--card2);padding:10px;border-radius:8px">
-        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Max Risk (SL)</div>
-        <div style="font-size:18px;font-weight:700;color:#ef4444">-₹${Math.round(maxRiskAmt).toLocaleString('en-IN')}</div>
-        <div style="font-size:10px;color:var(--muted)">SL @ ₹${slPrice.toFixed(1)} (-${maxRiskPct}%)</div>
-      </div>
-      <div style="background:var(--card2);padding:10px;border-radius:8px">
-        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Target 1 Profit (+8%)</div>
-        <div style="font-size:18px;font-weight:700;color:#10b981">+₹${Math.round(profitT1).toLocaleString('en-IN')}</div>
-        <div style="font-size:10px;color:var(--muted)">Target: ₹${t1Price.toFixed(1)}</div>
-      </div>
-      <div style="background:var(--card2);padding:10px;border-radius:8px">
-        <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Target 2 Profit (+15%)</div>
-        <div style="font-size:18px;font-weight:700;color:#00d4aa">+₹${Math.round(profitT2).toLocaleString('en-IN')}</div>
-        <div style="font-size:10px;color:var(--muted)">Target: ₹${t2Price.toFixed(1)}</div>
-      </div>
-    `;
+    if (qty <= 0) {
+      resEl.innerHTML = `
+        <div style="grid-column: 1 / -1; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); border-radius:10px; padding:14px; color:var(--text); text-align:center">
+          <div style="font-weight:700; color:#ef4444; font-size:13px; margin-bottom:4px">⚠️ Insufficient Capital to Buy 1 Share</div>
+          <div style="font-size:12px">Your entered capital (₹${capital.toLocaleString('en-IN')}) is less than the price of 1 share (₹${minRequired.toLocaleString('en-IN')}).</div>
+          <div style="font-size:11px; color:var(--muted); margin-top:6px">Minimum Capital Required: <strong>₹${minRequired.toLocaleString('en-IN')}</strong></div>
+        </div>
+      `;
+    } else {
+      resEl.innerHTML = `
+        <div style="background:var(--card2);padding:10px;border-radius:8px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Shares to Buy</div>
+          <div style="font-size:18px;font-weight:700;color:var(--white)">${qty} ${qty === 1 ? 'Share' : 'Shares'}</div>
+          <div style="font-size:10px;color:var(--muted)">Est. Outlay: ₹${Math.round(totalCost).toLocaleString('en-IN')}</div>
+        </div>
+        <div style="background:var(--card2);padding:10px;border-radius:8px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Max Risk (SL)</div>
+          <div style="font-size:18px;font-weight:700;color:#ef4444">-₹${Math.round(maxRiskAmt).toLocaleString('en-IN')}</div>
+          <div style="font-size:10px;color:var(--muted)">SL @ ₹${slPrice.toFixed(1)} (-${maxRiskPct}%)</div>
+        </div>
+        <div style="background:var(--card2);padding:10px;border-radius:8px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Target 1 Profit (+8%)</div>
+          <div style="font-size:18px;font-weight:700;color:#10b981">+₹${Math.round(profitT1).toLocaleString('en-IN')}</div>
+          <div style="font-size:10px;color:var(--muted)">Target: ₹${t1Price.toFixed(1)}</div>
+        </div>
+        <div style="background:var(--card2);padding:10px;border-radius:8px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Target 2 Profit (+15%)</div>
+          <div style="font-size:18px;font-weight:700;color:#00d4aa">+₹${Math.round(profitT2).toLocaleString('en-IN')}</div>
+          <div style="font-size:10px;color:var(--muted)">Target: ₹${t2Price.toFixed(1)}</div>
+        </div>
+      `;
+    }
   }
 }
 
