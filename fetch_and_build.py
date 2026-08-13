@@ -2196,8 +2196,8 @@ details[open] summary::before {
         <button class="btn-add" style="background:var(--card2);border:1px solid var(--border);color:var(--text);font-weight:600;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px" onclick="openBseModal()">
           ➕ Add BSE / Custom Stock
         </button>
-        <button class="btn-add" style="background:linear-gradient(135deg,#00d4aa,#10b981);color:#06060f;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px" onclick="autoAddTopSuggestions()">
-          ⚡ Auto-Add Suggestions
+        <button class="btn-add" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#ef4444;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px" onclick="clearAllWatchlist()">
+          🗑️ Clear All
         </button>
       </div>
     </div>
@@ -2851,16 +2851,34 @@ function recalcSwingPosition() {
   }
 }
 
+function clearAllWatchlist() {
+  if (!confirm("Are you sure you want to clear all watchlist stocks?")) return;
+  watchlist = [];
+  localStorage.removeItem('quality_watchlist_v1');
+  localStorage.removeItem('quality_watchlist_v2');
+  renderWatchlist();
+  showNotification("Watchlist cleared successfully!");
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 function init() {
   renderMarketStatusHeader();
   updateLtpBadgeStatus();
   renderCommodityBar();
-  // Load watchlist from localStorage, merge with seed
-  const stored = localStorage.getItem('quality_watchlist_v1');
+  
+  // Clear old storage keys if present to prevent stale auto-filled stocks
+  if (localStorage.getItem('quality_watchlist_v1')) {
+    localStorage.removeItem('quality_watchlist_v1');
+  }
+
+  const stored = localStorage.getItem('quality_watchlist_v2');
   if (stored) {
     try { watchlist = JSON.parse(stored); }
     catch { watchlist = []; }
+  } else {
+    // Default load seed stocks (the user's 9 custom portfolio holdings)
+    watchlist = JSON.parse(JSON.stringify(WATCHLIST_SEED));
+    localStorage.setItem('quality_watchlist_v2', JSON.stringify(watchlist));
   }
   // Always ensure seed stocks are present (first run)
   WATCHLIST_SEED.forEach(seed => {
