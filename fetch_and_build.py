@@ -4348,6 +4348,9 @@ function renderWatchlist() {
               </div>
               <div class="wl-name">${w.name||''}</div>
               <div class="wl-name" style="margin-top:2px;color:var(--accent2);font-size:11px">${w.sector||''} ${sigReason ? '· ' + sigReason : ''}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">
+                Holdings: <b style="color:var(--white);font-weight:600">${w.qty||1} Qty</b> @ <b style="color:var(--white);font-weight:600">₹${w.avg_cost?w.avg_cost.toFixed(2):'0.00'}</b> <span style="opacity:0.7">(₹${Math.round(w.total_invested||((w.avg_cost||0)*(w.qty||1))).toLocaleString()})</span>
+              </div>
             </div>
             <div style="text-align:right">
               <div class="wl-ltp">${w.ltp?'₹'+w.ltp.toFixed(2):'—'}</div>
