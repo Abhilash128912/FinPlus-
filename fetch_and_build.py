@@ -4156,6 +4156,63 @@ function removeFromWl(symbol) {
   renderStats();
 }
 
+function adjustQty(symbol, delta) {
+  const item = watchlist.find(w => w.symbol === symbol);
+  if (!item) return;
+  const currentQty = item.qty || 1;
+  const newQty = currentQty + delta;
+  if (newQty <= 0) {
+    removeFromWl(symbol);
+    return;
+  }
+  item.qty = newQty;
+  const avg = item.avg_cost || item.ltp || 0;
+  item.total_invested = Math.round(avg * newQty * 100) / 100;
+  if (item.ltp && avg) {
+    item.unrealised_pnl = Math.round((item.ltp - avg) * newQty * 100) / 100;
+    item.unrealised_pct = Math.round(((item.ltp - avg) / avg) * 10000) / 100;
+    item.current_value = Math.round(item.ltp * newQty * 100) / 100;
+  }
+  saveWatchlist();
+  renderWatchlist();
+  renderStats();
+}
+
+function editQtyModal(symbol) {
+  const item = watchlist.find(w => w.symbol === symbol);
+  if (!item) return;
+  const currentQty = item.qty || 1;
+  const currentAvg = item.avg_cost ? item.avg_cost.toFixed(2) : (item.ltp ? item.ltp.toFixed(2) : '0.00');
+
+  const newQtyStr = prompt(`Edit Quantity held for ${symbol}:`, currentQty);
+  if (newQtyStr === null) return;
+  const newQty = parseInt(newQtyStr, 10);
+  if (isNaN(newQty) || newQty <= 0) {
+    if (confirm(`Set quantity to 0? This will remove ${symbol} from watchlist.`)) {
+      removeFromWl(symbol);
+    }
+    return;
+  }
+
+  const newAvgStr = prompt(`Edit Average Buy Price (₹) for ${symbol}:`, currentAvg);
+  if (newAvgStr === null) return;
+  const newAvg = parseFloat(newAvgStr);
+  if (isNaN(newAvg) || newAvg <= 0) return;
+
+  item.qty = newQty;
+  item.avg_cost = newAvg;
+  item.total_invested = Math.round(newAvg * newQty * 100) / 100;
+  if (item.ltp) {
+    item.unrealised_pnl = Math.round((item.ltp - newAvg) * newQty * 100) / 100;
+    item.unrealised_pct = Math.round(((item.ltp - newAvg) / newAvg) * 10000) / 100;
+    item.current_value = Math.round(item.ltp * newQty * 100) / 100;
+  }
+  saveWatchlist();
+  renderWatchlist();
+  renderStats();
+  alert(`✅ Updated ${symbol}: ${newQty} shares @ ₹${newAvg.toFixed(2)} (Total Invested: ₹${item.total_invested.toLocaleString()})`);
+}
+
 function updateWlCount() {
   document.getElementById('wlCount').textContent = watchlist.length;
 }
@@ -4348,8 +4405,13 @@ function renderWatchlist() {
               </div>
               <div class="wl-name">${w.name||''}</div>
               <div class="wl-name" style="margin-top:2px;color:var(--accent2);font-size:11px">${w.sector||''} ${sigReason ? '· ' + sigReason : ''}</div>
-              <div style="font-size:11px;color:var(--muted);margin-top:4px">
-                Holdings: <b style="color:var(--white);font-weight:600">${w.qty||1} Qty</b> @ <b style="color:var(--white);font-weight:600">₹${w.avg_cost?w.avg_cost.toFixed(2):'0.00'}</b> <span style="opacity:0.7">(₹${Math.round(w.total_invested||((w.avg_cost||0)*(w.qty||1))).toLocaleString()})</span>
+              <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-top:5px;flex-wrap:wrap">
+                <span>Holdings:</span>
+                <button onclick="adjustQty('${w.symbol}', -1)" title="Decrease Quantity" style="padding:0 6px;height:20px;line-height:18px;border-radius:4px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer;font-weight:700;font-size:12px">-</button>
+                <b style="color:var(--white);font-weight:700">${w.qty||1} Qty</b>
+                <button onclick="adjustQty('${w.symbol}', 1)" title="Increase Quantity" style="padding:0 6px;height:20px;line-height:18px;border-radius:4px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer;font-weight:700;font-size:12px">+</button>
+                <span>@ <b style="color:var(--white)">₹${w.avg_cost?w.avg_cost.toFixed(2):'0.00'}</b></span>
+                <button onclick="editQtyModal('${w.symbol}')" title="Edit Quantity & Buy Price" style="padding:1px 7px;border-radius:4px;border:1px solid #6c63ff55;background:linear-gradient(135deg,#6c63ff22,#00d4aa22);color:#a5b4fc;cursor:pointer;font-size:10px;font-weight:600">✏️ Edit</button>
               </div>
             </div>
             <div style="text-align:right">
@@ -4448,6 +4510,7 @@ function renderWatchlist() {
           <td>${fmt(w.de_ratio, '', 2)}</td>
           <td>${fmt(w.rsi, '', 0)}</td>
           <td>
+            <button onclick="editQtyModal('${w.symbol}')" title="Edit Quantity & Buy Price" style="padding:4px 8px;font-size:11px;margin-right:4px;border-radius:4px;border:1px solid #6c63ff55;background:linear-gradient(135deg,#6c63ff22,#00d4aa22);color:#a5b4fc;cursor:pointer;font-weight:600">✏️ Qty</button>
             <button class="btn-add" onclick="openModal('${w.symbol}')" style="padding:4px 8px;font-size:11px;margin-right:4px">Detail</button>
             <button class="btn-remove" onclick="removeFromWl('${w.symbol}')" style="padding:4px 8px;font-size:11px">✕</button>
           </td>
