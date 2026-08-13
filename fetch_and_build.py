@@ -177,7 +177,7 @@ def cache_path(ticker):
 
 
 def load_cache(ticker):
-    """Load cached ticker data. Revalidates fundamental metrics and 24h expiration."""
+    """Load cached ticker data. Preserves valid fundamental metrics."""
     if FORCE_REFRESH:
         return None
     path = cache_path(ticker)
@@ -189,22 +189,39 @@ def load_cache(ticker):
         info = data.get("info", {})
         cached_at = datetime.datetime.fromisoformat(data.get("cached_at", "2000-01-01"))
         age_hrs = (datetime.datetime.now() - cached_at).total_seconds() / 3600
-        if age_hrs >= CACHE_TTL_HRS:
-            return None   # fundamentals stale — full re-fetch
-        # Invalidate cache entries missing fundamental metrics
+        # If cache is valid and has fundamentals, use it
         has_fund = any(info.get(k) is not None for k in ["returnOnEquity", "debtToEquity", "trailingPE", "profitMargins"])
-        if not has_fund:
-            return None   # cache file missing fundamentals — force re-fetch
-        return data
+        if age_hrs < CACHE_TTL_HRS and has_fund:
+            return data
+        # Even if stale age, return cached fundamentals if present so API failures won't drop fundamentals to 0
+        if has_fund:
+            return data
+        return None
     except Exception:
         pass
     return None
 
 
 def save_cache(ticker, data):
+    path = cache_path(ticker)
+    # Merge with existing cache if new fetch is missing fundamental metrics
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                old_data = json.load(f)
+            old_info = old_data.get("info", {})
+            new_info = data.get("info", {})
+            for k in ["returnOnEquity", "debtToEquity", "profitMargins", "revenueGrowth",
+                      "trailingPE", "pegRatio", "priceToBook", "dividendYield", "sector",
+                      "industry", "marketCap", "ebit", "totalAssets", "totalCurrentLiabilities"]:
+                if new_info.get(k) is None and old_info.get(k) is not None:
+                    new_info[k] = old_info.get(k)
+        except Exception:
+            pass
+
     data["cached_at"] = datetime.datetime.now().isoformat()
     try:
-        with open(cache_path(ticker), "w") as f:
+        with open(path, "w") as f:
             json.dump(data, f, indent=2)
     except Exception:
         pass
@@ -442,6 +459,22 @@ def fetch_via_curl_cffi(ticker: str) -> dict | None:
                                 info[k] = yf_inf.get(k)
                 except Exception:
                     pass
+
+            # Fallback 2: If fundamentals are still missing, merge with last known valid cached fundamentals on disk
+            has_fund = any(info.get(k) is not None for k in ["returnOnEquity", "debtToEquity", "trailingPE", "profitMargins"])
+            if not has_fund:
+                path = cache_path(ticker)
+                if os.path.exists(path):
+                    try:
+                        with open(path) as f:
+                            old_cache = json.load(f).get("info", {})
+                        for k in ["returnOnEquity", "debtToEquity", "profitMargins", "revenueGrowth",
+                                  "trailingPE", "pegRatio", "priceToBook", "dividendYield", "sector",
+                                  "industry", "marketCap", "ebit", "totalAssets", "totalCurrentLiabilities"]:
+                            if info.get(k) is None and old_cache.get(k) is not None:
+                                info[k] = old_cache.get(k)
+                    except Exception:
+                        pass
 
             data = {
                 "ticker": ticker,
@@ -2769,23 +2802,40 @@ function recalcSwingPosition() {
   }
 }
 
+function updateWatchlistSignalsAndAlerts(item, live) {
+  if (!live) return;
+  item.ltp = live.ltp;
+  item.current_score = live.total_score;
+  item.current_strength = live.strength;
+  item.current_value = live.value;
+  item.current_momentum = live.momentum;
+  item.roe_pct = live.roe_pct;
+  item.de_ratio = live.de_ratio;
+  item.npm_pct = live.npm_pct;
+  item.rsi = live.rsi;
+  item.wk52_return_pct = live.wk52_return_pct;
+  item.news = live.news || [];
+
+  let sig = "HOLD", sigBadge = "🟡 HOLD", sigReason = "Moderate quality score; maintain position";
+  if (live.total_score >= 55 && live.strength >= 50) {
+    sig = "BUY";
+    sigBadge = "🟢 BUY";
+    sigReason = `Strong quality score (${live.total_score.toFixed(1)}) & solid fundamentals`;
+  } else if (live.total_score < 40) {
+    sig = "SELL";
+    sigBadge = "🔴 SELL";
+    sigReason = `Quality score collapsed to ${live.total_score.toFixed(1)} (<40)`;
+  }
+  item.signal = sig;
+  item.signal_badge = sigBadge;
+  item.signal_reason = sigReason;
+}
+
 function populatePortfolioSeed() {
   watchlist = JSON.parse(JSON.stringify(WATCHLIST_SEED));
   watchlist.forEach(item => {
     const live = SCREENER_DATA.find(s => s.symbol === item.symbol);
-    if (live) {
-      item.ltp = live.ltp;
-      item.current_score = live.total_score;
-      item.current_strength = live.strength;
-      item.current_value = live.value;
-      item.current_momentum = live.momentum;
-      item.roe_pct = live.roe_pct;
-      item.de_ratio = live.de_ratio;
-      item.npm_pct = live.npm_pct;
-      item.rsi = live.rsi;
-      item.wk52_return_pct = live.wk52_return_pct;
-      item.news = live.news || [];
-    }
+    updateWatchlistSignalsAndAlerts(item, live);
   });
   saveWatchlist();
   renderWatchlist();
@@ -2802,6 +2852,7 @@ function clearAllWatchlist() {
   localStorage.removeItem('quality_watchlist_v3');
   localStorage.removeItem('quality_watchlist_v4');
   localStorage.removeItem('quality_watchlist_v5');
+  localStorage.removeItem('quality_watchlist_v6');
   saveWatchlist();
   renderWatchlist();
   updateWlCount();
@@ -2820,8 +2871,9 @@ function init() {
   localStorage.removeItem('quality_watchlist_v2');
   localStorage.removeItem('quality_watchlist_v3');
   localStorage.removeItem('quality_watchlist_v4');
+  localStorage.removeItem('quality_watchlist_v5');
 
-  const stored = localStorage.getItem('quality_watchlist_v5');
+  const stored = localStorage.getItem('quality_watchlist_v6');
   if (stored) {
     try { watchlist = JSON.parse(stored); }
     catch { watchlist = []; }
@@ -2830,25 +2882,13 @@ function init() {
   // If watchlist is empty (e.g. initial run or after version reset), load WATCHLIST_SEED
   if (!watchlist || watchlist.length === 0) {
     watchlist = JSON.parse(JSON.stringify(WATCHLIST_SEED));
-    localStorage.setItem('quality_watchlist_v5', JSON.stringify(watchlist));
+    localStorage.setItem('quality_watchlist_v6', JSON.stringify(watchlist));
   }
 
   // Update live data for watchlist items from scan
   watchlist.forEach(item => {
     const live = SCREENER_DATA.find(s => s.symbol === item.symbol);
-    if (live) {
-      item.ltp = live.ltp;
-      item.current_score = live.total_score;
-      item.current_strength = live.strength;
-      item.current_value = live.value;
-      item.current_momentum = live.momentum;
-      item.roe_pct = live.roe_pct;
-      item.de_ratio = live.de_ratio;
-      item.npm_pct = live.npm_pct;
-      item.rsi = live.rsi;
-      item.wk52_return_pct = live.wk52_return_pct;
-      item.news = live.news || [];
-    }
+    updateWatchlistSignalsAndAlerts(item, live);
   });
 
   saveWatchlist();
@@ -3160,7 +3200,7 @@ function changePollInterval(val) {
 }
 
 function saveWatchlist() {
-  localStorage.setItem('quality_watchlist_v5', JSON.stringify(watchlist));
+  localStorage.setItem('quality_watchlist_v6', JSON.stringify(watchlist));
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────
