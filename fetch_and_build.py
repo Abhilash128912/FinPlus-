@@ -4948,10 +4948,9 @@ if __name__ == "__main__":
     log("  Source: Nifty 500 | Scoring: Strength + Value + Momentum")
     log("=" * 60)
 
-    # Always launch scan in background thread on startup
-    log("⚡ Launching scan of 2413 stocks in background thread...")
-    scan_t = threading.Thread(target=background_initial_scan, daemon=True)
-    scan_t.start()
+    # Perform initial scan to ensure index.html is fully populated before browser opens
+    log("⚡ Performing initial scan of 2413 stocks...")
+    background_initial_scan()
 
     # Run the HTTP server directly in main thread
     run_server(port)
