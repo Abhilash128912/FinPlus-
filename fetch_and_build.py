@@ -2856,8 +2856,12 @@ function clearAllWatchlist() {
   watchlist = [];
   localStorage.removeItem('quality_watchlist_v1');
   localStorage.removeItem('quality_watchlist_v2');
+  localStorage.removeItem('quality_watchlist_v3');
+  saveWatchlist();
   renderWatchlist();
-  showNotification("Watchlist cleared successfully!");
+  updateWlCount();
+  renderStats();
+  alert("Watchlist cleared successfully!");
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
@@ -2866,53 +2870,37 @@ function init() {
   updateLtpBadgeStatus();
   renderCommodityBar();
   
-  // Clear old storage keys if present to prevent stale auto-filled stocks
-  if (localStorage.getItem('quality_watchlist_v1')) {
-    localStorage.removeItem('quality_watchlist_v1');
-  }
+  // Clear any old stored watchlist from previous versions
+  localStorage.removeItem('quality_watchlist_v1');
+  localStorage.removeItem('quality_watchlist_v2');
 
-  const stored = localStorage.getItem('quality_watchlist_v2');
+  const stored = localStorage.getItem('quality_watchlist_v3');
   if (stored) {
     try { watchlist = JSON.parse(stored); }
     catch { watchlist = []; }
   } else {
     // Default load seed stocks (the user's 9 custom portfolio holdings)
     watchlist = JSON.parse(JSON.stringify(WATCHLIST_SEED));
-    localStorage.setItem('quality_watchlist_v2', JSON.stringify(watchlist));
+    localStorage.setItem('quality_watchlist_v3', JSON.stringify(watchlist));
   }
-  // Always ensure seed stocks are present (first run)
-  WATCHLIST_SEED.forEach(seed => {
-    const exists = watchlist.find(w => w.symbol === seed.symbol);
-    if (!exists) watchlist.push(seed);
-    else {
-      // Update live data from scan
-      const live = SCREENER_DATA.find(s => s.symbol === seed.symbol);
-      if (live) {
-        exists.ltp = live.ltp;
-        exists.current_score = live.total_score;
-        exists.current_strength = live.strength;
-        exists.current_value = live.value;
-        exists.current_momentum = live.momentum;
-        exists.roe_pct = live.roe_pct;
-        exists.de_ratio = live.de_ratio;
-        exists.npm_pct = live.npm_pct;
-        exists.rsi = live.rsi;
-        exists.wk52_return_pct = live.wk52_return_pct;
-        exists.alerts = seed.alerts || [];
-        exists.news = live.news || [];
-        if (exists.score_at_entry == null) {
-          exists.score_at_entry = seed.score_at_entry;
-          exists.strength_at_entry = seed.strength_at_entry;
-          exists.roe_at_entry = seed.roe_at_entry;
-          exists.de_at_entry = seed.de_at_entry;
-          exists.npm_at_entry = seed.npm_at_entry;
-        }
-      }
+
+  // Update live data for watchlist items from scan
+  watchlist.forEach(item => {
+    const live = SCREENER_DATA.find(s => s.symbol === item.symbol);
+    if (live) {
+      item.ltp = live.ltp;
+      item.current_score = live.total_score;
+      item.current_strength = live.strength;
+      item.current_value = live.value;
+      item.current_momentum = live.momentum;
+      item.roe_pct = live.roe_pct;
+      item.de_ratio = live.de_ratio;
+      item.npm_pct = live.npm_pct;
+      item.rsi = live.rsi;
+      item.wk52_return_pct = live.wk52_return_pct;
+      item.news = live.news || [];
     }
   });
-
-  // Auto-add top suggestions on boot if empty slots exist
-  autoAddTopSuggestions(true);
 
   saveWatchlist();
   renderStats();
@@ -3223,7 +3211,7 @@ function changePollInterval(val) {
 }
 
 function saveWatchlist() {
-  localStorage.setItem('quality_watchlist_v1', JSON.stringify(watchlist));
+  localStorage.setItem('quality_watchlist_v3', JSON.stringify(watchlist));
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────
