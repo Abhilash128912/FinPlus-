@@ -1212,12 +1212,22 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
         history.pop(0)
 
     # STRICT SELECTION: Stock of the Day MUST BE Large Cap or Mid Cap ONLY, with LTP >= Rs 100
+    # STRICT SELECTION: Stock of the Day MUST BE Large Cap or Mid Cap ONLY, with LTP >= Rs 100
     eligible_screener_results = [r for r in screener_results if is_eligible_for_stock_of_the_day(r)]
     
+    # Exclude any stock that has already been Stock of the Day for 2+ consecutive days to ensure fresh rotation
+    overused_symbols = set()
+    if history:
+        for h_item in history[:3]:
+            if h_item.get("streak_days", 1) >= 2 or (history[0].get("symbol") == h_item.get("symbol") and len(history) >= 2):
+                overused_symbols.add(h_item.get("symbol"))
+
     qualified_eligible = [
         r for r in eligible_screener_results
         if (
             r.get("qualified") and
+            r.get("symbol") not in overused_symbols and
+            (r.get("momentum", 0) >= 40) and
             (
                 r.get("market_structure") == "HH / HL Uptrend" or
                 r.get("tech_class") == "badge-green" or
@@ -1225,12 +1235,19 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
             )
         )
     ]
+    
+    # Fallback to top eligible stock if no fresh candidate passes streak limit
     if qualified_eligible:
         top = qualified_eligible[0]
-    elif eligible_screener_results:
-        top = eligible_screener_results[0]
     else:
-        top = screener_results[0]
+        # Pick highest scoring qualified stock that is not sliding severely
+        non_sliding = [r for r in eligible_screener_results if r.get("qualified") and r.get("symbol") not in overused_symbols]
+        if non_sliding:
+            top = non_sliding[0]
+        elif eligible_screener_results:
+            top = eligible_screener_results[0]
+        else:
+            top = screener_results[0]
 
     streak_days = 1
     top_open = top.get("open") or top.get("regularMarketOpen")
@@ -1315,7 +1332,8 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
     tech_class = trend_st["class"]
     pick_st = check_top_pick_status(top)
 
-    is_pre_mkt = mkt_info["is_pre_market"]
+    ist_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=5, minutes=30)))
+    is_pre_mkt = mkt_info["is_pre_market"] and (ist_now.time() < datetime.time(9, 15))
 
     if is_pre_mkt:
         status_code = "PENDING"
@@ -3576,6 +3594,10 @@ function renderTopPick() {
     </tr>`;
   }).join('');
 
+  const currentMkt = calculateCurrentMarketStatus();
+  const isPreMktActive = currentMkt.is_pre_market;
+  const showStatusWarning = TOP_PICK.status && TOP_PICK.status !== 'ACTIVE' && (TOP_PICK.status !== 'PENDING' || isPreMktActive);
+
   container.innerHTML = `
     ${mktBannerHtml}
 
@@ -3588,10 +3610,10 @@ function renderTopPick() {
             ⭐ Streak: ${TOP_PICK.streak_days} Consecutive Days (#1 Pick)
           </span>` : `
           <span class="badge badge-purple" style="font-weight:700;font-size:12px;padding:6px 12px">
-            ✨ ${TOP_PICK.is_pre_market ? "Today's #1 Candidate" : "Today's #1 Highest-Scoring Stock"}
+            ✨ ${isPreMktActive ? "Today's #1 Candidate" : "Today's #1 Highest-Scoring Stock"}
           </span>`}
-          <span class="badge ${TOP_PICK.is_pre_market ? 'badge-yellow' : (TOP_PICK.status === 'INVALIDATED' ? 'badge-yellow' : TOP_PICK.status === 'INACTIVE' ? 'badge-red' : 'badge-green')}" style="font-weight:700;font-size:12px;padding:6px 12px">
-            ${TOP_PICK.status_badge || '🟢 ACTIVE'}
+          <span class="badge ${isPreMktActive ? 'badge-yellow' : (TOP_PICK.status === 'INVALIDATED' ? 'badge-yellow' : TOP_PICK.status === 'INACTIVE' ? 'badge-red' : 'badge-green')}" style="font-weight:700;font-size:12px;padding:6px 12px">
+            ${isPreMktActive ? '⏳ PENDING MARKET OPEN' : (TOP_PICK.status_badge && TOP_PICK.status !== 'PENDING' ? TOP_PICK.status_badge : '🟢 ACTIVE')}
           </span>
         </div>
         <div class="badge ${TOP_PICK.tech_class || 'badge-green'}" style="font-size:14px;font-weight:800;padding:8px 18px;border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,0.3);letter-spacing:0.02em">
@@ -3599,7 +3621,7 @@ function renderTopPick() {
         </div>
       </div>
 
-      ${TOP_PICK.status && TOP_PICK.status !== 'ACTIVE' ? `
+      ${showStatusWarning ? `
       <div class="alert-row alert-SELL" style="margin-bottom:14px;padding:10px 14px;font-size:13px">
         <span>⚠️</span>
         <div>

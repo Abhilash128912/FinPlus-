@@ -2,7 +2,7 @@
   {
     "date": "2026-08-13",
     "display_date": "13 August 2026",
-    "is_pre_market": true,
+    "is_pre_market": false,
     "symbol": "BAJAJHLDNG",
     "ticker": "BAJAJHLDNG.NS",
     "name": "Bajaj Holdings & Investment Limited",
@@ -12,47 +12,47 @@
     "value": 59.0,
     "momentum": 42.0,
     "ltp_at_pick": 11579.0,
-    "prev_close": 11471.0,
-    "overnight_gap_amt": 19.0,
+    "prev_close": 11550.0,
+    "overnight_gap_amt": 20.0,
     "overnight_gap_pct": 0.17,
-    "gap_badge": "\ud83d\udfe2 Gap Up +0.17% (+\u20b919.00)",
+    "gap_badge": "\ud83d\udfe2 Gap Up +0.17% (+\u20b920.00)",
     "gap_class": "badge-green",
-    "current_ltp": 11579.0,
+    "current_ltp": 11500.0,
     "pe": 14.55,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
     "npm_pct": 734.64,
-    "rsi": 79.7,
+    "rsi": 79.1,
     "rsi_status": "Overbought (>70)",
-    "ma50": 10654.0,
-    "ma200": 10800.08,
-    "stop_loss": 11030.4,
+    "ma50": 10653.0,
+    "ma200": 10799.82,
+    "stop_loss": 11107.2,
     "stop_loss_pct": -4.0,
-    "target1": 12409.2,
+    "target1": 12495.6,
     "target1_pct": 8.0,
-    "target2": 12868.8,
+    "target2": 12958.4,
     "target2_pct": 12.0,
     "risk_reward_ratio": "1 : 2.0 (T1) / 1 : 3.0 (T2)",
     "timeframe": "3 to 7 Trading Days",
-    "dist_ma50_pct": 8.7,
-    "dist_ma200_pct": 7.2,
+    "dist_ma50_pct": 8.0,
+    "dist_ma200_pct": 6.5,
     "week_high_52": 14763.0,
     "week_low_52": 8588.0,
-    "dist_52w_high_pct": -21.6,
-    "dist_52w_low_pct": 34.8,
+    "dist_52w_high_pct": -22.1,
+    "dist_52w_low_pct": 33.9,
     "tech_rating": "\ud83d\udfe2 Strong Uptrend",
     "tech_class": "badge-green",
-    "status": "PENDING",
-    "status_badge": "\u23f3 PENDING MARKET OPEN",
-    "status_reason": "Pre-market candidate for 13 August 2026. Will lock at 09:15 AM IST.",
+    "status": "ACTIVE",
+    "status_badge": "\ud83d\udfe2 ACTIVE",
+    "status_reason": "Qualified \u2014 Score 57.1/100, Strength 65.0/100",
     "streak_days": 4,
-    "wk52_return_pct": -16.12,
+    "wk52_return_pct": -16.7,
     "volume_spike": 0.97,
     "today_volume": 36058.0,
     "avg_volume_10d": 37146.5,
     "news": [],
     "highlights": [
-      "\u23f3 Pre-Market Candidate for 13 August 2026",
+      "#1 Highest-Scoring Stock for 13 August 2026",
       "Quality Score: 57.1/100 | Strength: 65.0/100",
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
@@ -76,7 +76,7 @@
     "overnight_gap_pct": 0.32,
     "gap_badge": "\ud83d\udfe2 Gap Up +0.32% (+\u20b937.00)",
     "gap_class": "badge-green",
-    "current_ltp": 11579.0,
+    "current_ltp": 11500.0,
     "pe": 14.27,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
@@ -116,7 +116,7 @@
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
     "current_score": 57.1,
-    "ltp": 11579.0
+    "ltp": 11500.0
   },
   {
     "date": "2026-08-11",
@@ -136,7 +136,7 @@
     "overnight_gap_pct": 2.02,
     "gap_badge": "\ud83d\udfe2 Gap Up +2.02% (+\u20b9227.00)",
     "gap_class": "badge-green",
-    "current_ltp": 11579.0,
+    "current_ltp": 11500.0,
     "pe": 14.54,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
@@ -176,7 +176,7 @@
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
     "current_score": 57.1,
-    "ltp": 11579.0
+    "ltp": 11500.0
   },
   {
     "date": "2026-08-10",
@@ -196,7 +196,7 @@
     "overnight_gap_pct": 0.0,
     "gap_badge": "\u26aa Flat Open (0.00%)",
     "gap_class": "badge-gray",
-    "current_ltp": 11579.0,
+    "current_ltp": 11500.0,
     "pe": 14.43,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
@@ -236,7 +236,7 @@
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
     "current_score": 57.1,
-    "ltp": 11579.0
+    "ltp": 11500.0
   },
   {
     "date": "2026-08-07",
@@ -256,7 +256,7 @@
     "overnight_gap_pct": -0.17,
     "gap_badge": "\ud83d\udd3b Gap Down -0.17% (-\u20b99.50)",
     "gap_class": "badge-red",
-    "current_ltp": 5895.0,
+    "current_ltp": 5885.5,
     "pe": 19.95,
     "roe_pct": 28.03,
     "de_ratio": 0.04,
@@ -296,7 +296,7 @@
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
     "current_score": 41.0,
-    "ltp": 5895.0
+    "ltp": 5885.5
   },
   {
     "date": "2026-08-05",
@@ -316,7 +316,7 @@
     "overnight_gap_pct": -1.86,
     "gap_badge": "\ud83d\udd3b Gap Down -1.86% (-\u20b926.70)",
     "gap_class": "badge-red",
-    "current_ltp": 1281.9,
+    "current_ltp": 1271.9,
     "pe": 6.67,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -371,7 +371,7 @@
       "Market Trend: \ud83d\udd35 Accumulation Phase"
     ],
     "current_score": 49.4,
-    "ltp": 1281.9
+    "ltp": 1271.9
   },
   {
     "date": "2026-08-04",
@@ -391,7 +391,7 @@
     "overnight_gap_pct": 13.72,
     "gap_badge": "\ud83d\udfe2 Gap Up +13.72% (+\u20b9191.90)",
     "gap_class": "badge-green",
-    "current_ltp": 1281.9,
+    "current_ltp": 1271.9,
     "pe": 7.03,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -446,7 +446,7 @@
       "Market Trend: \ud83d\udd35 Accumulation Phase"
     ],
     "current_score": 49.4,
-    "ltp": 1281.9
+    "ltp": 1271.9
   },
   {
     "date": "2026-08-03",
@@ -466,7 +466,7 @@
     "overnight_gap_pct": 0.56,
     "gap_badge": "\ud83d\udfe2 Gap Up +0.56% (+\u20b97.60)",
     "gap_class": "badge-green",
-    "current_ltp": 1281.9,
+    "current_ltp": 1271.9,
     "pe": 6.82,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -522,7 +522,7 @@
     ],
     "session_close": 1403.4,
     "current_score": 49.4,
-    "ltp": 1281.9
+    "ltp": 1271.9
   },
   {
     "date": "2026-07-31",
@@ -537,7 +537,7 @@
     "value": 64.0,
     "momentum": 41.0,
     "ltp_at_pick": 1350.4,
-    "current_ltp": 1281.9,
+    "current_ltp": 1271.9,
     "pe": 6.56,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -592,7 +592,7 @@
       "Market Trend: \ud83d\udfe1 Consolidation Phase"
     ],
     "current_score": 49.4,
-    "ltp": 1281.9
+    "ltp": 1271.9
   },
   {
     "date": "2026-07-30",
@@ -607,7 +607,7 @@
     "momentum": 48.0,
     "ltp_at_pick": 1374.0,
     "session_close": 1371.3,
-    "current_ltp": 1281.9,
+    "current_ltp": 1271.9,
     "pe": 6.67,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -654,6 +654,6 @@
       "Market Trend: \ud83d\udfe1 Consolidation Phase"
     ],
     "current_score": 49.4,
-    "ltp": 1281.9
+    "ltp": 1271.9
   }
 ]
