@@ -1286,129 +1286,7 @@ export default function App() {
     showToast(`Updated ${sipEditModalStock.cleanSym} successfully!`);
   };
 
-  const handleRecordMtfTx = (e) => {
-    e.preventDefault();
-    if (!mtfTicker || !mtfBuyPrice || parseFloat(mtfBuyPrice) <= 0) return;
-    const pr = parseFloat(mtfBuyPrice);
-    const sh = parseInt(mtfShares) || 1;
-    const totalVal = pr * sh;
-    
-    // Broker Funding % (default 68.0%, user margin = 32.0%)
-    const brokerFundedPct = Math.min(100, Math.max(0, parseFloat(mtfBrokerFundedPct) || 68.0));
-    const userMarginPct = 100.0 - brokerFundedPct;
-    
-    const funding = totalVal * (brokerFundedPct / 100.0);
-    const marginPaid = totalVal - funding;
 
-    const currentMtfList = Array.isArray(pullbackData.mtf_trading)
-      ? pullbackData.mtf_trading
-      : (pullbackData.mtf_trading ? (pullbackData.mtf_trading.trades || []) : []);
-
-    const newId = currentMtfList.length > 0 ? Math.max(...currentMtfList.map(t => t.id || 0)) + 1 : 0;
-    const formattedTicker = mtfTicker.trim().toUpperCase().endsWith('.NS') ? mtfTicker.trim().toUpperCase() : `${mtfTicker.trim().toUpperCase()}.NS`;
-
-    const newMtfTrade = {
-      id: newId,
-      ticker: formattedTicker,
-      broker: mtfBroker || 'Zerodha',
-      buy_date: mtfBuyDate || new Date().toISOString().split('T')[0],
-      buy_price: pr,
-      shares: sh,
-      broker_funding_pct: brokerFundedPct,
-      margin_ratio: userMarginPct / 100.0,
-      margin_paid: marginPaid,
-      broker_funding: funding,
-      status: 'Active'
-    };
-
-    const updated = {
-      ...pullbackData,
-      mtf_trading: Array.isArray(pullbackData.mtf_trading) ? [newMtfTrade, ...currentMtfList] : {
-        ...pullbackData.mtf_trading,
-        trades: [newMtfTrade, ...currentMtfList]
-      }
-    };
-    savePullbackState(updated);
-    showToast(`Logged ${mtfBroker || 'Zerodha'} MTF Position for ${formattedTicker} (${sh} shares @ ₹${pr})!`);
-    setMtfTicker('');
-    setMtfBuyPrice('');
-  };
-
-  const handleToggleMtfBroker = (tradeId) => {
-    const currentMtfList = Array.isArray(pullbackData.mtf_trading)
-      ? pullbackData.mtf_trading
-      : (pullbackData.mtf_trading ? (pullbackData.mtf_trading.trades || []) : []);
-
-    const updatedMtfList = currentMtfList.map(t => {
-      if (t.id === tradeId) {
-        const nextBroker = t.broker === 'INDmoney' ? 'Zerodha' : 'INDmoney';
-        showToast(`Switched broker for ${t.ticker.replace('.NS', '')} to ${nextBroker}!`);
-        return { ...t, broker: nextBroker };
-      }
-      return t;
-    });
-
-    const updated = {
-      ...pullbackData,
-      mtf_trading: Array.isArray(pullbackData.mtf_trading) ? updatedMtfList : {
-        ...pullbackData.mtf_trading,
-        trades: updatedMtfList
-      }
-    };
-    savePullbackState(updated);
-  };
-
-  const handleCloseMtfTx = (tradeId) => {
-    const exitPriceStr = prompt("Enter Exit Price for MTF Trade (₹):");
-    if (!exitPriceStr || parseFloat(exitPriceStr) <= 0) return;
-    const exitPr = parseFloat(exitPriceStr);
-
-    const currentMtfList = Array.isArray(pullbackData.mtf_trading)
-      ? pullbackData.mtf_trading
-      : (pullbackData.mtf_trading ? (pullbackData.mtf_trading.trades || []) : []);
-
-    const updatedMtfList = currentMtfList.map(t => {
-      if (t.id === tradeId) {
-        return {
-          ...t,
-          status: 'Closed',
-          sell_date: new Date().toISOString().split('T')[0],
-          sell_price: exitPr
-        };
-      }
-      return t;
-    });
-
-    const updated = {
-      ...pullbackData,
-      mtf_trading: Array.isArray(pullbackData.mtf_trading) ? updatedMtfList : {
-        ...pullbackData.mtf_trading,
-        trades: updatedMtfList
-      }
-    };
-    savePullbackState(updated);
-    showToast(`Closed MTF position @ ₹${exitPr}!`);
-  };
-
-  const handleDeleteMtfTx = (tradeId) => {
-    if (!window.confirm("Are you sure you want to remove this MTF position?")) return;
-
-    const currentMtfList = Array.isArray(pullbackData.mtf_trading)
-      ? pullbackData.mtf_trading
-      : (pullbackData.mtf_trading ? (pullbackData.mtf_trading.trades || []) : []);
-
-    const updatedMtfList = currentMtfList.filter(t => t.id !== tradeId);
-
-    const updated = {
-      ...pullbackData,
-      mtf_trading: Array.isArray(pullbackData.mtf_trading) ? updatedMtfList : {
-        ...pullbackData.mtf_trading,
-        trades: updatedMtfList
-      }
-    };
-    savePullbackState(updated);
-    showToast("Removed MTF position!");
-  };
 
   // Form State for Adding New Trade
   const [symbol, setSymbol] = useState('');
@@ -1995,16 +1873,15 @@ export default function App() {
     if (chg.net_pnl > 0) winningTradesCount++;
   });
 
-  // Cumulative totals (Journal closed trades + MTF closed trades + SIP closed trades)
-  const closedMtfTrades = mtfSummaryList.filter(t => t.status === 'Closed');
+  // Cumulative totals (Journal closed trades + SIP closed trades)
   const closedSipTradesCount = sipSoldTradesList.length;
   const closedSipWinningTradesCount = sipSoldTradesList.filter(t => (t.netPnl || 0) > 0).length;
 
-  const cumulativeRealizedNetPnl = totalRealizedNetPnl + closedMtfNetPnl + totalSipRealizedNetProfit;
-  const cumulativeGrossPnl = totalGrossPnl + closedMtfGrossPnl + totalSipRealizedProfit;
-  const cumulativeCharges = totalZerodhaCharges + closedMtfCarryingCharges + totalSipSellTaxes;
-  const cumulativeClosedTradesCount = closedTrades.length + closedMtfTrades.length + closedSipTradesCount;
-  const cumulativeWinningTradesCount = winningTradesCount + closedMtfTrades.filter(t => t.netPnl > 0).length + closedSipWinningTradesCount;
+  const cumulativeRealizedNetPnl = totalRealizedNetPnl + totalSipRealizedNetProfit;
+  const cumulativeGrossPnl = totalGrossPnl + totalSipRealizedProfit;
+  const cumulativeCharges = totalZerodhaCharges + totalSipSellTaxes;
+  const cumulativeClosedTradesCount = closedTrades.length + closedSipTradesCount;
+  const cumulativeWinningTradesCount = winningTradesCount + closedSipWinningTradesCount;
   const cumulativeWinRatePct = cumulativeClosedTradesCount > 0 
     ? ((cumulativeWinningTradesCount / cumulativeClosedTradesCount) * 100).toFixed(1)
     : '0';
@@ -2257,26 +2134,22 @@ export default function App() {
   // Cumulative Carried Loss Engine:
   // Total CUMULATIVE allowance = days elapsed × ₹250 daily limit.
   // This means after 15 days, the total risk budget is 15 × ₹250 = ₹3,750.
-  // Losses (Journal + closed MTF) are netted against this cumulative budget.
   const totalPastNetPnl = sortedPastDates.reduce((acc, d) => acc + (tradesByDate[d] || 0), 0);
-  // Also include closed MTF positions net P&L in the carried loss engine
-  const totalPastNetPnlWithMtf = totalPastNetPnl + closedMtfNetPnl;
 
   // Cumulative budget earned so far (all days elapsed including today)
   const totalCumulativeBudget = currentDayCount * dailyRiskLimit;
   // Past budget (all challenge days elapsed prior to today)
   const pastChallengeDaysCount = Math.max(0, currentDayCount - 1);
   const totalPastAllowance = pastChallengeDaysCount * dailyRiskLimit;
-  // Carried loss = how much total net loss (journal + mtf) exceeds the past cumulative daily budget
-  const cumulativeCarriedLoss = Math.max(0, -(totalPastNetPnlWithMtf) - totalPastAllowance);
+  // Carried loss = how much total net loss exceeds the past cumulative daily budget
+  const cumulativeCarriedLoss = Math.max(0, -(totalPastNetPnl) - totalPastAllowance);
 
   // Today's total realized PnL (closed trades only — unrealized excluded to avoid cross-day distortion)
   const todayTotalPnl = tradesByDate[todayStr] || 0;
   const todayCurrentLoss = todayTotalPnl < 0 ? Math.abs(todayTotalPnl) : 0;
   
   // Today's Starting Risk Budget = what's left of cumulative budget after subtracting all past losses
-  // Correct formula: (currentDayCount × dailyRiskLimit) - total losses so far (excl. today's intraday)
-  const totalLossesSoFar = Math.max(0, -(totalPastNetPnlWithMtf));
+  const totalLossesSoFar = Math.max(0, -(totalPastNetPnl));
   const todayStartingRisk = Math.max(0, totalCumulativeBudget - totalLossesSoFar);
 
   // Today's Available Risk Allowance Remaining
@@ -2777,9 +2650,7 @@ export default function App() {
               </div>
 
               {(() => {
-                const hasActiveMtf = mtfTradeList.some(t => t.status === 'Active');
-                const mtfOverviewNetPnl = hasActiveMtf ? (closedMtfNetPnl + activeMtfNetPnl) : closedMtfNetPnl;
-                const overallPortfolioTotalNetPnl = totalRealizedNetPnl + mtfOverviewNetPnl + totalSipCombinedNetPnl;
+                const overallPortfolioTotalNetPnl = totalRealizedNetPnl + totalSipCombinedNetPnl;
                 const netAfterRiskBudget = overallPortfolioTotalNetPnl + (currentDayCount * dailyRiskLimit);
 
                 return (
@@ -2793,28 +2664,8 @@ export default function App() {
                         <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Journal Closed ({closedTrades.length} Trades)</div>
                       </div>
 
-                      <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: hasActiveMtf ? '1px solid rgba(52, 211, 153, 0.35)' : '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 700 }}>NET MTF P&L</div>
-                          {hasActiveMtf && (
-                            <span style={{ fontSize: '9px', color: '#34d399', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '3px', background: 'rgba(52, 211, 153, 0.15)', padding: '1px 5px', borderRadius: '4px' }}>
-                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#34d399', boxShadow: '0 0 6px #34d399' }}></span>
-                              LIVE
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: '18px', fontWeight: 900, color: mtfOverviewNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
-                          {mtfOverviewNetPnl >= 0 ? '+' : ''}₹{mtfOverviewNetPnl.toFixed(2)}
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>
-                          {hasActiveMtf 
-                            ? `Closed (${closedMtfNetPnl >= 0 ? '+' : ''}₹${closedMtfNetPnl.toFixed(2)}) + Active (${activeMtfNetPnl >= 0 ? '+' : ''}₹${activeMtfNetPnl.toFixed(2)})` 
-                            : `Closed MTF (${closedMtfTrades.length} Trades)`}
-                        </div>
-                      </div>
-
                       <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ fontSize: '11px', color: '#00b4d8', fontWeight: 700 }}>NET SIP P&L</div>
+                        <div style={{ fontSize: '11px', color: '#00b4d8', fontWeight: 700 }}>NET LONG-TERM SIP P&L</div>
                         <div style={{ fontSize: '18px', fontWeight: 900, color: totalSipCombinedNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
                           {totalSipCombinedNetPnl >= 0 ? '+' : ''}₹{totalSipCombinedNetPnl.toFixed(2)}
                         </div>
@@ -2829,7 +2680,7 @@ export default function App() {
                           {overallPortfolioTotalNetPnl >= 0 ? '+' : ''}₹{overallPortfolioTotalNetPnl.toFixed(2)}
                         </div>
                         <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>
-                          Trading + MTF {hasActiveMtf ? '(Live Active)' : ''} + SIP
+                          Trading + Long-Term Investment SIP
                         </div>
                       </div>
                     </div>
@@ -2902,15 +2753,7 @@ export default function App() {
                 <span>Taxes & Charges: ₹{cumulativeCharges.toFixed(2)}</span>
               </div>
               <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '6px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
-                {(() => {
-                  const hasActiveMtf = mtfTradeList.some(t => t.status === 'Active');
-                  const mtfPnlVal = hasActiveMtf ? (closedMtfNetPnl + activeMtfNetPnl) : closedMtfNetPnl;
-                  return (
-                    <>
-                      Journal: <strong style={{ color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>{totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}</strong> | MTF: <strong style={{ color: mtfPnlVal >= 0 ? '#34d399' : '#f87171' }}>{mtfPnlVal >= 0 ? '+' : ''}₹{mtfPnlVal.toFixed(2)}</strong> | SIP Sold: <strong style={{ color: totalSipRealizedNetProfit >= 0 ? '#34d399' : '#f87171' }}>{totalSipRealizedNetProfit >= 0 ? '+' : ''}₹{totalSipRealizedNetProfit.toFixed(2)}</strong>
-                    </>
-                  );
-                })()}
+                Journal: <strong style={{ color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>{totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}</strong> | SIP Sold: <strong style={{ color: totalSipRealizedNetProfit >= 0 ? '#34d399' : '#f87171' }}>{totalSipRealizedNetProfit >= 0 ? '+' : ''}₹{totalSipRealizedNetProfit.toFixed(2)}</strong>
               </div>
             </div>
 
