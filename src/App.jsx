@@ -343,48 +343,8 @@ export default function App() {
   const [editSipPeak, setEditSipPeak] = useState('');
   const [editSipTxs, setEditSipTxs] = useState([]);
 
-  const [mtfTicker, setMtfTicker] = useState('');
-  const [mtfBroker, setMtfBroker] = useState('Zerodha'); // 'Zerodha' | 'INDmoney'
-  const [mtfBuyPrice, setMtfBuyPrice] = useState('');
-  const [mtfShares, setMtfShares] = useState('10');
-  const [mtfBrokerFundedPct, setMtfBrokerFundedPct] = useState('68.0');
-  const [mtfBuyDate, setMtfBuyDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [mtfViewMode, setMtfViewMode] = useState('overall'); // 'overall', 'active', 'closed'
-  const [showMtfDropdown, setShowMtfDropdown] = useState(false);
-
-  // MTF ticker autocomplete suggestions (must be AFTER mtfTicker state declaration)
-  const filteredMtfSuggestions = React.useMemo(() => {
-    const query = mtfTicker.toLowerCase().replace('.ns', '').trim();
-    if (!query || query.length < 2) return [];
-    const scored = combinedStockList.map(s => {
-      const sym = (s.symbol || '').toLowerCase();
-      const name = (s.name || '').toLowerCase();
-      const aliases = s.aliases || [];
-      let score = 0;
-      if (sym === query || aliases.includes(query)) score = 100;
-      else if (sym.startsWith(query)) score = 80;
-      else if (aliases.some(a => a.startsWith(query))) score = 75;
-      else if (name.startsWith(query)) score = 70;
-      else if (sym.includes(query)) score = 50;
-      else if (name.includes(query)) score = 40;
-      else if (aliases.some(a => a.includes(query))) score = 35;
-      return { stock: s, score };
-    }).filter(item => item.score > 0);
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 8).map(item => item.stock);
-  }, [mtfTicker, combinedStockList]);
-
-  // Auto-fill MTF buy price from live LTP when a suggestion is selected
-  useEffect(() => {
-    if (!mtfTicker.trim()) return;
-    if (filteredMtfSuggestions.length > 0) {
-      const top = filteredMtfSuggestions[0];
-      if (top.symbol.toLowerCase() === mtfTicker.toLowerCase().replace('.ns', '')) {
-        const ltp = liveLtps[top.symbol] || liveLtps[`${top.symbol}.NS`];
-        if (ltp && !mtfBuyPrice) setMtfBuyPrice(String(ltp));
-      }
-    }
-  }, [mtfTicker, filteredMtfSuggestions, liveLtps]);
+  // 3-Tier Strategy Allocation Category ('Swing Trading' | 'Day Trading (Nifty Pair)' | 'Long-Term Investment')
+  const [strategyCategory, setStrategyCategory] = useState('Swing Trading');
 
 
   const [isSyncing, setIsSyncing] = useState(false);
@@ -958,223 +918,46 @@ export default function App() {
     }
   }, [pullbackStockSummary, sipSellSelectedTicker, sipSellFormPrice]);
 
-  const mtfTradeList = Array.isArray(pullbackData.mtf_trading)
-    ? pullbackData.mtf_trading
-    : (pullbackData.mtf_trading ? (pullbackData.mtf_trading.trades || []) : []);
+  // 3-Tier Strategy Capital Allocation Engine (Fresh Start 2026-08-17)
+  const masterOpeningCapital = Number(openingCapitalInput) || 500000;
+  const currentMonthStr = new Date().toISOString().substring(0, 7); // e.g. '2026-08'
 
-  let activeMtfDeployedMargin = 0;
-  let activeMtfBrokerFunding = 0;
-  let activeMtfCurrentVal = 0;
-  let activeMtfCarryingCharges = 0;
-  let activeMtfInterest14 = 0;
-  let activeMtfGrossPnl = 0;
-  let activeMtfNetPnl = 0;
-
-  let overallMtfDeployedMargin = 0;
-  let overallMtfBrokerFunding = 0;
-  let overallMtfCurrentVal = 0;
-  let overallMtfGrossPnl = 0;
-  let overallMtfInterest14 = 0;
-  let overallMtfBrokerage = 0;
-  let overallMtfPledge = 0;
-  let overallMtfGovt = 0;
-  let overallMtfCarryingCharges = 0;
-  let overallMtfNetPnl = 0;
-
-  let closedMtfGrossPnl = 0;
-  let closedMtfInterest14 = 0;
-  let closedMtfBrokerage = 0;
-  let closedMtfPledge = 0;
-  let closedMtfGovt = 0;
-  let closedMtfCarryingCharges = 0;
-  let closedMtfNetPnl = 0;
-
-  const mtfSummaryList = mtfTradeList.map(t => {
-    const cleanSym = t.ticker.replace('.NS', '').trim();
-    const ltp = liveLtps[cleanSym] || liveLtps[t.ticker] || t.buy_price;
-    const totalBuyVal = t.shares * t.buy_price;
-    const broker = t.broker === 'INDmoney' ? 'INDmoney' : 'Zerodha';
-    
-    // Broker Funding % (Default 68.0%, User margin = 32.0%)
-    const brokerFundedPct = t.broker_funding_pct !== undefined ? Number(t.broker_funding_pct) : 68.0;
-    const userFundedPct = 100.0 - brokerFundedPct;
-    const funding = t.broker_funding || (totalBuyVal * (brokerFundedPct / 100.0));
-    const marginPaid = t.margin_paid || t.margin_used || (totalBuyVal - funding);
-
-    // Holding Period & Interest Math
-    // Zerodha MTF Interest: 0.04% per day (₹40 per lakh/day starting T+1) = 14.60% p.a.
-    // INDmoney MTF Interest: 14.0% p.a.
-    const annualInterestRate = broker === 'Zerodha' ? 0.146 : 0.140;
-    const buyDtStr = t.buy_date || '2026-08-03';
-    const buyDt = new Date(buyDtStr);
-    buyDt.setHours(0,0,0,0);
-    const endDtStr = (t.status === 'Closed' && t.sell_date) ? t.sell_date : new Date().toISOString().split('T')[0];
-    const endDt = new Date(endDtStr);
-    endDt.setHours(0,0,0,0);
-    
-    const diffTime = Math.max(0, endDt.getTime() - buyDt.getTime());
-    const holdingDays = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
-
-    // Interest Accrual
-    const interestCost14 = funding * annualInterestRate * (holdingDays / 365.0);
-
-    // Broker-Specific Tariff & Charges
-    const sellOrLtpPrice = t.status === 'Closed' ? (t.sell_price || ltp) : ltp;
-    const currentVal = t.shares * sellOrLtpPrice;
-
-    // 1. Brokerage:
-    // Zerodha: 0.3% per order side (max ₹20/side)
-    // INDmoney: 0.05% per order side (max ₹20/side)
-    const brokeragePct = broker === 'Zerodha' ? 0.003 : 0.0005;
-    const buyBrokerage = Math.min(20, totalBuyVal * brokeragePct);
-    const sellBrokerage = Math.min(20, currentVal * brokeragePct);
-    const brokerage = buyBrokerage + sellBrokerage;
-
-    // 2. Pledge / Unpledge Charges:
-    // Zerodha MTF: ₹15 + 18% GST = ₹17.70 on Buy pledge (Active); ₹17.70 on Sell unpledge = ₹35.40 total (Closed)
-    // INDmoney MTF: ₹20 + 18% GST = ₹23.60 flat per pledge
-    const pledgeCharges = broker === 'Zerodha'
-      ? (t.status === 'Closed' ? 35.40 : 17.70)
-      : 23.60;
-
-    // 3. Percentage-Based Govt & Statutory Charges
-    const sttCost = (totalBuyVal * 0.001) + (currentVal * 0.001); // 0.1% buy + 0.1% sell
-    const stampDutyCost = totalBuyVal * 0.00015; // 0.015% buy
-    const exchangeTxnFee = (totalBuyVal + currentVal) * 0.0000297; // 0.00297% NSE
-    const sebiFee = (totalBuyVal + currentVal) * 0.000001; // ₹10/crore
-    const gstCost = (brokerage + exchangeTxnFee) * 0.18; // 18% GST on brokerage + txn fee
-    const govtOtherCharges = sttCost + stampDutyCost + exchangeTxnFee + sebiFee + gstCost;
-
-    const totalCarryingCost = interestCost14 + brokerage + pledgeCharges + govtOtherCharges;
-
-    // P&L Calculations
-    const grossPnl = currentVal - totalBuyVal;
-    const netPnl = grossPnl - totalCarryingCost;
-    const netReturnPct = marginPaid > 0 ? (netPnl / marginPaid) * 100 : 0;
-
-    // Overall Accumulation (Deployed capital/value only applies to Active positions)
-    if (t.status === 'Active') {
-      overallMtfDeployedMargin += marginPaid;
-      overallMtfBrokerFunding += funding;
-      overallMtfCurrentVal += currentVal;
-    }
-    overallMtfGrossPnl += grossPnl;
-    overallMtfInterest14 += interestCost14;
-    overallMtfBrokerage += brokerage;
-    overallMtfPledge += pledgeCharges;
-    overallMtfGovt += govtOtherCharges;
-    overallMtfCarryingCharges += totalCarryingCost;
-    overallMtfNetPnl += netPnl;
-
-    if (t.status === 'Active') {
-      activeMtfDeployedMargin += marginPaid;
-      activeMtfBrokerFunding += funding;
-      activeMtfCurrentVal += currentVal;
-      activeMtfCarryingCharges += totalCarryingCost;
-      activeMtfInterest14 += interestCost14;
-      activeMtfGrossPnl += grossPnl;
-      activeMtfNetPnl += netPnl;
-    } else if (t.status === 'Closed') {
-      closedMtfGrossPnl += grossPnl;
-      closedMtfInterest14 += interestCost14;
-      closedMtfBrokerage += brokerage;
-      closedMtfPledge += pledgeCharges;
-      closedMtfGovt += govtOtherCharges;
-      closedMtfCarryingCharges += totalCarryingCost;
-      closedMtfNetPnl += netPnl;
-    }
-
-    // 5% Fixed Trailing Stop Loss Calculation (Includes all charges plus accumulated interest)
-    const storedPeak = t.peak_price || t.buy_price;
-    const peakLtp = Math.max(t.buy_price, storedPeak, ltp);
-    
-    // Gross 5% Trailing SL level (5% drop from peak stock price)
-    const grossSlPrice = peakLtp * 0.95;
-    
-    // Evaluate tariff charges at the fixed SL price level
-    const slVal = t.shares * grossSlPrice;
-    const slBuyBrokerage = Math.min(20, totalBuyVal * brokeragePct);
-    const slSellBrokerage = Math.min(20, slVal * brokeragePct);
-    const slBrokerage = slBuyBrokerage + slSellBrokerage;
-    const slPledge = pledgeCharges;
-    const slStt = (totalBuyVal * 0.001) + (slVal * 0.001);
-    const slStamp = totalBuyVal * 0.00015;
-    const slExchange = (totalBuyVal + slVal) * 0.0000297;
-    const slSebi = (totalBuyVal + slVal) * 0.000001;
-    const slGst = (slBrokerage + slExchange) * 0.18;
-    const slGovt = slStt + slStamp + slExchange + slSebi + slGst;
-    
-    const fixedCarryingCostAtSL = interestCost14 + slBrokerage + slPledge + slGovt;
-    const carryingCostPerShare = t.shares > 0 ? (fixedCarryingCostAtSL / t.shares) : 0;
-    
-    // Net 5% Trailing SL level (Rigidly locked to peak; adjusts upward with daily accrued interest)
-    const netSlPrice = grossSlPrice + carryingCostPerShare;
-    
-    const tslBuffer = ltp - netSlPrice;
-    const tslBufferPct = ltp > 0 ? ((ltp - netSlPrice) / ltp) * 100 : 0;
-
-    let tslStatusTag = '🟢 SL SAFE';
-    let tslStatusBg = 'rgba(52, 211, 153, 0.15)';
-    let tslStatusColor = '#34d399';
-    let tslStatusBorder = 'rgba(52, 211, 153, 0.3)';
-
-    if (t.status === 'Closed') {
-      tslStatusTag = '🏁 CLOSED';
-      tslStatusBg = 'rgba(255,255,255,0.06)';
-      tslStatusColor = '#a5b4fc';
-      tslStatusBorder = 'rgba(255,255,255,0.1)';
-    } else if (ltp <= netSlPrice) {
-      tslStatusTag = '🔴 5% TRAILING SL HIT (SELL SIGNAL)';
-      tslStatusBg = 'rgba(239, 68, 68, 0.25)';
-      tslStatusColor = '#f87171';
-      tslStatusBorder = 'rgba(239, 68, 68, 0.5)';
-    } else if (ltp <= netSlPrice * 1.015) {
-      tslStatusTag = '⚠️ NEAR TRAILING SL (Caution)';
-      tslStatusBg = 'rgba(245, 158, 11, 0.25)';
-      tslStatusColor = '#fbbf24';
-      tslStatusBorder = 'rgba(245, 158, 11, 0.5)';
-    }
-
-    return {
-      ...t,
-      cleanSym,
-      ltp,
-      totalBuyVal,
-      marginPaid,
-      funding,
-      userFundedPct,
-      brokerFundedPct,
-      buyDtStr,
-      endDtStr,
-      holdingDays,
-      interestCost14,
-      interestCost999,
-      brokerage,
-      pledgeCharges,
-      sttCost,
-      stampDutyCost,
-      exchangeTxnFee,
-      sebiFee,
-      gstCost,
-      govtOtherCharges,
-      totalCarryingCost,
-      sellOrLtpPrice,
-      currentVal,
-      grossPnl,
-      netPnl,
-      netReturnPct,
-      peakLtp,
-      carryingCostPerShare,
-      grossSlPrice,
-      netSlPrice,
-      tslBuffer,
-      tslBufferPct,
-      tslStatusTag,
-      tslStatusBg,
-      tslStatusColor,
-      tslStatusBorder
-    };
+  // Current Month Trades (from trade journal)
+  const currentMonthTrades = trades.filter(t => {
+    const dt = t.created_at || t.entry_date || t.date || '';
+    return dt.startsWith(currentMonthStr) || dt >= '2026-08-17';
   });
+
+  // Strategy 1: Swing Trading Trades
+  const swingTrades = currentMonthTrades.filter(t => {
+    const cat = (t.strategy_category || t.instrument_type || '').toLowerCase();
+    return cat.includes('swing') || cat.includes('delivery') || (!cat.includes('day') && !cat.includes('pair') && !cat.includes('long'));
+  });
+  const swingRealizedNetPnl = swingTrades.reduce((acc, t) => acc + (calculateZerodhaCharges(t).net_pnl || 0), 0);
+
+  // Strategy 2: Day Trading - Nifty Pair Trades
+  const dayPairTrades = currentMonthTrades.filter(t => {
+    const cat = (t.strategy_category || t.instrument_type || '').toLowerCase();
+    return cat.includes('day') || cat.includes('pair') || cat.includes('intraday') || cat.includes('nifty');
+  });
+  const dayPairMonthlyNetPnl = dayPairTrades.reduce((acc, t) => acc + (calculateZerodhaCharges(t).net_pnl || 0), 0);
+
+  // Day Trading Base Allocation = 25% of Master Capital
+  const dayPairBaseAllocRupees = masterOpeningCapital * 0.25;
+  const dayPairMonthlyLossPct = dayPairBaseAllocRupees > 0 ? (dayPairMonthlyNetPnl / dayPairBaseAllocRupees) * 100 : 0;
+
+  // 15% Monthly Loss Circuit Breaker Rule
+  const isDayPairCircuitBreakerTriggered = dayPairMonthlyNetPnl < 0 && dayPairMonthlyLossPct <= -15.0;
+
+  // Dynamic Effective Allocation Percentages & Rupees
+  // If Circuit Breaker Triggered: Day Trading = 0%, Swing Trading = 75% (50% base + 25% transferred!)
+  const effectiveSwingAllocPct = isDayPairCircuitBreakerTriggered ? 75.0 : 50.0;
+  const effectiveDayPairAllocPct = isDayPairCircuitBreakerTriggered ? 0.0 : 25.0;
+  const effectiveLongTermAllocPct = 25.0;
+
+  const swingAllocRupees = masterOpeningCapital * (effectiveSwingAllocPct / 100.0);
+  const dayPairAllocRupees = masterOpeningCapital * (effectiveDayPairAllocPct / 100.0);
+  const longTermAllocRupees = masterOpeningCapital * (effectiveLongTermAllocPct / 100.0);
 
   // Handlers for 5% Pullback SIP & MTF Margin Trading
   const handleAddStockToWatchlist = async (e) => {
@@ -2025,6 +1808,11 @@ export default function App() {
       return;
     }
 
+    if (isDayPairCircuitBreakerTriggered && strategyCategory === 'Day Trading (Nifty Pair)') {
+      showToast("🔴 Day Trading is paused for this month due to -15% Monthly Loss Circuit Breaker. Capital is transferred to Swing Trading.", "error");
+      return;
+    }
+
     const newTrade = {
       uuid: createTradeUUID(),
       symbol: symbol.trim().toUpperCase(),
@@ -2033,6 +1821,7 @@ export default function App() {
       stop_loss: stopLoss ? parseFloat(stopLoss) : null,
       target_price: targetPrice ? parseFloat(targetPrice) : null,
       instrument_type: instrumentType,
+      strategy_category: strategyCategory,
       exit_price: null,
       status: 'ACTIVE',
       created_at: new Date().toISOString()
@@ -2705,6 +2494,110 @@ export default function App() {
       </header>
 
       {activeTab === 'home' && (<>
+      {/* 3-TIER CAPITAL ALLOCATION & CIRCUIT BREAKER ENGINE WIDGET */}
+      <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
+          <div>
+            <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              🎯 3-Tier Strategy Capital Allocation & Risk Circuit Breaker
+            </div>
+            <div style={{ fontSize: '12px', color: '#a5b4fc', marginTop: '2px' }}>
+              Fresh Start: <strong>2026-08-17</strong> • 50% Swing Trading | 25% Day Trading (Nifty Pair) | 25% Long-Term Investment
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              fontSize: '11px',
+              fontWeight: 800,
+              padding: '4px 12px',
+              borderRadius: '6px',
+              background: isDayPairCircuitBreakerTriggered ? 'rgba(239, 68, 68, 0.2)' : 'rgba(52, 211, 153, 0.15)',
+              color: isDayPairCircuitBreakerTriggered ? '#f87171' : '#34d399',
+              border: `1px solid ${isDayPairCircuitBreakerTriggered ? 'rgba(239, 68, 68, 0.4)' : 'rgba(52, 211, 153, 0.3)'}`
+            }}>
+              {isDayPairCircuitBreakerTriggered ? '🔴 DAY TRADING PAUSED (-15% MONTHLY LOSS)' : '🟢 3-TIER ALLOCATION ACTIVE'}
+            </span>
+          </div>
+        </div>
+
+        {/* Strategy Allocation Cards Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          
+          {/* Bucket 1: Swing Trading (50% or 75%) */}
+          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '18px', borderRadius: '12px', border: `1px solid ${isDayPairCircuitBreakerTriggered ? 'rgba(99, 102, 241, 0.5)' : 'rgba(255,255,255,0.08)'}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 900, color: '#818cf8' }}>
+                ⚡ SWING TRADING ({effectiveSwingAllocPct}%)
+              </div>
+              {isDayPairCircuitBreakerTriggered && (
+                <span style={{ fontSize: '10px', fontWeight: 800, color: '#38bdf8', background: 'rgba(56,189,248,0.15)', padding: '2px 6px', borderRadius: '4px' }}>
+                  +25% Reallocated
+                </span>
+              )}
+            </div>
+
+            <div style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff', marginBottom: '6px' }}>
+              ₹{swingAllocRupees.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '8px' }}>
+              <span>Realized Net P&L:</span>
+              <strong style={{ color: swingRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>
+                {swingRealizedNetPnl >= 0 ? '+' : ''}₹{swingRealizedNetPnl.toFixed(2)}
+              </strong>
+            </div>
+          </div>
+
+          {/* Bucket 2: Day Trading - Nifty Pair Trading (25% or 0%) */}
+          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '18px', borderRadius: '12px', border: `1px solid ${isDayPairCircuitBreakerTriggered ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255,255,255,0.08)'}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 900, color: '#38bdf8' }}>
+                🎯 DAY TRADING: NIFTY PAIR ({effectiveDayPairAllocPct}%)
+              </div>
+              <span style={{ fontSize: '10px', fontWeight: 800, color: isDayPairCircuitBreakerTriggered ? '#f87171' : '#34d399', background: isDayPairCircuitBreakerTriggered ? 'rgba(239, 68, 68, 0.15)' : 'rgba(52, 211, 153, 0.15)', padding: '2px 6px', borderRadius: '4px' }}>
+                {isDayPairCircuitBreakerTriggered ? '🔴 -15% Breaker' : '🟢 Max -15%/mo'}
+              </span>
+            </div>
+
+            <div style={{ fontSize: '22px', fontWeight: 900, color: isDayPairCircuitBreakerTriggered ? '#94a3b8' : '#ffffff', marginBottom: '6px' }}>
+              ₹{dayPairAllocRupees.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '8px' }}>
+              <span>Monthly Net P&L:</span>
+              <strong style={{ color: dayPairMonthlyNetPnl >= 0 ? '#34d399' : '#f87171' }}>
+                {dayPairMonthlyNetPnl >= 0 ? '+' : ''}₹{dayPairMonthlyNetPnl.toFixed(2)} ({dayPairMonthlyLossPct.toFixed(1)}%)
+              </strong>
+            </div>
+          </div>
+
+          {/* Bucket 3: Long-Term Investment (25%) */}
+          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '18px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 900, color: '#34d399' }}>
+                🌱 LONG-TERM INVESTMENT ({effectiveLongTermAllocPct}%)
+              </div>
+              <span style={{ fontSize: '10px', fontWeight: 800, color: '#34d399', background: 'rgba(52, 211, 153, 0.15)', padding: '2px 6px', borderRadius: '4px' }}>
+                UYFINCORP + SIP
+              </span>
+            </div>
+
+            <div style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff', marginBottom: '6px' }}>
+              ₹{longTermAllocRupees.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '8px' }}>
+              <span>Active Holdings Value:</span>
+              <strong style={{ color: '#38bdf8' }}>
+                ₹{totalSipDeployedCost.toFixed(2)}
+              </strong>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       {/* TOP STATUS CARDS ROW (3 Wide Cards Top Summary Cards Row) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
         
@@ -3286,7 +3179,21 @@ export default function App() {
           </div>
 
           <div>
-            <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>TYPE</label>
+            <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>STRATEGY BUCKET</label>
+            <select 
+              value={strategyCategory} 
+              onChange={e => setStrategyCategory(e.target.value)} 
+              className="input-field"
+              style={{ fontWeight: 800, color: strategyCategory === 'Day Trading (Nifty Pair)' ? '#38bdf8' : (strategyCategory === 'Long-Term Investment' ? '#34d399' : '#818cf8') }}
+            >
+              <option value="Swing Trading">⚡ Swing Trading (50% Allocation)</option>
+              <option value="Day Trading (Nifty Pair)">🎯 Day Trading: Nifty Pair (25% Allocation)</option>
+              <option value="Long-Term Investment">🌱 Long-Term Investment (25% Allocation)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>INSTRUMENT TYPE</label>
             <select 
               value={instrumentType} 
               onChange={handleInstrumentTypeChange} 
@@ -7098,7 +7005,6 @@ export default function App() {
           { key: 'trades', label: 'Trades', icon: FileText, color: '#14b8a6' },
           { key: 'capital', label: 'Capital', icon: DollarSign, color: '#a855f7' },
           { key: 'sip', label: 'SIP', icon: TrendingUp, color: '#00b4d8' },
-          { key: 'mtf', label: 'MTF', icon: Layers, color: '#f59e0b' },
           { key: 'settings', label: 'Settings', icon: Settings, color: '#ec4899' }
         ].map(navItem => {
           const NavIcon = navItem.icon;

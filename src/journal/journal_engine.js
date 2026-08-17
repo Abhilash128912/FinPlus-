@@ -3,8 +3,8 @@
  * Standalone PnL App Engine - Zero dependency on backend scanner tables
  */
 
-const STORAGE_KEY = 'finplus_pnl_v3';
-const DATA_VERSION = '20260724_v1'; // Bump this to force-reset stale cached data
+const STORAGE_KEY = 'finplus_pnl_v4_fresh';
+const DATA_VERSION = '20260817_fresh_start';
 const VERSION_KEY = 'finplus_data_version';
 
 /**
@@ -17,7 +17,7 @@ export function calculateZerodhaCharges(trade) {
     entry_price = 0,
     exit_price = 0,
     quantity = 0
-  } = trade;
+  } = trade || {};
 
   const entry = Number(entry_price) || 0;
   const exit = Number(exit_price) || 0;
@@ -76,80 +76,55 @@ export function calculateZerodhaCharges(trade) {
 
   if (isCommodity && isOptions) {
     // ── Commodity Options (MCX) ──────────────────────────────────────────────
-    // Brokerage: Flat ₹20 per executed order  [Source: zerodha.com/charges]
+    // Brokerage: Flat ₹20 per executed order
     brokerage = exit > 0 ? 40 : 20;
-    // CTT: 0.05% on sell side (on premium)
     stt = sellTurnover * 0.0005;
-    // MCX Exchange Txn: 0.0418% (on premium)
     exchangeTxn = totalTurnover * 0.000418;
-    // Stamp duty: 0.003% on buy side
     stampDuty = buyTurnover * 0.00003;
 
   } else if (isCommodity && isFutures) {
     // ── Commodity Futures (MCX) ──────────────────────────────────────────────
-    // Brokerage: 0.03% or ₹20 per leg (whichever is lower)  [Source: zerodha.com/charges]
     const buyB = Math.min(20, buyTurnover * 0.0003);
     const sellB = exit > 0 ? Math.min(20, sellTurnover * 0.0003) : 0;
     brokerage = buyB + sellB;
-    // CTT: 0.01% on sell side (Non-Agri)
     stt = sellTurnover * 0.0001;
-    // MCX Exchange Txn: 0.0021%
     exchangeTxn = totalTurnover * 0.000021;
-    // Stamp duty: 0.002% on buy side
     stampDuty = buyTurnover * 0.00002;
 
   } else if (isOptions) {
     // ── Equity / Currency F&O Options (NSE) ─────────────────────────────────
-    // Brokerage: Flat ₹20 per executed order  [Source: zerodha.com/charges]
     brokerage = exit > 0 ? 40 : 20;
-    // STT: 0.1% on sell side premium
     stt = sellTurnover * 0.001;
-    // NSE Exchange Txn: 0.03553% (on premium)
     exchangeTxn = totalTurnover * 0.0003553;
-    // Stamp duty: 0.003% on buy side
     stampDuty = buyTurnover * 0.00003;
 
   } else if (isFutures) {
     // ── Equity / Currency F&O Futures (NSE) ─────────────────────────────────
-    // Brokerage: 0.03% or ₹20 per leg (whichever is lower)  [Source: zerodha.com/charges]
     const buyB = Math.min(20, buyTurnover * 0.0003);
     const sellB = exit > 0 ? Math.min(20, sellTurnover * 0.0003) : 0;
     brokerage = buyB + sellB;
-    // STT: 0.05% on sell side
     stt = sellTurnover * 0.0005;
-    // NSE Exchange Txn: 0.00183%
     exchangeTxn = totalTurnover * 0.0000183;
-    // Stamp duty: 0.002% on buy side
     stampDuty = buyTurnover * 0.00002;
 
   } else if (isDelivery) {
     // ── Equity Delivery (NSE/BSE) ─────────────────────────────────────────────
-    // Brokerage: ₹0  [Source: zerodha.com/charges]
     brokerage = 0;
-    // STT: 0.1% on buy & sell
     stt = totalTurnover * 0.001;
-    // NSE Exchange Txn: 0.00307%
     exchangeTxn = totalTurnover * 0.0000307;
-    // Stamp duty: 0.015% on buy side
     stampDuty = buyTurnover * 0.00015;
 
   } else {
     // ── Equity Intraday (NSE/BSE) ─────────────────────────────────────────────
-    // Brokerage: 0.03% or ₹20 per leg (whichever is lower)  [Source: zerodha.com/charges]
     const buyB = Math.min(20, buyTurnover * 0.0003);
     const sellB = exit > 0 ? Math.min(20, sellTurnover * 0.0003) : 0;
     brokerage = buyB + sellB;
-    // STT: 0.025% on sell side
     stt = sellTurnover * 0.00025;
-    // NSE Exchange Txn: 0.00297%
-    exchangeTxn = totalTurnover * 0.0000297;
-    // Stamp duty: 0.003% on buy side
+    exchangeTxn = totalTurnover * 0.000297;
     stampDuty = buyTurnover * 0.00003;
   }
 
-  // SEBI turnover charge: ₹10 per crore (0.0001%)
   const sebi = totalTurnover * 0.000001;
-  // GST: 18% on (Brokerage + Exchange Txn + SEBI)
   const gst = (brokerage + exchangeTxn + sebi) * 0.18;
 
   const totalCharges = brokerage + stt + exchangeTxn + sebi + stampDuty + gst;
@@ -168,182 +143,7 @@ export function calculateZerodhaCharges(trade) {
   };
 }
 
-const RECOVERED_RESERVE_TRADES = [
-  {
-    "uuid": "fp_20260813_nifty24050pe",
-    "symbol": "NIFTY 24050 PE",
-    "instrument_type": "Nifty Options",
-    "entry_price": 11.15,
-    "quantity": 65,
-    "exit_price": 10.20,
-    "status": "CLOSED",
-    "gross_pnl": -61.75,
-    "created_at": "2026-08-13T09:45:00.000Z"
-  },
-  {
-    "uuid": "fp_20260813_nifty24750ce",
-    "symbol": "NIFTY 24750 CE",
-    "instrument_type": "Nifty Options",
-    "entry_price": 15.75,
-    "quantity": 65,
-    "exit_price": 14.90,
-    "status": "CLOSED",
-    "gross_pnl": -55.25,
-    "created_at": "2026-08-13T09:50:00.000Z"
-  },
-  {
-    "uuid": "fp_20260813_goldbees_mis",
-    "symbol": "GOLDBEES",
-    "instrument_type": "Intraday",
-    "entry_price": 125.06,
-    "quantity": 1,
-    "exit_price": 124.98,
-    "status": "CLOSED",
-    "gross_pnl": -0.08,
-    "created_at": "2026-08-13T09:55:00.000Z"
-  },
-  {
-    "uuid": "fp_20260813_niftybees_mis",
-    "symbol": "NIFTYBEES",
-    "instrument_type": "Intraday",
-    "entry_price": 278.50,
-    "quantity": 1,
-    "exit_price": 278.40,
-    "status": "CLOSED",
-    "gross_pnl": -0.10,
-    "created_at": "2026-08-13T10:00:00.000Z"
-  },
-  {
-    "id": 1,
-    "uuid": "fp_mryv9p",
-    "symbol": "CRUDEOIL",
-    "instrument_type": "Crude Oil Options",
-    "entry_price": 275.0,
-    "quantity": 10,
-    "exit_price": 265.25,
-    "status": "CLOSED",
-    "gross_pnl": -97.5,
-    "net_pnl": -148.79,
-    "created_at": "2026-07-24T11:38:24.549Z"
-  },
-  {
-    "id": 2,
-    "uuid": "fp_mrypn7",
-    "symbol": "TMPV",
-    "instrument_type": "Intraday Short",
-    "entry_price": 319.55,
-    "quantity": 38,
-    "exit_price": 319.55,
-    "status": "CLOSED",
-    "gross_pnl": 0.0,
-    "net_pnl": -12.87,
-    "created_at": "2026-07-24T09:00:56.923Z"
-  },
-  {
-    "id": 3,
-    "uuid": "fp_mrypm5",
-    "symbol": "NIFTY 24100",
-    "instrument_type": "Nifty Options",
-    "entry_price": 30.0,
-    "quantity": 65,
-    "exit_price": 28.05,
-    "status": "CLOSED",
-    "gross_pnl": -126.75,
-    "net_pnl": -178.32,
-    "created_at": "2026-07-24T09:00:06.931Z"
-  },
-  {
-    "id": 4,
-    "uuid": "fp_mrypl4",
-    "symbol": "NIFTY 24050",
-    "instrument_type": "Nifty Options",
-    "entry_price": 35.15,
-    "quantity": 260,
-    "exit_price": 38.05,
-    "status": "CLOSED",
-    "gross_pnl": 754.0,
-    "net_pnl": 683.69,
-    "created_at": "2026-07-24T08:59:18.901Z"
-  },
-  {
-    "id": 5,
-    "uuid": "fp_mrypk2",
-    "symbol": "NIFTY 24000",
-    "instrument_type": "Nifty Options",
-    "entry_price": 35.7,
-    "quantity": 65,
-    "exit_price": 33.7,
-    "status": "CLOSED",
-    "gross_pnl": -130.0,
-    "net_pnl": -182.45,
-    "created_at": "2026-07-24T08:58:30.399Z"
-  },
-  {
-    "id": 6,
-    "uuid": "fp_mrypj2",
-    "symbol": "NIFTY 23950",
-    "instrument_type": "Nifty Options",
-    "entry_price": 36.9,
-    "quantity": 65,
-    "exit_price": 38.45,
-    "status": "CLOSED",
-    "gross_pnl": 100.75,
-    "net_pnl": 47.68,
-    "created_at": "2026-07-24T08:57:42.787Z"
-  },
-  {
-    "id": 7,
-    "uuid": "fp_mrypey",
-    "symbol": "NIFTY 23350",
-    "instrument_type": "Nifty Options",
-    "entry_price": 31.95,
-    "quantity": 65,
-    "exit_price": 29.9,
-    "status": "CLOSED",
-    "gross_pnl": -133.25,
-    "net_pnl": -185.12,
-    "created_at": "2026-07-24T08:54:31.779Z"
-  },
-  {
-    "id": 8,
-    "uuid": "fp_mryilq",
-    "symbol": "BHEL",
-    "instrument_type": "Intraday Short",
-    "entry_price": 402.95,
-    "quantity": 29,
-    "exit_price": 404.46,
-    "status": "CLOSED",
-    "gross_pnl": -43.79,
-    "net_pnl": -56.21,
-    "created_at": "2026-07-24T05:43:50.633Z"
-  },
-  {
-    "id": 9,
-    "uuid": "fp_mryil5",
-    "symbol": "TMPV",
-    "instrument_type": "Intraday Short",
-    "entry_price": 319.55,
-    "quantity": 38,
-    "exit_price": 319.75,
-    "status": "CLOSED",
-    "gross_pnl": -7.6,
-    "net_pnl": -20.48,
-    "created_at": "2026-07-24T05:43:23.232Z"
-  },
-  {
-    "id": 10,
-    "uuid": "fp_20260723_trade1",
-    "symbol": "NATGASMINI 275 CE",
-    "instrument_type": "Natural Gas Options",
-    "entry_price": 14.47,
-    "quantity": 250,
-    "exit_price": 10.05,
-    "status": "CLOSED",
-    "gross_pnl": -1105.0,
-    "net_pnl": -1156.61,
-    "created_at": "2026-07-23T14:27:48.540Z"
-  }
-];
+const RECOVERED_RESERVE_TRADES = [];
 
 export function getTradeKey(t) {
   if (!t) return '';
@@ -397,49 +197,25 @@ function dedupeTradesByFingerprint(trades) {
 }
 
 /**
- * 2. Instant Local Storage Reader with Fail-safe Disk Reserve Merge
+ * 2. Instant Local Storage Reader starting fresh from 2026-08-17
  */
 export function loadJournalEngine() {
-  let loaded = [];
-  
-  // Safely read and merge across all historical storage keys without wiping anything
-  for (const k of ['finplus_pnl_v3', 'finplus_pnl_v2', 'finplus_pnl_journal_v1', 'journal_trades_backup']) {
-    try {
-      const raw = localStorage.getItem(k);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          loaded = mergeJournalTrades(loaded, parsed);
-        }
-      }
-    } catch (e) {}
+  const version = localStorage.getItem('finplus_journal_fresh_version');
+  if (version !== DATA_VERSION) {
+    localStorage.setItem('finplus_journal_fresh_version', DATA_VERSION);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+    return [];
   }
-
-  // Merge recovered reserve trades as a safety baseline — ONLY ONCE.
-  // Without this guard, these 10 hardcoded trades get re-merged on every
-  // app load. Because they use numeric `id` fields instead of the `uuid`
-  // scheme real trades use, mergeJournalTrades can't recognize them as
-  // duplicates of already-recovered trades, so they get added again as new
-  // trades each time — silently inflating your total P&L loss on every reload.
-  const RESERVE_MERGE_FLAG = 'finplus_reserve_trades_merged_v1';
-  if (!localStorage.getItem(RESERVE_MERGE_FLAG)) {
-    loaded = mergeJournalTrades(loaded, RECOVERED_RESERVE_TRADES);
-    try {
-      localStorage.setItem(RESERVE_MERGE_FLAG, 'true');
-    } catch (e) {}
-  }
-
-  loaded = dedupeTradesByFingerprint(loaded);
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(loaded));
-    localStorage.setItem(VERSION_KEY, DATA_VERSION);
-    for (const legacyKey of ['finplus_pnl_v2', 'finplus_pnl_journal_v1', 'journal_trades_backup']) {
-      if (legacyKey !== STORAGE_KEY) localStorage.removeItem(legacyKey);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {}
 
-  return loaded;
+  return [];
 }
 
 let lastSyncedJson = '';
