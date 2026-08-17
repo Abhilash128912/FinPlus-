@@ -928,10 +928,10 @@ export default function App() {
   const masterOpeningCapital = baseOpenCap + baseBrokerAdj + baseDeposits - baseWithdrawals;
   const currentMonthStr = new Date().toISOString().substring(0, 7); // e.g. '2026-08'
 
-  // Current Month Trades (from trade journal)
+  // Current Month Trades starting fresh from 2026-08-17
   const currentMonthTrades = trades.filter(t => {
     const dt = t.created_at || t.entry_date || t.date || '';
-    return dt.startsWith(currentMonthStr) || dt >= '2026-08-17';
+    return dt >= '2026-08-17';
   });
 
   // Strategy 1: Swing Trading Trades
