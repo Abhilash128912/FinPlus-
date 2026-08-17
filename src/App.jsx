@@ -42,6 +42,31 @@ import {
 } from 'lucide-react';
 
 
+// Helper to sanitize pullback portfolio by purging pre-populated default stocks with 0 active holdings
+const sanitizePullbackPortfolio = (data) => {
+  if (!data || typeof data !== 'object') return data;
+  const cleaned = { ...data };
+  
+  // Pre-populated legacy default stocks to strip out if they have 0 net shares
+  const LEGACY_DEFAULT_STOCKS = new Set([
+    'ASHOKLEY.NS', 'BEL.NS', 'BORANA.NS', 'EMMVEE.NS', 'FEDERALBNK.NS', 
+    'ITC.NS', 'NMDC.NS', 'PANAMAPET.NS', 'TATAPOWER.NS', 'TATASTEEL.NS', 
+    'NIFTYBEES.NS', 'GOLDBEES.NS'
+  ]);
+
+  Object.keys(cleaned).forEach(key => {
+    if (LEGACY_DEFAULT_STOCKS.has(key)) {
+      const stock = cleaned[key];
+      const txs = (stock && Array.isArray(stock.transactions)) ? stock.transactions : [];
+      const netShares = txs.reduce((acc, t) => acc + (Number(t.shares) || 0), 0);
+      if (netShares <= 0) {
+        delete cleaned[key];
+      }
+    }
+  });
+  return cleaned;
+};
+
 export default function App() {
   // Master Trade State
   const [trades, setTrades] = useState(() => loadJournalEngine());
@@ -144,21 +169,16 @@ export default function App() {
       "mtf_trading": []
     };
 
-    const freshVersionTag = '20260817_fresh_start_v5';
-    const currentTag = localStorage.getItem('finplus_pullback_version_tag');
-
-    if (currentTag !== freshVersionTag) {
-      localStorage.setItem('finplus_pullback_version_tag', freshVersionTag);
-      localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(defaultData));
-      return defaultData;
-    }
-
     const saved = localStorage.getItem('finplus_pullback_portfolio');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        const sanitized = sanitizePullbackPortfolio({ ...defaultData, ...parsed });
+        localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(sanitized));
+        return sanitized;
       } catch (e) {}
     }
+    localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(defaultData));
     return defaultData;
   });
 
@@ -398,17 +418,7 @@ export default function App() {
               if (currentSaved) {
                 try { localP = JSON.parse(currentSaved); } catch(e) {}
               }
-              mergedPullback = { ...localP, ...sData.pullback };
-              const todayStr = '2026-08-17';
-              Object.keys(mergedPullback).forEach(k => {
-                if (k !== 'capital_settings' && k !== 'mtf_trading' && k !== 'UYFINCORP.NS' && mergedPullback[k]) {
-                  const txs = mergedPullback[k].transactions || [];
-                  mergedPullback[k].transactions = txs.filter(t => t.date >= todayStr);
-                  if (mergedPullback[k].transactions.length === 0) {
-                    mergedPullback[k].date_added = todayStr;
-                  }
-                }
-              });
+              mergedPullback = sanitizePullbackPortfolio({ ...localP, ...sData.pullback });
               
               // Merge MTF array safely
               const backendMtf = Array.isArray(sData.pullback.mtf_trading) ? sData.pullback.mtf_trading : (sData.pullback.mtf_trading?.trades || []);
@@ -649,15 +659,16 @@ export default function App() {
 
   // Persist pullbackData to localStorage and backend (multi-endpoint sync)
   const savePullbackState = async (updatedData) => {
-    setPullbackData(updatedData);
-    localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(updatedData));
+    const cleanedData = sanitizePullbackPortfolio(updatedData);
+    setPullbackData(cleanedData);
+    localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(cleanedData));
     const endpoints = Array.from(new Set([API_BASE_URL, RENDER_BACKEND_URL, 'http://127.0.0.1:8000'].filter(Boolean)));
     for (const endpoint of endpoints) {
       try {
         await fetch(`${endpoint}/api/investment/pullback`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedData)
+          body: JSON.stringify(cleanedData)
         });
       } catch (e) {}
     }
