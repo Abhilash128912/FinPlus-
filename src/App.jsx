@@ -1422,11 +1422,24 @@ export default function App() {
     return 'Intraday';
   };
 
+  const getDefaultStrategyCategoryForType = (type) => {
+    if (!type) return 'Swing Trading';
+    const lower = type.toLowerCase();
+    if (lower.includes('nifty') || lower.includes('intraday') || lower.includes('pair')) {
+      return 'Day Trading (Nifty Pair)';
+    }
+    if (lower.includes('long') || lower.includes('investment') || lower.includes('sip') || lower.includes('delivery')) {
+      return 'Long-Term Investment';
+    }
+    return 'Swing Trading';
+  };
+
   const handleSymbolChange = (e) => {
     const val = e.target.value;
     setSymbol(val);
     const newType = detectSegmentFromSymbol(val);
     setInstrumentType(newType);
+    setStrategyCategory(getDefaultStrategyCategoryForType(newType));
 
     const cfg = getSegmentConfig(newType);
     setCustomSlPct(cfg.slPct.toString());
@@ -1452,6 +1465,7 @@ export default function App() {
   const handleInstrumentTypeChange = (e) => {
     const newType = e.target.value;
     setInstrumentType(newType);
+    setStrategyCategory(getDefaultStrategyCategoryForType(newType));
     const cfg = getSegmentConfig(newType);
     const defaultPct = cfg.slPct.toString();
     setCustomSlPct(defaultPct);
