@@ -950,10 +950,11 @@ export default function App() {
 
   // Day Trading Base Allocation = 25% of Master Capital
   const dayPairBaseAllocRupees = masterOpeningCapital * 0.25;
+  const dayPairMaxLossRupees = dayPairBaseAllocRupees * 0.15; // 15% Monthly Max Loss Stop Loss in ₹
   const dayPairMonthlyLossPct = dayPairBaseAllocRupees > 0 ? (dayPairMonthlyNetPnl / dayPairBaseAllocRupees) * 100 : 0;
 
   // 15% Monthly Loss Circuit Breaker Rule
-  const isDayPairCircuitBreakerTriggered = dayPairMonthlyNetPnl < 0 && dayPairMonthlyLossPct <= -15.0;
+  const isDayPairCircuitBreakerTriggered = dayPairMonthlyNetPnl < 0 && (Math.abs(dayPairMonthlyNetPnl) >= dayPairMaxLossRupees || dayPairMonthlyLossPct <= -15.0);
 
   // Dynamic Effective Allocation Percentages & Rupees
   // If Circuit Breaker Triggered: Day Trading = 0%, Swing Trading = 75% (50% base + 25% transferred!)
@@ -2438,7 +2439,7 @@ export default function App() {
                 🎯 DAY TRADING: NIFTY PAIR ({effectiveDayPairAllocPct}%)
               </div>
               <span style={{ fontSize: '10px', fontWeight: 800, color: isDayPairCircuitBreakerTriggered ? '#f87171' : '#34d399', background: isDayPairCircuitBreakerTriggered ? 'rgba(239, 68, 68, 0.15)' : 'rgba(52, 211, 153, 0.15)', padding: '2px 6px', borderRadius: '4px' }}>
-                {isDayPairCircuitBreakerTriggered ? '🔴 -15% Breaker' : '🟢 Max -15%/mo'}
+                {isDayPairCircuitBreakerTriggered ? '🔴 -15% Breaker' : '🟢 Active'}
               </span>
             </div>
 
@@ -2446,7 +2447,14 @@ export default function App() {
               ₹{dayPairAllocRupees.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '8px', marginBottom: '4px' }}>
+              <span>Monthly 15% Max Loss SL:</span>
+              <strong style={{ color: '#fb7185' }}>
+                -₹{dayPairMaxLossRupees.toFixed(2)}
+              </strong>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8' }}>
               <span>Monthly Net P&L:</span>
               <strong style={{ color: dayPairMonthlyNetPnl >= 0 ? '#34d399' : '#f87171' }}>
                 {dayPairMonthlyNetPnl >= 0 ? '+' : ''}₹{dayPairMonthlyNetPnl.toFixed(2)} ({dayPairMonthlyLossPct.toFixed(1)}%)
