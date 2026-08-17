@@ -919,7 +919,13 @@ export default function App() {
   }, [pullbackStockSummary, sipSellSelectedTicker, sipSellFormPrice]);
 
   // 3-Tier Strategy Capital Allocation Engine (Fresh Start 2026-08-17)
-  const masterOpeningCapital = Number(openingCapitalInput) || 500000;
+  const baseOpenCap = Number(openingCapitalInput) || 0;
+  const baseBrokerAdj = Number(brokerAdjustmentInput) || 0;
+  const baseDeposits = Number(depositsInput) || 0;
+  const baseWithdrawals = Number(withdrawalsInput) || 0;
+  
+  // Total Net Operating Capital Pool (Opening Capital + Broker Adjustment + Deposits - Withdrawals)
+  const masterOpeningCapital = baseOpenCap + baseBrokerAdj + baseDeposits - baseWithdrawals;
   const currentMonthStr = new Date().toISOString().substring(0, 7); // e.g. '2026-08'
 
   // Current Month Trades (from trade journal)
@@ -1954,8 +1960,11 @@ export default function App() {
   const depositsNum = parseFloat(depositsInput) || 0;
   const withdrawalsNum = parseFloat(withdrawalsInput) || 0;
 
+  // Net Operating Base Capital (Opening + Broker Adjustment + Deposits - Withdrawals)
+  const netBaseCapitalNum = openingCapitalNum + brokerAdjNum + depositsNum - withdrawalsNum;
+
   const totalTradeNetPnl = totalRealizedNetPnl + totalUnrealizedPnl;
-  const closingCapitalNum = openingCapitalNum + totalTradeNetPnl + brokerAdjNum + depositsNum - withdrawalsNum;
+  const closingCapitalNum = netBaseCapitalNum + totalTradeNetPnl;
 
   // Current Month Segment Allocation & Monthly Risk SL Tracker
   // Available Closed Months List for Risk SL Audit
@@ -2088,7 +2097,7 @@ export default function App() {
     }
   ];
 
-  const currentCapitalBase = (closingCapitalNum > 0 ? closingCapitalNum : (openingCapitalNum > 0 ? openingCapitalNum : 0));
+  const currentCapitalBase = (closingCapitalNum > 0 ? closingCapitalNum : (netBaseCapitalNum > 0 ? netBaseCapitalNum : 0));
   const totalMonthlyRiskBudget = segmentAllocList.reduce((acc, s) => {
     const allocPct = Number(s.allocState) || 0;
     const mslPct = Number(s.mslState) || 0;
@@ -3164,7 +3173,7 @@ export default function App() {
           });
 
           if (matchedSeg) {
-            const capitalPool = (closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum);
+            const capitalPool = (closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum);
             const allocPct = Number(matchedSeg.allocState) || 0;
             const mslPct = Number(matchedSeg.mslState) || 0;
             const maxLoss = capitalPool * (allocPct / 100) * (mslPct / 100);
@@ -4171,7 +4180,7 @@ export default function App() {
                 TOTAL ACCOUNT CAPITAL
               </div>
               <div style={{ fontSize: '24px', fontWeight: 900, color: '#ffffff' }}>
-                ₹{((closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₹{((closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div style={{ fontSize: '11px', color: '#34d399', marginTop: '4px', fontWeight: 700 }}>
                 100% Capital Pool Baseline
@@ -4247,7 +4256,7 @@ export default function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#a5b4fc', fontWeight: 700, flexWrap: 'wrap', gap: '8px' }}>
                 <span>Layer 1: Today's Available Risk (₹{availableRiskLimitToday.toFixed(2)})</span>
                 <span>Layer 2: Monthly Segment Risk Budget (₹{totalMonthlyRiskBudget.toFixed(2)})</span>
-                <span>Layer 3: Total Account Capital (₹{((closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum)).toFixed(2)})</span>
+                <span>Layer 3: Total Account Capital (₹{((closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum)).toFixed(2)})</span>
               </div>
 
               {/* Visual Stack Progress Bar */}
@@ -4261,7 +4270,7 @@ export default function App() {
                   top: 0, 
                   left: 0, 
                   height: '100%', 
-                  width: `${Math.min(100, (totalMonthlyRiskBudget / Math.max(1, (closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum))) * 100)}%`, 
+                  width: `${Math.min(100, (totalMonthlyRiskBudget / Math.max(1, (closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum))) * 100)}%`, 
                   background: 'linear-gradient(90deg, rgba(99, 102, 241, 0.5) 0%, rgba(168, 85, 247, 0.5) 100%)' 
                 }} />
 
@@ -4271,7 +4280,7 @@ export default function App() {
                   top: 0, 
                   left: 0, 
                   height: '100%', 
-                  width: `${Math.min(100, (todayStartingRisk / Math.max(1, (closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum))) * 100)}%`, 
+                  width: `${Math.min(100, (todayStartingRisk / Math.max(1, (closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum))) * 100)}%`, 
                   background: availableRiskLimitToday > 0 ? 'linear-gradient(90deg, #10b981 0%, #34d399 100%)' : '#ef4444',
                   boxShadow: availableRiskLimitToday > 0 ? '0 0 12px rgba(52, 211, 153, 0.6)' : 'none'
                 }} />
@@ -4289,7 +4298,7 @@ export default function App() {
                 </div>
                 <div style={{ fontSize: '11px', color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#6366f1', display: 'inline-block' }}></span>
-                  Account Capital: <strong>₹{((closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum)).toFixed(2)}</strong>
+                  Account Capital: <strong>₹{((closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum)).toFixed(2)}</strong>
                 </div>
               </div>
             </div>
@@ -4343,7 +4352,7 @@ export default function App() {
                 </thead>
                 <tbody style={{ color: '#e0e7ff' }}>
                   {segmentAllocList.map((seg, idx) => {
-                    const capitalPool = (closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum);
+                    const capitalPool = (closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum);
                     const allocPct = Number(seg.allocState) || 0;
                     const segCapital = capitalPool * (allocPct / 100);
                     const mslPct = Number(seg.mslState) || 0;
@@ -4462,7 +4471,7 @@ export default function App() {
 
                   {/* Summary Row for Unallocated Cash Reserve if total allocation < 100% */}
                   {(() => {
-                    const capitalPool = (closingCapitalNum > 0 ? closingCapitalNum : openingCapitalNum);
+                    const capitalPool = (closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum);
                     const totalAllocPct = (Number(allocIntraday) || 0) + (Number(allocNatgas) || 0) + (Number(allocNifty) || 0) + (Number(allocCrude) || 0);
                     const unallocatedPct = 100 - totalAllocPct;
                     const unallocatedRupees = capitalPool * (Math.max(0, unallocatedPct) / 100);
