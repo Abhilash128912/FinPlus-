@@ -11,3 +11,11 @@
 ## 2. Fundamental Data & Caching Rules
 - The quoteSummary fetcher and yfinance fallback MUST populate genuine fundamental metrics (`P/E`, `ROE%`, `D/E`, `Net Profit Margin%`).
 - Cache files missing fundamental metrics MUST be invalidated immediately so fresh metrics are fetched.
+
+## 3. F&O / Options Signals Criteria & Filtering Rules
+- **Quantity & Selection**: The system MUST ALWAYS select and output exactly 15 qualified F&O stocks.
+- **Eligibility Criteria**: Options signals MUST ONLY be generated for stocks meeting:
+  - `LTP >= 1000.0`
+  - `lot_size < 500`
+  - Mandatory Exception: `RELIANCE` (`symbol == "RELIANCE"`)
+- **RELIANCE Mandatory Inclusion**: `RELIANCE` MUST ALWAYS be included in the official Top 15 F&O options picks regardless of its conviction ranking.

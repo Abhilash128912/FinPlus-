@@ -229,6 +229,19 @@ def save_cache(ticker, data):
 
 # ─── Step 1: Read Excel ───────────────────────────────────────────────────────
 def read_stock_list() -> list[str]:
+    tickers = _read_stock_list_raw()
+    try:
+        fno_master_dict = get_fno_master_list()
+        for sym, fno_item in fno_master_dict.items():
+            t = fno_item["ticker"]
+            if t not in tickers:
+                tickers.append(t)
+    except Exception as e:
+        log(f"Error integrating dynamic F&O symbols to scan list: {e}")
+    return tickers
+
+
+def _read_stock_list_raw() -> list[str]:
     auto_json = os.path.join(BASE_DIR, "nifty_stocks_auto.json")
     auto_excel = os.path.join(BASE_DIR, "nifty_stocks_auto.xlsx")
 
@@ -687,7 +700,12 @@ def run_scan(tickers: list[str]) -> list[dict]:
             pass
 
     # Symbols exempt from the ₹5000 price cap (F&O stocks traded as options)
-    fno_symbols = {s["symbol"] for s in cfg.get("fno_stocks", [])}
+    try:
+        fno_master_dict = get_fno_master_list()
+        fno_symbols = set(fno_master_dict.keys())
+    except Exception as e:
+        log(f"Error initializing dynamic fno_symbols: {e}")
+        fno_symbols = {s["symbol"] for s in cfg.get("fno_stocks", [])}
 
     def process_single_ticker(args):
         i, ticker = args
@@ -772,24 +790,127 @@ def run_scan(tickers: list[str]) -> list[dict]:
     return results
 
 
-# ─── Step 3b: Process F&O stocks (bypass price cap, compute options signal) ────────
+def get_fno_master_list() -> dict:
+    """
+    Downloads/caches the Zerodha instruments list and extracts F&O stocks with lot sizes and strike intervals.
+    Returns: dict: { symbol: { "lot_size": int, "strike_interval": int } }
+    """
+    import io
+    cache_path = os.path.join(BASE_DIR, "cache", "kite_instruments.csv")
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    
+    use_cache = False
+    if os.path.exists(cache_path):
+        try:
+            mtime = os.path.getmtime(cache_path)
+            age_hours = (time.time() - mtime) / 3600
+            if age_hours < 24:
+                use_cache = True
+        except Exception:
+            pass
+            
+    df = None
+    if use_cache:
+        log("Loading F&O instruments list from local cache...")
+        try:
+            df = pd.read_csv(cache_path)
+        except Exception as e:
+            log(f"Error reading instruments cache: {e}. Re-downloading...")
+            use_cache = False
+            
+    if df is None:
+        log("Downloading fresh F&O instruments list from Zerodha Kite API...")
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        url = "https://api.kite.trade/instruments"
+        try:
+            import requests as std_requests
+            r = std_requests.get(url, headers=headers, timeout=20)
+            if r.status_code == 200:
+                with open(cache_path, "w", encoding="utf-8") as f:
+                    f.write(r.text)
+                df = pd.read_csv(io.StringIO(r.text))
+            else:
+                log(f"Failed to download instruments from Kite API. Status: {r.status_code}")
+                return {}
+        except Exception as e:
+            log(f"Error fetching instruments from Kite API: {e}")
+            return {}
+            
+    try:
+        nfo = df[df["exchange"] == "NFO"]
+        indices = {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX", "BANKEX", "NIFTYNXT50"}
+        futs = nfo[nfo["instrument_type"] == "FUT"]
+        
+        fno_master = {}
+        for name, group in futs.groupby("name"):
+            if name in indices:
+                continue
+            lot_size = int(group["lot_size"].iloc[0])
+            opts = nfo[(nfo["name"] == name) & (nfo["instrument_type"].isin(["CE", "PE"]))]
+            if len(opts) > 1:
+                unique_strikes = sorted(opts["strike"].unique())
+                if len(unique_strikes) > 1:
+                    diffs = pd.Series(unique_strikes).diff().dropna()
+                    valid_diffs = diffs[diffs > 0]
+                    if not valid_diffs.empty and not valid_diffs.mode().empty:
+                        strike_interval = float(valid_diffs.mode().iloc[0])
+                    else:
+                        strike_interval = 50.0
+                else:
+                    strike_interval = 50.0
+            else:
+                strike_interval = 50.0
+
+            if strike_interval <= 0:
+                strike_interval = 50.0
+                
+            fno_master[name] = {
+                "symbol": name,
+                "ticker": f"{name}.NS",
+                "lot_size": lot_size if lot_size > 0 else 50,
+                "strike_interval": int(strike_interval)
+            }
+        log(f"Successfully processed {len(fno_master)} F&O instruments.")
+        return fno_master
+    except Exception as e:
+        log(f"Error processing instruments data: {e}")
+        return {}
+
+
 def process_fno_stocks(screener_results: list[dict]) -> list[dict]:
-    """Fetch/score the 6 designated F&O stocks and compute their weekly
-    OTM options signal.  F&O stocks bypass the ₹5000 price filter."""
-    fno_cfgs = cfg.get("fno_stocks", [])
-    if not fno_cfgs:
-        return []
+    """Fetch/score the dynamic F&O stocks, compute options signals,
+    and return the top 15 stocks ranked by conviction and total score."""
+    try:
+        fno_master_dict = get_fno_master_list()
+    except Exception as e:
+        log(f"Error fetching dynamic F&O master list: {e}")
+        fno_master_dict = {}
+
+    # Fallback to config-based list if master list is empty
+    if not fno_master_dict:
+        log("F&O dynamic master list is empty, falling back to config.")
+        fno_cfgs = cfg.get("fno_stocks", [])
+        fno_master_dict = {
+            fc["symbol"]: {
+                "symbol": fc["symbol"],
+                "ticker": fc["ticker"],
+                "lot_size": fc.get("lot_size", 50),
+                "strike_interval": fc.get("strike_interval", 50),
+                "name": fc["symbol"]
+            } for fc in fno_cfgs
+        }
 
     result_map = {r["symbol"]: r for r in screener_results}
     fno_data = []
 
-    for fc in fno_cfgs:
-        sym    = fc["symbol"]
-        ticker = fc["ticker"]
+    for sym, fno_item in fno_master_dict.items():
+        ticker = fno_item["ticker"]
         scored = result_map.get(sym)
 
         if scored is None:
-            # Not in the main scan (price > ₹5000 cap) — fetch individually
+            # Not found in the main scan results — fetch individually
             data = fetch_ticker_data(ticker)
             if data:
                 info    = data.get("info", {})
@@ -803,12 +924,39 @@ def process_fno_stocks(screener_results: list[dict]) -> list[dict]:
                 scored["tech_class"]  = trend_info["class"]
 
         if scored:
-            signal = compute_fno_signal(scored, fc)
-            fno_data.append(signal)
+            signal = compute_fno_signal(scored, fno_item)
+            if signal and signal.get("signal") != "NO_DATA" and signal.get("ltp", 0) > 0:
+                ltp_val = signal.get("ltp", 0)
+                lot_val = signal.get("lot_size", 0)
+                # Options Criteria Filter:
+                # Stock must meet LTP >= 1000 OR lot_size < 500 (with exception for RELIANCE)
+                if sym == "RELIANCE" or ltp_val >= 1000 or lot_val < 500:
+                    fno_data.append(signal)
+                else:
+                    log(f"  ℹ F&O Excluded: {sym} (LTP ₹{ltp_val}, Lot Size {lot_val} fails LTP>=1000 or lot_size<500)")
         else:
             log(f"  ⚠ F&O: could not fetch data for {sym}")
 
-    return fno_data
+    # Rank and select the top 15 stocks dynamically
+    # Sort key: conviction (descending), then total_score (descending)
+    fno_data.sort(
+        key=lambda x: (
+            x.get("conviction", 0),
+            x.get("total_score", 0) if x.get("total_score") is not None else 0
+        ),
+        reverse=True
+    )
+    
+    top_15 = fno_data[:15]
+
+    # Mandatory Exception: RELIANCE must ALWAYS be included in top 15 picks
+    rel_item = next((x for x in fno_data if x.get("symbol") == "RELIANCE"), None)
+    if rel_item and rel_item not in top_15:
+        log("  ★ Always-Include Exception: Adding RELIANCE to top 15 F&O picks.")
+        top_15 = top_15[:14] + [rel_item]
+
+    log(f"Selected {len(top_15)} F&O stocks after ranking.")
+    return top_15
 
 
 # ─── Step 4: Score watchlist stocks & fill entry metrics ─────────────────────
@@ -1164,15 +1312,9 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
                 top_pick["dist_ma200_pct"] = round(((res["ltp"] - res["ma200"]) / res["ma200"]) * 100, 1)
             st = check_top_pick_status(res)
             
-            # STABILITY CUSHION: If locked today, stay ACTIVE unless score falls below 45
-            if res.get("total_score", 0) >= 45.0 and res.get("strength", 0) >= 40.0:
-                top_pick["status"] = "ACTIVE"
-                top_pick["status_badge"] = "🟢 ACTIVE"
-                top_pick["status_reason"] = f"Locked Pick — Score {res['total_score']:.1f}/100, Strength {res.get('strength', 0):.1f}/100"
-            else:
-                top_pick["status"] = st["status"]
-                top_pick["status_badge"] = st["badge"]
-                top_pick["status_reason"] = st["reason"]
+            top_pick["status"] = st["status"]
+            top_pick["status_badge"] = st["badge"]
+            top_pick["status_reason"] = st["reason"]
 
             if top_pick.get("status") == "ACTIVE":
                 history[0] = top_pick
@@ -1268,10 +1410,10 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
     w52_l = top.get("week_low_52")
     rsi = top.get("rsi")
 
-    dist_ma50 = round(((ltp - ma50) / ma50) * 100, 1) if (ma50 and ltp) else None
-    dist_ma200 = round(((ltp - ma200) / ma200) * 100, 1) if (ma200 and ltp) else None
-    dist_52h = round(((ltp - w52_h) / w52_h) * 100, 1) if (w52_h and ltp) else None
-    dist_52l = round(((ltp - w52_l) / w52_l) * 100, 1) if (w52_l and ltp) else None
+    dist_ma50 = round(((ltp - ma50) / ma50) * 100, 1) if (ma50 and ma50 > 0 and ltp > 0) else None
+    dist_ma200 = round(((ltp - ma200) / ma200) * 100, 1) if (ma200 and ma200 > 0 and ltp > 0) else None
+    dist_52h = round(((ltp - w52_h) / w52_h) * 100, 1) if (w52_h and w52_h > 0 and ltp > 0) else None
+    dist_52l = round(((ltp - w52_l) / w52_l) * 100, 1) if (w52_l and w52_l > 0 and ltp > 0) else None
 
     if rsi is not None:
         if rsi < 30:
@@ -3253,6 +3395,20 @@ function switchTab(tab) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+if (!window.fnoFilters) {
+  window.fnoFilters = { conviction: 'all', signal: 'all', sort: 'conviction-desc' };
+}
+
+function applyFnoFilters() {
+  const cEl = document.getElementById('fFnoConviction');
+  const sEl = document.getElementById('fFnoSignal');
+  const sortEl = document.getElementById('fFnoSort');
+  if (cEl) window.fnoFilters.conviction = cEl.value;
+  if (sEl) window.fnoFilters.signal = sEl.value;
+  if (sortEl) window.fnoFilters.sort = sortEl.value;
+  renderFnoTab();
+}
+
 function renderFnoTab() {
   const container = document.getElementById('tab-fno');
   if (!container) return;
@@ -3269,6 +3425,11 @@ function renderFnoTab() {
     if (c >= 70) return '#4ade80';
     if (c >= 50) return '#fbbf24';
     return '#f87171';
+  }
+  function convRatingLabel(c) {
+    if (c >= 70) return '🔥 High';
+    if (c >= 50) return '⚡ Medium';
+    return '⚠️ Low';
   }
   function signalBadge(s) {
     if (s === 'CE') return '<span class="fno-signal-badge fno-signal-ce">▲ CE BUY</span>';
@@ -3298,7 +3459,29 @@ function renderFnoTab() {
 
   const strikeDir = s => s.signal === 'PE' ? 'PE' : 'CE';
 
-  const cards = FNO_DATA.map(s => {
+  const filters = window.fnoFilters || { conviction: 'all', signal: 'all', sort: 'conviction-desc' };
+
+  let filtered = FNO_DATA.filter(s => s.symbol === 'RELIANCE' || (s.ltp >= 1000 || s.lot_size < 500));
+  if (filters.conviction !== 'all') {
+    filtered = filtered.filter(s => {
+      if (filters.conviction === 'high') return s.conviction >= 70;
+      if (filters.conviction === 'medium') return s.conviction >= 50 && s.conviction < 70;
+      if (filters.conviction === 'low') return s.conviction < 50;
+      return true;
+    });
+  }
+  if (filters.signal !== 'all') {
+    filtered = filtered.filter(s => s.signal === filters.signal);
+  }
+
+  filtered.sort((a, b) => {
+    if (filters.sort === 'conviction-desc') return b.conviction - a.conviction;
+    if (filters.sort === 'conviction-asc') return a.conviction - b.conviction;
+    if (filters.sort === 'symbol-asc') return a.symbol.localeCompare(b.symbol);
+    return 0;
+  });
+
+  const cards = filtered.map(s => {
     const dir  = s.signal;
     const cc   = convColor(s.conviction);
     const s1   = dir === 'PE' ? s.pe_strike_1 : s.ce_strike_1;
@@ -3323,7 +3506,7 @@ function renderFnoTab() {
         ${signalBadge(dir)}
         <div class="fno-conviction">
           <div class="fno-conviction-label">
-            <span>Conviction</span>
+            <span>Conviction: <strong style="color:${cc}">${convRatingLabel(s.conviction)}</strong></span>
             <span style="color:${cc};font-weight:700">${s.conviction}%</span>
           </div>
           <div class="fno-conviction-bar">
@@ -3379,6 +3562,8 @@ function renderFnoTab() {
     </div>`;
   }).join('');
 
+  const gridContent = cards || `<div class="fno-no-data" style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--muted)">⚠ No stocks match the selected filters.</div>`;
+
   container.innerHTML = `
     <div class="fno-header">
       <div class="fno-header-left">
@@ -3394,7 +3579,35 @@ function renderFnoTab() {
       <span>⚠</span>
       <span>These are <strong>underlying price signals</strong>, not option premium calls. Verify live IV, premium &amp; bid-ask from your broker's option chain before entering. Physical settlement applies on expiry — square off before expiry Thursday.</span>
     </div>
-    <div class="fno-grid">${cards}</div>
+    <div class="filters">
+      <div class="filter-group">
+        <label>Conviction Rating</label>
+        <select id="fFnoConviction" onchange="applyFnoFilters()">
+          <option value="all" ${filters.conviction === 'all' ? 'selected' : ''}>All Convictions</option>
+          <option value="high" ${filters.conviction === 'high' ? 'selected' : ''}>High Conviction (≥70%)</option>
+          <option value="medium" ${filters.conviction === 'medium' ? 'selected' : ''}>Medium Conviction (50% - 69%)</option>
+          <option value="low" ${filters.conviction === 'low' ? 'selected' : ''}>Low Conviction (&lt;50%)</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Signal Type</label>
+        <select id="fFnoSignal" onchange="applyFnoFilters()">
+          <option value="all" ${filters.signal === 'all' ? 'selected' : ''}>All Signals</option>
+          <option value="CE" ${filters.signal === 'CE' ? 'selected' : ''}>CE Buy</option>
+          <option value="PE" ${filters.signal === 'PE' ? 'selected' : ''}>PE Buy</option>
+          <option value="NEUTRAL" ${filters.signal === 'NEUTRAL' ? 'selected' : ''}>Neutral</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Sort By</label>
+        <select id="fFnoSort" onchange="applyFnoFilters()">
+          <option value="conviction-desc" ${filters.sort === 'conviction-desc' ? 'selected' : ''}>Conviction (High to Low)</option>
+          <option value="conviction-asc" ${filters.sort === 'conviction-asc' ? 'selected' : ''}>Conviction (Low to High)</option>
+          <option value="symbol-asc" ${filters.sort === 'symbol-asc' ? 'selected' : ''}>Symbol (A to Z)</option>
+        </select>
+      </div>
+    </div>
+    <div class="fno-grid">${gridContent}</div>
   `;
 }
 

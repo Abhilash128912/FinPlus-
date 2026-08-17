@@ -1,59 +1,59 @@
 [
   {
-    "date": "2026-08-13",
-    "display_date": "13 August 2026",
+    "date": "2026-08-17",
+    "display_date": "17 August 2026",
     "is_pre_market": false,
     "symbol": "CHENNPETRO",
     "ticker": "CHENNPETRO.NS",
     "name": "Chennai Petroleum Corporation Limited",
     "sector": "Energy",
-    "total_score": 66.7,
+    "total_score": 66.0,
     "strength": 67.0,
     "value": 64.0,
-    "momentum": 70.0,
-    "ltp_at_pick": 1377.1,
-    "prev_close": 1379.5,
-    "overnight_gap_amt": -2.4,
-    "overnight_gap_pct": -0.17,
-    "gap_badge": "\ud83d\udd3b Gap Down -0.17% (-\u20b92.40)",
-    "gap_class": "badge-red",
-    "current_ltp": 1338.0,
-    "pe": 4.95,
-    "roe_pct": 36.35,
+    "momentum": 67.0,
+    "ltp_at_pick": 1332.1,
+    "prev_close": 1321.9000244140625,
+    "overnight_gap_amt": 10.2,
+    "overnight_gap_pct": 0.77,
+    "gap_badge": "\ud83d\udfe2 Gap Up +0.77% (+\u20b910.20)",
+    "gap_class": "badge-green",
+    "current_ltp": 1347.4,
+    "pe": 4.89,
+    "roe_pct": 36.55,
     "de_ratio": 0.18,
     "npm_pct": 5.48,
-    "rsi": 60.9,
-    "rsi_status": "Bullish Setup (45-65)",
-    "ma50": 1196.44,
-    "ma200": 1016.35,
-    "stop_loss": 1322.02,
+    "rsi": 67.2,
+    "rsi_status": "Neutral",
+    "ma50": 1199.84,
+    "ma200": 1018.89,
+    "stop_loss": 1278.82,
     "stop_loss_pct": -4.0,
-    "target1": 1487.26,
+    "target1": 1438.66,
     "target1_pct": 8.0,
-    "target2": 1542.34,
+    "target2": 1491.94,
     "target2_pct": 12.0,
     "risk_reward_ratio": "1 : 2.0 (T1) / 1 : 3.0 (T2)",
     "timeframe": "3 to 7 Trading Days",
-    "dist_ma50_pct": 11.8,
-    "dist_ma200_pct": 31.6,
+    "dist_ma50_pct": 12.3,
+    "dist_ma200_pct": 32.2,
     "week_high_52": 1449.0,
     "week_low_52": 620.85,
-    "dist_52w_high_pct": -7.7,
-    "dist_52w_low_pct": 115.5,
+    "dist_52w_high_pct": -7.0,
+    "dist_52w_low_pct": 117.0,
     "tech_rating": "\ud83d\udfe2 Strong Uptrend",
     "tech_class": "badge-green",
     "status": "ACTIVE",
     "status_badge": "\ud83d\udfe2 ACTIVE",
-    "status_reason": "Qualified \u2014 Score 66.7/100, Strength 67.0/100",
+    "status_reason": "Qualified \u2014 Score 66.0/100, Strength 67.0/100",
     "streak_days": 1,
-    "wk52_return_pct": 105.45,
-    "volume_spike": 0.42,
-    "today_volume": 1406324.0,
-    "avg_volume_10d": 3342303.8,
+    "wk52_return_pct": 112.74,
+    "volume_spike": 0.17,
+    "today_volume": 550420.0,
+    "avg_volume_10d": 3291104.0,
     "news": [],
     "highlights": [
-      "#1 Highest-Scoring Stock for 13 August 2026",
-      "Quality Score: 66.7/100 | Strength: 67.0/100",
+      "#1 Highest-Scoring Stock for 17 August 2026",
+      "Quality Score: 66.0/100 | Strength: 67.0/100",
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ]
   },
@@ -75,7 +75,7 @@
     "overnight_gap_pct": 0.32,
     "gap_badge": "\ud83d\udfe2 Gap Up +0.32% (+\u20b937.00)",
     "gap_class": "badge-green",
-    "current_ltp": 11499.0,
+    "current_ltp": 11419.0,
     "pe": 14.27,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
@@ -115,7 +115,7 @@
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
     "current_score": 56.1,
-    "ltp": 11499.0
+    "ltp": 11419.0
   },
   {
     "date": "2026-08-11",
@@ -135,7 +135,7 @@
     "overnight_gap_pct": 2.02,
     "gap_badge": "\ud83d\udfe2 Gap Up +2.02% (+\u20b9227.00)",
     "gap_class": "badge-green",
-    "current_ltp": 11499.0,
+    "current_ltp": 11419.0,
     "pe": 14.54,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
@@ -175,7 +175,7 @@
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
     "current_score": 56.1,
-    "ltp": 11499.0
+    "ltp": 11419.0
   },
   {
     "date": "2026-08-10",
@@ -195,7 +195,7 @@
     "overnight_gap_pct": 0.0,
     "gap_badge": "\u26aa Flat Open (0.00%)",
     "gap_class": "badge-gray",
-    "current_ltp": 11499.0,
+    "current_ltp": 11419.0,
     "pe": 14.43,
     "roe_pct": 11.6,
     "de_ratio": 0.0,
@@ -235,7 +235,7 @@
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
     "current_score": 56.1,
-    "ltp": 11499.0
+    "ltp": 11419.0
   },
   {
     "date": "2026-08-07",
@@ -255,7 +255,7 @@
     "overnight_gap_pct": -0.17,
     "gap_badge": "\ud83d\udd3b Gap Down -0.17% (-\u20b99.50)",
     "gap_class": "badge-red",
-    "current_ltp": 5862.5,
+    "current_ltp": 5806.5,
     "pe": 19.95,
     "roe_pct": 28.03,
     "de_ratio": 0.04,
@@ -282,7 +282,7 @@
     "tech_class": "badge-green",
     "status": "INVALIDATED",
     "status_badge": "\u26a0\ufe0f INVALIDATED",
-    "status_reason": "Score dropped to 51.0 (below 55 qualification threshold)",
+    "status_reason": "Score dropped to 51.2 (below 55 qualification threshold)",
     "streak_days": 1,
     "wk52_return_pct": 22.84,
     "volume_spike": 2.13,
@@ -294,8 +294,8 @@
       "Quality Score: 55.1/100 | Strength: 73.0/100",
       "Market Trend: \ud83d\udfe2 Strong Uptrend"
     ],
-    "current_score": 51.0,
-    "ltp": 5862.5
+    "current_score": 51.2,
+    "ltp": 5806.5
   },
   {
     "date": "2026-08-05",
@@ -315,7 +315,7 @@
     "overnight_gap_pct": -1.86,
     "gap_badge": "\ud83d\udd3b Gap Down -1.86% (-\u20b926.70)",
     "gap_class": "badge-red",
-    "current_ltp": 1275.9,
+    "current_ltp": 1279.0,
     "pe": 6.67,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -370,7 +370,7 @@
       "Market Trend: \ud83d\udd35 Accumulation Phase"
     ],
     "current_score": 58.2,
-    "ltp": 1275.9
+    "ltp": 1279.0
   },
   {
     "date": "2026-08-04",
@@ -390,7 +390,7 @@
     "overnight_gap_pct": 13.72,
     "gap_badge": "\ud83d\udfe2 Gap Up +13.72% (+\u20b9191.90)",
     "gap_class": "badge-green",
-    "current_ltp": 1275.9,
+    "current_ltp": 1279.0,
     "pe": 7.03,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -445,7 +445,7 @@
       "Market Trend: \ud83d\udd35 Accumulation Phase"
     ],
     "current_score": 58.2,
-    "ltp": 1275.9
+    "ltp": 1279.0
   },
   {
     "date": "2026-08-03",
@@ -465,7 +465,7 @@
     "overnight_gap_pct": 0.56,
     "gap_badge": "\ud83d\udfe2 Gap Up +0.56% (+\u20b97.60)",
     "gap_class": "badge-green",
-    "current_ltp": 1275.9,
+    "current_ltp": 1279.0,
     "pe": 6.82,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -521,7 +521,7 @@
     ],
     "session_close": 1403.4,
     "current_score": 58.2,
-    "ltp": 1275.9
+    "ltp": 1279.0
   },
   {
     "date": "2026-07-31",
@@ -536,7 +536,7 @@
     "value": 64.0,
     "momentum": 41.0,
     "ltp_at_pick": 1350.4,
-    "current_ltp": 1275.9,
+    "current_ltp": 1279.0,
     "pe": 6.56,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -591,7 +591,7 @@
       "Market Trend: \ud83d\udfe1 Consolidation Phase"
     ],
     "current_score": 58.2,
-    "ltp": 1275.9
+    "ltp": 1279.0
   },
   {
     "date": "2026-07-30",
@@ -606,7 +606,7 @@
     "momentum": 48.0,
     "ltp_at_pick": 1374.0,
     "session_close": 1371.3,
-    "current_ltp": 1275.9,
+    "current_ltp": 1279.0,
     "pe": 6.67,
     "roe_pct": 18.85,
     "de_ratio": 0.06,
@@ -653,6 +653,6 @@
       "Market Trend: \ud83d\udfe1 Consolidation Phase"
     ],
     "current_score": 58.2,
-    "ltp": 1275.9
+    "ltp": 1279.0
   }
 ]

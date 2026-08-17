@@ -1179,8 +1179,12 @@ def compute_fno_signal(scored: dict, fno_cfg: dict) -> dict:
     beta      = float(scored.get("beta") or 1.0)
     wk52_ret  = float(scored.get("wk52_return_pct") or 0)
 
-    strike_iv = fno_cfg.get("strike_interval", 50)
-    lot_size  = fno_cfg.get("lot_size", 50)
+    strike_iv = float(fno_cfg.get("strike_interval") or 50)
+    if strike_iv <= 0:
+        strike_iv = 50.0
+    lot_size  = int(fno_cfg.get("lot_size") or 50)
+    if lot_size <= 0:
+        lot_size = 50
 
     if ltp <= 0:
         return {
