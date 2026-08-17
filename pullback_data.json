@@ -24,8 +24,17 @@
     "category": "Core",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-07-13", "price": 160.53, "shares": 2 },
-      { "date": "2026-08-17", "price": 177.54, "shares": -2, "type": "SELL" }
+      {
+        "date": "2026-07-13",
+        "price": 160.53,
+        "shares": 2
+      },
+      {
+        "date": "2026-08-17",
+        "price": 177.54,
+        "shares": -2,
+        "type": "SELL"
+      }
     ],
     "local_peak": 179.33,
     "date_added": "2026-07-03",
@@ -36,8 +45,17 @@
     "category": "Core",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-07-29", "price": 403.52, "shares": 3 },
-      { "date": "2026-08-17", "price": 411.60, "shares": -3, "type": "SELL" }
+      {
+        "date": "2026-07-29",
+        "price": 403.52,
+        "shares": 3
+      },
+      {
+        "date": "2026-08-17",
+        "price": 411.6,
+        "shares": -3,
+        "type": "SELL"
+      }
     ],
     "local_peak": 412.95,
     "date_added": "2026-07-03",
@@ -48,20 +66,38 @@
     "category": "Growth",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-08-06", "price": 342.00, "shares": 1 },
-      { "date": "2026-08-17", "price": 324.40, "shares": -1, "type": "SELL" }
+      {
+        "date": "2026-08-06",
+        "price": 342,
+        "shares": 1
+      },
+      {
+        "date": "2026-08-17",
+        "price": 324.4,
+        "shares": -1,
+        "type": "SELL"
+      }
     ],
     "local_peak": 353.95,
     "date_added": "2026-08-06",
-    "initial_reference_price": 351.00
+    "initial_reference_price": 351
   },
   "EMMVEE.NS": {
     "name": "Emmvee Photovoltaic Power Limited",
     "category": "Growth",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-08-11", "price": 330.98, "shares": 2 },
-      { "date": "2026-08-12", "price": 314.10, "shares": -2, "type": "SELL" }
+      {
+        "date": "2026-08-11",
+        "price": 330.98,
+        "shares": 2
+      },
+      {
+        "date": "2026-08-12",
+        "price": 314.1,
+        "shares": -2,
+        "type": "SELL"
+      }
     ],
     "local_peak": 330.98,
     "date_added": "2026-08-11",
@@ -72,11 +108,24 @@
     "category": "Core",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-08-03", "price": 359.10, "shares": 1 },
-      { "date": "2026-08-11", "price": 353.10, "shares": 1 },
-      { "date": "2026-08-17", "price": 352.65, "shares": -2, "type": "SELL" }
+      {
+        "date": "2026-08-03",
+        "price": 359.1,
+        "shares": 1
+      },
+      {
+        "date": "2026-08-11",
+        "price": 353.1,
+        "shares": 1
+      },
+      {
+        "date": "2026-08-17",
+        "price": 352.65,
+        "shares": -2,
+        "type": "SELL"
+      }
     ],
-    "local_peak": 359.10,
+    "local_peak": 359.1,
     "date_added": "2026-07-03",
     "initial_reference_price": 355.75
   },
@@ -85,8 +134,17 @@
     "category": "Core",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-07-14", "price": 275.45, "shares": 1 },
-      { "date": "2026-08-17", "price": 277.50, "shares": -1, "type": "SELL" }
+      {
+        "date": "2026-07-14",
+        "price": 275.45,
+        "shares": 1
+      },
+      {
+        "date": "2026-08-17",
+        "price": 277.5,
+        "shares": -1,
+        "type": "SELL"
+      }
     ],
     "local_peak": 286.25,
     "date_added": "2026-07-03",
@@ -97,23 +155,45 @@
     "category": "Core",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-08-03", "price": 84.80, "shares": 1 },
-      { "date": "2026-08-11", "price": 85.29, "shares": 5 },
-      { "date": "2026-08-17", "price": 84.77, "shares": -6, "type": "SELL" }
+      {
+        "date": "2026-08-03",
+        "price": 84.8,
+        "shares": 1
+      },
+      {
+        "date": "2026-08-11",
+        "price": 85.29,
+        "shares": 5
+      },
+      {
+        "date": "2026-08-17",
+        "price": 84.77,
+        "shares": -6,
+        "type": "SELL"
+      }
     ],
-    "local_peak": 85.49,
+    "local_peak": 85.5,
     "date_added": "2026-07-03",
-    "initial_reference_price": 84.80
+    "initial_reference_price": 84.8
   },
   "PANAMAPET.NS": {
     "name": "Panama Petrochem Limited",
     "category": "Growth",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-08-11", "price": 544.95, "shares": 3 },
-      { "date": "2026-08-12", "price": 567.65, "shares": -3, "type": "SELL" }
+      {
+        "date": "2026-08-11",
+        "price": 544.95,
+        "shares": 3
+      },
+      {
+        "date": "2026-08-12",
+        "price": 567.65,
+        "shares": -3,
+        "type": "SELL"
+      }
     ],
-    "local_peak": 598.70,
+    "local_peak": 598.7,
     "date_added": "2026-08-11",
     "initial_reference_price": 506.15
   },
@@ -122,10 +202,19 @@
     "category": "Core",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-07-10", "price": 382.25, "shares": 1 },
-      { "date": "2026-08-17", "price": 381.30, "shares": -1, "type": "SELL" }
+      {
+        "date": "2026-07-10",
+        "price": 382.25,
+        "shares": 1
+      },
+      {
+        "date": "2026-08-17",
+        "price": 381.3,
+        "shares": -1,
+        "type": "SELL"
+      }
     ],
-    "local_peak": 390.40,
+    "local_peak": 390.4,
     "date_added": "2026-07-03",
     "initial_reference_price": 382.25
   },
@@ -134,9 +223,22 @@
     "category": "Growth",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-07-27", "price": 182.82, "shares": 1 },
-      { "date": "2026-08-14", "price": 181.45, "shares": 1 },
-      { "date": "2026-08-17", "price": 184.24, "shares": -2, "type": "SELL" }
+      {
+        "date": "2026-07-27",
+        "price": 182.82,
+        "shares": 1
+      },
+      {
+        "date": "2026-08-14",
+        "price": 181.45,
+        "shares": 1
+      },
+      {
+        "date": "2026-08-17",
+        "price": 184.24,
+        "shares": -2,
+        "type": "SELL"
+      }
     ],
     "local_peak": 191.53,
     "date_added": "2026-07-05",
@@ -147,40 +249,85 @@
     "category": "Park",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-08-12", "price": 277.40, "shares": 3 },
-      { "date": "2026-08-13", "price": 278.05, "shares": 3 },
-      { "date": "2026-08-14", "price": 277.75, "shares": -1, "type": "SELL" },
-      { "date": "2026-08-14", "price": 277.25, "shares": -5, "type": "SELL" }
+      {
+        "date": "2026-08-12",
+        "price": 277.4,
+        "shares": 3
+      },
+      {
+        "date": "2026-08-13",
+        "price": 278.05,
+        "shares": 3
+      },
+      {
+        "date": "2026-08-14",
+        "price": 277.75,
+        "shares": -1,
+        "type": "SELL"
+      },
+      {
+        "date": "2026-08-14",
+        "price": 277.25,
+        "shares": -5,
+        "type": "SELL"
+      }
     ],
-    "local_peak": 286.50,
+    "local_peak": 286.5,
     "date_added": "2026-08-11",
-    "initial_reference_price": 286.50
+    "initial_reference_price": 286.5
   },
   "GOLDBEES.NS": {
     "name": "Nippon India Gold BeES ETF",
     "category": "Park",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-08-12", "price": 126.25, "shares": 6 },
-      { "date": "2026-08-13", "price": 125.84, "shares": 4 },
-      { "date": "2026-08-14", "price": 123.90, "shares": -10, "type": "SELL" }
+      {
+        "date": "2026-08-12",
+        "price": 126.25,
+        "shares": 6
+      },
+      {
+        "date": "2026-08-13",
+        "price": 125.84,
+        "shares": 4
+      },
+      {
+        "date": "2026-08-14",
+        "price": 123.9,
+        "shares": -10,
+        "type": "SELL"
+      }
     ],
     "local_peak": 126.66,
     "date_added": "2026-08-11",
-    "initial_reference_price": 74.20
+    "initial_reference_price": 74.2
   },
   "MARKSANS.NS": {
     "name": "Marksans Pharma Limited",
     "category": "Park",
     "in_watchlist": false,
     "transactions": [
-      { "date": "2026-08-14", "price": 317.35, "shares": 5 },
-      { "date": "2026-08-17", "price": 328.93, "shares": -1, "type": "SELL" },
-      { "date": "2026-08-17", "price": 328.93, "shares": -4, "type": "SELL" }
+      {
+        "date": "2026-08-14",
+        "price": 317.35,
+        "shares": 5
+      },
+      {
+        "date": "2026-08-17",
+        "price": 328.93,
+        "shares": -1,
+        "type": "SELL"
+      },
+      {
+        "date": "2026-08-17",
+        "price": 328.93,
+        "shares": -4,
+        "type": "SELL"
+      }
     ],
     "local_peak": 335.45,
     "date_added": "2026-08-14",
-    "initial_reference_price": 316.80
+    "initial_reference_price": 316.8
   },
   "mtf_trading": [
     {
@@ -252,6 +399,18 @@
       "status": "Closed",
       "sell_date": "2026-08-06",
       "sell_price": 1348.67
+    },
+    {
+      "id": 5,
+      "ticker": "CYIENTDLM.NS",
+      "buy_date": "2026-08-17",
+      "buy_price": 727.3,
+      "shares": 15,
+      "broker_funding_pct": 72,
+      "margin_ratio": 0.28,
+      "margin_paid": 3054.66,
+      "broker_funding": 7854.84,
+      "status": "Active"
     }
   ]
 }

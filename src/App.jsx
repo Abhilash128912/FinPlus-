@@ -344,6 +344,7 @@ export default function App() {
   const [editSipTxs, setEditSipTxs] = useState([]);
 
   const [mtfTicker, setMtfTicker] = useState('');
+  const [mtfBroker, setMtfBroker] = useState('Zerodha'); // 'Zerodha' | 'INDmoney'
   const [mtfBuyPrice, setMtfBuyPrice] = useState('');
   const [mtfShares, setMtfShares] = useState('10');
   const [mtfBrokerFundedPct, setMtfBrokerFundedPct] = useState('68.0');
@@ -992,6 +993,7 @@ export default function App() {
     const cleanSym = t.ticker.replace('.NS', '').trim();
     const ltp = liveLtps[cleanSym] || liveLtps[t.ticker] || t.buy_price;
     const totalBuyVal = t.shares * t.buy_price;
+    const broker = t.broker === 'INDmoney' ? 'INDmoney' : 'Zerodha';
     
     // Broker Funding % (Default 68.0%, User margin = 32.0%)
     const brokerFundedPct = t.broker_funding_pct !== undefined ? Number(t.broker_funding_pct) : 68.0;
@@ -999,7 +1001,10 @@ export default function App() {
     const funding = t.broker_funding || (totalBuyVal * (brokerFundedPct / 100.0));
     const marginPaid = t.margin_paid || t.margin_used || (totalBuyVal - funding);
 
-    // Holding Period & 14% Interest Math
+    // Holding Period & Interest Math
+    // Zerodha MTF Interest: 0.04% per day (₹40 per lakh/day starting T+1) = 14.60% p.a.
+    // INDmoney MTF Interest: 14.0% p.a.
+    const annualInterestRate = broker === 'Zerodha' ? 0.146 : 0.140;
     const buyDtStr = t.buy_date || '2026-08-03';
     const buyDt = new Date(buyDtStr);
     buyDt.setHours(0,0,0,0);
@@ -1010,21 +1015,27 @@ export default function App() {
     const diffTime = Math.max(0, endDt.getTime() - buyDt.getTime());
     const holdingDays = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
 
-    // 14% p.a. Interest Accrual
-    const interestCost14 = funding * (0.14) * (holdingDays / 365.0);
-    const interestCost999 = funding * (0.0999) * (holdingDays / 365.0);
+    // Interest Accrual
+    const interestCost14 = funding * annualInterestRate * (holdingDays / 365.0);
 
-    // Dynamic INDmoney / Zerodha Percentage-Based Tariff Charges
+    // Broker-Specific Tariff & Charges
     const sellOrLtpPrice = t.status === 'Closed' ? (t.sell_price || ltp) : ltp;
     const currentVal = t.shares * sellOrLtpPrice;
 
-    // 1. Brokerage: 0.05% per order, max ₹20 per side
-    const buyBrokerage = Math.min(20, totalBuyVal * 0.0005);
-    const sellBrokerage = Math.min(20, currentVal * 0.0005);
+    // 1. Brokerage:
+    // Zerodha: 0.3% per order side (max ₹20/side)
+    // INDmoney: 0.05% per order side (max ₹20/side)
+    const brokeragePct = broker === 'Zerodha' ? 0.003 : 0.0005;
+    const buyBrokerage = Math.min(20, totalBuyVal * brokeragePct);
+    const sellBrokerage = Math.min(20, currentVal * brokeragePct);
     const brokerage = buyBrokerage + sellBrokerage;
 
-    // 2. Pledge / Unpledge Charges: ₹23.60 flat (₹20 + 18% GST)
-    const pledgeCharges = 23.60;
+    // 2. Pledge / Unpledge Charges:
+    // Zerodha MTF: ₹15 + 18% GST = ₹17.70 on Buy pledge (Active); ₹17.70 on Sell unpledge = ₹35.40 total (Closed)
+    // INDmoney MTF: ₹20 + 18% GST = ₹23.60 flat per pledge
+    const pledgeCharges = broker === 'Zerodha'
+      ? (t.status === 'Closed' ? 35.40 : 17.70)
+      : 23.60;
 
     // 3. Percentage-Based Govt & Statutory Charges
     const sttCost = (totalBuyVal * 0.001) + (currentVal * 0.001); // 0.1% buy + 0.1% sell
@@ -1073,20 +1084,19 @@ export default function App() {
       closedMtfNetPnl += netPnl;
     }
 
-    // 5% Fixed Trailing Stop Loss Calculation (Includes all charges plus accumulated 14% interest)
-    // IMPORTANT: SL Level is 100% ratcheted to PEAK. It NEVER decreases when LTP drops!
+    // 5% Fixed Trailing Stop Loss Calculation (Includes all charges plus accumulated interest)
     const storedPeak = t.peak_price || t.buy_price;
     const peakLtp = Math.max(t.buy_price, storedPeak, ltp);
     
     // Gross 5% Trailing SL level (5% drop from peak stock price)
     const grossSlPrice = peakLtp * 0.95;
     
-    // Evaluate tariff charges at the fixed SL price level so SL level does NOT drift with falling LTP
+    // Evaluate tariff charges at the fixed SL price level
     const slVal = t.shares * grossSlPrice;
-    const slBuyBrokerage = Math.min(20, totalBuyVal * 0.0005);
-    const slSellBrokerage = Math.min(20, slVal * 0.0005);
+    const slBuyBrokerage = Math.min(20, totalBuyVal * brokeragePct);
+    const slSellBrokerage = Math.min(20, slVal * brokeragePct);
     const slBrokerage = slBuyBrokerage + slSellBrokerage;
-    const slPledge = 23.60;
+    const slPledge = pledgeCharges;
     const slStt = (totalBuyVal * 0.001) + (slVal * 0.001);
     const slStamp = totalBuyVal * 0.00015;
     const slExchange = (totalBuyVal + slVal) * 0.0000297;
@@ -1517,6 +1527,7 @@ export default function App() {
     const newMtfTrade = {
       id: newId,
       ticker: formattedTicker,
+      broker: mtfBroker || 'Zerodha',
       buy_date: mtfBuyDate || new Date().toISOString().split('T')[0],
       buy_price: pr,
       shares: sh,
@@ -1535,9 +1546,33 @@ export default function App() {
       }
     };
     savePullbackState(updated);
-    showToast(`Logged MTF Position for ${formattedTicker} (${sh} shares @ ₹${pr}, ${brokerFundedPct}% Broker Funded)!`);
+    showToast(`Logged ${mtfBroker || 'Zerodha'} MTF Position for ${formattedTicker} (${sh} shares @ ₹${pr})!`);
     setMtfTicker('');
     setMtfBuyPrice('');
+  };
+
+  const handleToggleMtfBroker = (tradeId) => {
+    const currentMtfList = Array.isArray(pullbackData.mtf_trading)
+      ? pullbackData.mtf_trading
+      : (pullbackData.mtf_trading ? (pullbackData.mtf_trading.trades || []) : []);
+
+    const updatedMtfList = currentMtfList.map(t => {
+      if (t.id === tradeId) {
+        const nextBroker = t.broker === 'INDmoney' ? 'Zerodha' : 'INDmoney';
+        showToast(`Switched broker for ${t.ticker.replace('.NS', '')} to ${nextBroker}!`);
+        return { ...t, broker: nextBroker };
+      }
+      return t;
+    });
+
+    const updated = {
+      ...pullbackData,
+      mtf_trading: Array.isArray(pullbackData.mtf_trading) ? updatedMtfList : {
+        ...pullbackData.mtf_trading,
+        trades: updatedMtfList
+      }
+    };
+    savePullbackState(updated);
   };
 
   const handleCloseMtfTx = (tradeId) => {
@@ -6076,7 +6111,7 @@ export default function App() {
                     ₹{dispCharges.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                   <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>
-                    Interest (14%): ₹{dispInterest.toFixed(2)} + Tariff Fees
+                    Interest + Tariff Fees
                   </div>
                 </div>
 
@@ -6095,13 +6130,34 @@ export default function App() {
             );
           })()}
 
-          {/* Form: Record New MTF Trade (With Customizable Broker Funding %) */}
+          {/* Form: Record New MTF Trade (With Customizable Broker Funding & Broker Platform) */}
           <div className="glass-panel" style={{ padding: '24px' }}>
             <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff', marginBottom: '16px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '10px' }}>
               ⚙️ Record New MTF Leveraged Trade
             </h3>
 
             <form onSubmit={handleRecordMtfTx} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: '#fbbf24', fontWeight: 800, display: 'block', marginBottom: '4px' }}>BROKER PLATFORM</label>
+                <select
+                  value={mtfBroker}
+                  onChange={e => setMtfBroker(e.target.value)}
+                  className="input-field"
+                  style={{
+                    borderColor: mtfBroker === 'Zerodha' ? 'rgba(56, 189, 248, 0.6)' : 'rgba(52, 211, 153, 0.6)',
+                    background: 'rgba(15, 23, 42, 0.9)',
+                    color: mtfBroker === 'Zerodha' ? '#38bdf8' : '#34d399',
+                    fontWeight: 800
+                  }}
+                >
+                  <option value="Zerodha">🪁 Zerodha (Kite) — 0.04%/day (14.6% p.a.)</option>
+                  <option value="INDmoney">🟢 INDmoney — 14.0% p.a.</option>
+                </select>
+                <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', display: 'block', fontWeight: 600 }}>
+                  {mtfBroker === 'Zerodha' ? '14.6% p.a. int + 0.3% brok + ₹17.70/side pledge' : '14.0% p.a. int + 0.05% brok + ₹23.60 pledge'}
+                </span>
+              </div>
+
               <div style={{ position: 'relative' }}>
                 <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>TICKER SYMBOL</label>
                 <input
@@ -6208,18 +6264,23 @@ export default function App() {
             </form>
           </div>
 
-          {/* MTF Positions Breakdown (INDmoney Style Cards) */}
+          {/* MTF Positions Breakdown */}
           <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>⚡ Margin Trading Facility (MTF) Positions</h2>
                 <p style={{ fontSize: '12px', color: '#a5b4fc', margin: 0 }}>
-                  Live tracking of margin borrowing, customizable broker funding %, daily 14% p.a. interest accrual, and percentage-based INDmoney/Zerodha tariff fees.
+                  Live tracking of margin borrowing, broker platform selection (Zerodha Kite vs INDmoney), daily interest accrual, and exact tariff fees.
                 </p>
               </div>
-              <span style={{ fontSize: '12px', color: '#fbbf24', fontWeight: 800, background: 'rgba(245, 158, 11, 0.15)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-                Interest Rate: 14.0% p.a. (Emotional Edge Buffer)
-              </span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800, background: 'rgba(56, 189, 248, 0.15)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                  Kite: 14.6% p.a. (0.04%/day)
+                </span>
+                <span style={{ fontSize: '11px', color: '#34d399', fontWeight: 800, background: 'rgba(52, 211, 153, 0.15)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(52, 211, 153, 0.3)' }}>
+                  INDmoney: 14.0% p.a.
+                </span>
+              </div>
             </div>
 
             {(() => {
@@ -6239,252 +6300,272 @@ export default function App() {
 
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
-                  {displayList.map(t => (
-                    <div key={t.id} style={{ 
-                      background: 'rgba(15, 23, 42, 0.75)', 
-                      borderRadius: '14px', 
-                      border: '1px solid rgba(99, 102, 241, 0.25)', 
-                      padding: '20px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '16px'
-                    }}>
-                      {/* Header: Ticker, Status, Live Value */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                          <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {t.cleanSym}
+                  {displayList.map(t => {
+                    const isZerodha = (t.broker || 'Zerodha') === 'Zerodha';
+                    const intRateLabel = isZerodha ? '14.60% p.a. (0.04%/day)' : '14.00% p.a.';
+                    const brokRateLabel = isZerodha ? '0.3% capped @ ₹20/side' : '0.05% capped @ ₹20/side';
+                    const pledgeLabel = isZerodha 
+                      ? (t.status === 'Closed' ? '₹17.70 pledge + ₹17.70 unpledge' : '₹17.70 pledge (Active)') 
+                      : '₹23.60 flat per ISIN';
+
+                    return (
+                      <div key={t.id} style={{ 
+                        background: 'rgba(15, 23, 42, 0.75)', 
+                        borderRadius: '14px', 
+                        border: '1px solid rgba(99, 102, 241, 0.25)', 
+                        padding: '20px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '16px'
+                      }}>
+                        {/* Header: Ticker, Status, Broker Badge, Live Value */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div>
+                            <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              {t.cleanSym}
+                              <span style={{ 
+                                fontSize: '11px', 
+                                padding: '2px 8px', 
+                                borderRadius: '4px',
+                                background: t.status === 'Active' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(255,255,255,0.08)',
+                                color: t.status === 'Active' ? '#34d399' : '#a5b4fc',
+                                border: `1px solid ${t.status === 'Active' ? 'rgba(52, 211, 153, 0.4)' : 'rgba(255,255,255,0.1)'}`
+                              }}>
+                                ● {t.status}
+                              </span>
+                              <span 
+                                onClick={() => handleToggleMtfBroker(t.id)}
+                                title="Click to switch broker between Zerodha (Kite) and INDmoney"
+                                style={{ 
+                                  fontSize: '11px', 
+                                  padding: '2px 8px', 
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  background: isZerodha ? 'rgba(56, 189, 248, 0.15)' : 'rgba(52, 211, 153, 0.15)',
+                                  color: isZerodha ? '#38bdf8' : '#34d399',
+                                  border: `1px solid ${isZerodha ? 'rgba(56, 189, 248, 0.4)' : 'rgba(52, 211, 153, 0.4)'}`,
+                                  fontWeight: 800
+                                }}
+                              >
+                                {isZerodha ? '🪁 Zerodha (Kite)' : '🟢 INDmoney'} ⚡
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                              Buy Date: <strong style={{ color: '#cbd5e1' }}>{t.buyDtStr}</strong> ({t.holdingDays} day{t.holdingDays === 1 ? '' : 's'} held)
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700 }}>CURRENT VALUE</div>
+                            <div style={{ fontSize: '18px', fontWeight: 900, color: '#38bdf8' }}>
+                              ₹{t.currentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                              LTP: ₹{t.ltp.toFixed(2)} ({t.shares} Qty)
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Section A: Invested Value & Customizable Funding Split */}
+                        <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 800, color: '#a5b4fc' }}>
+                              <span style={{ background: 'rgba(99, 102, 241, 0.2)', padding: '2px 6px', borderRadius: '4px', color: '#818cf8', marginRight: '6px' }}>A</span>
+                              Invested Value
+                            </div>
+                            <div style={{ fontSize: '14px', fontWeight: 900, color: '#ffffff' }}>
+                              ₹{t.totalBuyVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                          
+                          <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '10px' }}>
+                            {t.shares} Qty at ₹{t.buy_price.toFixed(2)} Avg.
+                          </div>
+
+                          {/* Funding Progress Bar */}
+                          <div style={{ height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden', display: 'flex', marginBottom: '10px' }}>
+                            <div style={{ width: `${t.brokerFundedPct}%`, background: '#818cf8' }} title={`Broker Funded (${t.brokerFundedPct}%)`}></div>
+                            <div style={{ width: `${t.userFundedPct}%`, background: '#f59e0b' }} title={`You Funded (${t.userFundedPct}%)`}></div>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                            <div style={{ color: '#818cf8', fontWeight: 700 }}>
+                              — Broker Funded ({t.brokerFundedPct.toFixed(1)}%): <strong style={{ color: '#ffffff' }}>₹{t.funding.toFixed(2)}</strong>
+                            </div>
+                            <div style={{ color: '#fbbf24', fontWeight: 700 }}>
+                              — You Funded ({t.userFundedPct.toFixed(1)}%): <strong style={{ color: '#ffffff' }}>₹{t.marginPaid.toFixed(2)}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Section B: Gross P&L vs Real Net P&L (Clear Visibility) */}
+                        <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 800, color: '#a5b4fc' }}>
+                              <span style={{ background: 'rgba(52, 211, 153, 0.2)', padding: '2px 6px', borderRadius: '4px', color: '#34d399', marginRight: '6px' }}>B</span>
+                              Gross P&L (Before Fees)
+                            </div>
+                            <div style={{ fontSize: '14px', fontWeight: 800, color: t.grossPnl >= 0 ? '#34d399' : '#fb7185' }}>
+                              {t.grossPnl >= 0 ? '+' : ''}₹{t.grossPnl.toFixed(2)}
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 900, color: '#ffffff' }}>
+                              🎯 Real Net P&L (After MTF Charges):
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: '15px', fontWeight: 900, color: t.netPnl >= 0 ? '#34d399' : '#fb7185' }}>
+                                {t.netPnl >= 0 ? '+' : ''}₹{t.netPnl.toFixed(2)}
+                              </div>
+                              <div style={{ fontSize: '10px', color: t.netReturnPct >= 0 ? '#34d399' : '#fb7185', fontWeight: 800 }}>
+                                {t.netReturnPct >= 0 ? '+' : ''}{t.netReturnPct.toFixed(2)}% return on margin paid
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Section C: 🛡️ 5% Fixed Trailing Stop Loss Tracker */}
+                        <div style={{ 
+                          background: 'rgba(15, 23, 42, 0.9)', 
+                          padding: '14px', 
+                          borderRadius: '10px', 
+                          border: `1px solid ${t.tslStatusBorder}` 
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 800, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <ShieldAlert size={14} style={{ color: t.tslStatusColor }} />
+                              5% Trailing Stop Loss Level
+                            </div>
                             <span style={{ 
                               fontSize: '11px', 
                               padding: '2px 8px', 
-                              borderRadius: '4px',
-                              background: t.status === 'Active' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(255,255,255,0.08)',
-                              color: t.status === 'Active' ? '#34d399' : '#a5b4fc',
-                              border: `1px solid ${t.status === 'Active' ? 'rgba(52, 211, 153, 0.4)' : 'rgba(255,255,255,0.1)'}`
+                              borderRadius: '4px', 
+                              fontWeight: 800, 
+                              background: t.tslStatusBg, 
+                              color: t.tslStatusColor, 
+                              border: `1px solid ${t.tslStatusBorder}` 
                             }}>
-                              ● {t.status}
+                              {t.tslStatusTag}
                             </span>
                           </div>
-                          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                            Buy Date: <strong style={{ color: '#cbd5e1' }}>{t.buyDtStr}</strong> ({t.holdingDays} day{t.holdingDays === 1 ? '' : 's'} held)
-                          </div>
-                        </div>
 
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700 }}>CURRENT VALUE</div>
-                          <div style={{ fontSize: '18px', fontWeight: 900, color: '#38bdf8' }}>
-                            ₹{t.currentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </div>
-                          <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                            LTP: ₹{t.ltp.toFixed(2)} ({t.shares} Qty)
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section A: Invested Value & Customizable Funding Split */}
-                      <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <div style={{ fontSize: '12px', fontWeight: 800, color: '#a5b4fc' }}>
-                            <span style={{ background: 'rgba(99, 102, 241, 0.2)', padding: '2px 6px', borderRadius: '4px', color: '#818cf8', marginRight: '6px' }}>A</span>
-                            Invested Value
-                          </div>
-                          <div style={{ fontSize: '14px', fontWeight: 900, color: '#ffffff' }}>
-                            ₹{t.totalBuyVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </div>
-                        </div>
-                        
-                        <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '10px' }}>
-                          {t.shares} Qty at ₹{t.buy_price.toFixed(2)} Avg.
-                        </div>
-
-                        {/* Funding Progress Bar */}
-                        <div style={{ height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden', display: 'flex', marginBottom: '10px' }}>
-                          <div style={{ width: `${t.brokerFundedPct}%`, background: '#818cf8' }} title={`Broker Funded (${t.brokerFundedPct}%)`}></div>
-                          <div style={{ width: `${t.userFundedPct}%`, background: '#f59e0b' }} title={`You Funded (${t.userFundedPct}%)`}></div>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                          <div style={{ color: '#818cf8', fontWeight: 700 }}>
-                            — Broker Funded ({t.brokerFundedPct.toFixed(1)}%): <strong style={{ color: '#ffffff' }}>₹{t.funding.toFixed(2)}</strong>
-                          </div>
-                          <div style={{ color: '#fbbf24', fontWeight: 700 }}>
-                            — You Funded ({t.userFundedPct.toFixed(1)}%): <strong style={{ color: '#ffffff' }}>₹{t.marginPaid.toFixed(2)}</strong>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section B: Gross P&L vs Real Net P&L (Clear Visibility) */}
-                      <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                          <div style={{ fontSize: '12px', fontWeight: 800, color: '#a5b4fc' }}>
-                            <span style={{ background: 'rgba(52, 211, 153, 0.2)', padding: '2px 6px', borderRadius: '4px', color: '#34d399', marginRight: '6px' }}>B</span>
-                            Gross P&L (Before Fees)
-                          </div>
-                          <div style={{ fontSize: '14px', fontWeight: 800, color: t.grossPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                            {t.grossPnl >= 0 ? '+' : ''}₹{t.grossPnl.toFixed(2)}
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
-                          <div style={{ fontSize: '12px', fontWeight: 900, color: '#ffffff' }}>
-                            🎯 Real Net P&L (After MTF Charges):
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '15px', fontWeight: 900, color: t.netPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                              {t.netPnl >= 0 ? '+' : ''}₹{t.netPnl.toFixed(2)}
-                            </div>
-                            <div style={{ fontSize: '10px', color: t.netReturnPct >= 0 ? '#34d399' : '#fb7185', fontWeight: 800 }}>
-                              {t.netReturnPct >= 0 ? '+' : ''}{t.netReturnPct.toFixed(2)}% return on margin paid
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section C: 🛡️ 5% Fixed Trailing Stop Loss Tracker (Adjusts for Charges + Interest Daily) */}
-                      <div style={{ 
-                        background: 'rgba(15, 23, 42, 0.9)', 
-                        padding: '14px', 
-                        borderRadius: '10px', 
-                        border: `1px solid ${t.tslStatusBorder}` 
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 800, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <ShieldAlert size={14} style={{ color: t.tslStatusColor }} />
-                            5% Trailing Stop Loss Level
-                          </div>
-                          <span style={{ 
-                            fontSize: '11px', 
-                            padding: '2px 8px', 
-                            borderRadius: '4px', 
-                            fontWeight: 800, 
-                            background: t.tslStatusBg, 
-                            color: t.tslStatusColor, 
-                            border: `1px solid ${t.tslStatusBorder}` 
-                          }}>
-                            {t.tslStatusTag}
-                          </span>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
-                          <div>
-                            <span style={{ color: '#94a3b8', fontSize: '10px', display: 'block' }}>PEAK STOCK PRICE (HIGH)</span>
-                            <strong style={{ color: '#ffffff', fontSize: '13px' }}>₹{t.peakLtp.toFixed(2)}</strong>
-                          </div>
-                          <div>
-                            <span style={{ color: '#94a3b8', fontSize: '10px', display: 'block' }}>GROSS 5% SL (STOCK DROP)</span>
-                            <strong style={{ color: '#cbd5e1', fontSize: '13px' }}>₹{t.grossSlPrice.toFixed(2)}</strong>
-                          </div>
-                        </div>
-
-                        <div style={{ padding: '8px 10px', background: 'rgba(30, 41, 59, 0.6)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
                             <div>
-                              <span style={{ fontSize: '11px', fontWeight: 900, color: '#fbbf24' }}>
-                                🎯 DYNAMIC NET 5% SL PRICE LEVEL:
-                              </span>
-                              <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                                Gross SL (₹{t.grossSlPrice.toFixed(2)}) + Carrying Fees (₹{t.carryingCostPerShare.toFixed(2)}/sh)
-                              </div>
+                              <span style={{ color: '#94a3b8', fontSize: '10px', display: 'block' }}>PEAK STOCK PRICE (HIGH)</span>
+                              <strong style={{ color: '#ffffff', fontSize: '13px' }}>₹{t.peakLtp.toFixed(2)}</strong>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontSize: '16px', fontWeight: 900, color: t.ltp <= t.netSlPrice ? '#f87171' : '#38bdf8' }}>
-                                ₹{t.netSlPrice.toFixed(2)}
+                            <div>
+                              <span style={{ color: '#94a3b8', fontSize: '10px', display: 'block' }}>GROSS 5% SL (STOCK DROP)</span>
+                              <strong style={{ color: '#cbd5e1', fontSize: '13px' }}>₹{t.grossSlPrice.toFixed(2)}</strong>
+                            </div>
+                          </div>
+
+                          <div style={{ padding: '8px 10px', background: 'rgba(30, 41, 59, 0.6)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <span style={{ fontSize: '11px', fontWeight: 900, color: '#fbbf24' }}>
+                                  🎯 DYNAMIC NET 5% SL PRICE LEVEL:
+                                </span>
+                                <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                                  Gross SL (₹{t.grossSlPrice.toFixed(2)}) + Carrying Fees (₹{t.carryingCostPerShare.toFixed(2)}/sh)
+                                </div>
                               </div>
-                              <div style={{ fontSize: '10px', color: t.tslBuffer >= 0 ? '#34d399' : '#f87171', fontWeight: 800 }}>
-                                {t.tslBuffer >= 0 ? '+' : ''}₹{t.tslBuffer.toFixed(2)} ({t.tslBufferPct >= 0 ? '+' : ''}{t.tslBufferPct.toFixed(2)}% buffer)
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '16px', fontWeight: 900, color: t.ltp <= t.netSlPrice ? '#f87171' : '#38bdf8' }}>
+                                  ₹{t.netSlPrice.toFixed(2)}
+                                </div>
+                                <div style={{ fontSize: '10px', color: t.tslBuffer >= 0 ? '#34d399' : '#f87171', fontWeight: 800 }}>
+                                  {t.tslBuffer >= 0 ? '+' : ''}₹{t.tslBuffer.toFixed(2)} ({t.tslBufferPct >= 0 ? '+' : ''}{t.tslBufferPct.toFixed(2)}% buffer)
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Charges Paid / Accrued Box (INDmoney / Zerodha Tariff Rates) */}
-                      <div style={{ background: 'rgba(15, 23, 42, 0.9)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
-                        <div style={{ fontSize: '11px', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', marginBottom: '10px', letterSpacing: '0.5px' }}>
-                          💳 Charges Paid / Accrued during holding period
+                        {/* Charges Paid / Accrued Box (Broker Tariff Rates) */}
+                        <div style={{ background: 'rgba(15, 23, 42, 0.9)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                          <div style={{ fontSize: '11px', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', marginBottom: '10px', letterSpacing: '0.5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>💳 Charges Accrued ({isZerodha ? 'Zerodha Kite' : 'INDmoney'})</span>
+                            <span style={{ fontSize: '10px', color: isZerodha ? '#38bdf8' : '#34d399', textTransform: 'none' }}>
+                              {intRateLabel}
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <span style={{ color: '#e2e8f0', fontWeight: 700 }}>Interest ({intRateLabel})</span>
+                                <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                                  {t.buyDtStr} - {t.endDtStr} ({t.holdingDays} day{t.holdingDays === 1 ? '' : 's'} @ ₹{((t.funding * (isZerodha ? 0.146 : 0.140)) / 365).toFixed(2)}/day)
+                                </div>
+                              </div>
+                              <span style={{ fontWeight: 800, color: '#f472b6' }}>₹{t.interestCost14.toFixed(2)}</span>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <span style={{ color: '#cbd5e1' }}>Brokerage Charges ({brokRateLabel})</span>
+                                <div style={{ fontSize: '10px', color: '#94a3b8' }}>Buy: ₹{t.buyBrokerage.toFixed(2)} | Sell: ₹{t.sellBrokerage.toFixed(2)}</div>
+                              </div>
+                              <span style={{ fontWeight: 700, color: '#cbd5e1' }}>₹{t.brokerage.toFixed(2)}</span>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <span style={{ color: '#cbd5e1' }}>Pledge / Unpledge Charges</span>
+                                <div style={{ fontSize: '10px', color: '#94a3b8' }}>{pledgeLabel}</div>
+                              </div>
+                              <span style={{ fontWeight: 700, color: '#cbd5e1' }}>₹{t.pledgeCharges.toFixed(2)}</span>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <span style={{ color: '#cbd5e1' }}>Govt. & Statutory Charges</span>
+                                <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                                  STT: ₹{t.sttCost.toFixed(2)} | Stamp: ₹{t.stampDutyCost.toFixed(2)} | Txn/GST: ₹{(t.exchangeTxnFee + t.gstCost).toFixed(2)}
+                                </div>
+                              </div>
+                              <span style={{ fontWeight: 700, color: '#cbd5e1' }}>₹{t.govtOtherCharges.toFixed(2)}</span>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', fontWeight: 900 }}>
+                              <span style={{ color: '#ffffff' }}>TOTAL MTF CARRYING CHARGES</span>
+                              <span style={{ color: '#fb7185', fontSize: '13px' }}>₹{t.totalCarryingCost.toFixed(2)}</span>
+                            </div>
+                          </div>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                              <span style={{ color: '#e2e8f0', fontWeight: 700 }}>Interest for holding period (@ 14% p.a.)</span>
-                              <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                                {t.buyDtStr} - {t.endDtStr} ({t.holdingDays} day{t.holdingDays === 1 ? '' : 's'} @ ₹{((t.funding * 0.14) / 365).toFixed(2)}/day)
-                              </div>
-                            </div>
-                            <span style={{ fontWeight: 800, color: '#f472b6' }}>₹{t.interestCost14.toFixed(2)}</span>
-                          </div>
-
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                              <span style={{ color: '#cbd5e1' }}>Brokerage Charges</span>
-                              <div style={{ fontSize: '10px', color: '#94a3b8' }}>0.05% per order (max ₹20/side)</div>
-                            </div>
-                            <span style={{ fontWeight: 700, color: '#cbd5e1' }}>₹{t.brokerage.toFixed(2)}</span>
-                          </div>
-
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                              <span style={{ color: '#cbd5e1' }}>Pledge / Unpledge Charges</span>
-                              <div style={{ fontSize: '10px', color: '#94a3b8' }}>₹20 + 18% GST per ISIN</div>
-                            </div>
-                            <span style={{ fontWeight: 700, color: '#cbd5e1' }}>₹{t.pledgeCharges.toFixed(2)}</span>
-                          </div>
-
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                              <span style={{ color: '#cbd5e1' }}>Govt. & Statutory Charges</span>
-                              <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                                STT: ₹{t.sttCost.toFixed(2)} | Stamp: ₹{t.stampDutyCost.toFixed(2)} | Txn/GST: ₹{(t.exchangeTxnFee + t.gstCost).toFixed(2)}
-                              </div>
-                            </div>
-                            <span style={{ fontWeight: 700, color: '#cbd5e1' }}>₹{t.govtOtherCharges.toFixed(2)}</span>
-                          </div>
-
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', fontWeight: 900 }}>
-                            <span style={{ color: '#ffffff' }}>TOTAL MTF CARRYING CHARGES</span>
-                            <span style={{ color: '#fb7185', fontSize: '13px' }}>₹{t.totalCarryingCost.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Card Actions */}
-                      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
-                        {t.status === 'Active' && (
+                        {/* Action Bar */}
+                        <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                          {t.status === 'Active' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleCloseMtfTx(t.id)}
+                              style={{ flex: 1, background: '#f59e0b', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', fontSize: '13px' }}
+                            >
+                              🏁 Close MTF Position (Record Exit)
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleReopenMtfTx(t.id)}
+                              style={{ flex: 1, background: 'rgba(52, 211, 153, 0.2)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.4)', padding: '10px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', fontSize: '13px' }}
+                            >
+                              🔄 Re-open MTF Position
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleCloseMtfTx(t.id)}
-                            style={{
-                              background: 'rgba(52, 211, 153, 0.15)',
-                              color: '#34d399',
-                              border: '1px solid rgba(52, 211, 153, 0.3)',
-                              padding: '8px 14px',
-                              borderRadius: '6px',
-                              fontWeight: 800,
-                              fontSize: '12px',
-                              cursor: 'pointer'
-                            }}
+                            type="button"
+                            onClick={() => handleDeleteMtfTx(t.id)}
+                            style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '10px 14px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', fontSize: '13px' }}
                           >
-                            ✓ Log Exit & Close Trade
+                            🗑️ Delete
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleDeleteMtfTx(t.id)}
-                          style={{
-                            background: 'rgba(239, 68, 68, 0.15)',
-                            color: '#f87171',
-                            border: '1px solid rgba(239, 68, 68, 0.3)',
-                            padding: '8px 14px',
-                            borderRadius: '6px',
-                            fontWeight: 800,
-                            fontSize: '12px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          🗑️ Delete Position
-                        </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })()}
