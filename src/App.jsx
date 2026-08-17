@@ -3182,41 +3182,27 @@ export default function App() {
           </div>
         </div>
 
-        {/* Active Segment Monthly SL Breach Alert Banner */}
+        {/* Active Strategy 15% Monthly SL Alert Banner */}
         {(() => {
-          const matchedSeg = segmentAllocList.find(s => {
-            const lower = s.name.toLowerCase();
-            const type = instrumentType.toLowerCase();
-            if (lower.includes('intraday')) return type.includes('intraday');
-            if (lower.includes('natural') || lower.includes('natgas')) return type.includes('natural') || type.includes('natgas');
-            if (lower.includes('nifty')) return type.includes('nifty');
-            if (lower.includes('crude')) return type.includes('crude');
-            return false;
-          });
-
-          if (matchedSeg) {
-            const capitalPool = (closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum);
-            const allocPct = Number(matchedSeg.allocState) || 0;
-            const mslPct = Number(matchedSeg.mslState) || 0;
-            const maxLoss = capitalPool * (allocPct / 100) * (mslPct / 100);
-            const lossUsed = matchedSeg.currentPnl < 0 ? Math.abs(matchedSeg.currentPnl) : 0;
-            if (maxLoss > 0 && lossUsed >= maxLoss) {
+          if (strategyCategory === 'Day Trading (Nifty Pair)') {
+            const lossUsed = dayPairMonthlyNetPnl < 0 ? Math.abs(dayPairMonthlyNetPnl) : 0;
+            if (isDayPairCircuitBreakerTriggered || (dayPairMaxLossRupees > 0 && lossUsed >= dayPairMaxLossRupees)) {
               return (
                 <div style={{
-                  background: 'rgba(30, 27, 45, 0.85)',
-                  border: '1px solid rgba(251, 146, 60, 0.35)',
+                  background: 'rgba(30, 27, 45, 0.95)',
+                  border: '1px solid rgba(239, 68, 68, 0.5)',
                   padding: '12px 16px',
                   borderRadius: '8px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '10px',
-                  color: '#fb923c',
+                  color: '#f87171',
                   fontSize: '12px',
                   fontWeight: 700
                 }}>
-                  <AlertCircle size={18} style={{ color: '#fb923c', flexShrink: 0 }} />
+                  <AlertCircle size={18} style={{ color: '#f87171', flexShrink: 0 }} />
                   <span>
-                    ⚠️ <strong>MONTHLY RISK SL BREACHED FOR {matchedSeg.name.toUpperCase()}:</strong> Current month loss (₹{lossUsed.toFixed(0)}) exceeds your monthly risk limit (₹{maxLoss.toFixed(0)}). Exercise caution.
+                    🛑 <strong>DAY TRADING CIRCUIT BREAKER BREACHED (-15% MONTHLY LOSS):</strong> Current fresh loss (₹{lossUsed.toFixed(2)}) reached your 15% monthly stop-loss limit (₹{dayPairMaxLossRupees.toFixed(2)} based on ₹{dayPairBaseAllocRupees.toFixed(0)} Day Trading capital). Day Trading is paused and capital transferred to Swing Trading.
                   </span>
                 </div>
               );
