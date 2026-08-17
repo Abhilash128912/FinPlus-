@@ -140,23 +140,11 @@ export default function App() {
     const todayStr = '2026-08-17';
     const defaultData = {
       "capital_settings": { "start_date": todayStr, "initial_capital": 3477.97, "daily_rate": 200.0 },
-      "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 177.85, "date_added": todayStr, "initial_reference_price": 160.53 },
-      "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 410.45, "date_added": todayStr, "initial_reference_price": 403.52 },
-      "BORANA.NS": { "name": "BORANA", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 353.95, "date_added": todayStr, "initial_reference_price": 342.00 },
-      "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "in_watchlist": true, "transactions": [], "local_peak": 330.98, "date_added": todayStr, "initial_reference_price": 314.10 },
-      "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 359.10, "date_added": todayStr, "initial_reference_price": 355.75 },
-      "ITC.NS": { "name": "ITC Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 286.25, "date_added": todayStr, "initial_reference_price": 275.45 },
-      "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 85.49, "date_added": todayStr, "initial_reference_price": 84.80 },
-      "PANAMAPET.NS": { "name": "Panama Petrochem Limited", "category": "Growth", "in_watchlist": true, "transactions": [], "local_peak": 598.70, "date_added": todayStr, "initial_reference_price": 506.15 },
-      "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 382.25, "date_added": todayStr, "initial_reference_price": 382.25 },
-      "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "in_watchlist": true, "transactions": [], "local_peak": 191.53, "date_added": todayStr, "initial_reference_price": 182.82 },
       "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "in_watchlist": true, "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 19.33 },
-      "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "in_watchlist": true, "transactions": [], "local_peak": 286.50, "date_added": todayStr, "initial_reference_price": 277.40 },
-      "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "in_watchlist": true, "transactions": [], "local_peak": 126.39, "date_added": todayStr, "initial_reference_price": 126.25 },
       "mtf_trading": []
     };
 
-    const freshVersionTag = '20260817_fresh_start_v4';
+    const freshVersionTag = '20260817_fresh_start_v5';
     const currentTag = localStorage.getItem('finplus_pullback_version_tag');
 
     if (currentTag !== freshVersionTag) {
@@ -168,18 +156,7 @@ export default function App() {
     const saved = localStorage.getItem('finplus_pullback_portfolio');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        const merged = { ...defaultData, ...parsed };
-        Object.keys(merged).forEach(k => {
-          if (k !== 'capital_settings' && k !== 'mtf_trading' && k !== 'UYFINCORP.NS' && merged[k]) {
-            const txs = merged[k].transactions || [];
-            merged[k].transactions = txs.filter(t => t.date >= todayStr);
-            if (merged[k].transactions.length === 0) {
-              merged[k].date_added = todayStr;
-            }
-          }
-        });
-        return merged;
+        return JSON.parse(saved);
       } catch (e) {}
     }
     return defaultData;
@@ -1284,30 +1261,18 @@ export default function App() {
   };
 
   const handleFreshStartPortfolio = () => {
-    if (!window.confirm("Start fresh from today (2026-08-17)?\n\nThis will reset the SIP start date to today, refresh all past trade history for all stocks EXCEPT UYFINCORP (where your 12 shares holding will be kept), and keep all stocks in your active watchlist for new 5% pullback signals.")) return;
+    if (!window.confirm("Clear pre-populated stock watchlist and start fresh from today?\n\nThis will remove pre-populated stocks (like ITC, BEL, etc.) from your SIP watchlist, keeping ONLY UYFINCORP (your 12 shares holding), and reset the SIP start date to today.")) return;
 
     const todayStr = '2026-08-17';
     const freshData = {
       "capital_settings": { "start_date": todayStr, "initial_capital": 3477.97, "daily_rate": 200.0 },
-      "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 177.85, "date_added": todayStr, "initial_reference_price": 160.53 },
-      "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 410.45, "date_added": todayStr, "initial_reference_price": 403.52 },
-      "BORANA.NS": { "name": "BORANA", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 353.95, "date_added": todayStr, "initial_reference_price": 342.00 },
-      "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "in_watchlist": true, "transactions": [], "local_peak": 330.98, "date_added": todayStr, "initial_reference_price": 314.10 },
-      "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 359.10, "date_added": todayStr, "initial_reference_price": 355.75 },
-      "ITC.NS": { "name": "ITC Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 286.25, "date_added": todayStr, "initial_reference_price": 275.45 },
-      "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 85.49, "date_added": todayStr, "initial_reference_price": 84.80 },
-      "PANAMAPET.NS": { "name": "Panama Petrochem Limited", "category": "Growth", "in_watchlist": true, "transactions": [], "local_peak": 598.70, "date_added": todayStr, "initial_reference_price": 506.15 },
-      "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 382.25, "date_added": todayStr, "initial_reference_price": 382.25 },
-      "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "in_watchlist": true, "transactions": [], "local_peak": 191.53, "date_added": todayStr, "initial_reference_price": 182.82 },
       "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "in_watchlist": true, "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 19.33 },
-      "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "in_watchlist": true, "transactions": [], "local_peak": 286.50, "date_added": todayStr, "initial_reference_price": 277.40 },
-      "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "in_watchlist": true, "transactions": [], "local_peak": 126.39, "date_added": todayStr, "initial_reference_price": 126.25 },
       "mtf_trading": pullbackData.mtf_trading || []
     };
 
-    localStorage.setItem('finplus_pullback_version_tag', '20260817_fresh_start_v3');
+    localStorage.setItem('finplus_pullback_version_tag', '20260817_fresh_start_v5');
     savePullbackState(freshData);
-    showToast("Portfolio refreshed! All past day calculations reset to today (UYFINCORP position preserved).");
+    showToast("SIP Watchlist cleared! Only UYFINCORP preserved. Search and add stocks after your research.");
   };
 
   const handleDeleteStockFromWatchlist = (ticker) => {
