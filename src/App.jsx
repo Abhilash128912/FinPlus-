@@ -137,39 +137,49 @@ export default function App() {
 
   // Dynamic 5% Pullback SIP & MTF State
   const [pullbackData, setPullbackData] = useState(() => {
+    const todayStr = '2026-08-17';
     const defaultData = {
-      "capital_settings": { "start_date": "2026-07-03", "initial_capital": 3477.97, "daily_rate": 200.0 },
-      "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "transactions": [{ "date": "2026-07-13", "price": 160.53, "shares": 2 }], "local_peak": 177.85, "date_added": "2026-07-03", "initial_reference_price": 160.53 },
-      "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "transactions": [{ "date": "2026-07-29", "price": 403.52, "shares": 3 }], "local_peak": 410.45, "date_added": "2026-07-03", "initial_reference_price": 403.52 },
-      "BORANA.NS": { "name": "BORANA", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 342.0, "shares": 1 }], "local_peak": 353.95, "date_added": "2026-08-06", "initial_reference_price": 342.00 },
-      "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "in_watchlist": false, "transactions": [{ "date": "2026-08-03", "price": 330.98, "shares": 2 }, { "date": "2026-08-12", "price": 314.10, "shares": -2, "type": "SELL" }], "local_peak": 330.98, "date_added": "2026-07-03", "initial_reference_price": 314.10 },
-      "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 359.10, "shares": 1 }, { "date": "2026-08-11", "price": 353.10, "shares": 1 }], "local_peak": 359.10, "date_added": "2026-07-03", "initial_reference_price": 355.75 },
-      "ITC.NS": { "name": "ITC Limited", "category": "Core", "transactions": [{ "date": "2026-07-14", "price": 275.45, "shares": 1 }], "local_peak": 286.25, "date_added": "2026-07-03", "initial_reference_price": 275.45 },
-      "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }, { "date": "2026-08-11", "price": 85.29, "shares": 5 }], "local_peak": 85.49, "date_added": "2026-07-03", "initial_reference_price": 84.80 },
-      "PANAMAPET.NS": { "name": "Panama Petrochem Limited", "category": "Growth", "in_watchlist": false, "transactions": [{ "date": "2026-08-11", "price": 544.95, "shares": 3 }, { "date": "2026-08-12", "price": 567.65, "shares": -3, "type": "SELL" }], "local_peak": 598.70, "date_added": "2026-08-11", "initial_reference_price": 506.15 },
-      "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }], "local_peak": 382.25, "date_added": "2026-07-03", "initial_reference_price": 382.25 },
-      "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }], "local_peak": 191.53, "date_added": "2026-07-05", "initial_reference_price": 182.82 },
-      "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 19.33 },
-      "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 277.40, "shares": 3 }, { "date": "2026-08-13", "price": 278.05, "shares": 3 }], "local_peak": 286.50, "date_added": "2026-08-11", "initial_reference_price": 277.40 },
-      "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 126.25, "shares": 6 }, { "date": "2026-08-13", "price": 125.84, "shares": 4 }], "local_peak": 126.39, "date_added": "2026-08-11", "initial_reference_price": 126.25 },
+      "capital_settings": { "start_date": todayStr, "initial_capital": 3477.97, "daily_rate": 200.0 },
+      "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 177.85, "date_added": todayStr, "initial_reference_price": 160.53 },
+      "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 410.45, "date_added": todayStr, "initial_reference_price": 403.52 },
+      "BORANA.NS": { "name": "BORANA", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 353.95, "date_added": todayStr, "initial_reference_price": 342.00 },
+      "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "in_watchlist": true, "transactions": [], "local_peak": 330.98, "date_added": todayStr, "initial_reference_price": 314.10 },
+      "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 359.10, "date_added": todayStr, "initial_reference_price": 355.75 },
+      "ITC.NS": { "name": "ITC Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 286.25, "date_added": todayStr, "initial_reference_price": 275.45 },
+      "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 85.49, "date_added": todayStr, "initial_reference_price": 84.80 },
+      "PANAMAPET.NS": { "name": "Panama Petrochem Limited", "category": "Growth", "in_watchlist": true, "transactions": [], "local_peak": 598.70, "date_added": todayStr, "initial_reference_price": 506.15 },
+      "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 382.25, "date_added": todayStr, "initial_reference_price": 382.25 },
+      "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "in_watchlist": true, "transactions": [], "local_peak": 191.53, "date_added": todayStr, "initial_reference_price": 182.82 },
+      "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "in_watchlist": true, "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 19.33 },
+      "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "in_watchlist": true, "transactions": [], "local_peak": 286.50, "date_added": todayStr, "initial_reference_price": 277.40 },
+      "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "in_watchlist": true, "transactions": [], "local_peak": 126.39, "date_added": todayStr, "initial_reference_price": 126.25 },
       "mtf_trading": []
     };
+
+    const freshVersionTag = '20260817_fresh_start_v4';
+    const currentTag = localStorage.getItem('finplus_pullback_version_tag');
+
+    if (currentTag !== freshVersionTag) {
+      localStorage.setItem('finplus_pullback_version_tag', freshVersionTag);
+      localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(defaultData));
+      return defaultData;
+    }
 
     const saved = localStorage.getItem('finplus_pullback_portfolio');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        
-        // Sanitize MTF trades to strip out stale hardcoded unlogged demo trades (LODHA, INDUSTOWER, NAUKRI)
-        if (parsed.mtf_trading) {
-          const mtfList = Array.isArray(parsed.mtf_trading)
-            ? parsed.mtf_trading
-            : (parsed.mtf_trading.trades || []);
-          const cleanMtf = mtfList.filter(t => t.ticker !== 'LODHA.NS' && t.ticker !== 'INDUSTOWER.NS' && t.ticker !== 'NAUKRI.NS');
-          parsed.mtf_trading = cleanMtf;
-        }
-
-        return { ...defaultData, ...parsed };
+        const merged = { ...defaultData, ...parsed };
+        Object.keys(merged).forEach(k => {
+          if (k !== 'capital_settings' && k !== 'mtf_trading' && k !== 'UYFINCORP.NS' && merged[k]) {
+            const txs = merged[k].transactions || [];
+            merged[k].transactions = txs.filter(t => t.date >= todayStr);
+            if (merged[k].transactions.length === 0) {
+              merged[k].date_added = todayStr;
+            }
+          }
+        });
+        return merged;
       } catch (e) {}
     }
     return defaultData;
@@ -412,6 +422,16 @@ export default function App() {
                 try { localP = JSON.parse(currentSaved); } catch(e) {}
               }
               mergedPullback = { ...localP, ...sData.pullback };
+              const todayStr = '2026-08-17';
+              Object.keys(mergedPullback).forEach(k => {
+                if (k !== 'capital_settings' && k !== 'mtf_trading' && k !== 'UYFINCORP.NS' && mergedPullback[k]) {
+                  const txs = mergedPullback[k].transactions || [];
+                  mergedPullback[k].transactions = txs.filter(t => t.date >= todayStr);
+                  if (mergedPullback[k].transactions.length === 0) {
+                    mergedPullback[k].date_added = todayStr;
+                  }
+                }
+              });
               
               // Merge MTF array safely
               const backendMtf = Array.isArray(sData.pullback.mtf_trading) ? sData.pullback.mtf_trading : (sData.pullback.mtf_trading?.trades || []);
@@ -919,6 +939,23 @@ export default function App() {
   const availableSipCash = Math.max(0, totalSipAccumulatedCap - totalSipDeployedCost + (totalSipRealizedProfit * 0.5));
   const mutualFundSweepProfit = totalSipRealizedProfit * 0.5;
 
+  // Keep sipSellSelectedTicker synced with active open holdings if empty or invalidated
+  React.useEffect(() => {
+    const openHoldings = pullbackStockSummary.filter(s => s.netShares > 0);
+    if (openHoldings.length > 0) {
+      const exists = openHoldings.some(s => s.ticker === sipSellSelectedTicker);
+      if (!exists) {
+        const defaultHolding = openHoldings[0];
+        setSipSellSelectedTicker(defaultHolding.ticker);
+        if (!sipSellFormPrice && defaultHolding.ltp > 0) {
+          setSipSellFormPrice(String(defaultHolding.ltp));
+        }
+      }
+    } else if (sipSellSelectedTicker) {
+      setSipSellSelectedTicker('');
+    }
+  }, [pullbackStockSummary, sipSellSelectedTicker, sipSellFormPrice]);
+
   const mtfTradeList = Array.isArray(pullbackData.mtf_trading)
     ? pullbackData.mtf_trading
     : (pullbackData.mtf_trading ? (pullbackData.mtf_trading.trades || []) : []);
@@ -1246,6 +1283,33 @@ export default function App() {
     setShowNiftyDropdown(false);
   };
 
+  const handleFreshStartPortfolio = () => {
+    if (!window.confirm("Start fresh from today (2026-08-17)?\n\nThis will reset the SIP start date to today, refresh all past trade history for all stocks EXCEPT UYFINCORP (where your 12 shares holding will be kept), and keep all stocks in your active watchlist for new 5% pullback signals.")) return;
+
+    const todayStr = '2026-08-17';
+    const freshData = {
+      "capital_settings": { "start_date": todayStr, "initial_capital": 3477.97, "daily_rate": 200.0 },
+      "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 177.85, "date_added": todayStr, "initial_reference_price": 160.53 },
+      "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 410.45, "date_added": todayStr, "initial_reference_price": 403.52 },
+      "BORANA.NS": { "name": "BORANA", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 353.95, "date_added": todayStr, "initial_reference_price": 342.00 },
+      "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "in_watchlist": true, "transactions": [], "local_peak": 330.98, "date_added": todayStr, "initial_reference_price": 314.10 },
+      "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 359.10, "date_added": todayStr, "initial_reference_price": 355.75 },
+      "ITC.NS": { "name": "ITC Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 286.25, "date_added": todayStr, "initial_reference_price": 275.45 },
+      "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 85.49, "date_added": todayStr, "initial_reference_price": 84.80 },
+      "PANAMAPET.NS": { "name": "Panama Petrochem Limited", "category": "Growth", "in_watchlist": true, "transactions": [], "local_peak": 598.70, "date_added": todayStr, "initial_reference_price": 506.15 },
+      "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "in_watchlist": true, "transactions": [], "local_peak": 382.25, "date_added": todayStr, "initial_reference_price": 382.25 },
+      "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "in_watchlist": true, "transactions": [], "local_peak": 191.53, "date_added": todayStr, "initial_reference_price": 182.82 },
+      "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "in_watchlist": true, "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 19.33 },
+      "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "in_watchlist": true, "transactions": [], "local_peak": 286.50, "date_added": todayStr, "initial_reference_price": 277.40 },
+      "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "in_watchlist": true, "transactions": [], "local_peak": 126.39, "date_added": todayStr, "initial_reference_price": 126.25 },
+      "mtf_trading": pullbackData.mtf_trading || []
+    };
+
+    localStorage.setItem('finplus_pullback_version_tag', '20260817_fresh_start_v3');
+    savePullbackState(freshData);
+    showToast("Portfolio refreshed! All past day calculations reset to today (UYFINCORP position preserved).");
+  };
+
   const handleDeleteStockFromWatchlist = (ticker) => {
     const cleanSym = ticker.replace('.NS', '').trim();
     const stockObj = pullbackData[ticker] || {};
@@ -1271,17 +1335,20 @@ export default function App() {
 
   const handleRecordSipSellSubmit = (e) => {
     e.preventDefault();
-    if (!sipSellSelectedTicker) {
+    const openHoldings = pullbackStockSummary.filter(s => s.netShares > 0);
+    const targetTicker = sipSellSelectedTicker || (openHoldings.length > 0 ? openHoldings[0].ticker : '');
+
+    if (!targetTicker) {
       showToast("Please select a stock holding to sell.", "error");
       return;
     }
-    const holding = pullbackStockSummary.find(s => s.ticker === sipSellSelectedTicker);
+    const holding = pullbackStockSummary.find(s => s.ticker === targetTicker);
     if (!holding || holding.netShares <= 0) {
       showToast("No shares available to sell for this stock.", "error");
       return;
     }
     const sharesNum = parseInt(sipSellFormShares) || 0;
-    const priceNum = parseFloat(sipSellFormPrice) || 0;
+    const priceNum = parseFloat(sipSellFormPrice) || (holding.ltp > 0 ? holding.ltp : 0);
     const txDateStr = sipSellFormDate || new Date().toISOString().split('T')[0];
 
     if (sharesNum <= 0) {
@@ -1297,13 +1364,13 @@ export default function App() {
       return;
     }
 
-    const stockObj = pullbackData[sipSellSelectedTicker] || { name: sipSellSelectedTicker, category: 'Core', transactions: [] };
+    const stockObj = pullbackData[targetTicker] || { name: targetTicker, category: 'Core', transactions: [] };
     const existingTxs = stockObj.transactions || [];
     const newTx = { date: txDateStr, price: priceNum, shares: -Math.abs(sharesNum), type: 'SELL' };
 
     const updated = {
       ...pullbackData,
-      [sipSellSelectedTicker]: {
+      [targetTicker]: {
         ...stockObj,
         transactions: [...existingTxs, newTx]
       }
@@ -2115,13 +2182,16 @@ export default function App() {
     if (chg.net_pnl > 0) winningTradesCount++;
   });
 
-  // Cumulative totals (Journal closed trades + MTF closed trades)
+  // Cumulative totals (Journal closed trades + MTF closed trades + SIP closed trades)
   const closedMtfTrades = mtfSummaryList.filter(t => t.status === 'Closed');
-  const cumulativeRealizedNetPnl = totalRealizedNetPnl + closedMtfNetPnl;
-  const cumulativeGrossPnl = totalGrossPnl + closedMtfGrossPnl;
-  const cumulativeCharges = totalZerodhaCharges + closedMtfCarryingCharges;
-  const cumulativeClosedTradesCount = closedTrades.length + closedMtfTrades.length;
-  const cumulativeWinningTradesCount = winningTradesCount + closedMtfTrades.filter(t => t.netPnl > 0).length;
+  const closedSipTradesCount = sipSoldTradesList.length;
+  const closedSipWinningTradesCount = sipSoldTradesList.filter(t => (t.netPnl || 0) > 0).length;
+
+  const cumulativeRealizedNetPnl = totalRealizedNetPnl + closedMtfNetPnl + totalSipRealizedNetProfit;
+  const cumulativeGrossPnl = totalGrossPnl + closedMtfGrossPnl + totalSipRealizedProfit;
+  const cumulativeCharges = totalZerodhaCharges + closedMtfCarryingCharges + totalSipSellTaxes;
+  const cumulativeClosedTradesCount = closedTrades.length + closedMtfTrades.length + closedSipTradesCount;
+  const cumulativeWinningTradesCount = winningTradesCount + closedMtfTrades.filter(t => t.netPnl > 0).length + closedSipWinningTradesCount;
   const cumulativeWinRatePct = cumulativeClosedTradesCount > 0 
     ? ((cumulativeWinningTradesCount / cumulativeClosedTradesCount) * 100).toFixed(1)
     : '0';
@@ -2792,7 +2862,7 @@ export default function App() {
               {(() => {
                 const hasActiveMtf = mtfTradeList.some(t => t.status === 'Active');
                 const mtfOverviewNetPnl = hasActiveMtf ? (closedMtfNetPnl + activeMtfNetPnl) : closedMtfNetPnl;
-                const overallPortfolioTotalNetPnl = totalRealizedNetPnl + mtfOverviewNetPnl + totalSipUnrealizedPnl;
+                const overallPortfolioTotalNetPnl = totalRealizedNetPnl + mtfOverviewNetPnl + totalSipCombinedNetPnl;
                 const netAfterRiskBudget = overallPortfolioTotalNetPnl + (currentDayCount * dailyRiskLimit);
 
                 return (
@@ -2803,7 +2873,7 @@ export default function App() {
                         <div style={{ fontSize: '18px', fontWeight: 900, color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
                           {totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}
                         </div>
-                        <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Journal Closed</div>
+                        <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Journal Closed ({closedTrades.length} Trades)</div>
                       </div>
 
                       <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: hasActiveMtf ? '1px solid rgba(52, 211, 153, 0.35)' : '1px solid rgba(255,255,255,0.06)' }}>
@@ -2822,16 +2892,18 @@ export default function App() {
                         <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>
                           {hasActiveMtf 
                             ? `Closed (${closedMtfNetPnl >= 0 ? '+' : ''}₹${closedMtfNetPnl.toFixed(2)}) + Active (${activeMtfNetPnl >= 0 ? '+' : ''}₹${activeMtfNetPnl.toFixed(2)})` 
-                            : 'Closed MTF Leverage'}
+                            : `Closed MTF (${closedMtfTrades.length} Trades)`}
                         </div>
                       </div>
 
                       <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ fontSize: '11px', color: '#00b4d8', fontWeight: 700 }}>SIP RUNNING P&L</div>
-                        <div style={{ fontSize: '18px', fontWeight: 900, color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
-                          {totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toFixed(2)}
+                        <div style={{ fontSize: '11px', color: '#00b4d8', fontWeight: 700 }}>NET SIP P&L</div>
+                        <div style={{ fontSize: '18px', fontWeight: 900, color: totalSipCombinedNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
+                          {totalSipCombinedNetPnl >= 0 ? '+' : ''}₹{totalSipCombinedNetPnl.toFixed(2)}
                         </div>
-                        <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>SIP Holdings Unrealized</div>
+                        <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>
+                          Realized ({totalSipRealizedProfit >= 0 ? '+' : ''}₹{totalSipRealizedProfit.toFixed(1)}) + Running ({totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toFixed(1)}) − Tax
+                        </div>
                       </div>
 
                       <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
@@ -2879,7 +2951,7 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                 <span style={{ height: '8px', width: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }}></span>
                 <span style={{ fontSize: '14px', fontWeight: 800, color: '#34d399', textTransform: 'uppercase' }}>
-                  ● Cumulative Realized P&L Summary (Journal + MTF)
+                  ● Cumulative Realized P&L Summary (Journal + MTF + SIP)
                 </span>
               </div>
 
@@ -2918,7 +2990,7 @@ export default function App() {
                   const mtfPnlVal = hasActiveMtf ? (closedMtfNetPnl + activeMtfNetPnl) : closedMtfNetPnl;
                   return (
                     <>
-                      Journal P&L: <strong style={{ color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>{totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}</strong> | MTF P&L: <strong style={{ color: mtfPnlVal >= 0 ? '#34d399' : '#f87171' }}>{mtfPnlVal >= 0 ? '+' : ''}₹{mtfPnlVal.toFixed(2)}</strong> {hasActiveMtf ? '(Live Active)' : ''}
+                      Journal: <strong style={{ color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>{totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}</strong> | MTF: <strong style={{ color: mtfPnlVal >= 0 ? '#34d399' : '#f87171' }}>{mtfPnlVal >= 0 ? '+' : ''}₹{mtfPnlVal.toFixed(2)}</strong> | SIP Sold: <strong style={{ color: totalSipRealizedNetProfit >= 0 ? '#34d399' : '#f87171' }}>{totalSipRealizedNetProfit >= 0 ? '+' : ''}₹{totalSipRealizedNetProfit.toFixed(2)}</strong>
                     </>
                   );
                 })()}
@@ -4836,6 +4908,29 @@ export default function App() {
                 >
                   <DollarSign size={14} />
                   💰 Sell / Record Sold Stock
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleFreshStartPortfolio}
+                  title="Reset SIP portfolio starting fresh from today (keeps UYFINCORP holding)"
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    color: '#f87171',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <RefreshCw size={14} />
+                  🔄 Start Fresh (SIP)
                 </button>
               </div>
             </div>

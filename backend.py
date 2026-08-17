@@ -32,19 +32,19 @@ file_lock = threading.Lock()
 
 # Price cache: { symbol: { "ltp": float, "change": float, "prev_close": float, "high": float, "low": float, "timestamp": float } }
 PRICE_CACHE: Dict[str, Dict[str, Any]] = {
-    "ASHOKLEY.NS": { "ltp": 175.05, "change": -0.05, "change_percent": -0.03, "prev_close": 175.10, "high": 176.25, "low": 174.50, "timestamp": time.time() },
-    "BEL.NS": { "ltp": 400.60, "change": -5.25, "change_percent": -1.29, "prev_close": 405.85, "high": 406.00, "low": 399.50, "timestamp": time.time() },
-    "BORANA.NS": { "ltp": 325.00, "change": -5.45, "change_percent": -1.65, "prev_close": 330.45, "high": 335.00, "low": 322.00, "timestamp": time.time() },
+    "ASHOKLEY.NS": { "ltp": 177.54, "change": 0.48, "change_percent": 0.27, "prev_close": 177.06, "high": 178.00, "low": 176.50, "timestamp": time.time() },
+    "BEL.NS": { "ltp": 410.40, "change": 1.16, "change_percent": 0.28, "prev_close": 409.24, "high": 412.00, "low": 408.00, "timestamp": time.time() },
+    "BORANA.NS": { "ltp": 324.40, "change": -1.83, "change_percent": -0.56, "prev_close": 326.23, "high": 330.00, "low": 322.00, "timestamp": time.time() },
     "EMMVEE.NS": { "ltp": 314.15, "change": -4.55, "change_percent": -1.43, "prev_close": 318.70, "high": 322.00, "low": 312.00, "timestamp": time.time() },
-    "FEDERALBNK.NS": { "ltp": 355.75, "change": 0.75, "change_percent": 0.21, "prev_close": 355.00, "high": 358.00, "low": 354.00, "timestamp": time.time() },
-    "ITC.NS": { "ltp": 276.90, "change": -2.50, "change_percent": -0.89, "prev_close": 279.40, "high": 280.00, "low": 276.00, "timestamp": time.time() },
-    "NMDC.NS": { "ltp": 85.08, "change": -0.37, "change_percent": -0.43, "prev_close": 85.45, "high": 85.80, "low": 84.80, "timestamp": time.time() },
+    "FEDERALBNK.NS": { "ltp": 352.65, "change": -1.18, "change_percent": -0.33, "prev_close": 353.83, "high": 356.00, "low": 351.00, "timestamp": time.time() },
+    "ITC.NS": { "ltp": 277.50, "change": 0.29, "change_percent": 0.10, "prev_close": 277.21, "high": 279.00, "low": 276.00, "timestamp": time.time() },
+    "NMDC.NS": { "ltp": 84.77, "change": -1.32, "change_percent": -1.53, "prev_close": 86.09, "high": 86.50, "low": 84.50, "timestamp": time.time() },
     "PANAMAPET.NS": { "ltp": 507.25, "change": -38.25, "change_percent": -7.01, "prev_close": 545.50, "high": 548.00, "low": 505.00, "timestamp": time.time() },
-    "TATAPOWER.NS": { "ltp": 374.85, "change": -5.15, "change_percent": -1.36, "prev_close": 380.00, "high": 382.00, "low": 373.00, "timestamp": time.time() },
-    "TATASTEEL.NS": { "ltp": 183.95, "change": -4.45, "change_percent": -2.36, "prev_close": 188.40, "high": 189.00, "low": 183.00, "timestamp": time.time() },
-    "UYFINCORP.NS": { "ltp": 18.98, "change": -0.99, "change_percent": -4.96, "prev_close": 19.97, "high": 19.50, "low": 18.98, "timestamp": time.time() },
-    "GOLDBEES.NS": { "ltp": 74.20, "change": 0.15, "change_percent": 0.20, "prev_close": 74.05, "high": 74.50, "low": 74.00, "timestamp": time.time() },
-    "NIFTYBEES.NS": { "ltp": 286.50, "change": -1.20, "change_percent": -0.42, "prev_close": 287.70, "high": 288.00, "low": 286.10, "timestamp": time.time() }
+    "TATAPOWER.NS": { "ltp": 381.30, "change": 0.49, "change_percent": 0.13, "prev_close": 380.81, "high": 384.00, "low": 379.00, "timestamp": time.time() },
+    "TATASTEEL.NS": { "ltp": 184.24, "change": -1.05, "change_percent": -0.57, "prev_close": 185.29, "high": 186.00, "low": 183.00, "timestamp": time.time() },
+    "UYFINCORP.NS": { "ltp": 20.17, "change": 5.00, "change_percent": 5.00, "prev_close": 19.17, "high": 20.17, "low": 19.10, "timestamp": time.time() },
+    "GOLDBEES.NS": { "ltp": 124.98, "change": -0.68, "change_percent": -0.54, "prev_close": 125.66, "high": 126.50, "low": 124.80, "timestamp": time.time() },
+    "NIFTYBEES.NS": { "ltp": 278.40, "change": 0.13, "change_percent": 0.05, "prev_close": 278.27, "high": 279.50, "low": 277.50, "timestamp": time.time() }
 }
 CACHE_TTL_SECONDS = 20.0
 
@@ -66,19 +66,19 @@ SYMBOL_MAP = {
 
 DEFAULT_PULLBACK_DATA = {
     "capital_settings": { "start_date": "2026-07-03", "initial_capital": 3477.97, "daily_rate": 200.0 },
-    "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "transactions": [{ "date": "2026-07-13", "price": 160.53, "shares": 2 }], "local_peak": 176.25, "date_added": "2026-07-03", "initial_reference_price": 175.05 },
-    "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "transactions": [{ "date": "2026-07-29", "price": 403.52, "shares": 3 }], "local_peak": 405.85, "date_added": "2026-07-03", "initial_reference_price": 400.60 },
-    "BORANA.NS": { "name": "BORANA", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 342.0, "shares": 1 }], "local_peak": 353.95, "date_added": "2026-08-06", "initial_reference_price": 325.00 },
+    "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "transactions": [{ "date": "2026-07-13", "price": 160.53, "shares": 2 }], "local_peak": 177.85, "date_added": "2026-07-03", "initial_reference_price": 160.53 },
+    "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "transactions": [{ "date": "2026-07-29", "price": 403.52, "shares": 3 }], "local_peak": 410.45, "date_added": "2026-07-03", "initial_reference_price": 403.52 },
+    "BORANA.NS": { "name": "BORANA", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 342.0, "shares": 1 }], "local_peak": 353.95, "date_added": "2026-08-06", "initial_reference_price": 342.00 },
     "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "in_watchlist": False, "transactions": [{ "date": "2026-08-03", "price": 330.98, "shares": 2 }, { "date": "2026-08-12", "price": 314.10, "shares": -2, "type": "SELL" }], "local_peak": 330.98, "date_added": "2026-07-03", "initial_reference_price": 314.10 },
     "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 359.10, "shares": 1 }, { "date": "2026-08-11", "price": 353.10, "shares": 1 }], "local_peak": 359.10, "date_added": "2026-07-03", "initial_reference_price": 355.75 },
-    "ITC.NS": { "name": "ITC Limited", "category": "Core", "transactions": [{ "date": "2026-07-14", "price": 275.45, "shares": 1 }], "local_peak": 286.25, "date_added": "2026-07-03", "initial_reference_price": 276.90 },
-    "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }, { "date": "2026-08-11", "price": 85.29, "shares": 5 }], "local_peak": 85.49, "date_added": "2026-07-03", "initial_reference_price": 85.08 },
+    "ITC.NS": { "name": "ITC Limited", "category": "Core", "transactions": [{ "date": "2026-07-14", "price": 275.45, "shares": 1 }], "local_peak": 286.25, "date_added": "2026-07-03", "initial_reference_price": 275.45 },
+    "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }, { "date": "2026-08-11", "price": 85.29, "shares": 5 }], "local_peak": 85.49, "date_added": "2026-07-03", "initial_reference_price": 84.80 },
     "PANAMAPET.NS": { "name": "Panama Petrochem Limited", "category": "Growth", "in_watchlist": False, "transactions": [{ "date": "2026-08-11", "price": 544.95, "shares": 3 }, { "date": "2026-08-12", "price": 567.65, "shares": -3, "type": "SELL" }], "local_peak": 598.70, "date_added": "2026-08-11", "initial_reference_price": 506.15 },
-    "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }], "local_peak": 382.25, "date_added": "2026-07-03", "initial_reference_price": 374.85 },
-    "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }], "local_peak": 191.53, "date_added": "2026-07-05", "initial_reference_price": 183.95 },
-    "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 18.98 },
-    "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 277.21, "shares": 1 }], "local_peak": 286.50, "date_added": "2026-08-11", "initial_reference_price": 277.21 },
-    "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 126.19, "shares": 2 }], "local_peak": 126.18, "date_added": "2026-08-11", "initial_reference_price": 126.19 },
+    "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }], "local_peak": 382.25, "date_added": "2026-07-03", "initial_reference_price": 382.25 },
+    "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }], "local_peak": 191.53, "date_added": "2026-07-05", "initial_reference_price": 182.82 },
+    "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 19.33 },
+    "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 277.40, "shares": 3 }, { "date": "2026-08-13", "price": 278.05, "shares": 3 }], "local_peak": 286.50, "date_added": "2026-08-11", "initial_reference_price": 277.40 },
+    "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 126.25, "shares": 6 }, { "date": "2026-08-13", "price": 125.84, "shares": 4 }], "local_peak": 126.39, "date_added": "2026-08-11", "initial_reference_price": 126.25 },
     "mtf_trading": []
 }
 

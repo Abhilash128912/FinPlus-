@@ -1,134 +1,103 @@
 {
   "capital_settings": {
-    "start_date": "2026-07-03",
+    "start_date": "2026-08-17",
     "initial_capital": 3477.97,
     "daily_rate": 200
   },
   "ASHOKLEY.NS": {
     "name": "Ashok Leyland Limited",
     "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-07-13",
-        "price": 160.53,
-        "shares": 2
-      }
-    ],
-    "local_peak": 178,
-    "date_added": "2026-07-03",
+    "in_watchlist": true,
+    "transactions": [],
+    "local_peak": 179.33,
+    "date_added": "2026-08-17",
     "initial_reference_price": 160.53
   },
   "BEL.NS": {
     "name": "Bharat Electronics Limited",
     "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-07-29",
-        "price": 403.52,
-        "shares": 3
-      }
-    ],
-    "local_peak": 411.05,
-    "date_added": "2026-07-03",
+    "in_watchlist": true,
+    "transactions": [],
+    "local_peak": 412.95,
+    "date_added": "2026-08-17",
     "initial_reference_price": 403.52
   },
   "BORANA.NS": {
     "name": "BORANA",
     "category": "Growth",
-    "transactions": [
-      {
-        "date": "2026-08-06",
-        "price": 342,
-        "shares": 1
-      }
-    ],
+    "in_watchlist": true,
+    "transactions": [],
     "local_peak": 353.95,
-    "date_added": "2026-08-06",
+    "date_added": "2026-08-17",
     "initial_reference_price": 351
+  },
+  "EMMVEE.NS": {
+    "name": "Emmvee Photovoltaic Power Limited",
+    "category": "Growth",
+    "in_watchlist": true,
+    "transactions": [],
+    "local_peak": 330.98,
+    "date_added": "2026-08-17",
+    "initial_reference_price": 314.15
   },
   "FEDERALBNK.NS": {
     "name": "The Federal Bank Limited",
     "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-08-03",
-        "price": 359.1,
-        "shares": 1
-      },
-      {
-        "date": "2026-08-11",
-        "price": 353.1,
-        "shares": 1
-      }
-    ],
+    "in_watchlist": true,
+    "transactions": [],
     "local_peak": 359.1,
-    "date_added": "2026-07-03",
+    "date_added": "2026-08-17",
     "initial_reference_price": 355.75
   },
   "ITC.NS": {
     "name": "ITC Limited",
     "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-07-14",
-        "price": 275.45,
-        "shares": 1
-      }
-    ],
+    "in_watchlist": true,
+    "transactions": [],
     "local_peak": 286.25,
-    "date_added": "2026-07-03",
+    "date_added": "2026-08-17",
     "initial_reference_price": 275.45
   },
   "NMDC.NS": {
     "name": "NMDC Limited",
     "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-08-03",
-        "price": 84.8,
-        "shares": 1
-      },
-      {
-        "date": "2026-08-11",
-        "price": 85.29,
-        "shares": 5
-      }
-    ],
+    "in_watchlist": true,
+    "transactions": [],
     "local_peak": 85.49,
-    "date_added": "2026-07-03",
+    "date_added": "2026-08-17",
     "initial_reference_price": 84.8
+  },
+  "PANAMAPET.NS": {
+    "name": "Panama Petrochem Limited",
+    "category": "Growth",
+    "in_watchlist": true,
+    "transactions": [],
+    "local_peak": 598.7,
+    "date_added": "2026-08-17",
+    "initial_reference_price": 506.15
   },
   "TATAPOWER.NS": {
     "name": "Tata Power Company Limited",
     "category": "Core",
-    "transactions": [
-      {
-        "date": "2026-07-10",
-        "price": 382.25,
-        "shares": 1
-      }
-    ],
-    "local_peak": 382.8,
-    "date_added": "2026-07-03",
+    "in_watchlist": true,
+    "transactions": [],
+    "local_peak": 390.4,
+    "date_added": "2026-08-17",
     "initial_reference_price": 382.25
   },
   "TATASTEEL.NS": {
     "name": "Tata Steel Limited",
     "category": "Growth",
-    "transactions": [
-      {
-        "date": "2026-07-27",
-        "price": 182.82,
-        "shares": 1
-      }
-    ],
+    "in_watchlist": true,
+    "transactions": [],
     "local_peak": 191.53,
-    "date_added": "2026-07-05",
+    "date_added": "2026-08-17",
     "initial_reference_price": 182.82
   },
   "UYFINCORP.NS": {
     "name": "UYFINCORP",
     "category": "Core",
+    "in_watchlist": true,
     "transactions": [
       {
         "date": "2026-08-06",
@@ -143,40 +112,20 @@
   "NIFTYBEES.NS": {
     "name": "Nippon India Nifty 50 BeES ETF",
     "category": "Park",
-    "transactions": [
-      {
-        "date": "2026-08-12",
-        "price": 277.4,
-        "shares": 3
-      },
-      {
-        "date": "2026-08-13",
-        "price": 278.05,
-        "shares": 3
-      }
-    ],
+    "in_watchlist": true,
+    "transactions": [],
     "local_peak": 286.5,
-    "date_added": "2026-08-11",
+    "date_added": "2026-08-17",
     "initial_reference_price": 286.5
   },
   "GOLDBEES.NS": {
     "name": "Nippon India Gold BeES ETF",
     "category": "Park",
-    "transactions": [
-      {
-        "date": "2026-08-12",
-        "price": 126.25,
-        "shares": 6
-      },
-      {
-        "date": "2026-08-13",
-        "price": 125.84,
-        "shares": 4
-      }
-    ],
-    "local_peak": 126.39,
-    "date_added": "2026-08-11",
-    "initial_reference_price": 74.2
+    "in_watchlist": true,
+    "transactions": [],
+    "local_peak": 126.66,
+    "date_added": "2026-08-17",
+    "initial_reference_price": 126.25
   },
   "mtf_trading": [
     {
@@ -249,47 +198,5 @@
       "sell_date": "2026-08-06",
       "sell_price": 1348.67
     }
-  ],
-  "EMMVEE.NS": {
-    "name": "Emmvee Photovoltaic Power Limited",
-    "category": "Growth",
-    "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-08-11",
-        "price": 330.98,
-        "shares": 2
-      },
-      {
-        "date": "2026-08-12",
-        "price": 314.1,
-        "shares": -2,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 330.98,
-    "date_added": "2026-08-11",
-    "initial_reference_price": 314.15
-  },
-  "PANAMAPET.NS": {
-    "name": "Panama Petrochem Limited",
-    "category": "Growth",
-    "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-08-11",
-        "price": 544.95,
-        "shares": 3
-      },
-      {
-        "date": "2026-08-12",
-        "price": 567.65,
-        "shares": -3,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 598.7,
-    "date_added": "2026-08-11",
-    "initial_reference_price": 506.15
-  }
+  ]
 }
