@@ -42,6 +42,7 @@ OUT_HTML   = os.path.join(BASE_DIR, "index.html")
 OUT_WWW_HTML = os.path.join(BASE_DIR, "www", "index.html")
 
 os.makedirs(CACHE_DIR, exist_ok=True)
+IS_INITIAL_SCANNING = False
 
 # ─── Load config ──────────────────────────────────────────────────────────────
 with open(CONFIG_FILE) as f:
@@ -3670,6 +3671,40 @@ function init() {
   startPolling();
   refreshLiveLTP(true);
   setInterval(renderMarketStatusHeader, 30000);
+
+  checkStartupScanStatus();
+  startupScanPoller = setInterval(checkStartupScanStatus, 3000);
+}
+
+let startupScanPoller = null;
+let wasScanning = false;
+
+function checkStartupScanStatus() {
+  fetch('/api/status')
+    .then(r => r.json())
+    .then(res => {
+      const banner = document.getElementById('bgScanBanner');
+      if (res && res.is_scanning) {
+        wasScanning = true;
+        if (!banner) {
+          const b = document.createElement('div');
+          b.id = 'bgScanBanner';
+          b.style.cssText = 'background:linear-gradient(135deg,rgba(108,99,255,0.25),rgba(0,212,170,0.25));border-bottom:1.5px solid var(--accent);padding:10px 20px;text-align:center;font-size:13px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,0.3)';
+          b.innerHTML = `<span style="font-size:16px;animation:spin 1.5s linear infinite">⚡</span> <span>Full Stock &amp; Commodity Scan in Progress (2414 stocks)... Page will auto-reload when complete.</span>`;
+          document.body.prepend(b);
+        }
+      } else {
+        if (banner) {
+          banner.style.background = 'linear-gradient(135deg,rgba(16,185,129,0.35),rgba(5,150,105,0.35))';
+          banner.innerHTML = `<span>✅</span> <span>Scan complete! Reloading latest data...</span>`;
+          setTimeout(() => window.location.reload(), 1000);
+        } else if (wasScanning) {
+          window.location.reload();
+        }
+        if (startupScanPoller) clearInterval(startupScanPoller);
+      }
+    })
+    .catch(() => {});
 }
 
 // ── Auto-Add Top Suggestions ─────────────────────────────────────────────
@@ -5748,7 +5783,8 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "server": "running",
                 "market_info": mkt_info,
                 "out_html": OUT_HTML,
-                "timestamp": datetime.datetime.now().isoformat()
+                "timestamp": datetime.datetime.now().isoformat(),
+                "is_scanning": IS_INITIAL_SCANNING
             }
             self.wfile.write(json.dumps(res).encode('utf-8'))
             return
@@ -5953,6 +5989,8 @@ def run_server(port=None):
 
 
 def background_initial_scan():
+    global IS_INITIAL_SCANNING
+    IS_INITIAL_SCANNING = True
     try:
         log("Checking for Nifty stock list updates from NSE...")
         try:
@@ -5998,6 +6036,8 @@ def background_initial_scan():
         log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
     except Exception as e:
         log(f"⚠ Background scan error: {e}")
+    finally:
+        IS_INITIAL_SCANNING = False
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
