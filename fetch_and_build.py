@@ -44,6 +44,23 @@ OUT_WWW_HTML = os.path.join(BASE_DIR, "www", "index.html")
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 IS_INITIAL_SCANNING = False
+LATEST_SCREENER_RESULTS = []
+OUT_JSON_FILE = os.path.join(BASE_DIR, "screener_data.json")
+if os.path.exists(OUT_JSON_FILE):
+    try:
+        with open(OUT_JSON_FILE, encoding="utf-8") as f:
+            LATEST_SCREENER_RESULTS = json.load(f)
+    except Exception:
+        LATEST_SCREENER_RESULTS = []
+
+def json_serializer(o):
+    if hasattr(o, 'item'):
+        return o.item()
+    if hasattr(o, 'isoformat'):
+        return o.isoformat()
+    if isinstance(o, (bool, type(True))):
+        return bool(o)
+    return str(o)
 
 # ─── Load config ──────────────────────────────────────────────────────────────
 with open(CONFIG_FILE) as f:
@@ -3945,7 +3962,7 @@ function submitAddLtStockForm(e) {
       ltWatchlist.push({ ...body, active: true, added_date: new Date().toISOString().split('T')[0] });
     }
     closeAddLtStockModal();
-    renderLtWatchlist();
+    fetchLtWatchlistApi();
   }).catch(err => {
     let existing = ltWatchlist.find(s => s.symbol === symbol);
     if (existing) {
@@ -3954,7 +3971,7 @@ function submitAddLtStockForm(e) {
       ltWatchlist.push({ ...body, active: true, added_date: new Date().toISOString().split('T')[0] });
     }
     closeAddLtStockModal();
-    renderLtWatchlist();
+    fetchLtWatchlistApi();
   });
 }
 
@@ -3974,6 +3991,31 @@ function promptGttEdit(symbol, currentGtt) {
   });
 }
 
+function fetchLtWatchlistApi() {
+  fetch('/api/lt-watchlist')
+    .then(r => r.json())
+    .then(data => {
+      if (Array.isArray(data)) {
+        ltWatchlist = data;
+        renderLtWatchlist();
+      }
+    })
+    .catch(err => console.warn('Could not fetch live LT Watchlist:', err));
+}
+
+function deleteLtStock(symbol) {
+  if (!confirm(`Permanently delete ${symbol} from watchlist?\nThis will remove it completely from lt_watchlist.json.`)) return;
+  fetch('/api/lt-watchlist/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol: symbol })
+  }).then(r => r.json()).then(res => {
+    ltWatchlist = ltWatchlist.filter(s => s.symbol !== symbol);
+    renderLtWatchlist();
+    fetchLtWatchlistApi();
+  }).catch(err => alert('Error deleting stock: ' + err));
+}
+
 function retireLtStock(symbol) {
   if (!confirm(`Are you sure you want to retire ${symbol} from active watchlist?\n(Stock will be soft-deleted and can be restored anytime via "Show Retired Stocks")`)) return;
 
@@ -3984,7 +4026,7 @@ function retireLtStock(symbol) {
   }).finally(() => {
     const item = ltWatchlist.find(s => s.symbol === symbol);
     if (item) item.active = false;
-    renderLtWatchlist();
+    fetchLtWatchlistApi();
   });
 }
 
@@ -3996,7 +4038,7 @@ function reactivateLtStock(symbol) {
   }).finally(() => {
     const item = ltWatchlist.find(s => s.symbol === symbol);
     if (item) item.active = true;
-    renderLtWatchlist();
+    fetchLtWatchlistApi();
   });
 }
 
@@ -6442,6 +6484,15 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "prices": prices
             }).encode('utf-8'))
             return
+        elif parsed.path == '/api/lt-watchlist':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.end_headers()
+            data = process_lt_watchlist(LATEST_SCREENER_RESULTS)
+            self.wfile.write(json.dumps(data, default=json_serializer).encode('utf-8'))
+            return
         elif parsed.path in ('/health', '/api/health'):
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -6477,6 +6528,8 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 tickers = read_stock_list()
                 screener_results = run_scan(tickers)
+                global LATEST_SCREENER_RESULTS
+                LATEST_SCREENER_RESULTS = screener_results
 
                 log("Computing Mansfield Relative Strength (RS Rating 1-99) vs Nifty...")
                 screener_results = compute_relative_strength_ratings(screener_results, nifty_df)
@@ -6507,6 +6560,27 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(res).encode('utf-8'))
             return
 
+        elif parsed.path in ('/api/lt-watchlist/delete', '/api/lt-watchlist/hard-remove'):
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                sym = (body.get("symbol") or "").strip().upper()
+                if os.path.exists(LT_WL_FILE):
+                    with open(LT_WL_FILE, encoding="utf-8") as f:
+                        lt_stocks = json.load(f)
+                    lt_stocks = [s for s in lt_stocks if s.get("symbol") != sym]
+                    with open(LT_WL_FILE, "w", encoding="utf-8") as f:
+                        json.dump(lt_stocks, f, indent=2)
+                res = {"status": "ok", "message": f"{sym} permanently deleted from LT Watchlist"}
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
         elif parsed.path == '/api/lt-watchlist/add':
             try:
                 length = int(self.headers.get('Content-Length', 0))
@@ -6758,6 +6832,8 @@ def background_initial_scan():
 
         tickers = read_stock_list()
         screener_results = run_scan(tickers)
+        global LATEST_SCREENER_RESULTS
+        LATEST_SCREENER_RESULTS = screener_results
 
         log("Computing Mansfield Relative Strength (RS Rating 1-99) vs Nifty...")
         screener_results = compute_relative_strength_ratings(screener_results, nifty_df)
