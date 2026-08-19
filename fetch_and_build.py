@@ -29,7 +29,7 @@ import threading
 import pandas as pd
 import yfinance as yf
 
-from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal
+from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -189,12 +189,9 @@ def load_cache(ticker):
         info = data.get("info", {})
         cached_at = datetime.datetime.fromisoformat(data.get("cached_at", "2000-01-01"))
         age_hrs = (datetime.datetime.now() - cached_at).total_seconds() / 3600
-        # If cache is valid and has fundamentals, use it
+        # If cache is valid (< 24h old) and has fundamentals, use it
         has_fund = any(info.get(k) is not None for k in ["returnOnEquity", "debtToEquity", "trailingPE", "profitMargins"])
         if age_hrs < CACHE_TTL_HRS and has_fund:
-            return data
-        # Even if stale age, return cached fundamentals if present so API failures won't drop fundamentals to 0
-        if has_fund:
             return data
         return None
     except Exception:
@@ -537,7 +534,7 @@ def fetch_ticker_data(ticker: str) -> dict | None:
                 cached["info"]["regularMarketPrice"] = live_price
                 if cached.get("history_close") and len(cached["history_close"]) > 0:
                     cached["history_close"][-1]["close"] = live_price
-                cached["cached_at"] = datetime.datetime.now().isoformat()
+                cached["last_live_price_update"] = datetime.datetime.now().isoformat()
                 save_cache(ticker, cached)
         return cached
 
@@ -575,6 +572,15 @@ def fetch_ticker_data(ticker: str) -> dict | None:
 
     except Exception:
         pass
+
+    # Fallback to existing disk cache if full fetch fails
+    path = cache_path(ticker)
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except Exception:
+            pass
 
     return None
 
@@ -2018,6 +2024,8 @@ details[open] summary::before {
 .swing-card-inflow::before{background:linear-gradient(90deg,#6366f1,#a78bfa)}
 .swing-card-momentum::before{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
 .swing-card-pullback::before{background:linear-gradient(90deg,#3b82f6,#60a5fa)}
+.swing-card-overbought::before{background:linear-gradient(90deg,#ef4444,#f87171)}
+.swing-card-overbought{border-color:rgba(239,68,68,0.25)}
 .swing-score-ring{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;background:conic-gradient(var(--ring-color,#6c63ff) calc(var(--pct,0) * 1%),rgba(255,255,255,0.06) 0);position:relative}
 .swing-score-ring::after{content:attr(data-score);position:absolute;font-size:13px;font-weight:700;color:#fff}
 .swing-sl{color:#ef4444;font-weight:600}
@@ -2064,6 +2072,16 @@ details[open] summary::before {
 </div>
 
 <div class="main">
+
+  <!-- Macro NIFTY 50 Market Regime & Tactical Stance Banner -->
+  <div id="niftyRegimeBanner" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,0.2)">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span id="niftyRegimeBadge" class="badge badge-yellow" style="font-size:12px;padding:6px 14px;font-weight:700">🟡 NIFTY 50: Analyzing Regime...</span>
+      <span id="niftyRegimeLtp" style="font-size:14px;font-weight:800;color:#fff"></span>
+      <span id="niftyRegimeStance" style="font-size:11px;font-weight:700;color:#a5b4fc;background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.3);padding:3px 10px;border-radius:12px"></span>
+    </div>
+    <div id="niftyRegimeGuidance" style="font-size:12px;color:var(--muted);max-width:650px;line-height:1.4"></div>
+  </div>
 
   <!-- Desktop Top Tabs (Hidden on mobile where bottom nav is active) -->
   <div class="tabs">
@@ -2143,6 +2161,7 @@ details[open] summary::before {
             <th onclick="sortTable('symbol')" title="Click to sort by Symbol">Symbol <span id="sort_symbol">↕</span></th>
             <th onclick="sortTable('ltp')" title="Click to sort by Price">Price <span id="sort_ltp">↕</span></th>
             <th onclick="sortTable('total_score')" title="Click to sort by Total Score">Total Score <span id="sort_total_score">↕</span></th>
+            <th onclick="sortTable('rs_rating')" title="Click to sort by Relative Strength vs Nifty">RS Rating <span id="sort_rs_rating">↕</span></th>
             <th onclick="sortTable('strength')" title="Click to sort by Strength">Strength <span id="sort_strength">↕</span></th>
             <th onclick="sortTable('value')" title="Click to sort by Value">Value <span id="sort_value">↕</span></th>
             <th onclick="sortTable('momentum')" title="Click to sort by Momentum">Momentum <span id="sort_momentum">↕</span></th>
@@ -2178,7 +2197,11 @@ details[open] summary::before {
           <div style="font-size:10px;color:var(--muted);text-transform:uppercase">MTF Stocks</div>
         </div>
         <div style="text-align:center">
-          <div id="swingBlastCount" style="font-size:20px;font-weight:700;color:#10b981">0</div>
+          <div id="swingRsCount" style="font-size:20px;font-weight:700;color:#10b981">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">RS Leaders</div>
+        </div>
+        <div style="text-align:center">
+          <div id="swingBlastCount" style="font-size:20px;font-weight:700;color:#34d399">0</div>
           <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Blast Alerts</div>
         </div>
         <div style="text-align:center">
@@ -2192,6 +2215,7 @@ details[open] summary::before {
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;align-items:center">
       <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-right:4px">Quick Filters:</span>
       <button id="swingPill-all" class="swing-pill swing-pill-active" onclick="setSwingPreset('all')">↺ All MTF</button>
+      <button id="swingPill-rs" class="swing-pill" onclick="setSwingPreset('rs')" style="border-color:#10b981;background:rgba(16,185,129,0.1);color:#34d399">⚡ RS Leaders (RS ≥ 80)</button>
       <button id="swingPill-blast" class="swing-pill" onclick="setSwingPreset('blast')">💥 Volume Blast</button>
       <button id="swingPill-inflow" class="swing-pill" onclick="setSwingPreset('inflow')">🏛️ Institutional Inflow</button>
       <button id="swingPill-momentum" class="swing-pill" onclick="setSwingPreset('momentum')">🔥 High Momentum</button>
@@ -2217,6 +2241,7 @@ details[open] summary::before {
             <th>#</th>
             <th>Symbol</th>
             <th onclick="sortSwingTable('swing_score')" style="cursor:pointer">Swing Score ↕</th>
+            <th onclick="sortSwingTable('rs_rating')" style="cursor:pointer">RS Rating ↕</th>
             <th>Badge</th>
             <th onclick="sortSwingTable('ltp')" style="cursor:pointer">LTP ↕</th>
             <th onclick="sortSwingTable('volume_spike')" style="cursor:pointer">Vol Spike ↕</th>
@@ -2233,6 +2258,49 @@ details[open] summary::before {
         <tbody id="swingBody"></tbody>
       </table>
     </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         S/R BREAKOUT RADAR SECTION
+    ══════════════════════════════════════════════════════════ -->
+    <div style="margin-top:32px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+        <div>
+          <h2 style="font-size:18px;font-weight:800;color:#fff;margin:0">🧱 S/R Breakout Radar</h2>
+          <div style="font-size:12px;color:var(--muted);margin-top:3px">Live resistance breakout &amp; retest signals · ChartPrime SR Model</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="srPill-all"       class="swing-pill swing-pill-active" onclick="setSrFilter('all')">↺ All Setups</button>
+          <button id="srPill-break"     class="swing-pill" onclick="setSrFilter('break')"     style="border-color:#10b981;background:rgba(16,185,129,0.1);color:#34d399">🔥 Break Res</button>
+          <button id="srPill-retest"    class="swing-pill" onclick="setSrFilter('retest')"    style="border-color:#a78bfa;background:rgba(167,139,250,0.1);color:#a78bfa">🔄 Retest Buy</button>
+          <button id="srPill-approach"  class="swing-pill" onclick="setSrFilter('approach')"  style="border-color:#fbbf24;background:rgba(251,191,36,0.1);color:#fbbf24">⚡ Approaching</button>
+        </div>
+      </div>
+
+      <!-- Stats Row -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:18px">
+        <div style="background:var(--card);border:1px solid rgba(16,185,129,0.2);border-radius:12px;padding:12px 14px;text-align:center">
+          <div id="srCountBreak"  style="font-size:22px;font-weight:800;color:#10b981">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:2px">🔥 Break Res</div>
+        </div>
+        <div style="background:var(--card);border:1px solid rgba(167,139,250,0.2);border-radius:12px;padding:12px 14px;text-align:center">
+          <div id="srCountRetest" style="font-size:22px;font-weight:800;color:#a78bfa">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:2px">🔄 Retest Buy</div>
+        </div>
+        <div style="background:var(--card);border:1px solid rgba(251,191,36,0.2);border-radius:12px;padding:12px 14px;text-align:center">
+          <div id="srCountApproach" style="font-size:22px;font-weight:800;color:#fbbf24">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:2px">⚡ Approaching</div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;text-align:center">
+          <div id="srCountAll"  style="font-size:22px;font-weight:800;color:#e2e8f0">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:2px">Total Setups</div>
+        </div>
+      </div>
+
+      <!-- Cards Grid -->
+      <div id="srBreakoutGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px"></div>
+      <div id="srBreakoutEmpty" style="display:none;text-align:center;padding:40px;color:var(--muted);font-size:14px">No S/R setups detected with current filter.</div>
+    </div>
+
   </div>
 
   <!-- WATCHLIST TAB -->
@@ -2547,16 +2615,39 @@ function calculateCurrentMarketStatus() {
 
 function renderMarketStatusHeader() {
   const container = document.getElementById('mktStatusPillHeader');
-  if (!container) return;
-  
-  const currentMkt = calculateCurrentMarketStatus();
-  if (typeof MARKET_INFO !== 'undefined' && MARKET_INFO) {
-    MARKET_INFO.is_open = currentMkt.is_open;
-    MARKET_INFO.is_equity_open = currentMkt.is_equity_open;
-    MARKET_INFO.is_pre_market = currentMkt.is_pre_market;
+  if (container) {
+    const currentMkt = calculateCurrentMarketStatus();
+    if (typeof MARKET_INFO !== 'undefined' && MARKET_INFO) {
+      MARKET_INFO.is_open = currentMkt.is_open;
+      MARKET_INFO.is_equity_open = currentMkt.is_equity_open;
+      MARKET_INFO.is_pre_market = currentMkt.is_pre_market;
+    }
+    container.innerHTML = `<span class="badge ${currentMkt.badge_class || 'badge-green'}" style="font-size:12px;padding:6px 14px;font-weight:700" title="${currentMkt.message}">${currentMkt.badge}</span>`;
+    updateLtpBadgeStatus();
   }
-  container.innerHTML = `<span class="badge ${currentMkt.badge_class || 'badge-green'}" style="font-size:12px;padding:6px 14px;font-weight:700" title="${currentMkt.message}">${currentMkt.badge}</span>`;
-  updateLtpBadgeStatus();
+
+  // Populate NIFTY 50 Macro Regime Banner
+  if (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.nifty) {
+    const n = MARKET_INFO.nifty;
+    const bBadge = document.getElementById('niftyRegimeBadge');
+    const bLtp = document.getElementById('niftyRegimeLtp');
+    const bStance = document.getElementById('niftyRegimeStance');
+    const bGuidance = document.getElementById('niftyRegimeGuidance');
+    if (bBadge) {
+      bBadge.className = 'badge ' + (n.badge_class || 'badge-yellow');
+      bBadge.textContent = n.badge || '🟡 NIFTY 50: Neutral';
+    }
+    if (bLtp && n.ltp) {
+      const chgStr = n.change_pct !== undefined ? (n.change_pct >= 0 ? '+' : '') + n.change_pct + '%' : '';
+      bLtp.textContent = `₹${n.ltp.toLocaleString('en-IN')} (${chgStr})`;
+    }
+    if (bStance && n.stance) {
+      bStance.textContent = 'Tactical Stance: ' + n.stance;
+    }
+    if (bGuidance && n.guidance) {
+      bGuidance.textContent = n.guidance;
+    }
+  }
 }
 
 function isRealDesktopPC() {
@@ -2660,16 +2751,18 @@ function getSwingData() {
 
 function applySwingPreset(data) {
   switch (swingPreset) {
+    case 'rs':
+      return data.filter(s => (s.rs_rating || 0) >= 80 && (!s.rsi || s.rsi <= 72));
     case 'blast':
-      return data.filter(s => s.is_blast || (s.volume_spike >= 2.0 && s.momentum >= 60));
+      return data.filter(s => (s.is_blast || (s.volume_spike >= 2.0 && s.momentum >= 60)) && (!s.rsi || s.rsi <= 72));
     case 'inflow':
-      return data.filter(s => s.is_order_flow_bull || (s.cmf >= 0.08 && s.clv >= 0.55));
+      return data.filter(s => s.is_order_flow_bull || (s.cmf >= 0.08 && s.clv >= 0.55 && (!s.rsi || s.rsi <= 72)));
     case 'momentum':
-      return data.filter(s => s.is_momentum_surge || s.momentum >= 75);
+      return data.filter(s => (s.is_momentum_surge || s.momentum >= 75) && (!s.rsi || s.rsi <= 72));
     case 'pullback':
-      return data.filter(s => s.is_pullback || (s.rsi >= 40 && s.rsi <= 53));
+      return data.filter(s => s.is_pullback || (s.rsi >= 38 && s.rsi <= 53));
     case 'quality':
-      return data.filter(s => s.total_score >= 55 && s.momentum >= 60);
+      return data.filter(s => s.total_score >= 55 && s.momentum >= 60 && (!s.rsi || s.rsi <= 72));
     default:
       return data;
   }
@@ -2690,6 +2783,7 @@ function sortSwingTable(col) {
 }
 
 function getSwingCardClass(s) {
+  if (s.is_overbought || (s.rsi && s.rsi > 72)) return 'swing-card-overbought';
   if (s.is_blast) return 'swing-card-blast';
   if (s.is_order_flow_bull) return 'swing-card-inflow';
   if (s.is_momentum_surge) return 'swing-card-momentum';
@@ -2698,6 +2792,7 @@ function getSwingCardClass(s) {
 }
 
 function getSwingRingColor(s) {
+  if (s.is_overbought || (s.rsi && s.rsi > 72)) return '#ef4444';
   if (s.is_blast) return '#10b981';
   if (s.is_order_flow_bull) return '#6366f1';
   if (s.is_momentum_surge) return '#f59e0b';
@@ -2718,9 +2813,11 @@ function renderSwingRadar() {
 
   // Update banner counts
   const mtfEl = document.getElementById('swingMtfCount');
+  const rsEl = document.getElementById('swingRsCount');
   const blastEl = document.getElementById('swingBlastCount');
   const inflowEl = document.getElementById('swingInflowCount');
   if (mtfEl) mtfEl.textContent = allMtf.length;
+  if (rsEl) rsEl.textContent = allMtf.filter(s => (s.rs_rating || 0) >= 80).length;
   if (blastEl) blastEl.textContent = allMtf.filter(s => s.is_blast).length;
   if (inflowEl) inflowEl.textContent = allMtf.filter(s => s.is_order_flow_bull).length;
 
@@ -2741,6 +2838,8 @@ function renderSwingRadar() {
         const cardClass = getSwingCardClass(s);
         const volStr = s.volume_spike ? `${s.volume_spike.toFixed(1)}x` : 'N/A';
         const rsiStr = s.rsi ? s.rsi.toFixed(0) : 'N/A';
+        const rsVal = s.rs_rating || 50;
+        const rsColor = rsVal >= 80 ? '#10b981' : rsVal >= 60 ? '#60a5fa' : rsVal >= 40 ? '#94a3b8' : '#ef4444';
         const slStr = s.swing_sl ? `₹${s.swing_sl.toFixed(1)}` : 'N/A';
         const t1Str = s.swing_t1 ? `₹${s.swing_t1.toFixed(1)}` : 'N/A';
         const t2Str = s.swing_t2 ? `₹${s.swing_t2.toFixed(1)}` : 'N/A';
@@ -2759,20 +2858,25 @@ function renderSwingRadar() {
               </div>
             </div>
           </div>
-          <div style="font-size:11px;margin-bottom:8px">
+          <div style="font-size:11px;margin-bottom:8px;display:flex;gap:6px;align-items:center">
             <span style="background:rgba(108,99,255,0.15);color:#a5b4fc;border:1px solid #6c63ff33;border-radius:10px;padding:3px 9px;font-weight:600">${s.swing_badge||'–'}</span>
+            <span class="badge ${rsVal>=80?'badge-green':rsVal>=60?'badge-green':rsVal>=40?'badge-gray':'badge-red'}" style="font-size:10px;font-weight:700">RS ${rsVal}</span>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px;margin-bottom:10px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;font-size:11px;margin-bottom:10px">
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
-              <div style="color:var(--muted)">LTP</div>
+              <div style="color:var(--muted);font-size:10px">LTP</div>
               <div style="font-weight:700;color:#fff">₹${(s.ltp||0).toFixed(1)}</div>
             </div>
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
-              <div style="color:var(--muted)">Vol Spike</div>
+              <div style="color:var(--muted);font-size:10px">RS</div>
+              <div style="font-weight:700;color:${rsColor}">${rsVal}</div>
+            </div>
+            <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
+              <div style="color:var(--muted);font-size:10px">Vol</div>
               <div style="font-weight:700;color:${parseFloat(volStr)>=2?'#10b981':'#e2e8f0'}">${volStr}</div>
             </div>
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
-              <div style="color:var(--muted)">RSI</div>
+              <div style="color:var(--muted);font-size:10px">RSI</div>
               <div style="font-weight:700;color:#e2e8f0">${rsiStr}</div>
             </div>
           </div>
@@ -2806,12 +2910,13 @@ function renderSwingRadar() {
   const tbody = document.getElementById('swingBody');
   if (!tbody) return;
   if (sorted.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--muted)">No stocks match this filter.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--muted)">No stocks match this filter.</td></tr>';
     return;
   }
   tbody.innerHTML = sorted.map((s, i) => {
     const volStr = s.volume_spike ? `${s.volume_spike.toFixed(1)}x` : '–';
     const rsiStr = s.rsi ? s.rsi.toFixed(0) : '–';
+    const rsVal = s.rs_rating || 50;
     const cmfStr = s.cmf !== undefined ? (s.cmf >= 0 ? '+' : '') + s.cmf.toFixed(2) : '–';
     const cmfColor = (s.cmf||0) >= 0.05 ? '#10b981' : (s.cmf||0) <= -0.05 ? '#ef4444' : '#94a3b8';
     const volColor = (s.volume_spike||0) >= 2.0 ? '#10b981' : (s.volume_spike||0) >= 1.5 ? '#fbbf24' : '#94a3b8';
@@ -2819,6 +2924,7 @@ function renderSwingRadar() {
       <td>${i+1}</td>
       <td><strong style="color:#e2e8f0">${s.symbol}</strong><br><span style="font-size:10px;color:var(--muted)">${(s.cap_category||'')}</span></td>
       <td><span style="font-weight:700;color:#a78bfa;font-size:15px">${s.swing_score||0}</span></td>
+      <td><span class="badge ${rsVal>=80?'badge-green':rsVal>=60?'badge-green':rsVal>=40?'badge-gray':'badge-red'}" style="font-size:11px;font-weight:700">RS ${rsVal}</span></td>
       <td><span style="font-size:11px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:10px;padding:3px 8px;white-space:nowrap">${s.swing_badge||'–'}</span></td>
       <td>₹${(s.ltp||0).toFixed(2)}</td>
       <td style="color:${volColor};font-weight:600">${volStr}</td>
@@ -2838,6 +2944,131 @@ function renderSwingRadar() {
     </tr>`;
   }).join('');
 }
+
+// ─── S/R Breakout Radar ────────────────────────────────────────────────────
+
+let srFilter = 'all';
+
+function setSrFilter(f) {
+  srFilter = f;
+  document.querySelectorAll('[id^="srPill-"]').forEach(el => el.classList.remove('swing-pill-active'));
+  const pill = document.getElementById('srPill-' + f);
+  if (pill) pill.classList.add('swing-pill-active');
+  renderSrBreakouts();
+}
+
+function renderSrBreakouts() {
+  const all = SCREENER_DATA.filter(s => s.has_sr_setup && s.sr_type && s.sr_type !== 'NONE');
+
+  // Count by type
+  const breakCount    = all.filter(s => s.sr_type === 'BREAK_RES').length;
+  const retestCount   = all.filter(s => s.sr_type === 'RETEST_BUY').length;
+  const approachCount = all.filter(s => s.sr_type === 'APPROACHING_RES').length;
+  const el = id => document.getElementById(id);
+  if (el('srCountBreak'))   el('srCountBreak').textContent   = breakCount;
+  if (el('srCountRetest'))  el('srCountRetest').textContent  = retestCount;
+  if (el('srCountApproach'))el('srCountApproach').textContent = approachCount;
+  if (el('srCountAll'))     el('srCountAll').textContent     = all.length;
+
+  // Apply filter
+  let filtered = all;
+  if (srFilter === 'break')   filtered = all.filter(s => s.sr_type === 'BREAK_RES');
+  if (srFilter === 'retest')  filtered = all.filter(s => s.sr_type === 'RETEST_BUY');
+  if (srFilter === 'approach')filtered = all.filter(s => s.sr_type === 'APPROACHING_RES');
+
+  // Sort by sr_score descending
+  filtered = filtered.sort((a, b) => (b.sr_score || 0) - (a.sr_score || 0));
+
+  const grid  = el('srBreakoutGrid');
+  const empty = el('srBreakoutEmpty');
+  if (!grid) return;
+
+  if (filtered.length === 0) {
+    grid.innerHTML = '';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  grid.innerHTML = filtered.map(s => {
+    const typeColor  = s.sr_type === 'BREAK_RES' ? '#10b981' : s.sr_type === 'RETEST_BUY' ? '#a78bfa' : '#fbbf24';
+    const typeBorder = s.sr_type === 'BREAK_RES' ? 'rgba(16,185,129,0.25)' : s.sr_type === 'RETEST_BUY' ? 'rgba(167,139,250,0.25)' : 'rgba(251,191,36,0.25)';
+    const scoreBar   = s.sr_score || 0;
+    const scoreFill  = scoreBar >= 80 ? '#10b981' : scoreBar >= 60 ? '#60a5fa' : scoreBar >= 40 ? '#fbbf24' : '#ef4444';
+    const rsVal      = s.rs_rating || 50;
+    const rsColor    = rsVal >= 80 ? '#10b981' : rsVal >= 60 ? '#60a5fa' : '#94a3b8';
+    const distStr    = s.dist_from_res_pct != null ? (s.dist_from_res_pct >= 0 ? '+' : '') + s.dist_from_res_pct.toFixed(1) + '%' : '–';
+    const slStr      = s.sr_sl    ? '₹' + s.sr_sl.toFixed(1) + (s.sr_sl_pct   ? ' (' + s.sr_sl_pct  + '%)' : '') : '–';
+    const t1Str      = s.sr_t1    ? '₹' + s.sr_t1.toFixed(1) + (s.sr_t1_pct   ? ' (+' + s.sr_t1_pct + '%)' : '') : '–';
+    const t2Str      = s.sr_t2    ? '₹' + s.sr_t2.toFixed(1) + (s.sr_t2_pct   ? ' (+' + s.sr_t2_pct + '%)' : '') : '–';
+    const resStr     = s.res_level ? '₹' + s.res_level.toFixed(2) : '–';
+    const supStr     = s.sup_level ? '₹' + s.sup_level.toFixed(2) : '–';
+
+    return `
+    <div style="background:var(--card);border:1px solid ${typeBorder};border-radius:14px;padding:16px;position:relative;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s"
+         onclick="document.getElementById('fSearch').value='${s.symbol}';switchTab('screener');applyFilters()"
+         onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 28px rgba(0,0,0,0.35)'"
+         onmouseleave="this.style.transform='';this.style.boxShadow=''">
+      <!-- Accent bar -->
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${typeColor};border-radius:14px 14px 0 0"></div>
+
+      <!-- Header row -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;margin-top:4px">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:#fff">${s.symbol}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:1px">${(s.name||'').substring(0,26)} · ${s.cap_category||''}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;font-weight:700;color:${typeColor};background:rgba(0,0,0,0.25);border:1px solid ${typeBorder};border-radius:8px;padding:3px 8px;white-space:nowrap">${s.sr_badge||'–'}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:3px">₹${(s.ltp||0).toFixed(2)}</div>
+        </div>
+      </div>
+
+      <!-- SR Score bar -->
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px">
+          <span>SR Score</span><span style="color:${scoreFill};font-weight:700">${scoreBar}</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.07);border-radius:4px;height:5px;overflow:hidden">
+          <div style="height:100%;width:${scoreBar}%;background:${scoreFill};border-radius:4px;transition:width .4s"></div>
+        </div>
+      </div>
+
+      <!-- Key levels grid -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;margin-bottom:10px">
+        <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:6px 8px">
+          <div style="color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.05em">Resistance</div>
+          <div style="color:#e2e8f0;font-weight:700;margin-top:1px">${resStr} <span style="color:${s.dist_from_res_pct!=null&&s.dist_from_res_pct>=0?'#10b981':'#fbbf24'};font-size:10px">${distStr}</span></div>
+        </div>
+        <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:6px 8px">
+          <div style="color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.05em">Support</div>
+          <div style="color:#e2e8f0;font-weight:700;margin-top:1px">${supStr}</div>
+        </div>
+        <div style="background:rgba(239,68,68,0.07);border-radius:8px;padding:6px 8px">
+          <div style="color:#fca5a5;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Stop Loss</div>
+          <div style="color:#ef4444;font-weight:700;margin-top:1px">${slStr}</div>
+        </div>
+        <div style="background:rgba(16,185,129,0.07);border-radius:8px;padding:6px 8px">
+          <div style="color:#6ee7b7;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Target 1 (1:2)</div>
+          <div style="color:#10b981;font-weight:700;margin-top:1px">${t1Str}</div>
+        </div>
+      </div>
+      <div style="background:rgba(16,185,129,0.05);border:1px dashed rgba(16,185,129,0.2);border-radius:8px;padding:5px 8px;font-size:10px;color:var(--muted);margin-bottom:10px">
+        🎯 Target 2 (1:3): <span style="color:#34d399;font-weight:700">${t2Str}</span>
+      </div>
+
+      <!-- Footer: RS + RSI + Reason -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <span style="font-size:11px;font-weight:700;color:${rsColor}">RS ${rsVal}</span>
+        <span style="font-size:10px;color:var(--muted)">RSI ${s.rsi ? s.rsi.toFixed(0) : '–'}</span>
+        <button onclick="event.stopPropagation();addToWatchlist('${s.symbol}')" style="font-size:10px;padding:2px 8px;border-radius:6px;border:1px solid rgba(108,99,255,0.4);background:rgba(108,99,255,0.1);color:#a5b4fc;cursor:pointer">⭐ Watch</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:7px;line-height:1.4">${s.sr_reason||''}</div>
+    </div>`;
+  }).join('');
+}
+
+
 
 let currentCalcStock = null;
 
@@ -3387,7 +3618,7 @@ function switchTab(tab) {
   document.getElementById('tab-top-pick').style.display  = tab === 'top-pick'  ? '' : 'none';
   document.getElementById('tab-fno').style.display       = tab === 'fno'       ? '' : 'none';
   document.getElementById('tab-holidays').style.display  = tab === 'holidays'  ? '' : 'none';
-  if (tab === 'swing')      renderSwingRadar();
+  if (tab === 'swing')      { renderSwingRadar(); renderSrBreakouts(); }
   if (tab === 'watchlist')  renderWatchlist();
   if (tab === 'top-pick')   renderTopPick();
   if (tab === 'fno')        renderFnoTab();
@@ -4261,6 +4492,9 @@ function renderTable() {
         ? `<span class="badge badge-yellow">🟡 Watch</span>`
         : `<span class="badge badge-red">🔴 Avoid</span>`;
 
+    const rsVal = s.rs_rating || 50;
+    const rsBadge = `<span class="badge ${rsVal>=80?'badge-green':rsVal>=60?'badge-green':rsVal>=40?'badge-gray':'badge-red'}" style="font-size:11px;font-weight:700">RS ${rsVal}</span>`;
+
     return `<tr>
       <td>
         <div class="stock-name">${s.symbol}</div>
@@ -4269,6 +4503,7 @@ function renderTable() {
       </td>
       <td><span class="price">₹${s.ltp.toFixed(2)}</span></td>
       <td>${scoreBar(s.total_score)}</td>
+      <td>${rsBadge}</td>
       <td>${scoreBar(s.strength)}</td>
       <td>${scoreBar(s.value)}</td>
       <td>${scoreBar(s.momentum)}</td>
@@ -4280,7 +4515,7 @@ function renderTable() {
       <td>${fmt(s.rsi,'',0)}</td>
       <td>${s.volume_spike != null ? fmt(s.volume_spike, 'x', 2) : fmt(null)}</td>
       <td><span class="badge ${s.pa_class || 'badge-gray'}" style="font-size:10px;white-space:nowrap" title="${s.pa_pattern || ''}">${s.pa_badge || '⚪ Neutral Flow'}</span></td>
-      <td><span class="badge ${s.tech_class || 'badge-yellow'}" style="font-size:11px;white-space:nowrap" title="${s.tech_trend || ''}">${s.tech_badge || '🟡 Rangebound'}</span></td>
+      <td><span class="badge ${s.tech_class || 'badge-yellow'}" style="font-size:11px;white-space:nowrap" title="${s.tech_trend || ''}">${s.tech_rating || s.tech_badge || '🟡 Rangebound'}</span></td>
       <td>${badge}</td>
       <td>
         <button class="btn btn-sm ${inWlSet ? 'btn-danger' : 'btn-primary'}"
@@ -4936,7 +5171,25 @@ def fetch_15m_history_cffi(ticker: str) -> pd.DataFrame:
                 return pd.DataFrame(data).set_index("Date")
     except Exception:
         pass
-    return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
+def fetch_nifty_history() -> tuple[pd.DataFrame, dict]:
+    """Fetches NIFTY 50 (^NSEI) historical data and calculates Market Regime."""
+    log("Fetching NIFTY 50 benchmark data (^NSEI)...")
+    nifty_df = pd.DataFrame()
+    try:
+        t = yf.Ticker("^NSEI")
+        nifty_df = t.history(period="6mo")
+    except Exception:
+        pass
+
+    if nifty_df.empty:
+        try:
+            from screener_engine import fetch_live_price_and_history_cffi
+            info, nifty_df = fetch_live_price_and_history_cffi("^NSEI")
+        except Exception:
+            pass
+
+    regime = compute_nifty_market_regime(nifty_df)
+    return nifty_df, regime
 
 
 def fetch_commodity_signals() -> dict:
@@ -5124,10 +5377,19 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
         if parsed.path == '/api/scan':
             log("\n⚡ [API Request] Received Scan Now trigger from web app...")
             try:
+                nifty_df, nifty_regime = fetch_nifty_history()
+                log(f"  Market Regime: {nifty_regime.get('badge')}")
+
                 tickers = read_stock_list()
                 screener_results = run_scan(tickers)
+
+                log("Computing Mansfield Relative Strength (RS Rating 1-99) vs Nifty...")
+                screener_results = compute_relative_strength_ratings(screener_results, nifty_df)
+
                 wl_data = process_watchlist(screener_results)
                 top_pick, daily_history, mkt_info = process_daily_top_pick(screener_results)
+                mkt_info["nifty"] = nifty_regime
+
                 commodity_signals = fetch_commodity_signals()
                 fno_data = process_fno_stocks(screener_results)
                 html = build_html(screener_results, wl_data, top_pick, daily_history, commodity_signals, mkt_info, fno_data)
@@ -5188,14 +5450,22 @@ def background_initial_scan():
         except Exception as e:
             log(f"  ⚠ Stock list auto-update skipped: {e}")
 
+        log("Fetching NIFTY 50 benchmark & analyzing Market Regime...")
+        nifty_df, nifty_regime = fetch_nifty_history()
+        log(f"  Market Regime: {nifty_regime.get('badge')}")
+
         tickers = read_stock_list()
         screener_results = run_scan(tickers)
+
+        log("Computing Mansfield Relative Strength (RS Rating 1-99) vs Nifty...")
+        screener_results = compute_relative_strength_ratings(screener_results, nifty_df)
 
         log("Processing watchlist stocks...")
         wl_data = process_watchlist(screener_results)
 
         log("Processing Stock of the Day & history...")
         top_pick, daily_history, mkt_info = process_daily_top_pick(screener_results)
+        mkt_info["nifty"] = nifty_regime
 
         log("Fetching Commodity Intraday Signals (Crude Oil & Natural Gas)...")
         commodity_signals = fetch_commodity_signals()
