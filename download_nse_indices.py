@@ -80,20 +80,13 @@ def main():
     
     all_new_stocks = []
     
-    # 1. Download Full NSE Equity Master List (2,390+ stocks)
-    df_master = download_nse_equity_master()
-    if df_master is not None and "SYMBOL" in df_master.columns:
-        for _, row in df_master.iterrows():
-            sym = str(row["SYMBOL"]).strip()
-            name = str(row.get("NAME OF COMPANY") or row.get("NAME") or sym).strip()
-            if sym and sym != "nan" and sym != "SYMBOL":
-                all_new_stocks.append({
-                    "symbol": sym,
-                    "name": name
-                })
+    # 1. Download Nifty 50, Nifty Next 50, Nifty Midcap 150, Nifty Smallcap 250, Nifty 500
+    target_indices = ["Nifty 50", "Nifty Next 50", "Nifty Midcap 150", "Nifty Smallcap 250", "Nifty 500"]
     
-    # 2. Download Nifty 500, Midcap 150, and Smallcap 250
-    target_indices = ["Nifty 500", "Nifty Midcap 150", "Nifty Smallcap 250"]
+    largecap_syms = set()
+    midcap_syms = set()
+    smallcap_syms = set()
+    nifty500_syms = set()
     
     for idx_name in target_indices:
         url = INDICES[idx_name]
@@ -114,18 +107,46 @@ def main():
                 name_col = df.columns[0]
                 
             for _, row in df.iterrows():
-                sym = str(row[symbol_col]).strip()
+                sym = str(row[symbol_col]).strip().upper()
                 name = str(row[name_col]).strip()
-                if sym and sym != "nan":
+                if sym and sym != "NAN" and sym != "SYMBOL":
                     all_new_stocks.append({
                         "symbol": sym,
                         "name": name
                     })
+                    if idx_name in ["Nifty 50", "Nifty Next 50"]:
+                        largecap_syms.add(sym)
+                    elif idx_name == "Nifty Midcap 150":
+                        midcap_syms.add(sym)
+                    elif idx_name == "Nifty Smallcap 250":
+                        smallcap_syms.add(sym)
+                    
+                    nifty500_syms.add(sym)
+                    
+    # Save LargeCap and MidCap constituent JSON files for scanner categorizations
+    if largecap_syms:
+        with open(os.path.join(BASE_DIR, "nifty_largecap.json"), "w") as f:
+            json.dump(sorted(list(largecap_syms)), f, indent=2)
+        print(f"[SUCCESS] Saved {len(largecap_syms)} Large Cap tickers to nifty_largecap.json")
+    if midcap_syms:
+        with open(os.path.join(BASE_DIR, "nifty_midcap.json"), "w") as f:
+            json.dump(sorted(list(midcap_syms)), f, indent=2)
+        print(f"[SUCCESS] Saved {len(midcap_syms)} Mid Cap tickers to nifty_midcap.json")
+    if smallcap_syms:
+        with open(os.path.join(BASE_DIR, "nifty_smallcap.json"), "w") as f:
+            json.dump(sorted(list(smallcap_syms)), f, indent=2)
+        print(f"[SUCCESS] Saved {len(smallcap_syms)} Small Cap tickers to nifty_smallcap.json")
                     
     if not all_new_stocks:
-        print("\n[ERROR] No stock data could be downloaded (Access Denied / Network Issue).")
-        print("Please run this script from your local residential machine.")
-        return
+        json_file = os.path.join(BASE_DIR, "nifty_stocks_auto.json")
+        if os.path.exists(json_file) or os.path.exists(EXCEL_PATH):
+            print("\n[INFO] Unable to download fresh index list from NSE (Access Denied / Network Block).")
+            print("       Continuing with existing local stock list file.")
+            return
+        else:
+            print("\n[ERROR] No stock data could be downloaded (Access Denied / Network Issue).")
+            print("Please run this script from your local residential machine.")
+            return
 
     print(f"\nTotal unique stocks fetched from downloads: {len({s['symbol'] for s in all_new_stocks})}")
     

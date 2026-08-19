@@ -1,9 +1,9 @@
 {
-  "appId": "com.finplus.pnljournal",
-  "appName": "finplus_journal",
-  "webDir": "dist",
+  "appId": "com.stockscreener.app",
+  "appName": "Stock Screener",
+  "webDir": "www",
   "server": {
-    "cleartext": true,
-    "allowNavigation": ["*"]
+    "url": "https://abhilash128912.github.io/FinPlus-/",
+    "cleartext": true
   }
 }
