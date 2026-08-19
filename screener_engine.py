@@ -638,6 +638,12 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
     cp_info = calc_chartprime_sr_high_volume_boxes(history)
     res_stock.update(cp_info)
 
+    trend_info = compute_trend_classification(res_stock)
+    res_stock["trend"] = trend_info["trend"]
+    res_stock["trend_badge"] = trend_info["badge"]
+    res_stock["trend_class"] = trend_info["class"]
+    res_stock["tech_rating"] = trend_info["badge"]
+
     return res_stock
 
 
@@ -1509,33 +1515,38 @@ def compute_trend_classification(scored: dict) -> dict:
     - 🔴 Downtrend
     """
     ltp = scored.get("ltp", 0)
+    ema20 = scored.get("ema20")
     ma50 = scored.get("ma50")
     ma200 = scored.get("ma200")
     rsi = scored.get("rsi")
     vol_spike = scored.get("volume_spike", 1.0)
     wk52_h = scored.get("week_high_52")
 
-    if ltp <= 0 or not ma200:
+    if ltp <= 0:
         return {"trend": "Consolidation", "badge": "🟡 Consolidation Phase", "class": "badge-yellow"}
 
+    above_20 = (ema20 is not None and ltp >= ema20)
     above_50 = (ma50 is not None and ltp >= ma50)
-    above_200 = (ltp >= ma200)
+    above_200 = (ma200 is not None and ltp >= ma200) if ma200 else (above_20 or above_50)
     dist_52h_pct = ((ltp - wk52_h) / wk52_h * 100) if (wk52_h and wk52_h > 0) else -100
 
-    # 🔴 Downtrend: Price below both 50MA and 200MA
-    if not above_50 and not above_200:
+    # 🔴 Downtrend: Price below 20-EMA, 50-MA, and 200-MA
+    if not above_20 and not above_50 and (ma200 is None or not above_200):
         return {"trend": "Downtrend", "badge": "🔴 Downtrend", "class": "badge-red"}
 
     # 🟠 Distribution Phase: Near 52W High (within 10%) or above 50MA, but volume spike >= 1.2x & weakening RSI (<48)
     if (dist_52h_pct >= -10 or above_50) and vol_spike >= 1.2 and (rsi is not None and rsi < 48):
         return {"trend": "Distribution", "badge": "🟠 Distribution Phase", "class": "badge-yellow"}
 
-    # 🔵 Accumulation Phase: Price above 200MA, volume spike >= 1.2x, healthy RSI (45-58)
-    if above_200 and vol_spike >= 1.2 and (rsi is not None and 45 <= rsi <= 58):
+    # 🔵 Accumulation Phase: Price above 200MA or 20-EMA, volume spike >= 1.2x, healthy RSI (45-58)
+    if (above_200 or above_20) and vol_spike >= 1.2 and (rsi is not None and 45 <= rsi <= 58):
         return {"trend": "Accumulation", "badge": "🔵 Accumulation Phase", "class": "badge-purple"}
 
-    # 🟢 Strong Uptrend: Price > 50MA and Price > 200MA with strong RSI (>=50)
-    if above_50 and above_200 and (rsi is None or rsi >= 50):
+    # 🟢 Strong Uptrend: Price > 20-EMA and Price > 50-MA (or 200-MA) with healthy RSI (>=50)
+    if above_20 and (ma50 is None or above_50) and (rsi is None or rsi >= 48):
+        return {"trend": "Uptrend", "badge": "🟢 Strong Uptrend", "class": "badge-green"}
+
+    if above_20:
         return {"trend": "Uptrend", "badge": "🟢 Strong Uptrend", "class": "badge-green"}
 
     # 🟡 Consolidation Phase: Price consolidating near moving averages
