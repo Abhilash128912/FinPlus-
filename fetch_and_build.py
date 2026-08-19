@@ -3684,8 +3684,19 @@ function checkStartupScanStatus() {
     .then(r => r.json())
     .then(res => {
       const banner = document.getElementById('bgScanBanner');
+      const overlay = document.getElementById('scanProgressOverlay');
+      const textEl = document.getElementById('scanProgressText');
+      const logEl = document.getElementById('scanProgressLog');
+
       if (res && res.is_scanning) {
         wasScanning = true;
+
+        if (overlay && (typeof SCREENER_DATA === 'undefined' || !SCREENER_DATA || SCREENER_DATA.length === 0)) {
+          overlay.style.display = 'flex';
+          if (textEl) textEl.textContent = '⚡ Initializing Full Scan of 2,414 Stocks...';
+          if (logEl) logEl.textContent = 'Multithreaded engine scanning live prices & technical ratings. Page will auto-load when complete...';
+        }
+
         if (!banner) {
           const b = document.createElement('div');
           b.id = 'bgScanBanner';
@@ -3694,6 +3705,9 @@ function checkStartupScanStatus() {
           document.body.prepend(b);
         }
       } else {
+        if (overlay && wasScanning) {
+          overlay.style.display = 'none';
+        }
         if (banner) {
           banner.style.background = 'linear-gradient(135deg,rgba(16,185,129,0.35),rgba(5,150,105,0.35))';
           banner.innerHTML = `<span>✅</span> <span>Scan complete! Reloading latest data...</span>`;
