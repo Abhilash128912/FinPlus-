@@ -1107,13 +1107,13 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
         if gtt_level is not None:
             gtt_level = float(gtt_level)
 
-        # Calculate Auto-Dynamic GTT Level (20-day EMA support / S/R support)
-        ma20 = float(live.get("ma20") or 0) if live else 0.0
+        # Calculate Auto-Dynamic GTT Level (20-day EMA support / ChartPrime Support Box)
+        ema20 = float(live.get("ema20") or live.get("ma20") or 0) if live else 0.0
         sr_sup = float(live.get("sup_level") or 0) if live else 0.0
         
         auto_gtt = None
-        if ma20 > 0 and ma20 < ltp:
-            auto_gtt = round(ma20, 2)
+        if ema20 > 0 and ema20 < ltp:
+            auto_gtt = round(ema20, 2)
         elif sr_sup > 0 and sr_sup < ltp:
             auto_gtt = round(sr_sup, 2)
         elif ltp > 0:
