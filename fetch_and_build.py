@@ -29,7 +29,7 @@ import threading
 import pandas as pd
 import yfinance as yf
 
-from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings
+from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -37,6 +37,7 @@ CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 CACHE_DIR  = os.path.join(BASE_DIR, "cache")
 WL_SEED    = os.path.join(BASE_DIR, "watchlist_seed.json")
 WL_FILE    = os.path.join(BASE_DIR, "watchlist_data.json")
+LT_WL_FILE = os.path.join(BASE_DIR, "lt_watchlist.json")
 OUT_HTML   = os.path.join(BASE_DIR, "index.html")
 OUT_WWW_HTML = os.path.join(BASE_DIR, "www", "index.html")
 
@@ -1058,6 +1059,89 @@ def process_watchlist(screener_results: list[dict]) -> list[dict]:
 
 # ─── Step 4b: Market Timezone Awareness & Daily Top Pick Processing ────────────
 DAILY_PICKS_FILE = os.path.join(BASE_DIR, "daily_picks_history.json")
+
+
+def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
+    """
+    Reads lt_watchlist.json, merges live screener data per symbol,
+    runs the 3-state status gate (BUY_NOW / WAIT / WATCHLIST), and
+    returns an enriched list ready for the UI dashboard.
+    """
+    # Load seed file, create if missing
+    if not os.path.exists(LT_WL_FILE):
+        log(f"⚠ lt_watchlist.json not found at {LT_WL_FILE} — creating empty file")
+        with open(LT_WL_FILE, "w") as f:
+            json.dump([], f)
+        return []
+
+    try:
+        with open(LT_WL_FILE, encoding="utf-8") as f:
+            lt_stocks = json.load(f)
+    except Exception as e:
+        log(f"⚠ Could not load lt_watchlist.json: {e}")
+        return []
+
+    # Build fast lookup map from screener results
+    result_map = {r.get("symbol", "").upper(): r for r in screener_results}
+
+    enriched = []
+    buy_now_count = 0
+    for entry in lt_stocks:
+        sym = (entry.get("symbol") or "").upper()
+        active = entry.get("active", True)
+
+        live = result_map.get(sym)
+
+        ltp        = float(live.get("ltp") or 0) if live else 0.0
+        rsi        = float(live.get("rsi") or 50) if live else 50.0
+        trend      = (live.get("trend") or "Consolidation") if live else "Consolidation"
+        trend_badge= (live.get("tech_rating") or "🟡 Consolidation Phase") if live else "🟡 Consolidation Phase"
+        rs_rating  = int(live.get("rs_rating") or 50) if live else 50
+        rs_badge   = (live.get("rs_badge") or f"⚪ RS {rs_rating}") if live else f"⚪ RS {rs_rating}"
+        total_score= float(live.get("total_score") or 0) if live else 0.0
+        day_chg    = float(live.get("day_chg_pct") or 0) if live else 0.0
+
+        gtt_level = entry.get("gtt_level")
+        if gtt_level is not None:
+            gtt_level = float(gtt_level)
+
+        # Run status gate
+        gate = get_lt_watchlist_status(trend, rsi, ltp, gtt_level)
+        status = gate["status"]
+        if status == "BUY_NOW" and active:
+            buy_now_count += 1
+
+        # Distance from GTT level (negative = below GTT = triggered)
+        dist_from_gtt_pct = None
+        if gtt_level and gtt_level > 0 and ltp > 0:
+            dist_from_gtt_pct = round(((ltp - gtt_level) / gtt_level) * 100, 1)
+
+        enriched.append({
+            **entry,
+            "symbol":          sym,
+            "ltp":             round(ltp, 2),
+            "rsi":             round(rsi, 1),
+            "day_chg_pct":     round(day_chg, 2),
+            "trend":           trend,
+            "trend_badge":     trend_badge,
+            "rs_rating":       rs_rating,
+            "rs_badge":        rs_badge,
+            "total_score":     round(total_score, 1),
+            "gtt_level":       gtt_level,
+            "dist_from_gtt_pct": dist_from_gtt_pct,
+            "status":          status,
+            "status_badge":    gate["badge"],
+            "status_badge_class": gate["badge_class"],
+            "status_reason":   gate["reason"],
+            "live_data_found": live is not None,
+        })
+
+    if buy_now_count > 0:
+        log(f"  🔔 LT Watchlist: {buy_now_count} stock(s) are BUY_NOW — GTT level reached!")
+    log(f"  LT Watchlist: {sum(1 for e in enriched if e.get('active'))} active / {len(enriched)} total · "
+        f"{buy_now_count} BUY_NOW · {sum(1 for e in enriched if e.get('status')=='WAIT' and e.get('active'))} WAIT")
+    return enriched
+
 
 
 def get_market_status() -> dict:
@@ -2083,12 +2167,21 @@ details[open] summary::before {
     <div id="niftyRegimeGuidance" style="font-size:12px;color:var(--muted);max-width:650px;line-height:1.4"></div>
   </div>
 
+  <!-- Commodities Intraday Signals Bar -->
+  <div class="commodity-bar" id="commodityBar" style="margin-bottom:16px;border-radius:14px">
+    <div class="commodity-bar-title">
+      <span style="font-size:16px">⛽</span>
+      <span style="font-weight:600;font-size:13px;color:var(--text)">Commodities Intraday Signals</span>
+      <span style="font-size:10px;background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:10px;color:var(--muted)">15m timeframe (15/20 EMA Crossover)</span>
+    </div>
+    <div class="commodity-cards" id="commodityCards"></div>
+  </div>
+
   <!-- Desktop Top Tabs (Hidden on mobile where bottom nav is active) -->
   <div class="tabs">
     <button class="tab active" onclick="switchTab('screener')">🔍 Screener Results</button>
     <button class="tab" onclick="switchTab('swing')">⚡ Swing Trading</button>
-    <button class="tab" onclick="switchTab('watchlist')">⭐ My Watchlist (<span id="wlCount">0</span>)</button>
-    <button class="tab" onclick="switchTab('top-pick')">🏆 Stock of the Day</button>
+    <button class="tab" onclick="switchTab('watchlist')">🛡️ LT Watchlist (<span id="wlCount">0</span>)</button>
     <button class="tab" onclick="switchTab('fno')">📊 F&amp;O Options</button>
     <button class="tab" onclick="switchTab('holidays')">📅 Market Holidays (2026)</button>
   </div>
@@ -2303,115 +2396,101 @@ details[open] summary::before {
 
   </div>
 
-  <!-- WATCHLIST TAB -->
+  <!-- LT WATCHLIST TAB (Dynamic Status Gate) -->
   <div id="tab-watchlist" style="display:none">
-    <!-- Sleek Glassmorphic Summary Banner -->
+
+    <!-- BUY_NOW Live Alert Banner -->
+    <div id="ltBuyNowAlert" style="display:none;background:linear-gradient(135deg,rgba(16,185,129,0.18),rgba(5,150,105,0.25));border:1.5px solid #10b981;border-radius:14px;padding:16px 20px;margin-bottom:20px;box-shadow:0 4px 20px rgba(16,185,129,0.25);align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:24px;animation:pulse 1.5s infinite">🟢</span>
+        <div>
+          <div style="font-size:15px;font-weight:800;color:#34d399">GTT Dip-Buy Trigger Reached!</div>
+          <div style="font-size:12px;color:#e2e8f0;margin-top:2px" id="ltBuyNowAlertText">Stock(s) confirmed in Uptrend &amp; price reached target GTT level.</div>
+        </div>
+      </div>
+      <button class="btn-add" style="background:#10b981;color:#06060f;font-weight:800;padding:8px 16px;border-radius:8px;border:none;cursor:pointer" onclick="filterLtStatus('BUY_NOW')">
+        ⚡ View BUY NOW Signals
+      </button>
+    </div>
+
+    <!-- Stat Strip (3 Statuses + Total) -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:20px;box-shadow:0 4px 20px rgba(0,0,0,0.2)">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;text-align:center;align-items:center">
-        <div>
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Slots Used</div>
-          <div style="font-size:22px;font-weight:700;margin-top:2px"><span id="slotsUsed">0</span> / __MAX_STOCKS__</div>
-          <div class="slot-bar" style="margin-top:6px;height:4px"><div class="slot-fill" id="slotFill" style="width:0%"></div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;text-align:center;align-items:center">
+        <div style="cursor:pointer" onclick="filterLtStatus('BUY_NOW')">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">🟢 BUY NOW</div>
+          <div style="font-size:24px;font-weight:800;color:#34d399;margin-top:2px" id="ltCountBuyNow">0</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Uptrend + Price ≤ GTT</div>
+        </div>
+        <div style="cursor:pointer" onclick="filterLtStatus('WAIT')">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">🔵 WAIT</div>
+          <div style="font-size:24px;font-weight:800;color:#a5b4fc;margin-top:2px" id="ltCountWait">0</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Uptrend (Awaiting Dip)</div>
+        </div>
+        <div style="cursor:pointer" onclick="filterLtStatus('WATCHLIST')">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">⬜ WATCHING</div>
+          <div style="font-size:24px;font-weight:800;color:#94a3b8;margin-top:2px" id="ltCountWatchlist">0</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Consolidation / Down</div>
         </div>
         <div>
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Total Invested</div>
-          <div style="font-size:22px;font-weight:700;color:var(--accent2);margin-top:2px">₹<span id="totalInvested">0</span></div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px">Cap: ₹__TOTAL_BUDGET__</div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Portfolio P&L</div>
-          <div style="font-size:22px;font-weight:700;margin-top:2px" id="wlPortfolioPnl">—</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px" id="wlPortfolioPnlPct">0.00%</div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Signal Breakdown</div>
-          <div style="font-size:12px;font-weight:700;margin-top:6px;display:flex;justify-content:center;gap:10px" id="wlSignalCounts">
-            <span style="color:var(--green)">🟢 0 BUY</span>
-            <span style="color:var(--warn)">🟡 0 HOLD</span>
-            <span style="color:var(--danger)">🔴 0 SELL</span>
-          </div>
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">🛡️ Active Watchlist</div>
+          <div style="font-size:24px;font-weight:800;color:#fff;margin-top:2px"><span id="ltCountTotal">0</span> Stocks</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Dynamic Status Gate</div>
         </div>
       </div>
     </div>
 
-    <!-- Toolbar: Filter Pills & View Toggles & Auto-Add button -->
+    <!-- Toolbar: Filter Pills & Retired Toggle & Add Button -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:12px;color:var(--muted);font-weight:600;margin-right:4px">Signal:</span>
-        <button class="filter-reset" onclick="filterWlSignal('ALL')" id="wlSigBtnALL" style="border-color:var(--accent);color:var(--accent);font-weight:700">All</button>
-        <button class="filter-reset" onclick="filterWlSignal('BUY')" id="wlSigBtnBUY" style="color:var(--green)">🟢 BUY</button>
-        <button class="filter-reset" onclick="filterWlSignal('HOLD')" id="wlSigBtnHOLD" style="color:var(--warn)">🟡 HOLD</button>
-        <button class="filter-reset" onclick="filterWlSignal('SELL')" id="wlSigBtnSELL" style="color:var(--danger)">🔴 SELL</button>
+        <span style="font-size:12px;color:var(--muted);font-weight:600;margin-right:4px">Gate Filter:</span>
+        <button class="swing-pill swing-pill-active" id="ltPill-ALL" onclick="filterLtStatus('ALL')">↺ All (<span id="ltPillCountALL">0</span>)</button>
+        <button class="swing-pill" id="ltPill-BUY_NOW" onclick="filterLtStatus('BUY_NOW')" style="border-color:#10b981;color:#34d399">🟢 BUY NOW (<span id="ltPillCountBUY_NOW">0</span>)</button>
+        <button class="swing-pill" id="ltPill-WAIT" onclick="filterLtStatus('WAIT')" style="border-color:#6366f1;color:#a5b4fc">🔵 WAIT (<span id="ltPillCountWAIT">0</span>)</button>
+        <button class="swing-pill" id="ltPill-WATCHLIST" onclick="filterLtStatus('WATCHLIST')" style="border-color:#64748b;color:#94a3b8">⬜ WATCHING (<span id="ltPillCountWATCHLIST">0</span>)</button>
       </div>
 
-      <div style="display:flex;gap:10px;align-items:center">
-        <!-- View Toggle Pills -->
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:3px;display:flex;gap:2px">
-          <button id="wlViewCardsBtn" onclick="setWlViewMode('cards')" style="background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">📱 Cards</button>
-          <button id="wlViewTableBtn" onclick="setWlViewMode('table')" style="background:none;color:var(--muted);border:none;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">📊 Table</button>
-        </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;user-select:none">
+          <input type="checkbox" id="ltShowRetiredToggle" onchange="toggleLtShowRetired(this.checked)" style="cursor:pointer">
+          <span>Show Retired Stocks (<span id="ltRetiredCount">0</span>)</span>
+        </label>
 
-        <button class="btn-add" style="background:linear-gradient(135deg,#6c63ff,#00d4aa);color:#fff;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px" onclick="populatePortfolioSeed()">
-          ⚡ Populate 9 Portfolio Stocks
-        </button>
-        <button class="btn-add" style="background:var(--card2);border:1px solid var(--border);color:var(--text);font-weight:600;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px" onclick="openBseModal()">
-          ➕ Add BSE / Custom Stock
-        </button>
-        <button class="btn-add" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#ef4444;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px" onclick="clearAllWatchlist()">
-          🗑️ Clear All
+        <button class="btn-add" style="background:linear-gradient(135deg,#6c63ff,#00d4aa);color:#fff;font-weight:700;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px" onclick="openAddLtStockModal()">
+          ➕ Add Stock
         </button>
       </div>
     </div>
 
-    <!-- Cards View Container -->
-    <div class="wl-grid" id="watchlistGrid"></div>
-
-    <!-- Datatable View Container -->
-    <div class="table-wrap" id="watchlistTableWrap" style="display:none">
+    <!-- Main LT Watchlist Table -->
+    <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th onclick="sortWlTable('symbol')" style="cursor:pointer;user-select:none" title="Click to sort by Symbol">SYMBOL <span id="wlSort_symbol">↕</span></th>
-            <th onclick="sortWlTable('signal')" style="cursor:pointer;user-select:none" title="Click to sort by Signal">SIGNAL <span id="wlSort_signal">↕</span></th>
-            <th onclick="sortWlTable('ltp')" style="cursor:pointer;user-select:none" title="Click to sort by Price">PRICE <span id="wlSort_ltp">↕</span></th>
-            <th onclick="sortWlTable('unrealised_pnl')" style="cursor:pointer;user-select:none" title="Click to sort by Unrealised P&L">UNREALISED P&L <span id="wlSort_unrealised_pnl">↕</span></th>
-            <th onclick="sortWlTable('current_score')" style="cursor:pointer;user-select:none" title="Click to sort by Quality Score">SCORE <span id="wlSort_current_score">↕</span></th>
-            <th onclick="sortWlTable('current_strength')" style="cursor:pointer;user-select:none" title="Click to sort by Strength">STRENGTH <span id="wlSort_current_strength">↕</span></th>
-            <th onclick="sortWlTable('roe_pct')" style="cursor:pointer;user-select:none" title="Click to sort by ROE%">ROE% <span id="wlSort_roe_pct">↕</span></th>
-            <th onclick="sortWlTable('de_ratio')" style="cursor:pointer;user-select:none" title="Click to sort by Debt/Equity">D/E <span id="wlSort_de_ratio">↕</span></th>
-            <th onclick="sortWlTable('rsi')" style="cursor:pointer;user-select:none" title="Click to sort by RSI">RSI <span id="wlSort_rsi">↕</span></th>
-            <th>ACTION</th>
+            <th onclick="sortLtTable('durability_score')" style="cursor:pointer" title="Sort by Durability Score">Score ↕</th>
+            <th onclick="sortLtTable('symbol')" style="cursor:pointer">Stock ↕</th>
+            <th onclick="sortLtTable('type')" style="cursor:pointer">Type ↕</th>
+            <th onclick="sortLtTable('sector')" style="cursor:pointer">Sector ↕</th>
+            <th onclick="sortLtTable('status')" style="cursor:pointer">Gate Status ↕</th>
+            <th onclick="sortLtTable('trend')" style="cursor:pointer">Trend ↕</th>
+            <th onclick="sortLtTable('rsi')" style="cursor:pointer">RSI ↕</th>
+            <th onclick="sortLtTable('ltp')" style="cursor:pointer">LTP (Price) ↕</th>
+            <th onclick="sortLtTable('gtt_level')" style="cursor:pointer">GTT Target ↕</th>
+            <th onclick="sortLtTable('dist_from_gtt_pct')" style="cursor:pointer">Distance ↕</th>
+            <th>Role</th>
+            <th>Actions</th>
           </tr>
         </thead>
-        <tbody id="watchlistTableBody"></tbody>
+        <tbody id="ltWatchlistBody"></tbody>
       </table>
     </div>
 
-    <div id="wlEmpty" style="display:none;text-align:center;padding:40px;color:var(--muted)">
-      No stocks in watchlist match the selected signal filter. Add from the Screener tab or click ⚡ Auto-Add Suggestions!
+    <div id="ltEmpty" style="display:none;text-align:center;padding:40px;color:var(--muted);font-size:14px">
+      No stocks match the current gate filter.
     </div>
   </div>
 
 
-  <!-- STOCK OF THE DAY & DASHBOARD OVERVIEW TAB -->
-  <div id="tab-top-pick" style="display:none">
 
-    <!-- 6-Card Stats Summary Grid -->
-    <div class="stats-grid" id="statsGrid" style="margin-bottom:20px"></div>
-
-    <!-- Commodities Intraday Signals Bar -->
-    <div class="commodity-bar" id="commodityBar" style="margin-bottom:20px">
-      <div class="commodity-bar-title">
-        <span style="font-size:16px">⛽</span>
-        <span style="font-weight:600;font-size:13px;color:var(--text)">Commodities Intraday Signals</span>
-        <span style="font-size:10px;background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:10px;color:var(--muted)">15m timeframe (15/20 EMA Crossover)</span>
-      </div>
-      <div class="commodity-cards" id="commodityCards"></div>
-    </div>
-
-    <!-- Inner Spotlight Content -->
-    <div id="topPickInnerContent"></div>
-  </div>
 
   <!-- F&O OPTIONS TAB -->
   <div id="tab-fno" style="display:none"></div>
@@ -2486,12 +2565,8 @@ details[open] summary::before {
     <span>Swing</span>
   </button>
   <button class="mobile-nav-item" data-tab="watchlist" onclick="switchTab('watchlist')">
-    <span class="mobile-nav-icon">⭐</span>
-    <span>Watchlist</span>
-  </button>
-  <button class="mobile-nav-item" data-tab="top-pick" onclick="switchTab('top-pick')">
-    <span class="mobile-nav-icon">🏆</span>
-    <span>Top Pick</span>
+    <span class="mobile-nav-icon">🛡️</span>
+    <span>LT Watchlist</span>
   </button>
   <button class="mobile-nav-item" data-tab="fno" onclick="switchTab('fno')">
     <span class="mobile-nav-icon">📊</span>
@@ -2507,9 +2582,8 @@ details[open] summary::before {
 // ── DATA (injected by Python) ─────────────────────────────────────────────
 const SCREENER_DATA = __SCREENER_JSON__;
 const WATCHLIST_SEED = __WATCHLIST_JSON__;
+const LT_WATCHLIST = __LT_WATCHLIST_JSON__;
 const CONFIG = __CONFIG_JSON__;
-const TOP_PICK = __TOP_PICK_JSON__;
-const DAILY_PICKS_HISTORY = __DAILY_PICKS_HISTORY_JSON__;
 const COMMODITIES_DATA = __COMMODITIES_JSON__;
 const MARKET_INFO = __MARKET_INFO_JSON__;
 const FNO_DATA = __FNO_JSON__;
@@ -3234,6 +3308,317 @@ function clearAllWatchlist() {
   alert("Watchlist cleared successfully!");
 }
 
+// ── LT Watchlist — Dynamic Status Gate ────────────────────────────────────
+let ltWatchlist = (typeof LT_WATCHLIST !== 'undefined' && Array.isArray(LT_WATCHLIST)) ? LT_WATCHLIST : [];
+let ltFilterStatus = 'ALL';
+let ltShowRetired = false;
+let ltSortCol = 'durability_score';
+let ltSortDir = -1;
+
+function calculateClientStatus(item) {
+  const uptrendStates = ["Uptrend", "Accumulation", "Strong Uptrend"];
+  const trend = item.trend || "Consolidation";
+  const rsi = item.rsi || 50;
+  const ltp = item.ltp || 0;
+  const gtt = item.gtt_level;
+
+  if (uptrendStates.includes(trend)) {
+    if (gtt !== null && gtt !== undefined && gtt !== "" && ltp > 0 && ltp <= gtt && rsi < 70) {
+      item.status = "BUY_NOW";
+      item.status_badge = "🟢 BUY NOW";
+      item.status_badge_class = "badge-green";
+      item.status_reason = `Price ₹${ltp.toFixed(2)} ≤ GTT ₹${parseFloat(gtt).toFixed(2)} · Trend: ${trend} · RSI ${rsi.toFixed(0)}`;
+      return;
+    }
+    item.status = "WAIT";
+    item.status_badge = "🔵 WAIT";
+    item.status_badge_class = "badge-purple";
+    item.status_reason = `Trend confirmed (${trend}) — waiting for dip to GTT level` + (gtt ? ` ₹${parseFloat(gtt).toFixed(2)}` : ' (GTT not set)');
+    return;
+  }
+  item.status = "WATCHLIST";
+  item.status_badge = "⬜ WATCHING";
+  item.status_badge_class = "badge-gray";
+  item.status_reason = `Trend not confirmed (${trend}) — monitoring only, no action expected`;
+}
+
+function filterLtStatus(status) {
+  ltFilterStatus = status;
+  document.querySelectorAll('[id^="ltPill-"]').forEach(el => el.classList.remove('swing-pill-active'));
+  const pill = document.getElementById('ltPill-' + status);
+  if (pill) pill.classList.add('swing-pill-active');
+  renderLtWatchlist();
+}
+
+function toggleLtShowRetired(checked) {
+  ltShowRetired = checked;
+  renderLtWatchlist();
+}
+
+function sortLtTable(col) {
+  if (ltSortCol === col) {
+    ltSortDir *= -1;
+  } else {
+    ltSortCol = col;
+    ltSortDir = -1;
+  }
+  renderLtWatchlist();
+}
+
+function renderLtWatchlist() {
+  if (!Array.isArray(ltWatchlist)) return;
+
+  // Sync live price & recalculate status for all items
+  ltWatchlist.forEach(item => {
+    const live = (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA))
+      ? SCREENER_DATA.find(s => s.symbol === item.symbol)
+      : null;
+    if (live) {
+      item.ltp = live.ltp || item.ltp || 0;
+      item.rsi = live.rsi || item.rsi || 50;
+      item.trend = live.trend || item.trend || 'Consolidation';
+      item.trend_badge = live.tech_rating || item.trend_badge || '🟡 Consolidation Phase';
+      item.rs_rating = live.rs_rating || item.rs_rating || 50;
+    }
+    calculateClientStatus(item);
+    if (item.gtt_level && item.gtt_level > 0 && item.ltp > 0) {
+      item.dist_from_gtt_pct = Math.round(((item.ltp - item.gtt_level) / item.gtt_level) * 1000) / 10;
+    } else {
+      item.dist_from_gtt_pct = null;
+    }
+  });
+
+  const activeList = ltWatchlist.filter(s => s.active !== false);
+  const retiredList = ltWatchlist.filter(s => s.active === false);
+
+  const buyNowCount = activeList.filter(s => s.status === 'BUY_NOW').length;
+  const waitCount = activeList.filter(s => s.status === 'WAIT').length;
+  const watchlistCount = activeList.filter(s => s.status === 'WATCHLIST').length;
+  const totalActive = activeList.length;
+
+  // Update Stats & Header Counts
+  const el = id => document.getElementById(id);
+  if (el('ltCountBuyNow')) el('ltCountBuyNow').textContent = buyNowCount;
+  if (el('ltCountWait')) el('ltCountWait').textContent = waitCount;
+  if (el('ltCountWatchlist')) el('ltCountWatchlist').textContent = watchlistCount;
+  if (el('ltCountTotal')) el('ltCountTotal').textContent = totalActive;
+  if (el('wlCount')) el('wlCount').textContent = totalActive;
+  if (el('ltRetiredCount')) el('ltRetiredCount').textContent = retiredList.length;
+
+  if (el('ltPillCountALL')) el('ltPillCountALL').textContent = totalActive;
+  if (el('ltPillCountBUY_NOW')) el('ltPillCountBUY_NOW').textContent = buyNowCount;
+  if (el('ltPillCountWAIT')) el('ltPillCountWAIT').textContent = waitCount;
+  if (el('ltPillCountWATCHLIST')) el('ltPillCountWATCHLIST').textContent = watchlistCount;
+
+  // Alert Banner
+  const alertBox = el('ltBuyNowAlert');
+  const alertText = el('ltBuyNowAlertText');
+  if (alertBox) {
+    if (buyNowCount > 0) {
+      const buyNowItems = activeList.filter(s => s.status === 'BUY_NOW');
+      const symbolsStr = buyNowItems.map(s => `${s.symbol} (LTP: ₹${s.ltp.toFixed(2)} ≤ GTT: ₹${parseFloat(s.gtt_level).toFixed(2)})`).join(', ');
+      if (alertText) alertText.innerHTML = `<strong>${buyNowCount} Stock(s) Triggered:</strong> ${symbolsStr}`;
+      alertBox.style.display = 'flex';
+    } else {
+      alertBox.style.display = 'none';
+    }
+  }
+
+  // Filter display list
+  let displayList = ltWatchlist.filter(s => (ltShowRetired ? true : s.active !== false));
+  if (ltFilterStatus !== 'ALL') {
+    displayList = displayList.filter(s => s.status === ltFilterStatus);
+  }
+
+  // Sort
+  displayList.sort((a, b) => {
+    let av = a[ltSortCol];
+    let bv = b[ltSortCol];
+    if (ltSortCol === 'status') {
+      const order = { 'BUY_NOW': 1, 'WAIT': 2, 'WATCHLIST': 3 };
+      av = order[a.status] || 4;
+      bv = order[b.status] || 4;
+    }
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'string') return ltSortDir * av.localeCompare(bv);
+    return ltSortDir * (av - bv);
+  });
+
+  const tbody = el('ltWatchlistBody');
+  const empty = el('ltEmpty');
+  if (!tbody) return;
+
+  if (displayList.length === 0) {
+    tbody.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  tbody.innerHTML = displayList.map((s, i) => {
+    const isRetired = (s.active === false);
+    const scoreVal = s.durability_score || 75;
+    const scoreColor = scoreVal >= 85 ? '#10b981' : scoreVal >= 75 ? '#60a5fa' : '#fbbf24';
+    const statusBadgeCls = s.status === 'BUY_NOW' ? 'badge-green' : s.status === 'WAIT' ? 'badge-purple' : 'badge-gray';
+    const statusBadgeText = s.status === 'BUY_NOW' ? '🟢 BUY NOW' : s.status === 'WAIT' ? '🔵 WAIT' : '⬜ WATCHING';
+
+    const gttStr = s.gtt_level ? `₹${parseFloat(s.gtt_level).toFixed(2)}` : '—';
+    const ltpStr = s.ltp ? `₹${s.ltp.toFixed(2)}` : '—';
+    const distStr = s.dist_from_gtt_pct != null
+      ? `<span style="color:${s.dist_from_gtt_pct <= 0 ? '#10b981' : '#a5b4fc'};font-weight:700">${s.dist_from_gtt_pct <= 0 ? '' : '+'}${s.dist_from_gtt_pct.toFixed(1)}%</span>`
+      : '—';
+
+    const rsiStr = s.rsi ? s.rsi.toFixed(0) : '—';
+
+    return `
+    <tr style="${isRetired ? 'opacity:0.5;background:rgba(0,0,0,0.2)' : ''}">
+      <td>
+        <div style="font-weight:800;color:${scoreColor};font-size:14px">${scoreVal} <span style="font-size:10px;color:var(--muted)">/100</span></div>
+      </td>
+      <td>
+        <div style="font-weight:700;color:#fff;font-size:14px">${s.symbol}</div>
+        <div style="font-size:10px;color:var(--muted)">${s.portfolio_role || ''}</div>
+      </td>
+      <td><span class="badge ${s.type === 'PSU' ? 'badge-yellow' : 'badge-purple'}" style="font-size:10px">${s.type || 'Private'}</span></td>
+      <td><span style="font-size:11px;color:var(--text)">${s.sector || ''}</span></td>
+      <td>
+        <span class="badge ${statusBadgeCls}" style="font-size:11px;font-weight:700" title="${s.status_reason || ''}">${statusBadgeText}</span>
+      </td>
+      <td>
+        <span class="badge ${s.trend === 'Uptrend' || s.trend === 'Strong Uptrend' ? 'badge-green' : s.trend === 'Accumulation' ? 'badge-purple' : s.trend === 'Downtrend' ? 'badge-red' : 'badge-yellow'}" style="font-size:10px">
+          ${s.trend_badge || s.trend || 'Consolidation'}
+        </span>
+      </td>
+      <td><span style="font-size:11px;font-weight:600">${rsiStr}</span></td>
+      <td><strong style="color:#fff;font-size:13px">${ltpStr}</strong></td>
+      <td>
+        <button onclick="promptGttEdit('${s.symbol}', ${s.gtt_level || 0})" style="background:rgba(255,255,255,0.06);border:1px dashed rgba(255,255,255,0.2);color:#34d399;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:12px" title="Click to edit GTT Dip-Buy Target Price">
+          ${gttStr} ✏️
+        </button>
+      </td>
+      <td>${distStr}</td>
+      <td><span style="font-size:11px;color:var(--muted)">${s.portfolio_role || '—'}</span></td>
+      <td>
+        <div style="display:flex;gap:6px">
+          ${!isRetired ? `
+            <button onclick="promptGttEdit('${s.symbol}', ${s.gtt_level || 0})" style="background:var(--card2);border:1px solid var(--border);color:var(--text);font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Edit GTT Level">✏️ GTT</button>
+            <button onclick="retireLtStock('${s.symbol}')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Soft-delete (Keep history)">🗑️ Retire</button>
+          ` : `
+            <button onclick="reactivateLtStock('${s.symbol}')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#34d399;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Reactivate Stock">🔄 Reactivate</button>
+          `}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openAddLtStockModal(prefillSymbol = '') {
+  const el = id => document.getElementById(id);
+  if (prefillSymbol) {
+    if (el('ltFormSymbol')) el('ltFormSymbol').value = prefillSymbol;
+    const screenerItem = (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA)) ? SCREENER_DATA.find(s => s.symbol === prefillSymbol) : null;
+    if (screenerItem) {
+      if (el('ltFormSector')) el('ltFormSector').value = screenerItem.sector || '';
+      if (el('ltFormGtt')) el('ltFormGtt').value = screenerItem.ltp ? (screenerItem.ltp * 0.95).toFixed(2) : '';
+    }
+  }
+  const modalBg = el('ltAddModalBg');
+  if (modalBg) modalBg.style.display = 'flex';
+}
+
+function closeAddLtStockModal() {
+  const modalBg = document.getElementById('ltAddModalBg');
+  if (modalBg) modalBg.style.display = 'none';
+}
+
+function submitAddLtStockForm(e) {
+  e.preventDefault();
+  const el = id => document.getElementById(id);
+  const symbol = el('ltFormSymbol').value.trim().toUpperCase();
+  const type = el('ltFormType').value;
+  const durability_score = parseInt(el('ltFormDurability').value || 75);
+  const sector = el('ltFormSector').value.trim();
+  const portfolio_role = el('ltFormRole').value.trim();
+  const gtt_level = el('ltFormGtt').value ? parseFloat(el('ltFormGtt').value) : null;
+
+  const body = { symbol, type, durability_score, sector, portfolio_role, gtt_level };
+
+  fetch('/api/lt-watchlist/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(r => r.json()).then(res => {
+    let existing = ltWatchlist.find(s => s.symbol === symbol);
+    if (existing) {
+      Object.assign(existing, body, { active: true });
+    } else {
+      ltWatchlist.push({ ...body, active: true, added_date: new Date().toISOString().split('T')[0] });
+    }
+    closeAddLtStockModal();
+    renderLtWatchlist();
+  }).catch(err => {
+    let existing = ltWatchlist.find(s => s.symbol === symbol);
+    if (existing) {
+      Object.assign(existing, body, { active: true });
+    } else {
+      ltWatchlist.push({ ...body, active: true, added_date: new Date().toISOString().split('T')[0] });
+    }
+    closeAddLtStockModal();
+    renderLtWatchlist();
+  });
+}
+
+function promptGttEdit(symbol, currentGtt) {
+  const newGttStr = prompt(`Enter new GTT Dip-Buy Target Price (₹) for ${symbol}:`, currentGtt || '');
+  if (newGttStr === null) return;
+  const newGtt = newGttStr.trim() !== '' ? parseFloat(newGttStr) : null;
+
+  fetch('/api/lt-watchlist/update-gtt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol, gtt_level: newGtt })
+  }).finally(() => {
+    const item = ltWatchlist.find(s => s.symbol === symbol);
+    if (item) item.gtt_level = newGtt;
+    renderLtWatchlist();
+  });
+}
+
+function retireLtStock(symbol) {
+  if (!confirm(`Are you sure you want to retire ${symbol} from active watchlist?\n(Stock will be soft-deleted and can be restored anytime via "Show Retired Stocks")`)) return;
+
+  fetch('/api/lt-watchlist/remove', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol })
+  }).finally(() => {
+    const item = ltWatchlist.find(s => s.symbol === symbol);
+    if (item) item.active = false;
+    renderLtWatchlist();
+  });
+}
+
+function reactivateLtStock(symbol) {
+  fetch('/api/lt-watchlist/toggle-active', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol, active: true })
+  }).finally(() => {
+    const item = ltWatchlist.find(s => s.symbol === symbol);
+    if (item) item.active = true;
+    renderLtWatchlist();
+  });
+}
+
+function addToWatchlist(symbol) {
+  openAddLtStockModal(symbol);
+}
+
+function toggleWatchlist(symbol) {
+  openAddLtStockModal(symbol);
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 function init() {
   renderMarketStatusHeader();
@@ -3278,6 +3663,7 @@ function init() {
   populateSectorFilter();
   applyFilters();
   renderWatchlist();
+  renderLtWatchlist();
   updateWlCount();
 
   renderMarketStatusHeader();
@@ -3607,7 +3993,7 @@ function renderStats() {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  const tabs = ['screener', 'swing', 'watchlist', 'top-pick', 'fno', 'holidays'];
+  const tabs = ['screener', 'swing', 'watchlist', 'fno', 'holidays'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.mobile-nav-item').forEach(m => {
     m.classList.toggle('active', m.dataset.tab === tab);
@@ -3615,12 +4001,10 @@ function switchTab(tab) {
   document.getElementById('tab-screener').style.display  = tab === 'screener'  ? '' : 'none';
   document.getElementById('tab-swing').style.display     = tab === 'swing'     ? '' : 'none';
   document.getElementById('tab-watchlist').style.display = tab === 'watchlist' ? '' : 'none';
-  document.getElementById('tab-top-pick').style.display  = tab === 'top-pick'  ? '' : 'none';
   document.getElementById('tab-fno').style.display       = tab === 'fno'       ? '' : 'none';
   document.getElementById('tab-holidays').style.display  = tab === 'holidays'  ? '' : 'none';
   if (tab === 'swing')      { renderSwingRadar(); renderSrBreakouts(); }
-  if (tab === 'watchlist')  renderWatchlist();
-  if (tab === 'top-pick')   renderTopPick();
+  if (tab === 'watchlist')  renderLtWatchlist();
   if (tab === 'fno')        renderFnoTab();
   if (tab === 'holidays')   renderHolidaysTab();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -5251,7 +5635,7 @@ def fetch_commodity_signals() -> dict:
     return results
 
 
-def build_html(screener_results: list[dict], watchlist: list[dict], top_pick: dict, daily_history: list[dict], commodity_signals: dict, mkt_info: dict, fno_data: list[dict] | None = None) -> str:
+def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist: list[dict], commodity_signals: dict, mkt_info: dict, fno_data: list[dict] | None = None) -> str:
     run_time = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
 
     def json_serializer(o):
@@ -5271,9 +5655,8 @@ def build_html(screener_results: list[dict], watchlist: list[dict], top_pick: di
     html = html.replace("__RUN_TIME__",      run_time)
     html = html.replace("__SCREENER_JSON__", json.dumps(screener_results, ensure_ascii=False, default=json_serializer))
     html = html.replace("__WATCHLIST_JSON__", json.dumps(watchlist, ensure_ascii=False, default=json_serializer))
+    html = html.replace("__LT_WATCHLIST_JSON__", json.dumps(lt_watchlist, ensure_ascii=False, default=json_serializer))
     html = html.replace("__CONFIG_JSON__",   json.dumps(cfg, ensure_ascii=False, default=json_serializer))
-    html = html.replace("__TOP_PICK_JSON__", json.dumps(top_pick, ensure_ascii=False, default=json_serializer))
-    html = html.replace("__DAILY_PICKS_HISTORY_JSON__", json.dumps(daily_history, ensure_ascii=False, default=json_serializer))
     html = html.replace("__COMMODITIES_JSON__", json.dumps(commodity_signals, ensure_ascii=False, default=json_serializer))
     html = html.replace("__MARKET_INFO_JSON__", json.dumps(mkt_info, ensure_ascii=False, default=json_serializer))
     backtest_data = {}
@@ -5386,13 +5769,16 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 log("Computing Mansfield Relative Strength (RS Rating 1-99) vs Nifty...")
                 screener_results = compute_relative_strength_ratings(screener_results, nifty_df)
 
+                log("Processing LT Watchlist stocks...")
+                lt_wl_data = process_lt_watchlist(screener_results)
                 wl_data = process_watchlist(screener_results)
-                top_pick, daily_history, mkt_info = process_daily_top_pick(screener_results)
+
+                mkt_info = get_market_status()
                 mkt_info["nifty"] = nifty_regime
 
                 commodity_signals = fetch_commodity_signals()
                 fno_data = process_fno_stocks(screener_results)
-                html = build_html(screener_results, wl_data, top_pick, daily_history, commodity_signals, mkt_info, fno_data)
+                html = build_html(screener_results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
                 with open(OUT_HTML, "w", encoding="utf-8") as f:
                     f.write(html)
                 log("⚡ [API Request] Live Scan complete & index.html updated successfully!")
@@ -5403,6 +5789,131 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 res = {"status": "error", "message": str(e)}
                 self.send_response(500)
 
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
+
+        elif parsed.path == '/api/lt-watchlist/add':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                sym = (body.get("symbol") or "").strip().upper()
+                if not sym:
+                    raise ValueError("Symbol is required")
+
+                lt_stocks = []
+                if os.path.exists(LT_WL_FILE):
+                    with open(LT_WL_FILE, encoding="utf-8") as f:
+                        lt_stocks = json.load(f)
+
+                existing = next((s for s in lt_stocks if s.get("symbol") == sym), None)
+                if existing:
+                    existing["type"] = body.get("type", existing.get("type", "Private"))
+                    existing["sector"] = body.get("sector", existing.get("sector", ""))
+                    existing["durability_score"] = int(body.get("durability_score") or existing.get("durability_score", 75))
+                    existing["portfolio_role"] = body.get("portfolio_role", existing.get("portfolio_role", "Growth"))
+                    if "gtt_level" in body and body["gtt_level"] is not None and body["gtt_level"] != "":
+                        existing["gtt_level"] = float(body["gtt_level"])
+                    existing["active"] = True
+                else:
+                    gtt_val = float(body["gtt_level"]) if (body.get("gtt_level") is not None and body.get("gtt_level") != "") else None
+                    lt_stocks.append({
+                        "symbol": sym,
+                        "ticker": f"{sym}.NS",
+                        "type": body.get("type", "Private"),
+                        "sector": body.get("sector", ""),
+                        "durability_score": int(body.get("durability_score") or 75),
+                        "portfolio_role": body.get("portfolio_role", "Growth"),
+                        "gtt_level": gtt_val,
+                        "active": True,
+                        "added_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                        "notes": ""
+                    })
+
+                with open(LT_WL_FILE, "w", encoding="utf-8") as f:
+                    json.dump(lt_stocks, f, indent=2)
+
+                res = {"status": "ok", "message": f"{sym} saved to LT Watchlist"}
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
+
+        elif parsed.path == '/api/lt-watchlist/remove':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                sym = (body.get("symbol") or "").strip().upper()
+                if os.path.exists(LT_WL_FILE):
+                    with open(LT_WL_FILE, encoding="utf-8") as f:
+                        lt_stocks = json.load(f)
+                    for s in lt_stocks:
+                        if s.get("symbol") == sym:
+                            s["active"] = False
+                    with open(LT_WL_FILE, "w", encoding="utf-8") as f:
+                        json.dump(lt_stocks, f, indent=2)
+                res = {"status": "ok", "message": f"{sym} retired (soft-deleted)"}
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
+
+        elif parsed.path == '/api/lt-watchlist/update-gtt':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                sym = (body.get("symbol") or "").strip().upper()
+                gtt_val = float(body["gtt_level"]) if (body.get("gtt_level") is not None and body.get("gtt_level") != "") else None
+                if os.path.exists(LT_WL_FILE):
+                    with open(LT_WL_FILE, encoding="utf-8") as f:
+                        lt_stocks = json.load(f)
+                    for s in lt_stocks:
+                        if s.get("symbol") == sym:
+                            s["gtt_level"] = gtt_val
+                    with open(LT_WL_FILE, "w", encoding="utf-8") as f:
+                        json.dump(lt_stocks, f, indent=2)
+                res = {"status": "ok", "message": f"GTT level updated for {sym}"}
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
+
+        elif parsed.path == '/api/lt-watchlist/toggle-active':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                sym = (body.get("symbol") or "").strip().upper()
+                active = bool(body.get("active", True))
+                if os.path.exists(LT_WL_FILE):
+                    with open(LT_WL_FILE, encoding="utf-8") as f:
+                        lt_stocks = json.load(f)
+                    for s in lt_stocks:
+                        if s.get("symbol") == sym:
+                            s["active"] = active
+                    with open(LT_WL_FILE, "w", encoding="utf-8") as f:
+                        json.dump(lt_stocks, f, indent=2)
+                res = {"status": "ok", "message": f"{sym} active status set to {active}"}
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
@@ -5460,11 +5971,11 @@ def background_initial_scan():
         log("Computing Mansfield Relative Strength (RS Rating 1-99) vs Nifty...")
         screener_results = compute_relative_strength_ratings(screener_results, nifty_df)
 
-        log("Processing watchlist stocks...")
+        log("Processing LT Watchlist stocks...")
+        lt_wl_data = process_lt_watchlist(screener_results)
         wl_data = process_watchlist(screener_results)
 
-        log("Processing Stock of the Day & history...")
-        top_pick, daily_history, mkt_info = process_daily_top_pick(screener_results)
+        mkt_info = get_market_status()
         mkt_info["nifty"] = nifty_regime
 
         log("Fetching Commodity Intraday Signals (Crude Oil & Natural Gas)...")
@@ -5474,7 +5985,7 @@ def background_initial_scan():
         fno_data = process_fno_stocks(screener_results)
 
         log("Building HTML report...")
-        html = build_html(screener_results, wl_data, top_pick, daily_history, commodity_signals, mkt_info, fno_data)
+        html = build_html(screener_results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
         with open(OUT_HTML, "w", encoding="utf-8") as f:
             f.write(html)
         try:

@@ -1425,6 +1425,43 @@ def compute_trend_classification(scored: dict) -> dict:
     return {"trend": "Consolidation", "badge": "🟡 Consolidation Phase", "class": "badge-yellow"}
 
 
+def get_lt_watchlist_status(trend: str, rsi: float, ltp: float, gtt_level: float = None) -> dict:
+    """
+    LT Watchlist Dynamic Status Gate — 3 states only.
+
+    BUY_NOW  : Trend confirmed + price has actually hit the GTT dip-buy level + RSI < 70
+    WAIT     : Trend confirmed but price hasn't pulled back to trigger yet
+    WATCHLIST: Consolidation / Distribution / Downtrend — monitoring only
+
+    Uptrend-eligible trend states: "Uptrend" (Strong Uptrend) and "Accumulation".
+    Everything else → WATCHLIST.
+    """
+    UPTREND_STATES = ("Uptrend", "Accumulation")
+
+    if trend in UPTREND_STATES:
+        if gtt_level is not None and ltp is not None and ltp <= gtt_level and (rsi is None or rsi < 70):
+            return {
+                "status": "BUY_NOW",
+                "badge": "🟢 BUY NOW",
+                "badge_class": "badge-green",
+                "reason": f"Price ₹{ltp:.2f} ≤ GTT ₹{gtt_level:.2f} · Trend: {trend} · RSI {rsi:.0f}" if rsi else f"Price ₹{ltp:.2f} ≤ GTT ₹{gtt_level:.2f} · Trend: {trend}"
+            }
+        return {
+            "status": "WAIT",
+            "badge": "🔵 WAIT",
+            "badge_class": "badge-purple",
+            "reason": f"Trend confirmed ({trend}) — waiting for dip to GTT level" + (f" ₹{gtt_level:.2f}" if gtt_level else " (GTT not set)")
+        }
+
+    return {
+        "status": "WATCHLIST",
+        "badge": "⬜ WATCHING",
+        "badge_class": "badge-gray",
+        "reason": f"Trend not confirmed ({trend}) — monitoring only, no action expected"
+    }
+
+
+
 def calculate_ema_crossover_15m(df_15m: pd.DataFrame) -> dict:
     """
     Computes 15 EMA vs 20 EMA on 15-minute candles.

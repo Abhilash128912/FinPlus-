@@ -1,0 +1,17 @@
+[
+  {"symbol":"BEL","ticker":"BEL.NS","type":"PSU","sector":"Defence Electronics","durability_score":93,"portfolio_role":"Core growth","gtt_level":375.0,"active":true,"added_date":"2026-08-19","notes":""},
+  {"symbol":"ASHOKLEY","ticker":"ASHOKLEY.NS","type":"Private","sector":"Commercial Vehicles","durability_score":91,"portfolio_role":"Core growth","gtt_level":160.0,"active":true,"added_date":"2026-08-19","notes":""},
+  {"symbol":"POWERGRID","ticker":"POWERGRID.NS","type":"PSU","sector":"Power Transmission","durability_score":88,"portfolio_role":"Core stability","gtt_level":248.0,"active":true,"added_date":"2026-08-19","notes":""},
+  {"symbol":"VGUARD","ticker":"VGUARD.NS","type":"Private","sector":"Consumer Electricals","durability_score":84,"portfolio_role":"Consumer growth","gtt_level":305.0,"active":true,"added_date":"2026-08-19","notes":""},
+  {"symbol":"ITC","ticker":"ITC.NS","type":"Private","sector":"FMCG","durability_score":83,"portfolio_role":"Defensive compounder","gtt_level":248.0,"active":true,"added_date":"2026-08-19","notes":""},
+  {"symbol":"KARURVYSYA","ticker":"KARURVYSYA.NS","type":"Private","sector":"Banking","durability_score":83,"portfolio_role":"Financial growth","gtt_level":305.0,"active":true,"added_date":"2026-08-19","notes":""},
+  {"symbol":"NBCC","ticker":"NBCC.NS","type":"PSU","sector":"Infrastructure","durability_score":82,"portfolio_role":"Infrastructure","gtt_level":80.0,"active":true,"added_date":"2026-08-19","notes":""},
+  {"symbol":"FEDERALBNK","ticker":"FEDERALBNK.NS","type":"Private","sector":"Banking","durability_score":80,"portfolio_role":"Financial growth","gtt_level":325.0,"active":true,"added_date":"2026-08-19","notes":""},
+  {"symbol":"CUPID","ticker":"CUPID.NS","type":"Private","sector":"Healthcare/Wellness","durability_score":81,"portfolio_role":"High growth","gtt_level":258.0,"active":true,"added_date":"2026-08-19","notes":""},
+  {"symbol":"WELSPUNLIV","ticker":"WELSPUNLIV.NS","type":"Private","sector":"Home Textiles","durability_score":78,"portfolio_role":"Growth","gtt_level":162.0,"active":true,"added_date":"2026-08-19","notes":""},
+  {"symbol":"NATIONALUM","ticker":"NATIONALUM.NS","type":"PSU","sector":"Aluminium","durability_score":76,"portfolio_role":"Cyclical","gtt_level":355.0,"active":true,"added_date":"2026-08-19","notes":"NALCO"},
+  {"symbol":"GOLDIAM","ticker":"GOLDIAM.NS","type":"Private","sector":"Jewellery","durability_score":76,"portfolio_role":"Growth","gtt_level":330.0,"active":true,"added_date":"2026-08-19","notes":""},
+  {"symbol":"EIHAHOTELS","ticker":"EIHAHOTELS.NS","type":"Private","sector":"Hospitality","durability_score":74,"portfolio_role":"Travel","gtt_level":268.0,"active":true,"added_date":"2026-08-19","notes":""},
+  {"symbol":"FINEOTEX","ticker":"FINEOTEX.NS","type":"Private","sector":"Specialty Chemicals","durability_score":73,"portfolio_role":"Small-cap growth","gtt_level":null,"active":true,"added_date":"2026-08-19","notes":"GTT level to be set after next scan"},
+  {"symbol":"RVNL","ticker":"RVNL.NS","type":"PSU","sector":"Rail Infrastructure","durability_score":72,"portfolio_role":"Infrastructure growth","gtt_level":205.0,"active":true,"added_date":"2026-08-19","notes":""}
+]
