@@ -4024,13 +4024,15 @@ function saveWatchlist() {
 
 // ── Stats ─────────────────────────────────────────────────────────────────
 function renderStats() {
+  const el = document.getElementById('statsGrid');
+  if (!el) return;
   const qualified = SCREENER_DATA.filter(s => s.qualified).length;
   const total = SCREENER_DATA.length;
   const avgScore = total > 0 ? (SCREENER_DATA.reduce((a,b)=>a+b.total_score,0)/total).toFixed(1) : 0;
   const alerts = watchlist.filter(w => w.alerts && w.alerts.length > 0).length;
   const totalInvested = watchlist.reduce((a,w)=>a+(w.total_invested||0),0);
 
-  document.getElementById('statsGrid').innerHTML = `
+  el.innerHTML = `
     <div class="stat-card"><div class="stat-val stat-purple">${total}</div><div class="stat-lbl">Stocks Scanned</div></div>
     <div class="stat-card"><div class="stat-val stat-green">${qualified}</div><div class="stat-lbl">Qualified (Score≥55)</div></div>
     <div class="stat-card"><div class="stat-val stat-purple">${avgScore}</div><div class="stat-lbl">Avg Score</div></div>
