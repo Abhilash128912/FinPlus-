@@ -3415,6 +3415,17 @@ function renderLtWatchlist() {
       item.trend = live.trend || item.trend || 'Consolidation';
       item.trend_badge = live.tech_rating || item.trend_badge || '🟡 Consolidation Phase';
       item.rs_rating = live.rs_rating || item.rs_rating || 50;
+      item.day_chg_pct = live.day_chg_pct || item.day_chg_pct || 0;
+
+      const liveEma = live.ema20 || live.ma20 || 0;
+      const liveSup = live.sup_level || 0;
+      if (liveEma > 0 && liveEma < item.ltp) {
+        item.auto_gtt = Math.round(liveEma * 100) / 100;
+      } else if (liveSup > 0 && liveSup < item.ltp) {
+        item.auto_gtt = Math.round(liveSup * 100) / 100;
+      } else if (item.ltp > 0) {
+        item.auto_gtt = Math.round(item.ltp * 0.94 * 100) / 100;
+      }
     }
     calculateClientStatus(item);
     if (item.gtt_level && item.gtt_level > 0 && item.ltp > 0) {
