@@ -3993,14 +3993,22 @@ function promptGttEdit(symbol, currentGtt) {
 
 function fetchLtWatchlistApi() {
   fetch('/api/lt-watchlist')
-    .then(r => r.json())
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
     .then(data => {
-      if (Array.isArray(data)) {
+      if (Array.isArray(data) && data.length > 0) {
         ltWatchlist = data;
         renderLtWatchlist();
       }
     })
-    .catch(err => console.warn('Could not fetch live LT Watchlist:', err));
+    .catch(err => {
+      console.warn('Could not fetch live LT Watchlist from API, using offline fallback:', err);
+      if (typeof ltWatchlist !== 'undefined' && Array.isArray(ltWatchlist)) {
+        renderLtWatchlist();
+      }
+    });
 }
 
 function deleteLtStock(symbol) {
