@@ -2683,6 +2683,7 @@ details[open] summary::before {
           </div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button onclick="openLtBuyModal('', 0)" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:700;font-size:12px;padding:8px 14px;border-radius:8px;border:none;cursor:pointer">🛒 Record Buy</button>
           <button onclick="promptLtDeposit()" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.4);color:#34d399;font-weight:700;font-size:12px;padding:8px 14px;border-radius:8px;cursor:pointer">➕ Top-Up Capital</button>
           <button onclick="toggleLtHoldingsDrawer()" style="background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.4);color:#a5b4fc;font-weight:700;font-size:12px;padding:8px 14px;border-radius:8px;cursor:pointer">💼 View Holdings</button>
         </div>
@@ -3888,6 +3889,7 @@ function renderLtWatchlist() {
       <td>
         <div style="display:flex;gap:6px">
           ${!isRetired ? `
+            <button onclick="openLtBuyModal('${s.symbol}', ${s.ltp || 0})" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#34d399;font-weight:700;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Record Buy Transaction for ${s.symbol}">🛒 Buy</button>
             <button onclick="promptGttEdit('${s.symbol}', ${s.gtt_level || 0})" style="background:var(--card2);border:1px solid var(--border);color:var(--text);font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Edit GTT Level">✏️ GTT</button>
             <button onclick="retireLtStock('${s.symbol}')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Soft-delete (Keep history)">🗑️ Retire</button>
           ` : `
@@ -6034,22 +6036,64 @@ function promptLtDeposit() {
 }
 
 function openLtBuyModal(symbol, ltp) {
-  const qtyStr = prompt(`Execute BUY Order for ${symbol} @ ₹${ltp.toFixed(2)}\n\nEnter Quantity to Buy:`, '1');
+  let sym = symbol ? symbol.trim().toUpperCase() : '';
+  if (!sym) {
+    const symInput = prompt('Enter Stock Symbol to Record BUY (e.g. BEL, ASHOKLEY, POWERGRID):');
+    if (!symInput) return;
+    sym = symInput.trim().toUpperCase();
+    const found = (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA))
+      ? SCREENER_DATA.find(s => s.symbol === sym)
+      : null;
+    ltp = found ? found.ltp : 0;
+  }
+
+  const defaultPrice = ltp && ltp > 0 ? ltp.toFixed(2) : '';
+  const priceStr = prompt(`Record BUY Transaction for ${sym}\n\nEnter Buy Price per Share (₹):`, defaultPrice);
+  if (!priceStr) return;
+  const price = parseFloat(priceStr);
+  if (isNaN(price) || price <= 0) {
+    alert('Please enter a valid buy price.');
+    return;
+  }
+
+  const qtyStr = prompt(`Record BUY Transaction for ${sym} @ ₹${price.toFixed(2)}\n\nEnter Quantity of Shares Bought:`, '1');
   if (!qtyStr) return;
   const qty = parseInt(qtyStr, 10);
-  if (isNaN(qty) || qty <= 0) return;
+  if (isNaN(qty) || qty <= 0) {
+    alert('Please enter a valid quantity.');
+    return;
+  }
 
-  if (confirm(`Confirm BUY ${qty} shares of ${symbol} @ ₹${ltp.toFixed(2)} via INDmoney Delivery Engine?`)) {
+  const tradeVal = qty * price;
+  const brokerage = Math.min(20.0, tradeVal * 0.0005);
+  const stt = tradeVal * 0.001;
+  const stamp = tradeVal * 0.00015;
+  const exch = tradeVal * 0.0000297;
+  const gst = (brokerage + exch) * 0.18;
+  const totalFees = brokerage + stt + stamp + exch + gst;
+  const netCost = tradeVal + totalFees;
+
+  const confirmMsg = `🛒 CONFIRM BUY TRANSACTION\n\n` +
+    `• Stock: ${sym}\n` +
+    `• Quantity: ${qty} shares\n` +
+    `• Price / Share: ₹${price.toFixed(2)}\n` +
+    `• Trade Value: ₹${tradeVal.toFixed(2)}\n` +
+    `• INDmoney Delivery Charges: ₹${totalFees.toFixed(2)}\n` +
+    `========================================\n` +
+    `• Total Cash Required: ₹${netCost.toFixed(2)}\n\n` +
+    `Deduct ₹${netCost.toFixed(2)} from Available Cash & record in LT Portfolio?`;
+
+  if (confirm(confirmMsg)) {
     fetch('/api/lt-portfolio/buy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbol: symbol, qty: qty, price: ltp })
+      body: JSON.stringify({ symbol: sym, qty: qty, price: price })
     }).then(r => r.json()).then(res => {
       if (res.status === 'ok') {
         alert(`✅ ${res.message}`);
         fetchLtPortfolioStatus();
       } else {
-        alert(`❌ Buy Order Failed: ${res.message}`);
+        alert(`❌ Buy Order Failed: ${res.message}\n\nHint: Use "+ Top-Up Capital" button if you need more Available Cash.`);
       }
     }).catch(err => alert('Error connecting to backend server.'));
   }
