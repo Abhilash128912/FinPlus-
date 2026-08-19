@@ -1061,6 +1061,8 @@ def detect_sr_breaks_and_retests(
         return default_res
 
     df = history.copy()
+    # Standardize column names (handle lowercase 'close', 'high', 'low' from yfinance cache)
+    df = df.rename(columns={c: str(c).capitalize() for c in df.columns})
     for col in ["Open", "High", "Low", "Close", "Volume"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -1136,22 +1138,17 @@ def detect_sr_breaks_and_retests(
         base_score = 50.0
 
     # Trigger B: RETEST BUY (Support Bounce 🔄)
-    elif breakout_idx is not None and 2 <= breakout_bars_ago <= 8:
-        recent_lows = lows[breakout_idx:]
-        tested_level = any(l <= res_level * 1.018 for l in recent_lows)
-        held_support = (curr_ltp >= res_level * 0.985)
-        is_green_reversal = (closes[-1] >= opens[-1] or closes[-1] >= closes[-2])
-
-        if tested_level and held_support and is_green_reversal and dist_from_res_pct <= 4.5:
-            is_retest_buy = True
-            sr_type = "RETEST_BUY"
-            sr_badge = "🔄 Retest Buy (Support Bounce)"
-            sr_badge_class = "badge-purple"
-            sr_reason = f"Retest bounce: former ₹{res_level:.2f} resistance confirmed as support"
-            base_score = 55.0
+    elif (breakout_idx is not None and 2 <= breakout_bars_ago <= 15 and -1.5 <= dist_from_res_pct <= 4.5) or \
+         (sup_level and 0.5 <= ((curr_ltp - sup_level) / sup_level) * 100 <= 3.5 and (closes[-1] >= opens[-1] or closes[-1] >= closes[-2])):
+        is_retest_buy = True
+        sr_type = "RETEST_BUY"
+        sr_badge = "🔄 Retest Buy (Support Bounce)"
+        sr_badge_class = "badge-purple"
+        sr_reason = f"Retest bounce: former ₹{res_level:.2f} resistance or ₹{sup_level:.2f} support confirmed"
+        base_score = 55.0
 
     # Trigger C: APPROACHING RESISTANCE (Coiling ⚡)
-    elif -2.0 <= dist_from_res_pct <= -0.1 and (rsi is not None and 48 <= rsi <= 68):
+    elif -3.0 <= dist_from_res_pct <= -0.1 and (rsi is None or 45 <= rsi <= 70):
         is_approaching = True
         sr_type = "APPROACHING_RES"
         sr_badge = "⚡ Approaching Breakout"

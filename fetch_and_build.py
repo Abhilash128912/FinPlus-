@@ -1102,39 +1102,63 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
         total_score= float(live.get("total_score") or 0) if live else 0.0
         day_chg    = float(live.get("day_chg_pct") or 0) if live else 0.0
 
+        gtt_mode  = entry.get("gtt_mode", "auto") # "auto" or "manual"
         gtt_level = entry.get("gtt_level")
         if gtt_level is not None:
             gtt_level = float(gtt_level)
 
-        # Run status gate
-        gate = get_lt_watchlist_status(trend, rsi, ltp, gtt_level)
+        # Calculate Auto-Dynamic GTT Level (20-day EMA support / S/R support)
+        ma20 = float(live.get("ma20") or 0) if live else 0.0
+        sr_sup = float(live.get("sup_level") or 0) if live else 0.0
+        
+        auto_gtt = None
+        if ma20 > 0 and ma20 < ltp:
+            auto_gtt = round(ma20, 2)
+        elif sr_sup > 0 and sr_sup < ltp:
+            auto_gtt = round(sr_sup, 2)
+        elif ltp > 0:
+            auto_gtt = round(ltp * 0.94, 2)
+
+        # Effective GTT Level: Auto-trailing unless user explicitly overrode with manual level
+        if gtt_mode == "auto" or gtt_level is None:
+            effective_gtt = auto_gtt
+            is_auto_gtt = True
+        else:
+            effective_gtt = gtt_level
+            is_auto_gtt = False
+
+        # Run status gate using effective_gtt
+        gate = get_lt_watchlist_status(trend, rsi, ltp, effective_gtt)
         status = gate["status"]
         if status == "BUY_NOW" and active:
             buy_now_count += 1
 
         # Distance from GTT level (negative = below GTT = triggered)
         dist_from_gtt_pct = None
-        if gtt_level and gtt_level > 0 and ltp > 0:
-            dist_from_gtt_pct = round(((ltp - gtt_level) / gtt_level) * 100, 1)
+        if effective_gtt and effective_gtt > 0 and ltp > 0:
+            dist_from_gtt_pct = round(((ltp - effective_gtt) / effective_gtt) * 100, 1)
 
         enriched.append({
             **entry,
-            "symbol":          sym,
-            "ltp":             round(ltp, 2),
-            "rsi":             round(rsi, 1),
-            "day_chg_pct":     round(day_chg, 2),
-            "trend":           trend,
-            "trend_badge":     trend_badge,
-            "rs_rating":       rs_rating,
-            "rs_badge":        rs_badge,
-            "total_score":     round(total_score, 1),
-            "gtt_level":       gtt_level,
+            "symbol":            sym,
+            "ltp":               round(ltp, 2),
+            "rsi":               round(rsi, 1),
+            "day_chg_pct":       round(day_chg, 2),
+            "trend":             trend,
+            "trend_badge":       trend_badge,
+            "rs_rating":         rs_rating,
+            "rs_badge":          rs_badge,
+            "total_score":       round(total_score, 1),
+            "gtt_level":         effective_gtt,
+            "auto_gtt":          auto_gtt,
+            "gtt_mode":          "auto" if is_auto_gtt else "manual",
+            "is_auto_gtt":       is_auto_gtt,
             "dist_from_gtt_pct": dist_from_gtt_pct,
-            "status":          status,
-            "status_badge":    gate["badge"],
+            "status":            status,
+            "status_badge":      gate["badge"],
             "status_badge_class": gate["badge_class"],
-            "status_reason":   gate["reason"],
-            "live_data_found": live is not None,
+            "status_reason":     gate["reason"],
+            "live_data_found":   live is not None,
         })
 
     if buy_now_count > 0:
@@ -3464,13 +3488,19 @@ function renderLtWatchlist() {
     const statusBadgeCls = s.status === 'BUY_NOW' ? 'badge-green' : s.status === 'WAIT' ? 'badge-purple' : 'badge-gray';
     const statusBadgeText = s.status === 'BUY_NOW' ? '🟢 BUY NOW' : s.status === 'WAIT' ? '🔵 WAIT' : '⬜ WATCHING';
 
-    const gttStr = s.gtt_level ? `₹${parseFloat(s.gtt_level).toFixed(2)}` : '—';
+    const isAutoGtt = (s.gtt_mode === 'auto' || s.gtt_mode == null || s.is_auto_gtt);
+    const gttVal = isAutoGtt ? (s.auto_gtt || s.gtt_level) : s.gtt_level;
+    const gttStr = gttVal ? `₹${parseFloat(gttVal).toFixed(2)}` : '—';
     const ltpStr = s.ltp ? `₹${s.ltp.toFixed(2)}` : '—';
     const distStr = s.dist_from_gtt_pct != null
       ? `<span style="color:${s.dist_from_gtt_pct <= 0 ? '#10b981' : '#a5b4fc'};font-weight:700">${s.dist_from_gtt_pct <= 0 ? '' : '+'}${s.dist_from_gtt_pct.toFixed(1)}%</span>`
       : '—';
 
     const rsiStr = s.rsi ? s.rsi.toFixed(0) : '—';
+
+    const gttBtn = isAutoGtt
+      ? `<button onclick="promptGttEdit('${s.symbol}', ${gttVal || 0}, true)" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.3);color:#34d399;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px" title="⚡ Auto-Trailing 20-EMA / Support Target (Click to edit or set custom level)">⚡ ${gttStr}</button>`
+      : `<button onclick="promptGttEdit('${s.symbol}', ${gttVal || 0}, false)" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:#fbbf24;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px" title="📌 Fixed Manual Level (Click to edit or reset to auto)">📌 ${gttStr}</button>`;
 
     return `
     <tr style="${isRetired ? 'opacity:0.5;background:rgba(0,0,0,0.2)' : ''}">
@@ -3493,11 +3523,7 @@ function renderLtWatchlist() {
       </td>
       <td><span style="font-size:11px;font-weight:600">${rsiStr}</span></td>
       <td><strong style="color:#fff;font-size:13px">${ltpStr}</strong></td>
-      <td>
-        <button onclick="promptGttEdit('${s.symbol}', ${s.gtt_level || 0})" style="background:rgba(255,255,255,0.06);border:1px dashed rgba(255,255,255,0.2);color:#34d399;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:12px" title="Click to edit GTT Dip-Buy Target Price">
-          ${gttStr} ✏️
-        </button>
-      </td>
+      <td>${gttBtn}</td>
       <td>${distStr}</td>
       <td><span style="font-size:11px;color:var(--muted)">${s.portfolio_role || '—'}</span></td>
       <td>
@@ -5927,16 +5953,21 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 length = int(self.headers.get('Content-Length', 0))
                 body = json.loads(self.rfile.read(length).decode('utf-8'))
                 sym = (body.get("symbol") or "").strip().upper()
+                mode = body.get("gtt_mode", "manual")
                 gtt_val = float(body["gtt_level"]) if (body.get("gtt_level") is not None and body.get("gtt_level") != "") else None
+                if mode == "auto":
+                    gtt_val = None
+
                 if os.path.exists(LT_WL_FILE):
                     with open(LT_WL_FILE, encoding="utf-8") as f:
                         lt_stocks = json.load(f)
                     for s in lt_stocks:
                         if s.get("symbol") == sym:
                             s["gtt_level"] = gtt_val
+                            s["gtt_mode"] = mode
                     with open(LT_WL_FILE, "w", encoding="utf-8") as f:
                         json.dump(lt_stocks, f, indent=2)
-                res = {"status": "ok", "message": f"GTT level updated for {sym}"}
+                res = {"status": "ok", "message": f"GTT target updated for {sym}"}
                 self.send_response(200)
             except Exception as e:
                 res = {"status": "error", "message": str(e)}
