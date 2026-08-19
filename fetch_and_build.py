@@ -2666,8 +2666,88 @@ details[open] summary::before {
 
   </div>
 
-  <!-- LT WATCHLIST TAB (Dynamic Status Gate) -->
+  <!-- LT WATCHLIST TAB (Dynamic Status Gate & Capital Accumulator) -->
   <div id="tab-watchlist" style="display:none">
+
+    <!-- 📅 Systematic Daily Capital Accumulator & INDmoney Portfolio Dashboard Card -->
+    <div id="ltCapitalDashboard" style="background:linear-gradient(135deg, #0e1726, #162438);border:1.5px solid rgba(52,211,153,0.35);border-radius:14px;padding:18px 22px;margin-bottom:20px;box-shadow:0 8px 30px rgba(0,0,0,0.35)">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px">📅</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="ltDayCounterBadge" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:12px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.05em">DAY 1 ACTIVE</span>
+              <span style="font-size:12px;color:var(--muted)">Started Aug 19, 2026</span>
+            </div>
+            <div style="font-size:16px;font-weight:700;color:#fff;margin-top:3px">LT Segment Daily Capital Accumulator (INDmoney Delivery Engine)</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button onclick="promptLtDeposit()" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.4);color:#34d399;font-weight:700;font-size:12px;padding:8px 14px;border-radius:8px;cursor:pointer">➕ Top-Up Capital</button>
+          <button onclick="toggleLtHoldingsDrawer()" style="background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.4);color:#a5b4fc;font-weight:700;font-size:12px;padding:8px 14px;border-radius:8px;cursor:pointer">💼 View Holdings</button>
+        </div>
+      </div>
+
+      <!-- Metric Grid -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Daily Accrual Rate</div>
+          <div style="font-size:20px;font-weight:800;color:#34d399;margin-top:2px">+₹100.00 <span style="font-size:10px;color:var(--muted)">/ day</span></div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Auto-credits EOD</div>
+        </div>
+
+        <div style="background:rgba(52,211,153,0.1);border:1.5px solid rgba(52,211,153,0.35);border-radius:10px;padding:12px 14px">
+          <div style="font-size:10px;color:#34d399;text-transform:uppercase;letter-spacing:.05em;font-weight:700">Available Cash</div>
+          <div id="ltAvailableCashVal" style="font-size:22px;font-weight:800;color:#34d399;margin-top:2px">₹100.00</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Ready for 🟢 BUY NOW</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Total Deposited</div>
+          <div id="ltTotalDepositedVal" style="font-size:20px;font-weight:800;color:#fff;margin-top:2px">₹100.00</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Cumulative Capital</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Invested Capital</div>
+          <div id="ltInvestedCapitalVal" style="font-size:20px;font-weight:800;color:#e2e8f0;margin-top:2px">₹0.00</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">In Active Holdings</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Portfolio Value</div>
+          <div id="ltPortfolioValueVal" style="font-size:20px;font-weight:800;color:#fff;margin-top:2px">₹0.00</div>
+          <div id="ltTotalPnlVal" style="font-size:10px;font-weight:700;color:var(--muted);margin-top:2px">P&L: ₹0.00 (0.0%)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LT Holdings Collapsible Drawer -->
+    <div id="ltHoldingsDrawer" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-size:15px;font-weight:700;color:#fff">💼 LT Portfolio Holdings (INDmoney Delivery Engine)</div>
+        <button onclick="toggleLtHoldingsDrawer()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px">✕ Close</button>
+      </div>
+      <div class="table-wrap">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">
+              <th style="padding:8px">Stock</th>
+              <th style="padding:8px">Qty</th>
+              <th style="padding:8px">Avg Price</th>
+              <th style="padding:8px">Live Price</th>
+              <th style="padding:8px">Invested</th>
+              <th style="padding:8px">Market Value</th>
+              <th style="padding:8px">Unrealized P&L</th>
+              <th style="padding:8px">Action</th>
+            </tr>
+          </thead>
+          <tbody id="ltHoldingsTableBody">
+            <tr><td colspan="8" style="padding:16px;text-align:center;color:var(--muted)">No active holdings yet. Buy stocks when status is 🟢 BUY NOW!</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
 
     <!-- BUY_NOW Live Alert Banner -->
     <div id="ltBuyNowAlert" style="display:none;background:linear-gradient(135deg,rgba(16,185,129,0.18),rgba(5,150,105,0.25));border:1.5px solid #10b981;border-radius:14px;padding:16px 20px;margin-bottom:20px;box-shadow:0 4px 20px rgba(16,185,129,0.25);align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
