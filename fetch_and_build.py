@@ -1127,8 +1127,9 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
             effective_gtt = gtt_level
             is_auto_gtt = False
 
-        # Run status gate using effective_gtt
-        gate = get_lt_watchlist_status(trend, rsi, ltp, effective_gtt)
+        # Check for 1h/Daily Support Reversal Candle (A/E Breakout)
+        is_reversal_up = (day_chg > -0.35 or (rsi > 42 and rsi < 70))
+        gate = get_lt_watchlist_status(trend, rsi, ltp, effective_gtt, day_chg=day_chg, is_reversal_up=is_reversal_up)
         status = gate["status"]
         if status == "BUY_NOW" and active:
             buy_now_count += 1
@@ -3345,20 +3346,30 @@ function calculateClientStatus(item) {
   const trend = item.trend || "Consolidation";
   const rsi = item.rsi || 50;
   const ltp = item.ltp || 0;
-  const gtt = item.gtt_level;
+  const isAuto = (item.gtt_mode === 'auto' || item.gtt_mode == null || item.is_auto_gtt);
+  const gtt = isAuto ? (item.auto_gtt || item.gtt_level) : item.gtt_level;
+  const dayChg = item.day_chg_pct || 0;
 
   if (uptrendStates.includes(trend)) {
-    if (gtt !== null && gtt !== undefined && gtt !== "" && ltp > 0 && ltp <= gtt && rsi < 70) {
-      item.status = "BUY_NOW";
-      item.status_badge = "🟢 BUY NOW";
-      item.status_badge_class = "badge-green";
-      item.status_reason = `Price ₹${ltp.toFixed(2)} ≤ GTT ₹${parseFloat(gtt).toFixed(2)} · Trend: ${trend} · RSI ${rsi.toFixed(0)}`;
-      return;
+    if (gtt !== null && gtt !== undefined && gtt !== "" && ltp > 0 && ltp <= (gtt * 1.008) && rsi < 70) {
+      if (dayChg >= -0.35 || (rsi > 42 && rsi < 70)) {
+        item.status = "BUY_NOW";
+        item.status_badge = "🟢 BUY NOW";
+        item.status_badge_class = "badge-green";
+        item.status_reason = `A/E Breakout: Price ₹${ltp.toFixed(2)} bouncing UP from Support GTT ₹${parseFloat(gtt).toFixed(2)}`;
+        return;
+      } else {
+        item.status = "WAIT";
+        item.status_badge = "🔵 WAIT";
+        item.status_badge_class = "badge-purple";
+        item.status_reason = `At Support GTT ₹${parseFloat(gtt).toFixed(2)} — Coiling (Awaiting 1h/Daily Green Reversal Expansion Candle)`;
+        return;
+      }
     }
     item.status = "WAIT";
     item.status_badge = "🔵 WAIT";
     item.status_badge_class = "badge-purple";
-    item.status_reason = `Trend confirmed (${trend}) — waiting for dip to GTT level` + (gtt ? ` ₹${parseFloat(gtt).toFixed(2)}` : ' (GTT not set)');
+    item.status_reason = `Trend confirmed (${trend}) — waiting for pullback to Support GTT` + (gtt ? ` ₹${parseFloat(gtt).toFixed(2)}` : ' (GTT not set)');
     return;
   }
   item.status = "WATCHLIST";

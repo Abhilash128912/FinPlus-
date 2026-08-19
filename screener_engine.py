@@ -985,6 +985,115 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
     }
 
 
+def calc_chartprime_sr_high_volume_boxes(df: pd.DataFrame, lookback: int = 20, box_width_mult: float = 1.0) -> dict:
+    """
+    Exact Python Port of ChartPrime 'Support and Resistance (High Volume Boxes)' Pine Script v5.
+    Calculates Delta Volume, High-Volume Support & Resistance Boxes, ATR box width,
+    'sup_holds' (Support Bounce Reversal ◆), and 'brekout_res' (Resistance Polarity Bounce ◆).
+    """
+    if df is None or df.empty or len(df) < 20:
+        return {"support_level": None, "resistance_level": None, "sup_holds": False, "brekout_res": False, "has_buy_diamond": False}
+
+    try:
+        df = df.copy()
+        df = df.rename(columns={c: str(c).capitalize() for c in df.columns})
+        for col in ["Open", "High", "Low", "Close", "Volume"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        df = df.dropna(subset=["Close", "High", "Low"])
+        
+        if len(df) < 20:
+            return {"support_level": None, "resistance_level": None, "sup_holds": False, "brekout_res": False, "has_buy_diamond": False}
+
+        closes = df["Close"].values
+        highs = df["High"].values
+        lows = df["Low"].values
+        opens = df["Open"].values if "Open" in df.columns else closes
+        volumes = df["Volume"].values if "Volume" in df.columns else np.ones(len(closes))
+
+        n = len(closes)
+
+        # 1. Delta Volume calculation (posVol vs negVol)
+        delta_vol = np.zeros(n)
+        is_buy_vol = True
+        for i in range(n):
+            if closes[i] > opens[i]:
+                is_buy_vol = True
+            elif closes[i] < opens[i]:
+                is_buy_vol = False
+            delta_vol[i] = volumes[i] if is_buy_vol else -volumes[i]
+
+        vol_len = 2
+        vol_hi = np.array([np.max(delta_vol[max(0, i-vol_len+1):i+1] / 2.5) for i in range(n)])
+        vol_lo = np.array([np.min(delta_vol[max(0, i-vol_len+1):i+1] / 2.5) for i in range(n)])
+
+        # 2. ATR Box Width calculation
+        tr = np.zeros(n)
+        tr[0] = highs[0] - lows[0]
+        for i in range(1, n):
+            tr[i] = max(highs[i] - lows[i], abs(highs[i] - closes[i-1]), abs(lows[i] - closes[i-1]))
+        
+        atr_window = min(200, n)
+        atr = pd.Series(tr).rolling(window=atr_window, min_periods=5).mean().values
+        width = atr * box_width_mult
+
+        # 3. Pivot High & Low detection
+        pivot_highs = {}
+        pivot_lows = {}
+        lb = min(15, (n - 1) // 2) if n < 45 else 20
+
+        for i in range(lb, n - lb):
+            if closes[i] == max(closes[i-lb : i+lb+1]):
+                pivot_highs[i] = closes[i]
+            if closes[i] == min(closes[i-lb : i+lb+1]):
+                pivot_lows[i] = closes[i]
+
+        support_level = None
+        support_level_1 = None
+        resistance_level = None
+        resistance_level_1 = None
+
+        for i in range(lb, n):
+            if i in pivot_lows and delta_vol[i] > vol_hi[i]:
+                support_level = pivot_lows[i]
+                support_level_1 = support_level - width[i]
+
+            if i in pivot_highs and delta_vol[i] < vol_lo[i]:
+                resistance_level = pivot_highs[i]
+                resistance_level_1 = resistance_level + width[i]
+
+        if support_level is None:
+            support_level = float(np.min(lows[-20:]))
+            support_level_1 = support_level - width[-1]
+        if resistance_level is None:
+            resistance_level = float(np.max(highs[-20:]))
+            resistance_level_1 = resistance_level + width[-1]
+
+        # 4. Support Bounce (sup_holds) & Resistance Flip Bounce (brekout_res)
+        curr_low = lows[-1]
+        prev_low = lows[-2] if n > 1 else curr_low
+
+        is_green_reversal = (closes[-1] >= opens[-1] or closes[-1] >= closes[-2])
+        in_sup_box = (curr_low <= support_level * 1.015 and curr_low >= support_level * 0.975)
+        sup_holds = bool(in_sup_box and is_green_reversal)
+        
+        brekout_res = bool(closes[-1] > resistance_level and prev_low <= resistance_level * 1.015 and is_green_reversal)
+        has_buy_diamond = bool(sup_holds or brekout_res)
+
+        return {
+            "support_level": round(float(support_level), 2),
+            "support_level_1": round(float(support_level_1), 2),
+            "resistance_level": round(float(resistance_level), 2),
+            "resistance_level_1": round(float(resistance_level_1), 2),
+            "sup_holds": sup_holds,
+            "brekout_res": brekout_res,
+            "has_buy_diamond": has_buy_diamond,
+            "badge": "🟢 A/E Support Reversal ◆" if has_buy_diamond else "⚪ Awaiting Support Reversal"
+        }
+    except Exception as e:
+        return {"support_level": None, "resistance_level": None, "sup_holds": False, "brekout_res": False, "has_buy_diamond": False}
+
+
 def detect_sr_breaks_and_retests(
     history: pd.DataFrame = None,
     ltp: float = None,
@@ -1422,32 +1531,50 @@ def compute_trend_classification(scored: dict) -> dict:
     return {"trend": "Consolidation", "badge": "🟡 Consolidation Phase", "class": "badge-yellow"}
 
 
-def get_lt_watchlist_status(trend: str, rsi: float, ltp: float, gtt_level: float = None) -> dict:
+def get_lt_watchlist_status(
+    trend: str,
+    rsi: float,
+    ltp: float,
+    gtt_level: float = None,
+    day_chg: float = 0.0,
+    is_reversal_up: bool = True
+) -> dict:
     """
-    LT Watchlist Dynamic Status Gate — 3 states only.
+    LT Watchlist Dynamic Status Gate — 3 states with A/E Support Reversal Expansion.
 
-    BUY_NOW  : Trend confirmed + price has actually hit the GTT dip-buy level + RSI < 70
-    WAIT     : Trend confirmed but price hasn't pulled back to trigger yet
+    BUY_NOW  : Trend confirmed + Price in Support Zone (≤ GTT * 1.008) + Moving UP from Support (A/E Breakout) + RSI < 70
+    WAIT     : Trend confirmed but price hasn't reached support or is still falling (coiling at support)
     WATCHLIST: Consolidation / Distribution / Downtrend — monitoring only
-
-    Uptrend-eligible trend states: "Uptrend" (Strong Uptrend) and "Accumulation".
-    Everything else → WATCHLIST.
     """
-    UPTREND_STATES = ("Uptrend", "Accumulation")
+    UPTREND_STATES = ("Uptrend", "Accumulation", "Strong Uptrend")
 
     if trend in UPTREND_STATES:
-        if gtt_level is not None and ltp is not None and ltp <= gtt_level and (rsi is None or rsi < 70):
-            return {
-                "status": "BUY_NOW",
-                "badge": "🟢 BUY NOW",
-                "badge_class": "badge-green",
-                "reason": f"Price ₹{ltp:.2f} ≤ GTT ₹{gtt_level:.2f} · Trend: {trend} · RSI {rsi:.0f}" if rsi else f"Price ₹{ltp:.2f} ≤ GTT ₹{gtt_level:.2f} · Trend: {trend}"
-            }
+        if gtt_level is not None and ltp is not None:
+            # Price in support zone (at or below GTT + 0.8% buffer)
+            in_support_zone = (ltp <= gtt_level * 1.008)
+            rsi_ok = (rsi is None or rsi < 70)
+            
+            if in_support_zone and rsi_ok:
+                if is_reversal_up or day_chg >= -0.3:
+                    return {
+                        "status": "BUY_NOW",
+                        "badge": "🟢 BUY NOW",
+                        "badge_class": "badge-green",
+                        "reason": f"A/E Breakout: Price ₹{ltp:.2f} bouncing UP from Support GTT ₹{gtt_level:.2f} · Trend: {trend}"
+                    }
+                else:
+                    return {
+                        "status": "WAIT",
+                        "badge": "🔵 WAIT",
+                        "badge_class": "badge-purple",
+                        "reason": f"At Support GTT ₹{gtt_level:.2f} — Coiling (Awaiting 1h/Daily Green Reversal Expansion Candle)"
+                    }
+
         return {
             "status": "WAIT",
             "badge": "🔵 WAIT",
             "badge_class": "badge-purple",
-            "reason": f"Trend confirmed ({trend}) — waiting for dip to GTT level" + (f" ₹{gtt_level:.2f}" if gtt_level else " (GTT not set)")
+            "reason": f"Trend confirmed ({trend}) — waiting for pullback to Support GTT" + (f" ₹{gtt_level:.2f}" if gtt_level else " (GTT not set)")
         }
 
     return {
