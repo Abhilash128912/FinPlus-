@@ -1977,3 +1977,65 @@ def compute_fno_signal(scored: dict, fno_cfg: dict) -> dict:
         "pa_badge": scored.get("pa_badge", "⚪ Neutral Order Flow"),
         "pa_class": scored.get("pa_class", "badge-gray"),
     }
+
+
+def calc_indmoney_charges(trade_value: float, trade_type: str = "BUY") -> dict:
+    """
+    Calculates exact INDmoney Delivery Charges for Indian Equity:
+    - Brokerage: 0.05% or ₹20 (whichever is lower).
+    - STT (Securities Transaction Tax): 0.1% on Buy value & 0.1% on Sell value.
+    - Exchange Turnover Fee (NSE): 0.00297% of trade value.
+    - Stamp Duty: 0.015% on Buy value (0% on Sell).
+    - GST: 18% on (Brokerage + Exchange Turnover Fee).
+    - DP Charges (Depository Participant): ₹15.93 flat per sell order (CDSL/INDmoney).
+    - SEBI Turnover Fee: 0.0001% of trade value.
+    """
+    trade_val = float(trade_value)
+    if trade_val <= 0:
+        return {
+            "gross_value": 0.0, "total_charges": 0.0, "net_value": 0.0,
+            "brokerage": 0.0, "stt": 0.0, "stamp_duty": 0.0,
+            "exchange_fee": 0.0, "gst": 0.0, "dp_charges": 0.0, "sebi_fee": 0.0
+        }
+
+    # 1. Brokerage: 0.05% or ₹20 (whichever is lower)
+    brokerage = min(20.0, trade_val * 0.0005)
+    
+    # 2. STT: 0.1% on Buy & Sell
+    stt = trade_val * 0.001
+    
+    # 3. Exchange Turnover Fee (NSE): 0.00297%
+    exchange_fee = trade_val * 0.0000297
+    
+    # 4. Stamp Duty: 0.015% on Buy only
+    stamp_duty = (trade_val * 0.00015) if trade_type.upper() == "BUY" else 0.0
+    
+    # 5. GST: 18% on (Brokerage + Exchange Fee)
+    gst = (brokerage + exchange_fee) * 0.18
+    
+    # 6. DP Charges: ₹15.93 flat per Sell order
+    dp_charges = 15.93 if trade_type.upper() == "SELL" else 0.0
+    
+    # 7. SEBI Fee: 0.0001%
+    sebi_fee = trade_val * 0.000001
+
+    total_charges = round(brokerage + stt + exchange_fee + stamp_duty + gst + dp_charges + sebi_fee, 2)
+    
+    if trade_type.upper() == "BUY":
+        net_value = round(trade_val + total_charges, 2)
+    else:
+        net_value = round(max(0.0, trade_val - total_charges), 2)
+
+    return {
+        "gross_value": round(trade_val, 2),
+        "total_charges": total_charges,
+        "net_value": net_value,
+        "brokerage": round(brokerage, 2),
+        "stt": round(stt, 2),
+        "stamp_duty": round(stamp_duty, 2),
+        "exchange_fee": round(exchange_fee, 2),
+        "gst": round(gst, 2),
+        "dp_charges": round(dp_charges, 2),
+        "sebi_fee": round(sebi_fee, 2)
+    }
+

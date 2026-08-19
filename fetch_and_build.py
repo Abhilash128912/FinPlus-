@@ -29,7 +29,7 @@ import threading
 import pandas as pd
 import yfinance as yf
 
-from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status
+from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, calc_indmoney_charges
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -38,6 +38,7 @@ CACHE_DIR  = os.path.join(BASE_DIR, "cache")
 WL_SEED    = os.path.join(BASE_DIR, "watchlist_seed.json")
 WL_FILE    = os.path.join(BASE_DIR, "watchlist_data.json")
 LT_WL_FILE = os.path.join(BASE_DIR, "lt_watchlist.json")
+LT_CAPITAL_LEDGER_FILE = os.path.join(BASE_DIR, "lt_capital_ledger.json")
 OUT_HTML   = os.path.join(BASE_DIR, "index.html")
 OUT_WWW_HTML = os.path.join(BASE_DIR, "www", "index.html")
 
@@ -1179,6 +1180,237 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
     log(f"  LT Watchlist: {sum(1 for e in enriched if e.get('active'))} active / {len(enriched)} total · "
         f"{buy_now_count} BUY_NOW · {sum(1 for e in enriched if e.get('status')=='WAIT' and e.get('active'))} WAIT")
     return enriched
+
+
+def load_lt_capital_ledger() -> dict:
+    if os.path.exists(LT_CAPITAL_LEDGER_FILE):
+        try:
+            with open(LT_CAPITAL_LEDGER_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {
+        "start_date": "2026-08-19",
+        "daily_accrual_rate": 100.0,
+        "extra_deposits": 0.0,
+        "holdings": [],
+        "transactions": []
+    }
+
+
+def save_lt_capital_ledger(ledger: dict):
+    with open(LT_CAPITAL_LEDGER_FILE, "w", encoding="utf-8") as f:
+        json.dump(ledger, f, indent=2)
+
+
+def get_lt_portfolio_summary(screener_results: list[dict] = None) -> dict:
+    ledger = load_lt_capital_ledger()
+    start_date_str = ledger.get("start_date", "2026-08-19")
+    daily_rate = float(ledger.get("daily_accrual_rate", 100.0))
+    extra_deposits = float(ledger.get("extra_deposits", 0.0))
+    
+    try:
+        s_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        today_date = datetime.datetime.now().date()
+        days_active = max(1, (today_date - s_date).days + 1)
+    except Exception:
+        days_active = 1
+
+    total_deposited = round((days_active * daily_rate) + extra_deposits, 2)
+    
+    holdings = ledger.get("holdings", [])
+    transactions = ledger.get("transactions", [])
+    
+    realized_pnl = 0.0
+    total_charges_paid = 0.0
+    total_buy_cash_spent = 0.0
+    total_sell_cash_received = 0.0
+    
+    for tx in transactions:
+        total_charges_paid += float(tx.get("total_charges", 0))
+        if tx.get("type") == "BUY":
+            total_buy_cash_spent += float(tx.get("net_value", 0))
+        elif tx.get("type") == "SELL":
+            total_sell_cash_received += float(tx.get("net_value", 0))
+            realized_pnl += float(tx.get("realized_pnl", 0))
+
+    available_cash = round(total_deposited + total_sell_cash_received - total_buy_cash_spent, 2)
+    
+    price_map = {}
+    if screener_results:
+        for s in screener_results:
+            price_map[s["symbol"]] = float(s.get("ltp", 0.0))
+
+    enriched_holdings = []
+    invested_capital = 0.0
+    current_portfolio_val = 0.0
+
+    for h in holdings:
+        sym = h["symbol"]
+        qty = int(h.get("qty", 0))
+        avg_price = float(h.get("avg_price", 0.0))
+        buy_value = round(qty * avg_price, 2)
+        
+        live_price = price_map.get(sym) or float(h.get("last_price", avg_price))
+        mkt_val = round(qty * live_price, 2)
+        unrealized_pnl = round(mkt_val - buy_value, 2)
+        unrealized_pnl_pct = round((unrealized_pnl / buy_value * 100), 2) if buy_value > 0 else 0.0
+        
+        invested_capital += buy_value
+        current_portfolio_val += mkt_val
+
+        enriched_holdings.append({
+            **h,
+            "live_price": round(live_price, 2),
+            "buy_value": buy_value,
+            "market_value": mkt_val,
+            "unrealized_pnl": unrealized_pnl,
+            "unrealized_pnl_pct": unrealized_pnl_pct
+        })
+
+    total_unrealized_pnl = round(current_portfolio_val - invested_capital, 2)
+    total_pnl = round(realized_pnl + total_unrealized_pnl, 2)
+
+    return {
+        "start_date": start_date_str,
+        "days_active": days_active,
+        "daily_accrual_rate": daily_rate,
+        "extra_deposits": extra_deposits,
+        "total_deposited": total_deposited,
+        "available_cash": available_cash,
+        "invested_capital": round(invested_capital, 2),
+        "current_portfolio_val": round(current_portfolio_val, 2),
+        "total_unrealized_pnl": total_unrealized_pnl,
+        "realized_pnl": round(realized_pnl, 2),
+        "total_pnl": total_pnl,
+        "total_charges_paid": round(total_charges_paid, 2),
+        "holdings": enriched_holdings,
+        "transactions": transactions
+    }
+
+
+def execute_lt_buy_order(symbol: str, qty: int, price: float) -> dict:
+    symbol = symbol.strip().upper()
+    qty = int(qty)
+    price = float(price)
+    if qty <= 0 or price <= 0:
+        raise ValueError("Quantity and price must be greater than zero")
+
+    gross_val = round(qty * price, 2)
+    fees = calc_indmoney_charges(gross_val, "BUY")
+    net_cost = fees["net_value"]
+
+    summary = get_lt_portfolio_summary()
+    available_cash = summary["available_cash"]
+
+    if net_cost > available_cash:
+        raise ValueError(f"Insufficient cash balance. Required: ₹{net_cost:.2f} (incl. INDmoney charges ₹{fees['total_charges']:.2f}), Available: ₹{available_cash:.2f}")
+
+    ledger = load_lt_capital_ledger()
+    holdings = ledger.get("holdings", [])
+    transactions = ledger.get("transactions", [])
+
+    existing = next((h for h in holdings if h["symbol"] == symbol), None)
+    if existing:
+        old_qty = int(existing["qty"])
+        old_avg = float(existing["avg_price"])
+        new_qty = old_qty + qty
+        new_avg = round(((old_qty * old_avg) + gross_val) / new_qty, 2)
+        existing["qty"] = new_qty
+        existing["avg_price"] = new_avg
+        existing["last_price"] = price
+    else:
+        holdings.append({
+            "symbol": symbol,
+            "qty": qty,
+            "avg_price": price,
+            "buy_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+            "last_price": price
+        })
+
+    tx_id = f"TX-BUY-{int(datetime.datetime.now().timestamp())}"
+    tx_record = {
+        "id": tx_id,
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "type": "BUY",
+        "symbol": symbol,
+        "qty": qty,
+        "price": price,
+        "gross_value": gross_val,
+        "total_charges": fees["total_charges"],
+        "net_value": net_cost,
+        "charges_breakdown": fees
+    }
+    transactions.append(tx_record)
+
+    ledger["holdings"] = holdings
+    ledger["transactions"] = transactions
+    save_lt_capital_ledger(ledger)
+
+    return {
+        "status": "ok",
+        "message": f"Successfully bought {qty} shares of {symbol} @ ₹{price:.2f} (Net Cost: ₹{net_cost:.2f})",
+        "transaction": tx_record
+    }
+
+
+def execute_lt_sell_order(symbol: str, qty: int, price: float) -> dict:
+    symbol = symbol.strip().upper()
+    qty = int(qty)
+    price = float(price)
+    if qty <= 0 or price <= 0:
+        raise ValueError("Quantity and price must be greater than zero")
+
+    ledger = load_lt_capital_ledger()
+    holdings = ledger.get("holdings", [])
+    transactions = ledger.get("transactions", [])
+
+    existing = next((h for h in holdings if h["symbol"] == symbol), None)
+    if not existing or int(existing.get("qty", 0)) < qty:
+        avail_qty = int(existing.get("qty", 0)) if existing else 0
+        raise ValueError(f"Insufficient holding for {symbol}. Requested: {qty}, Available: {avail_qty}")
+
+    old_qty = int(existing["qty"])
+    avg_price = float(existing["avg_price"])
+    cost_of_sold = round(qty * avg_price, 2)
+    gross_val = round(qty * price, 2)
+    
+    fees = calc_indmoney_charges(gross_val, "SELL")
+    net_proceeds = fees["net_value"]
+    realized_pnl = round(net_proceeds - cost_of_sold, 2)
+
+    rem_qty = old_qty - qty
+    if rem_qty <= 0:
+        holdings = [h for h in holdings if h["symbol"] != symbol]
+    else:
+        existing["qty"] = rem_qty
+        existing["last_price"] = price
+
+    tx_id = f"TX-SELL-{int(datetime.datetime.now().timestamp())}"
+    tx_record = {
+        "id": tx_id,
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "type": "SELL",
+        "symbol": symbol,
+        "qty": qty,
+        "price": price,
+        "gross_value": gross_val,
+        "total_charges": fees["total_charges"],
+        "net_value": net_proceeds,
+        "realized_pnl": realized_pnl,
+        "charges_breakdown": fees
+    }
+    transactions.append(tx_record)
+
+    ledger["holdings"] = holdings
+    ledger["transactions"] = transactions
+    save_lt_capital_ledger(ledger)
+
+    return {
+        "status": "ok",
+        "message": f"Successfully sold {qty} shares of {symbol} @ ₹{price:.2f} (Net Proceeds ₹{net_proceeds:.2f} credited to Cash Balance)",
+        "transaction": tx_record
+    }
 
 
 
@@ -6040,6 +6272,78 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                     with open(LT_WL_FILE, "w", encoding="utf-8") as f:
                         json.dump(lt_stocks, f, indent=2)
                 res = {"status": "ok", "message": f"{sym} active status set to {active}"}
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
+
+        elif parsed.path == '/api/lt-portfolio/status':
+            try:
+                summary = get_lt_portfolio_summary()
+                res = {"status": "ok", "summary": summary}
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
+
+        elif parsed.path == '/api/lt-portfolio/buy':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                sym = body.get("symbol")
+                qty = int(body.get("qty", 0))
+                price = float(body.get("price", 0.0))
+                res = execute_lt_buy_order(sym, qty, price)
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
+
+        elif parsed.path == '/api/lt-portfolio/sell':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                sym = body.get("symbol")
+                qty = int(body.get("qty", 0))
+                price = float(body.get("price", 0.0))
+                res = execute_lt_sell_order(sym, qty, price)
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
+
+        elif parsed.path == '/api/lt-portfolio/deposit':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                amount = float(body.get("amount", 0.0))
+                if amount <= 0:
+                    raise ValueError("Deposit amount must be positive")
+                ledger = load_lt_capital_ledger()
+                ledger["extra_deposits"] = round(float(ledger.get("extra_deposits", 0.0)) + amount, 2)
+                save_lt_capital_ledger(ledger)
+                summary = get_lt_portfolio_summary()
+                res = {"status": "ok", "message": f"Successfully deposited ₹{amount:.2f}", "summary": summary}
                 self.send_response(200)
             except Exception as e:
                 res = {"status": "error", "message": str(e)}
