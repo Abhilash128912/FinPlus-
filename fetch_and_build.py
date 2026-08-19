@@ -1114,14 +1114,20 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
         ma50 = float(live.get("ma50") or 0) if live else 0.0
 
         auto_gtt = None
-        if sr_sup > 0 and sr_sup < ltp:
-            auto_gtt = round(sr_sup, 2)
-        elif ema20 > 0 and ema20 < ltp:
+        if ema20 > 0 and ema20 < ltp:
             auto_gtt = round(ema20, 2)
+        elif sr_sup > 0 and sr_sup < ltp:
+            auto_gtt = round(sr_sup, 2)
         elif low20 > 0 and low20 < ltp:
             auto_gtt = round(low20, 2)
         elif ma50 > 0 and ma50 < ltp:
             auto_gtt = round(ma50, 2)
+        elif low20 > 0:
+            auto_gtt = round(low20, 2)
+        elif ema20 > 0:
+            auto_gtt = round(ema20, 2)
+        elif sr_sup > 0:
+            auto_gtt = round(sr_sup, 2)
         elif ltp > 0:
             auto_gtt = round(ltp, 2)
 
@@ -3428,14 +3434,20 @@ function renderLtWatchlist() {
       const liveLow20 = live.low20 || 0;
       const liveMa50 = live.ma50 || 0;
 
-      if (liveSup > 0 && liveSup < item.ltp) {
-        item.auto_gtt = Math.round(liveSup * 100) / 100;
-      } else if (liveEma > 0 && liveEma < item.ltp) {
+      if (liveEma > 0 && liveEma < item.ltp) {
         item.auto_gtt = Math.round(liveEma * 100) / 100;
+      } else if (liveSup > 0 && liveSup < item.ltp) {
+        item.auto_gtt = Math.round(liveSup * 100) / 100;
       } else if (liveLow20 > 0 && liveLow20 < item.ltp) {
         item.auto_gtt = Math.round(liveLow20 * 100) / 100;
       } else if (liveMa50 > 0 && liveMa50 < item.ltp) {
         item.auto_gtt = Math.round(liveMa50 * 100) / 100;
+      } else if (liveLow20 > 0) {
+        item.auto_gtt = Math.round(liveLow20 * 100) / 100;
+      } else if (liveEma > 0) {
+        item.auto_gtt = Math.round(liveEma * 100) / 100;
+      } else if (liveSup > 0) {
+        item.auto_gtt = Math.round(liveSup * 100) / 100;
       } else if (item.ltp > 0) {
         item.auto_gtt = Math.round(item.ltp * 100) / 100;
       }
