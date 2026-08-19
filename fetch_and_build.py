@@ -1107,17 +1107,23 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
         if gtt_level is not None:
             gtt_level = float(gtt_level)
 
-        # Calculate Auto-Dynamic GTT Level (20-day EMA support / ChartPrime Support Box)
-        ema20 = float(live.get("ema20") or live.get("ma20") or 0) if live else 0.0
+        # Fully Dynamic Auto-Trailing GTT Fallback Chain (100% calculated from price history, 0 hardcoded multipliers):
+        ema20 = float(live.get("ema20") or 0) if live else 0.0
         sr_sup = float(live.get("sup_level") or 0) if live else 0.0
-        
+        low20 = float(live.get("low20") or 0) if live else 0.0
+        ma50 = float(live.get("ma50") or 0) if live else 0.0
+
         auto_gtt = None
-        if ema20 > 0 and ema20 < ltp:
-            auto_gtt = round(ema20, 2)
-        elif sr_sup > 0 and sr_sup < ltp:
+        if sr_sup > 0 and sr_sup < ltp:
             auto_gtt = round(sr_sup, 2)
+        elif ema20 > 0 and ema20 < ltp:
+            auto_gtt = round(ema20, 2)
+        elif low20 > 0 and low20 < ltp:
+            auto_gtt = round(low20, 2)
+        elif ma50 > 0 and ma50 < ltp:
+            auto_gtt = round(ma50, 2)
         elif ltp > 0:
-            auto_gtt = round(ltp * 0.94, 2)
+            auto_gtt = round(ltp, 2)
 
         # Effective GTT Level: Auto-trailing unless user explicitly overrode with manual level
         if gtt_mode == "auto" or gtt_level is None:
@@ -3417,14 +3423,21 @@ function renderLtWatchlist() {
       item.rs_rating = live.rs_rating || item.rs_rating || 50;
       item.day_chg_pct = live.day_chg_pct || item.day_chg_pct || 0;
 
-      const liveEma = live.ema20 || live.ma20 || 0;
+      const liveEma = live.ema20 || 0;
       const liveSup = live.sup_level || 0;
-      if (liveEma > 0 && liveEma < item.ltp) {
-        item.auto_gtt = Math.round(liveEma * 100) / 100;
-      } else if (liveSup > 0 && liveSup < item.ltp) {
+      const liveLow20 = live.low20 || 0;
+      const liveMa50 = live.ma50 || 0;
+
+      if (liveSup > 0 && liveSup < item.ltp) {
         item.auto_gtt = Math.round(liveSup * 100) / 100;
+      } else if (liveEma > 0 && liveEma < item.ltp) {
+        item.auto_gtt = Math.round(liveEma * 100) / 100;
+      } else if (liveLow20 > 0 && liveLow20 < item.ltp) {
+        item.auto_gtt = Math.round(liveLow20 * 100) / 100;
+      } else if (liveMa50 > 0 && liveMa50 < item.ltp) {
+        item.auto_gtt = Math.round(liveMa50 * 100) / 100;
       } else if (item.ltp > 0) {
-        item.auto_gtt = Math.round(item.ltp * 0.94 * 100) / 100;
+        item.auto_gtt = Math.round(item.ltp * 100) / 100;
       }
     }
     calculateClientStatus(item);

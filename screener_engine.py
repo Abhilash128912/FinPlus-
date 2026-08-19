@@ -332,6 +332,12 @@ def score_momentum(info: dict, history: pd.DataFrame) -> tuple[float, dict]:
     breakdown["today_volume"] = vol
     breakdown["avg_volume_10d"] = avg_vol_10d
 
+    # 20-day EMA calculation
+    if len(history) >= 10 and "Close" in history.columns:
+        breakdown["ema20"] = round(float(history["Close"].ewm(span=min(20, len(history)), adjust=False).mean().iloc[-1]), 2)
+    else:
+        breakdown["ema20"] = None
+
     # 6. Beta (Relative Strength / Market Sensitivity) → up to 15 pts
     beta = to_float(info.get("beta"))
     beta_pts = 0
@@ -593,6 +599,7 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
         "rev_growth_pct": s_break.get("rev_growth_pct"),
         "div_yield_pct": v_break.get("div_yield_pct"),
         "rsi": m_break.get("rsi"),
+        "ema20": m_break.get("ema20"),
         "ma50": m_break.get("ma50"),
         "ma200": m_break.get("ma200"),
         "wk52_return_pct": m_break.get("wk52_return_pct"),
@@ -612,6 +619,7 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
         "market_cap": info.get("marketCap") or 0,
         "week_high_52": info.get("fiftyTwoWeekHigh") or 0,
         "week_low_52": info.get("fiftyTwoWeekLow") or 0,
+        "low20": round(float(history["Low"].tail(20).min()), 2) if len(history) >= 5 and "Low" in history.columns else None,
     }
 
     swing_info = compute_swing_setup(res_stock, history)
@@ -626,6 +634,9 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
         cmf=res_stock.get("cmf", 0.0)
     )
     res_stock.update(sr_info)
+
+    cp_info = calc_chartprime_sr_high_volume_boxes(history)
+    res_stock.update(cp_info)
 
     return res_stock
 
