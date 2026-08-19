@@ -4360,7 +4360,7 @@ function switchTab(tab) {
   document.getElementById('tab-fno').style.display       = tab === 'fno'       ? '' : 'none';
   document.getElementById('tab-holidays').style.display  = tab === 'holidays'  ? '' : 'none';
   if (tab === 'swing')      { renderSwingRadar(); renderSrBreakouts(); }
-  if (tab === 'watchlist')  renderLtWatchlist();
+  if (tab === 'watchlist')  { renderLtWatchlist(); fetchLtPortfolioStatus(); }
   if (tab === 'fno')        renderFnoTab();
   if (tab === 'holidays')   renderHolidaysTab();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -5869,8 +5869,140 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ── LT Capital Accumulator & Portfolio Functions ─────────────────────────
+function fetchLtPortfolioStatus() {
+  fetch('/api/lt-portfolio/status')
+    .then(r => r.json())
+    .then(res => {
+      if (res && res.status === 'ok' && res.summary) {
+        renderLtPortfolioSummary(res.summary);
+      }
+    })
+    .catch(err => {
+      console.log('Portfolio status API static/offline');
+    });
+}
+
+function renderLtPortfolioSummary(summary) {
+  const el = id => document.getElementById(id);
+  if (el('ltDayCounterBadge')) el('ltDayCounterBadge').textContent = `DAY ${summary.days_active} ACTIVE`;
+  if (el('ltAvailableCashVal')) el('ltAvailableCashVal').textContent = `₹${summary.available_cash.toFixed(2)}`;
+  if (el('ltTotalDepositedVal')) el('ltTotalDepositedVal').textContent = `₹${summary.total_deposited.toFixed(2)}`;
+  if (el('ltInvestedCapitalVal')) el('ltInvestedCapitalVal').textContent = `₹${summary.invested_capital.toFixed(2)}`;
+  if (el('ltPortfolioValueVal')) el('ltPortfolioValueVal').textContent = `₹${summary.current_portfolio_val.toFixed(2)}`;
+
+  if (el('ltTotalPnlVal')) {
+    const pnl = summary.total_pnl || 0;
+    const pnlCls = pnl > 0 ? '#10b981' : pnl < 0 ? '#ef4444' : 'var(--muted)';
+    el('ltTotalPnlVal').innerHTML = `<span style="color:${pnlCls}">P&L: ${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)}</span>`;
+  }
+
+  const tbody = el('ltHoldingsTableBody');
+  if (tbody) {
+    if (!summary.holdings || summary.holdings.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" style="padding:16px;text-align:center;color:var(--muted)">No active holdings yet. Buy stocks when status is 🟢 BUY NOW!</td></tr>`;
+    } else {
+      tbody.innerHTML = summary.holdings.map(h => {
+        const pnlCls = h.unrealized_pnl >= 0 ? '#10b981' : '#ef4444';
+        return `
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px"><strong style="color:#fff">${h.symbol}</strong></td>
+            <td style="padding:8px">${h.qty}</td>
+            <td style="padding:8px">₹${h.avg_price.toFixed(2)}</td>
+            <td style="padding:8px">₹${h.live_price.toFixed(2)}</td>
+            <td style="padding:8px">₹${h.buy_value.toFixed(2)}</td>
+            <td style="padding:8px">₹${h.market_value.toFixed(2)}</td>
+            <td style="padding:8px;font-weight:700;color:${pnlCls}">${h.unrealized_pnl >= 0 ? '+' : ''}₹${h.unrealized_pnl.toFixed(2)} (${h.unrealized_pnl_pct >= 0 ? '+' : ''}${h.unrealized_pnl_pct.toFixed(1)}%)</td>
+            <td style="padding:8px">
+              <button onclick="openLtSellModal('${h.symbol}', ${h.qty}, ${h.avg_price}, ${h.live_price})" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#ef4444;font-weight:700;font-size:11px;padding:3px 8px;border-radius:6px;cursor:pointer">🔴 Sell</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+}
+
+function toggleLtHoldingsDrawer() {
+  const drawer = document.getElementById('ltHoldingsDrawer');
+  if (drawer) {
+    drawer.style.display = (drawer.style.display === 'none' || !drawer.style.display) ? 'block' : 'none';
+  }
+}
+
+function promptLtDeposit() {
+  const amtStr = prompt('Enter Top-Up Capital Amount (₹) to add to LT available cash:');
+  if (!amtStr) return;
+  const amt = parseFloat(amtStr);
+  if (isNaN(amt) || amt <= 0) {
+    alert('Please enter a valid positive amount.');
+    return;
+  }
+
+  fetch('/api/lt-portfolio/deposit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount: amt })
+  }).then(r => r.json()).then(res => {
+    if (res.status === 'ok') {
+      alert(`✅ Successfully added ₹${amt.toFixed(2)} top-up capital!`);
+      if (res.summary) renderLtPortfolioSummary(res.summary);
+    } else {
+      alert(`❌ Deposit failed: ${res.message}`);
+    }
+  }).catch(err => alert('Error connecting to backend server.'));
+}
+
+function openLtBuyModal(symbol, ltp) {
+  const qtyStr = prompt(`Execute BUY Order for ${symbol} @ ₹${ltp.toFixed(2)}\n\nEnter Quantity to Buy:`, '1');
+  if (!qtyStr) return;
+  const qty = parseInt(qtyStr, 10);
+  if (isNaN(qty) || qty <= 0) return;
+
+  if (confirm(`Confirm BUY ${qty} shares of ${symbol} @ ₹${ltp.toFixed(2)} via INDmoney Delivery Engine?`)) {
+    fetch('/api/lt-portfolio/buy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol: symbol, qty: qty, price: ltp })
+    }).then(r => r.json()).then(res => {
+      if (res.status === 'ok') {
+        alert(`✅ ${res.message}`);
+        fetchLtPortfolioStatus();
+      } else {
+        alert(`❌ Buy Order Failed: ${res.message}`);
+      }
+    }).catch(err => alert('Error connecting to backend server.'));
+  }
+}
+
+function openLtSellModal(symbol, maxQty, avgPrice, ltp) {
+  const qtyStr = prompt(`Execute SELL Order for ${symbol} (Holding: ${maxQty} shares @ ₹${avgPrice.toFixed(2)})\nLive Price: ₹${ltp.toFixed(2)}\n\nEnter Quantity to Sell:`, maxQty);
+  if (!qtyStr) return;
+  const qty = parseInt(qtyStr, 10);
+  if (isNaN(qty) || qty <= 0 || qty > maxQty) {
+    alert(`Invalid quantity. Must be between 1 and ${maxQty}.`);
+    return;
+  }
+
+  if (confirm(`Confirm SELL ${qty} shares of ${symbol} @ ₹${ltp.toFixed(2)}?\n\nNet sale proceeds will be automatically credited back to your Available Cash balance for reinvestment!`)) {
+    fetch('/api/lt-portfolio/sell', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol: symbol, qty: qty, price: ltp })
+    }).then(r => r.json()).then(res => {
+      if (res.status === 'ok') {
+        alert(`✅ ${res.message}`);
+        fetchLtPortfolioStatus();
+      } else {
+        alert(`❌ Sell Order Failed: ${res.message}`);
+      }
+    }).catch(err => alert('Error connecting to backend server.'));
+  }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────
 init();
+fetchLtPortfolioStatus();
 </script>
 </body>
 </html>"""
