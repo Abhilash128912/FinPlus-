@@ -3766,8 +3766,9 @@ function renderLtWatchlist() {
       }
     }
     calculateClientStatus(item);
-    if (item.gtt_level && item.gtt_level > 0 && item.ltp > 0) {
-      item.dist_from_gtt_pct = Math.round(((item.ltp - item.gtt_level) / item.gtt_level) * 1000) / 10;
+    const _effGtt = (item.gtt_mode === 'auto' || item.is_auto_gtt) ? (item.auto_gtt || item.gtt_level) : item.gtt_level;
+    if (_effGtt && _effGtt > 0 && item.ltp > 0) {
+      item.dist_from_gtt_pct = Math.round(((item.ltp - _effGtt) / _effGtt) * 1000) / 10;
     } else {
       item.dist_from_gtt_pct = null;
     }
@@ -4277,7 +4278,6 @@ async function refreshLiveLTP(manual = false) {
   const currentMkt = calculateCurrentMarketStatus();
   const isOpen = currentMkt.is_open || currentMkt.is_equity_open;
 
-  // Automatically stop background polling if market is closed (allow manual click if forced)
   if (!isOpen && !manual) {
     if (pollIntervalTimer) {
       clearInterval(pollIntervalTimer);
@@ -4292,62 +4292,102 @@ async function refreshLiveLTP(manual = false) {
   if (dot) dot.classList.add('updating');
   if (txt && manual) txt.textContent = 'Refreshing prices...';
 
-  const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   let priceChanged = false;
 
   const symbolsToPoll = new Map();
   if (typeof TOP_PICK !== 'undefined' && TOP_PICK && TOP_PICK.symbol) {
     symbolsToPoll.set(TOP_PICK.symbol, TOP_PICK.ticker || TOP_PICK.symbol + '.NS');
   }
-  watchlist.forEach(w => symbolsToPoll.set(w.symbol, w.ticker || w.symbol + '.NS'));
-  filteredData.slice(0, 20).forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
+  if (typeof watchlist !== 'undefined' && Array.isArray(watchlist)) {
+    watchlist.forEach(w => symbolsToPoll.set(w.symbol, w.ticker || w.symbol + '.NS'));
+  }
+  if (typeof ltWatchlist !== 'undefined' && Array.isArray(ltWatchlist)) {
+    ltWatchlist.forEach(w => symbolsToPoll.set(w.symbol, w.ticker || w.symbol + '.NS'));
+  }
+  if (typeof filteredData !== 'undefined' && Array.isArray(filteredData)) {
+    filteredData.slice(0, 25).forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
+  }
   if (typeof FNO_DATA !== 'undefined' && Array.isArray(FNO_DATA)) {
     FNO_DATA.forEach(f => symbolsToPoll.set(f.symbol, f.ticker || f.symbol + '.NS'));
   }
 
-  for (const [sym, ticker] of symbolsToPoll.entries()) {
-    const newPrice = await fetchLiveLTPForSymbol(ticker);
-    if (newPrice && newPrice > 0) {
-      if (typeof TOP_PICK !== 'undefined' && TOP_PICK && TOP_PICK.symbol === sym) {
-        if (Math.abs((TOP_PICK.ltp || TOP_PICK.current_ltp || 0) - newPrice) > 0.01) {
-          TOP_PICK.old_ltp = TOP_PICK.ltp;
-          TOP_PICK.ltp = newPrice;
-          TOP_PICK.current_ltp = newPrice;
-          if (TOP_PICK.ma50) TOP_PICK.dist_ma50_pct = Math.round(((newPrice - TOP_PICK.ma50)/TOP_PICK.ma50)*1000)/10;
-          if (TOP_PICK.ma200) TOP_PICK.dist_ma200_pct = Math.round(((newPrice - TOP_PICK.ma200)/TOP_PICK.ma200)*1000)/10;
-          if (TOP_PICK.week_high_52) TOP_PICK.dist_52w_high_pct = Math.round(((newPrice - TOP_PICK.week_high_52)/TOP_PICK.week_high_52)*1000)/10;
-          if (TOP_PICK.week_low_52) TOP_PICK.dist_52w_low_pct = Math.round(((newPrice - TOP_PICK.week_low_52)/TOP_PICK.week_low_52)*1000)/10;
-          priceChanged = true;
-        }
-      }
+  const fetchedPrices = new Map();
+  const tickerList = Array.from(symbolsToPoll.values());
 
-      const sc = SCREENER_DATA.find(s => s.symbol === sym);
-      if (sc && Math.abs(sc.ltp - newPrice) > 0.01) {
-        sc.old_ltp = sc.ltp;
-        sc.ltp = newPrice;
+  if (isRealDesktopPC() && tickerList.length > 0) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const bUrl = `http://localhost:${window.location.port}/api/ltp?ticker=${encodeURIComponent(tickerList.join(','))}`;
+      const res = await fetch(bUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        const pricesObj = data.prices || {};
+        for (const [sym, ticker] of symbolsToPoll.entries()) {
+          const p = pricesObj[ticker] || pricesObj[sym] || pricesObj[sym + '.NS'];
+          if (p && p > 0) fetchedPrices.set(sym, p);
+        }
+      }
+    } catch (e) {}
+  }
+
+  const unpolled = Array.from(symbolsToPoll.entries()).filter(([sym, ticker]) => !fetchedPrices.has(sym));
+  if (unpolled.length > 0) {
+    await Promise.all(unpolled.map(async ([sym, ticker]) => {
+      const p = await fetchLiveLTPForSymbol(ticker);
+      if (p && p > 0) fetchedPrices.set(sym, p);
+    }));
+  }
+
+  for (const [sym, newPrice] of fetchedPrices.entries()) {
+    if (typeof TOP_PICK !== 'undefined' && TOP_PICK && TOP_PICK.symbol === sym) {
+      if (Math.abs((TOP_PICK.ltp || TOP_PICK.current_ltp || 0) - newPrice) > 0.01) {
+        TOP_PICK.old_ltp = TOP_PICK.ltp;
+        TOP_PICK.ltp = newPrice;
+        TOP_PICK.current_ltp = newPrice;
+        if (TOP_PICK.ma50) TOP_PICK.dist_ma50_pct = Math.round(((newPrice - TOP_PICK.ma50)/TOP_PICK.ma50)*1000)/10;
+        if (TOP_PICK.ma200) TOP_PICK.dist_ma200_pct = Math.round(((newPrice - TOP_PICK.ma200)/TOP_PICK.ma200)*1000)/10;
+        if (TOP_PICK.week_high_52) TOP_PICK.dist_52w_high_pct = Math.round(((newPrice - TOP_PICK.week_high_52)/TOP_PICK.week_high_52)*1000)/10;
+        if (TOP_PICK.week_low_52) TOP_PICK.dist_52w_low_pct = Math.round(((newPrice - TOP_PICK.week_low_52)/TOP_PICK.week_low_52)*1000)/10;
         priceChanged = true;
       }
-      const wl = watchlist.find(w => w.symbol === sym);
-      if (wl && Math.abs(wl.ltp - newPrice) > 0.01) {
-        wl.old_ltp = wl.ltp;
-        wl.ltp = newPrice;
-        if (wl.avg_cost && wl.qty > 0) {
-          wl.unrealised_pnl = Math.round((wl.ltp - wl.avg_cost) * wl.qty * 100) / 100;
-          wl.unrealised_pct = Math.round(((wl.ltp - wl.avg_cost) / wl.avg_cost) * 10000) / 100;
-          wl.current_value = Math.round(wl.ltp * wl.qty * 100) / 100;
-        }
+    }
+
+    const sc = SCREENER_DATA.find(s => s.symbol === sym);
+    if (sc && Math.abs(sc.ltp - newPrice) > 0.01) {
+      sc.old_ltp = sc.ltp;
+      sc.ltp = newPrice;
+      priceChanged = true;
+    }
+    const wl = watchlist.find(w => w.symbol === sym);
+    if (wl && Math.abs(wl.ltp - newPrice) > 0.01) {
+      wl.old_ltp = wl.ltp;
+      wl.ltp = newPrice;
+      if (wl.avg_cost && wl.qty > 0) {
+        wl.unrealised_pnl = Math.round((wl.ltp - wl.avg_cost) * wl.qty * 100) / 100;
+        wl.unrealised_pct = Math.round(((wl.ltp - wl.avg_cost) / wl.avg_cost) * 10000) / 100;
+        wl.current_value = Math.round(wl.ltp * wl.qty * 100) / 100;
+      }
+      priceChanged = true;
+    }
+    if (typeof ltWatchlist !== 'undefined' && Array.isArray(ltWatchlist)) {
+      const lt = ltWatchlist.find(w => w.symbol === sym);
+      if (lt && Math.abs((lt.ltp || 0) - newPrice) > 0.01) {
+        lt.old_ltp = lt.ltp;
+        lt.ltp = newPrice;
         priceChanged = true;
       }
-      if (typeof FNO_DATA !== 'undefined' && Array.isArray(FNO_DATA)) {
-        const fn = FNO_DATA.find(f => f.symbol === sym);
-        if (fn && Math.abs(fn.ltp - newPrice) > 0.01) {
-          fn.old_ltp = fn.ltp;
-          fn.ltp = newPrice;
-          if (fn.prev_close && fn.prev_close > 0) {
-            fn.day_chg_pct = Math.round(((newPrice - fn.prev_close) / fn.prev_close) * 10000) / 100;
-          }
-          priceChanged = true;
+    }
+    if (typeof FNO_DATA !== 'undefined' && Array.isArray(FNO_DATA)) {
+      const fn = FNO_DATA.find(f => f.symbol === sym);
+      if (fn && Math.abs(fn.ltp - newPrice) > 0.01) {
+        fn.old_ltp = fn.ltp;
+        fn.ltp = newPrice;
+        if (fn.prev_close && fn.prev_close > 0) {
+          fn.day_chg_pct = Math.round(((newPrice - fn.prev_close) / fn.prev_close) * 10000) / 100;
         }
+        priceChanged = true;
       }
     }
   }
@@ -4360,6 +4400,7 @@ async function refreshLiveLTP(manual = false) {
     renderStats();
     renderTable();
     renderWatchlist();
+    if (typeof renderLtWatchlist === 'function') renderLtWatchlist();
     if (typeof renderFnoTab === 'function') renderFnoTab();
     if (typeof renderTopPick === 'function') renderTopPick();
     flashUpdatedPrices();
@@ -4383,13 +4424,15 @@ function startPolling() {
   const currentMkt = calculateCurrentMarketStatus();
   const isOpen = currentMkt.is_open || currentMkt.is_equity_open;
 
-  // Stop background polling automatically if market is closed
-  if (!isOpen || pollIntervalMs <= 0) {
+  if (pollIntervalMs <= 0) {
     updateLtpBadgeStatus();
     return;
   }
 
-  pollIntervalTimer = setInterval(() => refreshLiveLTP(false), pollIntervalMs);
+  refreshLiveLTP(false);
+  if (isOpen) {
+    pollIntervalTimer = setInterval(() => refreshLiveLTP(false), pollIntervalMs);
+  }
   updateLtpBadgeStatus();
 }
 
@@ -5148,18 +5191,72 @@ function populateSectorFilter() {
   select.value = currentVal;
 }
 
+const STOCK_SEARCH_ALIASES = {
+  "SEKURITIND": ["saint gobain", "saint goban", "saint-gobain", "saintgobain", "saintgoban", "sekurit", "saint gobain glass", "saint goban glasses", "auto glass", "safety glass", "glass", "glasses"],
+  "BORANA": ["borosil", "glassware", "borosil glass"],
+  "NATIONALUM": ["nalco", "aluminium"],
+  "TATAMOTORS": ["tmo", "tata motors", "jaguar", "jlr"],
+  "M&M": ["mahindra", "mahindra & mahindra"],
+  "RELIANCE": ["ril", "jio"],
+  "BAJFINANCE": ["bajaj finance"],
+  "BAJAJFINSV": ["bajaj finserv"],
+  "HDFCBANK": ["hdfc bank"],
+  "ICICIBANK": ["icici bank"],
+  "SBIN": ["sbi", "state bank"],
+  "BHARTIARTL": ["airtel", "bharti airtel"]
+};
+
+function normStr(str) {
+  return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function matchSearch(stock, rawQuery) {
+  if (!rawQuery || rawQuery.trim().length === 0) return true;
+  const qNorm = normStr(rawQuery);
+  if (!qNorm) return true;
+
+  const symNorm  = normStr(stock.symbol);
+  const nameNorm = normStr(stock.name);
+  const secNorm  = normStr(stock.sector);
+
+  if (symNorm.includes(qNorm) || nameNorm.includes(qNorm) || secNorm.includes(qNorm)) return true;
+
+  const aliases = STOCK_SEARCH_ALIASES[stock.symbol] || stock.aliases || [];
+  if (aliases.some(a => normStr(a).includes(qNorm) || qNorm.includes(normStr(a)))) return true;
+
+  const rawTokens = rawQuery.toLowerCase().split(/\s+/).map(t => normStr(t)).filter(Boolean);
+  if (rawTokens.length > 0) {
+    const aliasStr = aliases.map(a => normStr(a)).join(' ');
+    const combinedTarget = (symNorm + ' ' + nameNorm + ' ' + secNorm + ' ' + aliasStr).toLowerCase();
+
+    const normToken = (t) => {
+      if (t === 'goban') return 'gobain';
+      if (t === 'glasses') return 'glass';
+      return t;
+    };
+
+    return rawTokens.every(t => {
+      const nt = normToken(t);
+      if (combinedTarget.includes(t) || combinedTarget.includes(nt)) return true;
+      if (['glass', 'glasses', 'ltd', 'limited', 'india', 'co', 'inc', 'corp', 'corporation'].includes(t)) return true;
+      return false;
+    });
+  }
+  return false;
+}
+
 function applyFilters() {
-  const search   = document.getElementById('fSearch').value.trim().toLowerCase();
+  const search   = document.getElementById('fSearch').value.trim();
   const qual     = document.getElementById('fQual').value;
   const sector   = document.getElementById('fSector') ? document.getElementById('fSector').value : 'all';
   const mcap     = document.getElementById('fMcap') ? document.getElementById('fMcap').value : 'all';
   const trend    = document.getElementById('fTrend').value;
 
   filteredData = SCREENER_DATA.filter(s => {
-    if (qual === 'qualified' && !s.qualified) return false;
-    if (qual === 'watch' && s.total_score < 45) return false;
+    if (!search && qual === 'qualified' && !s.qualified) return false;
+    if (!search && qual === 'watch' && s.total_score < 45) return false;
 
-    if (search && !s.symbol.toLowerCase().includes(search) && !(s.name||'').toLowerCase().includes(search) && !(s.sector||'').toLowerCase().includes(search)) return false;
+    if (search && !matchSearch(s, search)) return false;
 
     if (sector !== 'all' && s.sector !== sector) return false;
 
@@ -5194,14 +5291,16 @@ function renderSearchQuickView(search) {
     return;
   }
 
-  const match = SCREENER_DATA.find(s => s.symbol.toLowerCase() === search) ||
-                SCREENER_DATA.find(s => s.symbol.toLowerCase().startsWith(search)) ||
-                SCREENER_DATA.find(s => (s.name||'').toLowerCase().includes(search));
+  const qNorm = normStr(search);
+  const match = SCREENER_DATA.find(s => normStr(s.symbol) === qNorm) ||
+                SCREENER_DATA.find(s => normStr(s.symbol).startsWith(qNorm)) ||
+                SCREENER_DATA.find(s => matchSearch(s, search));
 
   if (!match) {
     container.innerHTML = `
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px">
-        <span>🔍</span> No stock matching "<strong>${search}</strong>" found in Nifty 500 scan results.
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;font-size:13px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>🔍 No local match for "<strong>${search}</strong>" in current Nifty universe.</div>
+        <button onclick="openAddLtStockModal()" style="background:linear-gradient(135deg,#6c63ff,#00d4aa);color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">➕ Search &amp; Add "${search.toUpperCase()}" via Yahoo Finance</button>
       </div>`;
     return;
   }
