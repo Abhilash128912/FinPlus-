@@ -1,7 +1,7 @@
 {
   "start_date": "2026-08-19",
   "daily_accrual_rate": 100.0,
-  "extra_deposits": 39.24,
+  "extra_deposits": 0.0,
   "holdings": [
     {
       "symbol": "ASHOKLEY",
@@ -16,13 +16,6 @@
       "avg_price": 356.45,
       "buy_date": "2026-08-24",
       "last_price": 356.45
-    },
-    {
-      "symbol": "SHEKHAWATI",
-      "qty": 6,
-      "avg_price": 18.32,
-      "buy_date": "2026-08-24",
-      "last_price": 18.32
     }
   ],
   "transactions": [
@@ -68,52 +61,6 @@
         "stamp_duty": 0.05,
         "exchange_fee": 0.01,
         "gst": 0.03,
-        "dp_charges": 0.0,
-        "sebi_fee": 0.0
-      }
-    },
-    {
-      "id": "TX-BUY-1787575802",
-      "timestamp": "2026-08-24 18:20:02",
-      "type": "BUY",
-      "symbol": "SHEKHAWATI",
-      "qty": 3,
-      "price": 18.32,
-      "gross_value": 54.96,
-      "total_charges": 0.1,
-      "net_value": 55.06,
-      "charges_breakdown": {
-        "gross_value": 54.96,
-        "total_charges": 0.1,
-        "net_value": 55.06,
-        "brokerage": 0.03,
-        "stt": 0.05,
-        "stamp_duty": 0.01,
-        "exchange_fee": 0.0,
-        "gst": 0.01,
-        "dp_charges": 0.0,
-        "sebi_fee": 0.0
-      }
-    },
-    {
-      "id": "TX-BUY-1787575813",
-      "timestamp": "2026-08-24 18:20:13",
-      "type": "BUY",
-      "symbol": "SHEKHAWATI",
-      "qty": 3,
-      "price": 18.32,
-      "gross_value": 54.96,
-      "total_charges": 0.1,
-      "net_value": 55.06,
-      "charges_breakdown": {
-        "gross_value": 54.96,
-        "total_charges": 0.1,
-        "net_value": 55.06,
-        "brokerage": 0.03,
-        "stt": 0.05,
-        "stamp_duty": 0.01,
-        "exchange_fee": 0.0,
-        "gst": 0.01,
         "dp_charges": 0.0,
         "sebi_fee": 0.0
       }
