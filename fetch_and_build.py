@@ -3186,9 +3186,25 @@ let swingSortCol = 'swing_score';
 let swingSortDir = -1; // -1 = descending
 
 function getSwingData() {
-  // Base pool: MTF stocks or all qualified swing candidates
-  const mtf = SCREENER_DATA.filter(s => s.is_mtf);
-  return mtf.length > 0 ? mtf : SCREENER_DATA.filter(s => s.total_score >= 45 || s.momentum >= 50);
+  return SCREENER_DATA.filter(s => {
+    // 1. HARD PRICE FLOOR: LTP >= ₹50.0 (Strictly No Penny Stocks)
+    const ltp = parseFloat(s.ltp || s.current_ltp || 0);
+    if (ltp < 50.0) return false;
+
+    // 2. QUALITY CAP REQUIREMENT: Must be Large Cap, Mid Cap, or Zerodha MTF Quality Small Cap
+    const mcap = parseFloat(s.market_cap || 0);
+    const isLargeOrMid = (s.cap_category === 'Large Cap' || s.cap_category === 'Mid Cap' || s.is_large_cap || s.is_mid_cap || mcap >= 50000000000);
+    const isMtfQuality = (s.is_mtf === true || s.is_mtf === 'true');
+    if (!isLargeOrMid && !isMtfQuality) return false;
+
+    // 3. VALID SETUP & SCORE FLOOR: Must have valid setup, calculated SL, and positive score
+    const swingScore = parseFloat(s.swing_score || 0);
+    const totalScore = parseFloat(s.total_score || 0);
+    if (swingScore < 40 && totalScore < 45) return false;
+    if (!s.swing_sl || parseFloat(s.swing_sl) <= 0) return false;
+
+    return true;
+  });
 }
 
 function applySwingPreset(data) {
@@ -6866,6 +6882,11 @@ def background_initial_scan():
         screener_results = run_scan(tickers)
         global LATEST_SCREENER_RESULTS
         LATEST_SCREENER_RESULTS = screener_results
+        try:
+            with open(OUT_JSON_FILE, "w", encoding="utf-8") as f:
+                json.dump(screener_results, f, default=json_serializer)
+        except Exception as e:
+            log(f"  ⚠ Could not save screener_data.json: {e}")
 
         log("Computing Mansfield Relative Strength (RS Rating 1-99) vs Nifty...")
         screener_results = compute_relative_strength_ratings(screener_results, nifty_df)
