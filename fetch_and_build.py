@@ -6795,6 +6795,16 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+def open_in_browser(url_or_path: str) -> bool:
+    try:
+        import webbrowser
+        if not str(url_or_path).startswith("http"):
+            url_or_path = f"file:///{os.path.abspath(url_or_path).replace(os.sep, '/')}"
+        return webbrowser.open(url_or_path)
+    except Exception:
+        return False
+
+
 def run_server(port=None):
     if port is None:
         port = int(os.environ.get("PORT", 5000))
@@ -6805,22 +6815,36 @@ def run_server(port=None):
     server_address = ('0.0.0.0', port)
     class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
         daemon_threads = True
+        allow_reuse_address = True
         def handle_error(self, request, client_address):
             exctype, value, tb = sys.exc_info()
             if exctype and issubclass(exctype, (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, OSError)):
                 return
             super().handle_error(request, client_address)
 
-    try:
-        httpd = ThreadedHTTPServer(server_address, ScanRequestHandler)
-        if "PORT" not in os.environ:
-            log(f"Opening http://localhost:{port} in default browser...")
-            open_in_browser(f"http://localhost:{port}")
-        httpd.serve_forever()
-    except Exception as e:
-        log(f"⚠ Could not start server on port {port}: {e}")
-        log(f"Falling back to opening static file: {OUT_HTML}")
-        open_in_browser(OUT_HTML)
+    httpd = None
+    for attempt in range(5):
+        try:
+            httpd = ThreadedHTTPServer(server_address, ScanRequestHandler)
+            break
+        except OSError as e:
+            if attempt < 4:
+                log(f"Port {port} busy, retrying in 1s (attempt {attempt + 1}/5)...")
+                time.sleep(1.0)
+            else:
+                log(f"⚠ Could not start server on port {port}: {e}")
+                log(f"Falling back to opening static file: {OUT_HTML}")
+                open_in_browser(OUT_HTML)
+                return
+
+    if httpd:
+        try:
+            if "PORT" not in os.environ:
+                log(f"Opening http://localhost:{port} in default browser...")
+                open_in_browser(f"http://localhost:{port}")
+            httpd.serve_forever()
+        except Exception as e:
+            log(f"⚠ Server shutdown: {e}")
 
 
 def background_initial_scan():
