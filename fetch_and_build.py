@@ -6858,7 +6858,16 @@ def run_server(port=None):
             if "PORT" not in os.environ:
                 log(f"Opening http://localhost:{port} in default browser...")
                 open_in_browser(f"http://localhost:{port}")
-            httpd.serve_forever()
+            while True:
+                try:
+                    httpd.serve_forever()
+                except (KeyboardInterrupt, SystemExit):
+                    break
+                except Exception as e:
+                    log(f"Server exception (recovering): {e}")
+                    time.sleep(0.5)
+        except (KeyboardInterrupt, SystemExit):
+            log("Server stopped.")
         except Exception as e:
             log(f"⚠ Server shutdown: {e}")
 
