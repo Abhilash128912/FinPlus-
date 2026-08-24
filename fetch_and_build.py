@@ -29,7 +29,7 @@ import threading
 import pandas as pd
 import yfinance as yf
 
-from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, calc_indmoney_charges
+from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, calc_indmoney_charges, compute_quality_penny_stocks
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -2469,6 +2469,7 @@ details[open] summary::before {
     <button class="tab active" onclick="switchTab('screener')">🔍 Screener Results</button>
     <button class="tab" onclick="switchTab('swing')">⚡ Swing Trading</button>
     <button class="tab" onclick="switchTab('watchlist')">🛡️ LT Watchlist (<span id="wlCount">0</span>)</button>
+    <button class="tab" onclick="switchTab('penny')">💎 Quality Penny SIP (20)</button>
     <button class="tab" onclick="switchTab('fno')">📊 F&amp;O Options</button>
     <button class="tab" onclick="switchTab('holidays')">📅 Market Holidays (2026)</button>
   </div>
@@ -2860,6 +2861,9 @@ details[open] summary::before {
 
 
 
+  <!-- QUALITY PENNY STOCKS TAB -->
+  <div id="tab-penny" style="display:none"></div>
+
   <!-- F&O OPTIONS TAB -->
   <div id="tab-fno" style="display:none"></div>
 
@@ -2936,6 +2940,10 @@ details[open] summary::before {
     <span class="mobile-nav-icon">🛡️</span>
     <span>LT Watchlist</span>
   </button>
+  <button class="mobile-nav-item" data-tab="penny" onclick="switchTab('penny')">
+    <span class="mobile-nav-icon">💎</span>
+    <span>Penny</span>
+  </button>
   <button class="mobile-nav-item" data-tab="fno" onclick="switchTab('fno')">
     <span class="mobile-nav-icon">📊</span>
     <span>F&amp;O</span>
@@ -2955,6 +2963,7 @@ const CONFIG = __CONFIG_JSON__;
 const COMMODITIES_DATA = __COMMODITIES_JSON__;
 const MARKET_INFO = __MARKET_INFO_JSON__;
 const FNO_DATA = __FNO_JSON__;
+const PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;
 
 // ── State ─────────────────────────────────────────────────────────────────
 let watchlist = [];
@@ -4540,7 +4549,7 @@ function renderStats() {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  const tabs = ['screener', 'swing', 'watchlist', 'fno', 'holidays'];
+  const tabs = ['screener', 'swing', 'watchlist', 'penny', 'fno', 'holidays'];
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabs[i] === tab));
   document.querySelectorAll('.mobile-nav-item').forEach(m => {
     m.classList.toggle('active', m.dataset.tab === tab);
@@ -4548,10 +4557,13 @@ function switchTab(tab) {
   document.getElementById('tab-screener').style.display  = tab === 'screener'  ? '' : 'none';
   document.getElementById('tab-swing').style.display     = tab === 'swing'     ? '' : 'none';
   document.getElementById('tab-watchlist').style.display = tab === 'watchlist' ? '' : 'none';
+  const pennyTab = document.getElementById('tab-penny');
+  if (pennyTab) pennyTab.style.display                   = tab === 'penny'     ? '' : 'none';
   document.getElementById('tab-fno').style.display       = tab === 'fno'       ? '' : 'none';
   document.getElementById('tab-holidays').style.display  = tab === 'holidays'  ? '' : 'none';
   if (tab === 'swing')      { renderSwingRadar(); renderSrBreakouts(); }
   if (tab === 'watchlist')  { renderLtWatchlist(); fetchLtPortfolioStatus(); }
+  if (tab === 'penny')      renderPennyStocksTab();
   if (tab === 'fno')        renderFnoTab();
   if (tab === 'holidays')   renderHolidaysTab();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4770,6 +4782,138 @@ function renderFnoTab() {
       </div>
     </div>
     <div class="fno-grid">${gridContent}</div>
+  `;
+}
+
+// ── Quality Penny Stocks Tab (Top 20 Micro-Cap Wealth Builder) ─────────
+let pennyFilterCategory = 'all';
+let customPennyMonthlyBudget = 200.0;
+
+function renderPennyStocksTab() {
+  const container = document.getElementById('tab-penny');
+  if (!container) return;
+
+  const pennyList = (typeof PENNY_STOCKS_DATA !== 'undefined' && Array.isArray(PENNY_STOCKS_DATA)) ? PENNY_STOCKS_DATA : [];
+
+  let filtered = [...pennyList];
+  if (pennyFilterCategory === 'debt_free') {
+    filtered = filtered.filter(s => s.de_ratio != null && s.de_ratio <= 0.15);
+  } else if (pennyFilterCategory === 'high_roe') {
+    filtered = filtered.filter(s => s.roe_pct != null && s.roe_pct >= 15.0);
+  } else if (pennyFilterCategory === 'under_30') {
+    filtered = filtered.filter(s => s.ltp != null && s.ltp <= 30.0);
+  } else if (pennyFilterCategory === 'under_50') {
+    filtered = filtered.filter(s => s.ltp != null && s.ltp <= 50.0);
+  }
+
+  const budget = customPennyMonthlyBudget || 200.0;
+
+  const cardsHtml = filtered.map((s, idx) => {
+    const ltp = parseFloat(s.ltp || 0);
+    const sipQty = ltp > 0 ? Math.max(1, Math.floor(budget / ltp)) : 1;
+    const sipCost = (sipQty * ltp).toFixed(2);
+    const roeVal = s.roe_pct != null ? s.roe_pct.toFixed(1) + '%' : '—';
+    const deVal = s.de_ratio != null ? s.de_ratio.toFixed(2) : '—';
+    const npmVal = s.npm_pct != null ? s.npm_pct.toFixed(1) + '%' : '—';
+    const volVal = s.avg_volume_10d ? (s.avg_volume_10d / 1000).toFixed(0) + 'k' : '—';
+
+    return `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,0.3);position:relative;overflow:hidden">
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#7c3aed,#c084fc)"></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+        <div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;font-weight:800;color:#c084fc;background:rgba(192,132,252,0.12);padding:2px 8px;border-radius:12px">#${idx + 1} Top Penny</span>
+            <span class="badge ${s.durability_class || 'badge-green'}" style="font-size:10px;font-weight:700">${s.durability_tag || '💎 Quality Penny'}</span>
+          </div>
+          <div style="font-size:18px;font-weight:800;color:#fff;margin-top:6px">${s.symbol}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:1px">${(s.name || '').substring(0, 28)} · ${s.sector || 'Micro-Cap'}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:18px;font-weight:800;color:var(--accent2)">₹${ltp.toFixed(2)}</div>
+          <div style="font-size:10px;color:${(s.day_chg_pct || 0) >= 0 ? '#10b981' : '#ef4444'};margin-top:2px;font-weight:700">
+            ${(s.day_chg_pct || 0) >= 0 ? '+' : ''}${(s.day_chg_pct || 0).toFixed(2)}%
+          </div>
+        </div>
+      </div>
+
+      <!-- Fundamental Metrics Grid -->
+      <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;background:rgba(255,255,255,0.03);border-radius:10px;padding:10px;margin-bottom:12px;text-align:center">
+        <div>
+          <div style="font-size:9px;color:var(--muted);text-transform:uppercase">ROE %</div>
+          <div style="font-size:13px;font-weight:700;color:#10b981;margin-top:2px">${roeVal}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Debt/Equity</div>
+          <div style="font-size:13px;font-weight:700;color:#38bdf8;margin-top:2px">${deVal}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Profit Margin</div>
+          <div style="font-size:13px;font-weight:700;color:#c084fc;margin-top:2px">${npmVal}</div>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-bottom:14px;padding:0 4px">
+        <span>Avg Vol (10d): <strong style="color:#fff">${volVal}</strong></span>
+        <span>Quality Score: <strong style="color:var(--accent2)">${s.total_score || 0}/100</strong></span>
+      </div>
+
+      <!-- Monthly SIP Recommendation Box -->
+      <div style="background:linear-gradient(135deg,rgba(124,58,237,0.12),rgba(192,132,252,0.08));border:1px solid rgba(192,132,252,0.25);border-radius:10px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:10px;color:#c084fc;font-weight:700;text-transform:uppercase">Recommended Monthly SIP</div>
+            <div style="font-size:14px;font-weight:800;color:#fff;margin-top:2px">Buy ${sipQty} Share${sipQty > 1 ? 's' : ''} / mo</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:10px;color:var(--muted)">Est. Outlay</div>
+            <div style="font-size:14px;font-weight:800;color:#34d399;margin-top:2px">₹${sipCost}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <!-- Header Banner -->
+    <div style="background:linear-gradient(135deg,#1e1035,#0f0a1e);border:1px solid #7c3aed;border-radius:16px;padding:22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:24px">💎</span>
+          <div>
+            <div style="font-size:20px;font-weight:800;color:#c084fc">Quality Penny & Micro-Cap Wealth-Builder Screener</div>
+            <div style="font-size:12px;color:#a78bfa;margin-top:2px">Strict 6-Point Gate: ₹5-₹75 Price &bull; Debt/Equity ≤ 1.0 &bull; ROE ≥ 6% &bull; Positive Margin &bull; Liquidity ≥ 20k/day</div>
+          </div>
+        </div>
+      </div>
+      <div style="background:rgba(192,132,252,0.12);border:1px solid rgba(192,132,252,0.3);padding:8px 16px;border-radius:12px;text-align:right">
+        <div style="font-size:10px;color:#c084fc;text-transform:uppercase;font-weight:700">Qualified Penny Candidates</div>
+        <div style="font-size:20px;font-weight:900;color:#fff;margin-top:1px">${pennyList.length} Stocks Scanned</div>
+      </div>
+    </div>
+
+    <!-- Filter & SIP Budget Controller Row -->
+    <div class="filters" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button onclick="pennyFilterCategory='all';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='all'?'active':''}" style="padding:6px 12px;font-size:11px">All Top 20</button>
+        <button onclick="pennyFilterCategory='debt_free';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='debt_free'?'active':''}" style="padding:6px 12px;font-size:11px">💎 Debt-Free Only (D/E ≤ 0.15)</button>
+        <button onclick="pennyFilterCategory='high_roe';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='high_roe'?'active':''}" style="padding:6px 12px;font-size:11px">🔥 High ROE (≥ 15%)</button>
+        <button onclick="pennyFilterCategory='under_30';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='under_30'?'active':''}" style="padding:6px 12px;font-size:11px">Sub-₹30 Micro-Caps</button>
+        <button onclick="pennyFilterCategory='under_50';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='under_50'?'active':''}" style="padding:6px 12px;font-size:11px">Sub-₹50 Micro-Caps</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:11px;color:var(--muted);font-weight:700">Monthly SIP Amount (₹):</label>
+        <input type="number" id="pennyBudgetInput" value="${budget}" min="50" max="5000" step="50"
+               onchange="customPennyMonthlyBudget=parseFloat(this.value)||200;renderPennyStocksTab()"
+               style="background:var(--card);border:1px solid var(--border);color:#fff;padding:6px 10px;border-radius:8px;width:100px;font-size:12px;font-weight:700">
+      </div>
+    </div>
+
+    <!-- Cards Grid -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(310px, 1fr));gap:16px">
+      ${cardsHtml || '<div style="color:var(--muted);text-align:center;grid-column:1/-1;padding:40px">No penny stocks match this filter.</div>'}
+    </div>
   `;
 }
 
@@ -6447,6 +6591,8 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
 
     html = html.replace("__BACKTEST_RESULTS_JSON__", json.dumps(backtest_data, ensure_ascii=False, default=json_serializer))
     html = html.replace("__FNO_JSON__", json.dumps(fno_data or [], ensure_ascii=False, default=json_serializer))
+    penny_stocks_data = compute_quality_penny_stocks(screener_results, top_n=20, monthly_sip=200.0)
+    html = html.replace("__PENNY_STOCKS_JSON__", json.dumps(penny_stocks_data, ensure_ascii=False, default=json_serializer))
     return html
 
 

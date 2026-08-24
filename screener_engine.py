@@ -2039,3 +2039,99 @@ def calc_indmoney_charges(trade_value: float, trade_type: str = "BUY") -> dict:
         "sebi_fee": round(sebi_fee, 2)
     }
 
+
+def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, monthly_sip: float = 200.0) -> list[dict]:
+    """
+    Filters and ranks the Top 20 Quality Penny / Micro-Cap wealth-builder stocks from the universe.
+    
+    Quality Penny Gates (Strict 6-Point Filter):
+    1. Price: ₹5.0 <= LTP <= ₹75.0 (affordable micro-caps for ₹200/mo SIP)
+    2. Solvency: D/E <= 1.0 (Low debt / no bankruptcy trap)
+    3. Profitability: ROE >= 6.0% and Net Profit Margin > 0%
+    4. Liquidity: 10d Avg Volume >= 20,000 shares/day (no lower circuit trap)
+    5. Valuation & Quality: Total Score >= 45.0
+    6. Market Cap: >= ₹50 Cr
+    """
+    if not screener_results:
+        return []
+
+    qualified = []
+    for s in screener_results:
+        ltp = float(s.get("ltp") or 0.0)
+        mc = float(s.get("market_cap") or 0.0)
+        roe = s.get("roe_pct")
+        npm = s.get("npm_pct")
+        de = s.get("de_ratio")
+        vol = float(s.get("avg_volume_10d") or s.get("today_volume") or 0.0)
+        total_score = float(s.get("total_score") or 0.0)
+        rs_rating = float(s.get("rs_rating") or 50.0)
+        strength = float(s.get("strength") or 0.0)
+
+        # Gate 1: Price Range (₹5 to ₹75)
+        if not (5.0 <= ltp <= 75.0):
+            continue
+
+        # Gate 2: Market Cap Floor (≥ ₹50 Cr)
+        if mc > 0 and mc < 500000000:
+            continue
+
+        # Gate 3: Solvency (D/E <= 1.0)
+        if de is not None and de > 1.0:
+            continue
+
+        # Gate 4: Profitability (ROE >= 6% and Margin > 0%)
+        if roe is not None and roe < 6.0:
+            continue
+        if npm is not None and npm <= 0.0:
+            continue
+
+        # Gate 5: Liquidity (Avg Volume >= 20,000)
+        if vol > 0 and vol < 20000:
+            continue
+
+        # Gate 6: Minimum Quality Score (≥ 45)
+        if total_score < 45.0:
+            continue
+
+        # Compute Penny Ranking Score
+        # Composite of Total Score (40%) + Strength/Fundamentals (30%) + RS Rating (30%) + Bonuses
+        penny_rank_score = round(
+            (total_score * 0.40) +
+            (strength * 0.30) +
+            (rs_rating * 0.30) +
+            (10.0 if (de is not None and de <= 0.20) else 0.0) +
+            (10.0 if (roe is not None and roe >= 20.0) else 0.0),
+            1
+        )
+
+        # Calculate ₹200 Monthly SIP Accumulation Qty
+        sip_qty = max(1, int(monthly_sip / ltp)) if ltp > 0 else 1
+        sip_cost = round(sip_qty * ltp, 2)
+
+        # Durability Tag
+        if de is not None and de <= 0.15:
+            durability_tag = "💎 Virtually Debt-Free"
+            durability_class = "badge-green"
+        elif roe is not None and roe >= 20.0:
+            durability_tag = "🔥 High ROE Compounder"
+            durability_class = "badge-purple"
+        elif total_score >= 60.0:
+            durability_tag = "⚡ Quality Growth Penny"
+            durability_class = "badge-green"
+        else:
+            durability_tag = "📈 Undervalued Micro-Cap"
+            durability_class = "badge-yellow"
+
+        item = dict(s)
+        item["penny_rank_score"] = penny_rank_score
+        item["monthly_sip_qty"] = sip_qty
+        item["monthly_sip_cost"] = sip_cost
+        item["durability_tag"] = durability_tag
+        item["durability_class"] = durability_class
+        qualified.append(item)
+
+    # Sort descending by penny ranking score
+    qualified.sort(key=lambda x: x.get("penny_rank_score", 0), reverse=True)
+    return qualified[:top_n]
+
+
