@@ -3886,7 +3886,10 @@ function renderLtWatchlist() {
     }
   });
 
+  const isCuratedLt = s => (typeof LT_WATCHLIST !== 'undefined' && Array.isArray(LT_WATCHLIST)) && LT_WATCHLIST.some(item => (item.symbol || '').toUpperCase() === (s.symbol || '').toUpperCase());
+
   const isPenny = s => {
+    if (isCuratedLt(s)) return false;
     const p = parseFloat(s.ltp || 0);
     const hp = s.holding ? parseFloat(s.holding.avg_price || 0) : 0;
     return (p > 0 && p <= 75.0) || (hp > 0 && hp <= 75.0);
