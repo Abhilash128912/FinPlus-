@@ -1570,6 +1570,9 @@ def get_lt_watchlist_status(
     WAIT     : Trend confirmed but price hasn't reached support or is still falling (coiling at support)
     WATCHLIST: Consolidation / Distribution / Downtrend — monitoring only
     """
+    UPTREND_STATES = ("Uptrend", "Accumulation", "Strong Uptrend")
+    COOLING_OFF_DAYS = 10
+
     if holding and int(holding.get("qty", 0)) > 0:
         qty = int(holding.get("qty", 1))
         avg_price = float(holding.get("avg_price", ltp or 0))
@@ -1578,14 +1581,47 @@ def get_lt_watchlist_status(
         pnl_pct = float(holding.get("unrealized_pnl_pct", 0.0))
         pnl_str = f"P&L: ₹{pnl:+.2f} ({pnl_pct:+.1f}%)" if pnl != 0 else ""
         date_str = f" on {buy_date}" if buy_date else ""
+
+        days_held = None
+        if buy_date:
+            try:
+                from datetime import datetime
+                bdate = datetime.strptime(str(buy_date)[:10], "%Y-%m-%d").date()
+                days_held = (datetime.now().date() - bdate).days
+            except Exception:
+                days_held = None
+
+        is_cooling_off = (days_held is not None and days_held < COOLING_OFF_DAYS)
+
+        if is_cooling_off:
+            day_num = max(1, days_held + 1)
+            return {
+                "status": "BOUGHT",
+                "badge": f"🟢 BOUGHT (Cooling Off: Day {day_num}/{COOLING_OFF_DAYS})",
+                "badge_class": "badge-green",
+                "reason": f"Purchased{date_str}: {qty} share(s) @ ₹{avg_price:.2f} · Cooling Off Active (Day {day_num} of {COOLING_OFF_DAYS}) {pnl_str}".strip()
+            }
+
+        # Cooling off completed (> 10 days) — check if fresh pyramiding / add buy signal triggers
+        if trend in UPTREND_STATES and gtt_level is not None and ltp is not None:
+            in_support_zone = (ltp <= gtt_level * 1.008)
+            rsi_ok = (rsi is None or rsi < 70)
+            if in_support_zone and rsi_ok and (is_reversal_up or day_chg >= -0.3):
+                return {
+                    "status": "BUY_NOW",
+                    "badge": f"🟢 BUY NOW (ADD)",
+                    "badge_class": "badge-green",
+                    "reason": f"Pyramiding / Add Opportunity: Price ₹{ltp:.2f} bouncing UP from Support GTT ₹{gtt_level:.2f} post {COOLING_OFF_DAYS}-day cooling off ({days_held} days held)"
+                }
+
+        held_str = f" · Cooling off completed ({days_held} days held)" if days_held is not None else ""
         return {
             "status": "BOUGHT",
             "badge": f"🟢 BOUGHT ({qty})",
             "badge_class": "badge-green",
-            "reason": f"Purchased{date_str}: {qty} share(s) @ ₹{avg_price:.2f} · Cooling off / Holding active {pnl_str}".strip()
+            "reason": f"Purchased{date_str}: {qty} share(s) @ ₹{avg_price:.2f}{held_str} {pnl_str}".strip()
         }
 
-    UPTREND_STATES = ("Uptrend", "Accumulation", "Strong Uptrend")
 
     if trend in UPTREND_STATES:
         if gtt_level is not None and ltp is not None:

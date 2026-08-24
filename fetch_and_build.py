@@ -1329,10 +1329,12 @@ def execute_lt_buy_order(symbol: str, qty: int, price: float) -> dict:
     summary = get_lt_portfolio_summary()
     available_cash = summary["available_cash"]
 
-    if net_cost > available_cash:
-        raise ValueError(f"Insufficient cash balance. Required: ₹{net_cost:.2f} (incl. INDmoney charges ₹{fees['total_charges']:.2f}), Available: ₹{available_cash:.2f}")
-
     ledger = load_lt_capital_ledger()
+
+    # Automatically top up extra deposits if net_cost exceeds available cash to remove buy restriction
+    if net_cost > available_cash:
+        shortfall = round(net_cost - available_cash, 2)
+        ledger["extra_deposits"] = round(float(ledger.get("extra_deposits", 0.0)) + shortfall, 2)
     holdings = ledger.get("holdings", [])
     transactions = ledger.get("transactions", [])
 
@@ -3913,12 +3915,13 @@ function renderLtWatchlist() {
 
   tbody.innerHTML = displayList.map((s, i) => {
     const isRetired = (s.active === false);
-    const isBought = (s.status === 'BOUGHT' || (s.holding && s.holding.qty > 0));
+    const isBought = (s.status === 'BOUGHT' || (s.holding && s.holding.qty > 0 && s.status !== 'BUY_NOW'));
     const holdingQty = (s.holding && s.holding.qty) ? s.holding.qty : 1;
     const scoreVal = s.durability_score || 75;
     const scoreColor = scoreVal >= 85 ? '#10b981' : scoreVal >= 75 ? '#60a5fa' : '#fbbf24';
     const statusBadgeCls = isBought ? 'badge-green' : (s.status === 'BUY_NOW' ? 'badge-green' : s.status === 'WAIT' ? 'badge-purple' : 'badge-gray');
-    const statusBadgeText = isBought ? (s.status_badge || `🟢 BOUGHT (${holdingQty})`) : (s.status === 'BUY_NOW' ? '🟢 BUY NOW' : s.status === 'WAIT' ? '🔵 WAIT' : '⬜ WATCHING');
+    const statusBadgeText = s.status_badge || (isBought ? `🟢 BOUGHT (${holdingQty})` : (s.status === 'BUY_NOW' ? '🟢 BUY NOW' : s.status === 'WAIT' ? '🔵 WAIT' : '⬜ WATCHING'));
+
 
     const isAutoGtt = (s.gtt_mode === 'auto' || s.gtt_mode == null || s.is_auto_gtt);
     const gttVal = isAutoGtt ? (s.auto_gtt || s.gtt_level) : s.gtt_level;
@@ -4870,12 +4873,16 @@ function renderPennyStocksTab() {
     const volVal = s.avg_volume_10d ? (s.avg_volume_10d / 1000).toFixed(0) + 'k' : '—';
 
     const holding = hMap[sym];
-    const isBought = holding && holding.qty > 0;
-    const gateStatus = isBought ? 'BOUGHT' : (s.status || 'WATCHLIST');
+    const isBought = holding && holding.qty > 0 && s.status !== 'BUY_NOW';
+    const gateStatus = (s.status === 'BUY_NOW') ? 'BUY_NOW' : (isBought ? 'BOUGHT' : (s.status || 'WATCHLIST'));
+
 
     // Status Badge
     let statusBadgeHtml = '';
-    if (isBought) {
+    if (s.status_badge) {
+      const cls = s.status_badge_class || (gateStatus === 'BUY_NOW' ? 'badge-green' : isBought ? 'badge-green' : gateStatus === 'WAIT' ? 'badge-purple' : 'badge-gray');
+      statusBadgeHtml = `<span class="badge ${cls}" style="font-size:10px;font-weight:700" title="${s.status_reason || ''}">${s.status_badge}</span>`;
+    } else if (isBought) {
       statusBadgeHtml = `<span class="badge badge-green" style="font-size:10px;font-weight:700" title="Purchased on ${holding.buy_date || ''} (${holding.qty} shares @ ₹${holding.avg_price.toFixed(2)})">🟢 BOUGHT (${holding.qty})</span>`;
     } else if (gateStatus === 'BUY_NOW') {
       statusBadgeHtml = `<span class="badge badge-green" style="font-size:10px;font-weight:700" title="${s.status_reason || ''}">🟢 BUY NOW</span>`;
@@ -4884,6 +4891,7 @@ function renderPennyStocksTab() {
     } else {
       statusBadgeHtml = `<span class="badge badge-gray" style="font-size:10px;font-weight:700" title="${s.status_reason || ''}">⬜ WATCHING</span>`;
     }
+
 
     // Trend & CMF Badge
     const trendText = s.trend_badge || s.trend || 'Consolidation';
@@ -6578,7 +6586,7 @@ function openLtBuyModal(symbol, ltp) {
         alert(`✅ ${res.message}`);
         fetchLtPortfolioStatus();
       } else {
-        alert(`❌ Buy Order Failed: ${res.message}\n\nHint: Use "+ Top-Up Capital" button if you need more Available Cash.`);
+        alert(`❌ Buy Order Failed: ${res.message}`);
       }
     }).catch(err => alert('Error connecting to backend server.'));
   }
