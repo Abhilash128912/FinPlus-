@@ -4873,8 +4873,30 @@ function renderPennyStocksTab() {
   const container = document.getElementById('tab-penny');
   if (!container) return;
 
-  const pennyList = (typeof PENNY_STOCKS_DATA !== 'undefined' && Array.isArray(PENNY_STOCKS_DATA)) ? PENNY_STOCKS_DATA : [];
+  const pennyList = (typeof PENNY_STOCKS_DATA !== 'undefined' && Array.isArray(PENNY_STOCKS_DATA)) ? [...PENNY_STOCKS_DATA] : [];
   const holdingsList = (typeof LT_PORTFOLIO_SUMMARY !== 'undefined' && LT_PORTFOLIO_SUMMARY && Array.isArray(LT_PORTFOLIO_SUMMARY.holdings)) ? LT_PORTFOLIO_SUMMARY.holdings : [];
+
+  holdingsList.forEach(h => {
+    const sym = (h.symbol || '').toUpperCase();
+    if (h.qty > 0 && !pennyList.some(s => (s.symbol || '').toUpperCase() === sym)) {
+      pennyList.push({
+        symbol: h.symbol,
+        name: h.symbol,
+        ltp: h.live_price || h.last_price || h.avg_price,
+        status: 'BOUGHT',
+        status_badge: `🟢 BOUGHT (${h.qty})`,
+        status_badge_class: 'badge-green',
+        status_reason: `Purchased on ${h.buy_date || ''} (${h.qty} shares @ ₹${parseFloat(h.avg_price).toFixed(2)})`,
+        roe_pct: h.roe_pct || 15.0,
+        de_ratio: h.de_ratio || 0.1,
+        npm_pct: h.npm_pct || 10.0,
+        trend: 'Strong Uptrend',
+        trend_badge: '🟢 Strong Uptrend',
+        auto_gtt: h.avg_price
+      });
+    }
+  });
+
   const hMap = {};
   holdingsList.forEach(h => { hMap[h.symbol.toUpperCase()] = h; });
 
@@ -6453,19 +6475,23 @@ function fetchLtPortfolioStatus() {
   if (typeof LT_PORTFOLIO_SUMMARY !== 'undefined' && LT_PORTFOLIO_SUMMARY) {
     renderLtPortfolioSummary(LT_PORTFOLIO_SUMMARY);
     syncLtWatchlistHoldings(LT_PORTFOLIO_SUMMARY);
+    if (typeof renderPennyStocksTab === 'function') renderPennyStocksTab();
   }
   fetch('/api/lt-portfolio/status')
     .then(r => r.json())
     .then(res => {
       if (res && res.status === 'ok' && res.summary) {
+        window.LT_PORTFOLIO_SUMMARY = res.summary;
         renderLtPortfolioSummary(res.summary);
         syncLtWatchlistHoldings(res.summary);
+        if (typeof renderPennyStocksTab === 'function') renderPennyStocksTab();
       }
     })
     .catch(err => {
       if (typeof LT_PORTFOLIO_SUMMARY !== 'undefined' && LT_PORTFOLIO_SUMMARY) {
         renderLtPortfolioSummary(LT_PORTFOLIO_SUMMARY);
         syncLtWatchlistHoldings(LT_PORTFOLIO_SUMMARY);
+        if (typeof renderPennyStocksTab === 'function') renderPennyStocksTab();
       }
     });
 }
