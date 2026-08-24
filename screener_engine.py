@@ -1559,15 +1559,32 @@ def get_lt_watchlist_status(
     ltp: float,
     gtt_level: float = None,
     day_chg: float = 0.0,
-    is_reversal_up: bool = True
+    is_reversal_up: bool = True,
+    holding: dict = None
 ) -> dict:
     """
-    LT Watchlist Dynamic Status Gate — 3 states with A/E Support Reversal Expansion.
+    LT Watchlist Dynamic Status Gate — 4 states with A/E Support Reversal Expansion.
 
+    BOUGHT   : Stock is currently held in LT Portfolio (cooling off / holding active)
     BUY_NOW  : Trend confirmed + Price in Support Zone (≤ GTT * 1.008) + Moving UP from Support (A/E Breakout) + RSI < 70
     WAIT     : Trend confirmed but price hasn't reached support or is still falling (coiling at support)
     WATCHLIST: Consolidation / Distribution / Downtrend — monitoring only
     """
+    if holding and int(holding.get("qty", 0)) > 0:
+        qty = int(holding.get("qty", 1))
+        avg_price = float(holding.get("avg_price", ltp or 0))
+        buy_date = holding.get("buy_date", "")
+        pnl = float(holding.get("unrealized_pnl", 0.0))
+        pnl_pct = float(holding.get("unrealized_pnl_pct", 0.0))
+        pnl_str = f"P&L: ₹{pnl:+.2f} ({pnl_pct:+.1f}%)" if pnl != 0 else ""
+        date_str = f" on {buy_date}" if buy_date else ""
+        return {
+            "status": "BOUGHT",
+            "badge": f"🟢 BOUGHT ({qty})",
+            "badge_class": "badge-green",
+            "reason": f"Purchased{date_str}: {qty} share(s) @ ₹{avg_price:.2f} · Cooling off / Holding active {pnl_str}".strip()
+        }
+
     UPTREND_STATES = ("Uptrend", "Accumulation", "Strong Uptrend")
 
     if trend in UPTREND_STATES:
@@ -2122,12 +2139,53 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
             durability_tag = "📈 Undervalued Micro-Cap"
             durability_class = "badge-yellow"
 
+        # Calculate dynamic auto-trailing Support GTT
+        ema20 = float(s.get("ema20") or 0)
+        sr_sup = float(s.get("sup_level") or 0)
+        low20 = float(s.get("low20") or 0)
+        ma50 = float(s.get("ma50") or 0)
+
+        auto_gtt = None
+        if ema20 > 0 and ema20 < ltp:
+            auto_gtt = round(ema20, 2)
+        elif sr_sup > 0 and sr_sup < ltp:
+            auto_gtt = round(sr_sup, 2)
+        elif low20 > 0 and low20 < ltp:
+            auto_gtt = round(low20, 2)
+        elif ma50 > 0 and ma50 < ltp:
+            auto_gtt = round(ma50, 2)
+        elif low20 > 0:
+            auto_gtt = round(low20, 2)
+        elif ema20 > 0:
+            auto_gtt = round(ema20, 2)
+        elif sr_sup > 0:
+            auto_gtt = round(sr_sup, 2)
+        elif ltp > 0:
+            auto_gtt = round(ltp, 2)
+
+        rsi = float(s.get("rsi") or 50.0)
+        trend = s.get("trend") or "Consolidation"
+        day_chg = float(s.get("day_chg_pct") or 0.0)
+        is_reversal_up = (day_chg > -0.35 or (rsi > 42 and rsi < 70))
+
+        gate = get_lt_watchlist_status(trend, rsi, ltp, auto_gtt, day_chg=day_chg, is_reversal_up=is_reversal_up)
+
+        dist_from_gtt_pct = None
+        if auto_gtt and auto_gtt > 0 and ltp > 0:
+            dist_from_gtt_pct = round(((ltp - auto_gtt) / auto_gtt) * 100, 1)
+
         item = dict(s)
         item["penny_rank_score"] = penny_rank_score
         item["monthly_sip_qty"] = sip_qty
         item["monthly_sip_cost"] = sip_cost
         item["durability_tag"] = durability_tag
         item["durability_class"] = durability_class
+        item["status"] = gate["status"]
+        item["status_badge"] = gate["badge"]
+        item["status_badge_class"] = gate["badge_class"]
+        item["status_reason"] = gate["reason"]
+        item["auto_gtt"] = auto_gtt
+        item["dist_from_gtt_pct"] = dist_from_gtt_pct
         qualified.append(item)
 
     # Sort descending by penny ranking score

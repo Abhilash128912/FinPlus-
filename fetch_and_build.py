@@ -1103,11 +1103,17 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
     # Build fast lookup map from screener results
     result_map = {r.get("symbol", "").upper(): r for r in screener_results}
 
+    # Load capital ledger holdings to identify active positions
+    lt_summary = get_lt_portfolio_summary(screener_results)
+    holding_map = {h.get("symbol", "").upper(): h for h in lt_summary.get("holdings", []) if int(h.get("qty", 0)) > 0}
+
     enriched = []
     buy_now_count = 0
+    bought_count = 0
     for entry in lt_stocks:
         sym = (entry.get("symbol") or "").upper()
         active = entry.get("active", True)
+        holding = holding_map.get(sym)
 
         live = result_map.get(sym)
 
@@ -1159,10 +1165,12 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
 
         # Check for 1h/Daily Support Reversal Candle (A/E Breakout)
         is_reversal_up = (day_chg > -0.35 or (rsi > 42 and rsi < 70))
-        gate = get_lt_watchlist_status(trend, rsi, ltp, effective_gtt, day_chg=day_chg, is_reversal_up=is_reversal_up)
+        gate = get_lt_watchlist_status(trend, rsi, ltp, effective_gtt, day_chg=day_chg, is_reversal_up=is_reversal_up, holding=holding)
         status = gate["status"]
         if status == "BUY_NOW" and active:
             buy_now_count += 1
+        elif status == "BOUGHT" and active:
+            bought_count += 1
 
         # Distance from GTT level (negative = below GTT = triggered)
         dist_from_gtt_pct = None
@@ -1189,13 +1197,14 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
             "status_badge":      gate["badge"],
             "status_badge_class": gate["badge_class"],
             "status_reason":     gate["reason"],
+            "holding":           holding,
             "live_data_found":   live is not None,
         })
 
     if buy_now_count > 0:
         log(f"  🔔 LT Watchlist: {buy_now_count} stock(s) are BUY_NOW — GTT level reached!")
     log(f"  LT Watchlist: {sum(1 for e in enriched if e.get('active'))} active / {len(enriched)} total · "
-        f"{buy_now_count} BUY_NOW · {sum(1 for e in enriched if e.get('status')=='WAIT' and e.get('active'))} WAIT")
+        f"{buy_now_count} BUY_NOW · {sum(1 for e in enriched if e.get('status')=='WAIT' and e.get('active'))} WAIT · {bought_count} BOUGHT")
     return enriched
 
 
@@ -2814,6 +2823,7 @@ details[open] summary::before {
         <span style="font-size:12px;color:var(--muted);font-weight:600;margin-right:4px">Gate Filter:</span>
         <button class="swing-pill swing-pill-active" id="ltPill-ALL" onclick="filterLtStatus('ALL')">↺ All (<span id="ltPillCountALL">0</span>)</button>
         <button class="swing-pill" id="ltPill-BUY_NOW" onclick="filterLtStatus('BUY_NOW')" style="border-color:#10b981;color:#34d399">🟢 BUY NOW (<span id="ltPillCountBUY_NOW">0</span>)</button>
+        <button class="swing-pill" id="ltPill-BOUGHT" onclick="filterLtStatus('BOUGHT')" style="border-color:#06b6d4;color:#22d3ee">🟢 BOUGHT (<span id="ltPillCountBOUGHT">0</span>)</button>
         <button class="swing-pill" id="ltPill-WAIT" onclick="filterLtStatus('WAIT')" style="border-color:#6366f1;color:#a5b4fc">🔵 WAIT (<span id="ltPillCountWAIT">0</span>)</button>
         <button class="swing-pill" id="ltPill-WATCHLIST" onclick="filterLtStatus('WATCHLIST')" style="border-color:#64748b;color:#94a3b8">⬜ WATCHING (<span id="ltPillCountWATCHLIST">0</span>)</button>
       </div>
@@ -3710,6 +3720,19 @@ let ltSortCol = 'durability_score';
 let ltSortDir = -1;
 
 function calculateClientStatus(item) {
+  if (item.holding && (item.holding.qty > 0 || parseInt(item.holding.qty, 10) > 0)) {
+    const qty = parseInt(item.holding.qty, 10) || 1;
+    const avgPrice = parseFloat(item.holding.avg_price) || item.ltp || 0;
+    const buyDate = item.holding.buy_date || '';
+    const pnl = item.holding.unrealized_pnl || 0;
+    const pnlPct = item.holding.unrealized_pnl_pct || 0;
+    const pnlStr = pnl !== 0 ? `P&L: ${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)` : '';
+    item.status = "BOUGHT";
+    item.status_badge = `🟢 BOUGHT (${qty})`;
+    item.status_badge_class = "badge-green";
+    item.status_reason = `Purchased${buyDate ? ' on ' + buyDate : ''}: ${qty} share(s) @ ₹${avgPrice.toFixed(2)} · Cooling off / Holding active ${pnlStr}`.trim();
+    return;
+  }
   const uptrendStates = ["Uptrend", "Accumulation", "Strong Uptrend"];
   const trend = item.trend || "Consolidation";
   const rsi = item.rsi || 50;
@@ -3821,6 +3844,7 @@ function renderLtWatchlist() {
   const retiredList = ltWatchlist.filter(s => s.active === false);
 
   const buyNowCount = activeList.filter(s => s.status === 'BUY_NOW').length;
+  const boughtCount = activeList.filter(s => s.status === 'BOUGHT' || (s.holding && s.holding.qty > 0)).length;
   const waitCount = activeList.filter(s => s.status === 'WAIT').length;
   const watchlistCount = activeList.filter(s => s.status === 'WATCHLIST').length;
   const totalActive = activeList.length;
@@ -3830,12 +3854,14 @@ function renderLtWatchlist() {
   if (el('ltCountBuyNow')) el('ltCountBuyNow').textContent = buyNowCount;
   if (el('ltCountWait')) el('ltCountWait').textContent = waitCount;
   if (el('ltCountWatchlist')) el('ltCountWatchlist').textContent = watchlistCount;
+  if (el('ltCountBought')) el('ltCountBought').textContent = boughtCount;
   if (el('ltCountTotal')) el('ltCountTotal').textContent = totalActive;
   if (el('wlCount')) el('wlCount').textContent = totalActive;
   if (el('ltRetiredCount')) el('ltRetiredCount').textContent = retiredList.length;
 
   if (el('ltPillCountALL')) el('ltPillCountALL').textContent = totalActive;
   if (el('ltPillCountBUY_NOW')) el('ltPillCountBUY_NOW').textContent = buyNowCount;
+  if (el('ltPillCountBOUGHT')) el('ltPillCountBOUGHT').textContent = boughtCount;
   if (el('ltPillCountWAIT')) el('ltPillCountWAIT').textContent = waitCount;
   if (el('ltPillCountWATCHLIST')) el('ltPillCountWATCHLIST').textContent = watchlistCount;
 
@@ -3864,9 +3890,9 @@ function renderLtWatchlist() {
     let av = a[ltSortCol];
     let bv = b[ltSortCol];
     if (ltSortCol === 'status') {
-      const order = { 'BUY_NOW': 1, 'WAIT': 2, 'WATCHLIST': 3 };
-      av = order[a.status] || 4;
-      bv = order[b.status] || 4;
+      const order = { 'BUY_NOW': 1, 'BOUGHT': 2, 'WAIT': 3, 'WATCHLIST': 4 };
+      av = order[a.status] || 5;
+      bv = order[b.status] || 5;
     }
     if (av == null) return 1;
     if (bv == null) return -1;
@@ -3887,10 +3913,12 @@ function renderLtWatchlist() {
 
   tbody.innerHTML = displayList.map((s, i) => {
     const isRetired = (s.active === false);
+    const isBought = (s.status === 'BOUGHT' || (s.holding && s.holding.qty > 0));
+    const holdingQty = (s.holding && s.holding.qty) ? s.holding.qty : 1;
     const scoreVal = s.durability_score || 75;
     const scoreColor = scoreVal >= 85 ? '#10b981' : scoreVal >= 75 ? '#60a5fa' : '#fbbf24';
-    const statusBadgeCls = s.status === 'BUY_NOW' ? 'badge-green' : s.status === 'WAIT' ? 'badge-purple' : 'badge-gray';
-    const statusBadgeText = s.status === 'BUY_NOW' ? '🟢 BUY NOW' : s.status === 'WAIT' ? '🔵 WAIT' : '⬜ WATCHING';
+    const statusBadgeCls = isBought ? 'badge-green' : (s.status === 'BUY_NOW' ? 'badge-green' : s.status === 'WAIT' ? 'badge-purple' : 'badge-gray');
+    const statusBadgeText = isBought ? (s.status_badge || `🟢 BOUGHT (${holdingQty})`) : (s.status === 'BUY_NOW' ? '🟢 BUY NOW' : s.status === 'WAIT' ? '🔵 WAIT' : '⬜ WATCHING');
 
     const isAutoGtt = (s.gtt_mode === 'auto' || s.gtt_mode == null || s.is_auto_gtt);
     const gttVal = isAutoGtt ? (s.auto_gtt || s.gtt_level) : s.gtt_level;
@@ -3933,7 +3961,12 @@ function renderLtWatchlist() {
       <td>
         <div style="display:flex;gap:6px">
           ${!isRetired ? `
-            <button onclick="openLtBuyModal('${s.symbol}', ${s.ltp || 0})" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#34d399;font-weight:700;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Record Buy Transaction for ${s.symbol}">🛒 Buy</button>
+            ${isBought ? `
+              <button onclick="openLtHoldingLogModal('${s.symbol}')" style="background:rgba(6,182,212,0.18);border:1px solid rgba(6,182,212,0.4);color:#22d3ee;font-weight:700;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="View Purchase Log & Holding details for ${s.symbol}">📋 Purchased (${holdingQty})</button>
+              <button onclick="openLtBuyModal('${s.symbol}', ${s.ltp || 0})" style="background:var(--card2);border:1px solid var(--border);color:#a7f3d0;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Add More / Pyramid">+ Add</button>
+            ` : `
+              <button onclick="openLtBuyModal('${s.symbol}', ${s.ltp || 0})" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#34d399;font-weight:700;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Record Buy Transaction for ${s.symbol}">🛒 Buy</button>
+            `}
             <button onclick="promptGttEdit('${s.symbol}', ${s.gtt_level || 0})" style="background:var(--card2);border:1px solid var(--border);color:var(--text);font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Edit GTT Level">✏️ GTT</button>
             <button onclick="retireLtStock('${s.symbol}')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Soft-delete (Keep history)">🗑️ Retire</button>
           ` : `
@@ -4796,9 +4829,25 @@ function renderPennyStocksTab() {
   if (!container) return;
 
   const pennyList = (typeof PENNY_STOCKS_DATA !== 'undefined' && Array.isArray(PENNY_STOCKS_DATA)) ? PENNY_STOCKS_DATA : [];
+  const holdingsList = (typeof LT_PORTFOLIO_SUMMARY !== 'undefined' && LT_PORTFOLIO_SUMMARY && Array.isArray(LT_PORTFOLIO_SUMMARY.holdings)) ? LT_PORTFOLIO_SUMMARY.holdings : [];
+  const hMap = {};
+  holdingsList.forEach(h => { hMap[h.symbol.toUpperCase()] = h; });
+
+  const buyNowCount = pennyList.filter(s => s.status === 'BUY_NOW' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0)).length;
+  const boughtCount = pennyList.filter(s => hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0).length;
+  const waitCount = pennyList.filter(s => s.status === 'WAIT' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0)).length;
+  const watchingCount = pennyList.filter(s => s.status === 'WATCHLIST' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0)).length;
 
   let filtered = [...pennyList];
-  if (pennyFilterCategory === 'debt_free') {
+  if (pennyFilterCategory === 'buy_now') {
+    filtered = filtered.filter(s => s.status === 'BUY_NOW' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0));
+  } else if (pennyFilterCategory === 'bought') {
+    filtered = filtered.filter(s => hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0);
+  } else if (pennyFilterCategory === 'wait') {
+    filtered = filtered.filter(s => s.status === 'WAIT' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0));
+  } else if (pennyFilterCategory === 'watching') {
+    filtered = filtered.filter(s => s.status === 'WATCHLIST' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0));
+  } else if (pennyFilterCategory === 'debt_free') {
     filtered = filtered.filter(s => s.de_ratio != null && s.de_ratio <= 0.15);
   } else if (pennyFilterCategory === 'high_roe') {
     filtered = filtered.filter(s => s.roe_pct != null && s.roe_pct >= 15.0);
@@ -4811,6 +4860,7 @@ function renderPennyStocksTab() {
   const budget = customPennyMonthlyBudget || 200.0;
 
   const cardsHtml = filtered.map((s, idx) => {
+    const sym = (s.symbol || '').toUpperCase();
     const ltp = parseFloat(s.ltp || 0);
     const sipQty = ltp > 0 ? Math.max(1, Math.floor(budget / ltp)) : 1;
     const sipCost = (sipQty * ltp).toFixed(2);
@@ -4819,16 +4869,79 @@ function renderPennyStocksTab() {
     const npmVal = s.npm_pct != null ? s.npm_pct.toFixed(1) + '%' : '—';
     const volVal = s.avg_volume_10d ? (s.avg_volume_10d / 1000).toFixed(0) + 'k' : '—';
 
+    const holding = hMap[sym];
+    const isBought = holding && holding.qty > 0;
+    const gateStatus = isBought ? 'BOUGHT' : (s.status || 'WATCHLIST');
+
+    // Status Badge
+    let statusBadgeHtml = '';
+    if (isBought) {
+      statusBadgeHtml = `<span class="badge badge-green" style="font-size:10px;font-weight:700" title="Purchased on ${holding.buy_date || ''} (${holding.qty} shares @ ₹${holding.avg_price.toFixed(2)})">🟢 BOUGHT (${holding.qty})</span>`;
+    } else if (gateStatus === 'BUY_NOW') {
+      statusBadgeHtml = `<span class="badge badge-green" style="font-size:10px;font-weight:700" title="${s.status_reason || ''}">🟢 BUY NOW</span>`;
+    } else if (gateStatus === 'WAIT') {
+      statusBadgeHtml = `<span class="badge badge-purple" style="font-size:10px;font-weight:700" title="${s.status_reason || ''}">🔵 WAIT</span>`;
+    } else {
+      statusBadgeHtml = `<span class="badge badge-gray" style="font-size:10px;font-weight:700" title="${s.status_reason || ''}">⬜ WATCHING</span>`;
+    }
+
+    // Trend & CMF Badge
+    const trendText = s.trend_badge || s.trend || 'Consolidation';
+    const trendClass = (s.trend === 'Uptrend' || s.trend === 'Strong Uptrend') ? 'badge-green' : (s.trend === 'Accumulation' ? 'badge-purple' : (s.trend === 'Downtrend' ? 'badge-red' : 'badge-yellow'));
+    const cmfBadge = s.pa_badge ? `<div style="font-size:9px;margin-top:3px"><span class="badge ${s.pa_class || 'badge-gray'}" style="font-size:9px">${s.pa_badge}</span></div>` : '';
+
+    // Support Target GTT
+    const gttVal = s.auto_gtt || s.gtt_level;
+    const gttStr = gttVal ? `₹${parseFloat(gttVal).toFixed(2)}` : '—';
+    const distStr = s.dist_from_gtt_pct != null ? `${s.dist_from_gtt_pct <= 0 ? '' : '+'}${s.dist_from_gtt_pct.toFixed(1)}%` : '—';
+    const gttBoxHtml = `
+      <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:10px">
+        <span style="color:var(--muted);font-weight:600">⚡ Support GTT Target:</span>
+        <span style="color:#34d399;font-weight:800">${gttStr} <span style="color:${s.dist_from_gtt_pct <= 0 ? '#10b981' : '#a5b4fc'};font-size:9px">(${distStr})</span></span>
+      </div>
+    `;
+
+    // Smart Action Button
+    let actionBtnHtml = '';
+    if (isBought) {
+      actionBtnHtml = `
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button onclick="openLtHoldingLogModal('${sym}')" style="flex:1;background:rgba(6,182,212,0.18);border:1px solid rgba(6,182,212,0.4);color:#22d3ee;font-weight:700;font-size:11px;padding:8px 12px;border-radius:8px;cursor:pointer" title="View Purchase Log for ${sym}">📋 Purchased (${holding.qty})</button>
+          <button onclick="openLtBuyModal('${sym}', ${ltp})" style="background:linear-gradient(135deg,#7c3aed,#c084fc);color:#fff;font-weight:700;font-size:11px;padding:8px 12px;border-radius:8px;border:none;cursor:pointer" title="Record additional SIP for ${sym}">+ Add SIP</button>
+        </div>
+      `;
+    } else if (gateStatus === 'BUY_NOW') {
+      actionBtnHtml = `
+        <div style="margin-top:10px">
+          <button onclick="openLtBuyModal('${sym}', ${ltp})" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;font-size:11px;padding:8px 12px;border-radius:8px;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(16,185,129,0.3)" title="Breakout confirmed at Support — Record Buy/SIP">🟢 BUY NOW / Record SIP</button>
+        </div>
+      `;
+    } else if (gateStatus === 'WAIT') {
+      actionBtnHtml = `
+        <div style="margin-top:10px">
+          <button onclick="openLtBuyModal('${sym}', ${ltp})" style="width:100%;background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;font-weight:700;font-size:11px;padding:8px 12px;border-radius:8px;cursor:pointer" title="Coiling at support GTT ${gttStr} — Click if buying manual pullback">🔵 WAIT — Support GTT ${gttStr}</button>
+        </div>
+      `;
+    } else {
+      actionBtnHtml = `
+        <div style="margin-top:10px">
+          <button onclick="openLtBuyModal('${sym}', ${ltp})" style="width:100%;background:rgba(100,116,139,0.15);border:1px solid rgba(100,116,139,0.3);color:#94a3b8;font-weight:600;font-size:11px;padding:8px 12px;border-radius:8px;cursor:pointer" title="Trend not confirmed (${s.trend || 'Consolidation'}) — Avoid blind buy">⚠️ WATCHING (${s.trend || 'Consolidation'})</button>
+        </div>
+      `;
+    }
+
     return `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,0.3);position:relative;overflow:hidden">
-      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#7c3aed,#c084fc)"></div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+    <div style="background:var(--card);border:1px solid ${isBought ? '#10b981' : (gateStatus === 'BUY_NOW' ? 'rgba(16,185,129,0.6)' : 'var(--border)')};border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,0.3);position:relative;overflow:hidden">
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${isBought ? '#10b981' : (gateStatus === 'BUY_NOW' ? '#10b981' : 'linear-gradient(90deg,#7c3aed,#c084fc)')}"></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
         <div>
-          <div style="display:flex;align-items:center;gap:6px">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span style="font-size:10px;font-weight:800;color:#c084fc;background:rgba(192,132,252,0.12);padding:2px 8px;border-radius:12px">#${idx + 1} Top Penny</span>
-            <span class="badge ${s.durability_class || 'badge-green'}" style="font-size:10px;font-weight:700">${s.durability_tag || '💎 Quality Penny'}</span>
+            ${statusBadgeHtml}
+            <span class="badge ${trendClass}" style="font-size:10px">${trendText}</span>
           </div>
-          <div style="font-size:18px;font-weight:800;color:#fff;margin-top:6px">${s.symbol}</div>
+          ${cmfBadge}
+          <div style="font-size:18px;font-weight:800;color:#fff;margin-top:6px">${sym}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:1px">${(s.name || '').substring(0, 28)} · ${s.sector || 'Micro-Cap'}</div>
         </div>
         <div style="text-align:right">
@@ -4839,40 +4952,45 @@ function renderPennyStocksTab() {
         </div>
       </div>
 
+      <!-- Support GTT Target -->
+      ${gttBoxHtml}
+
       <!-- Fundamental Metrics Grid -->
-      <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;background:rgba(255,255,255,0.03);border-radius:10px;padding:10px;margin-bottom:12px;text-align:center">
+      <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;background:rgba(255,255,255,0.03);border-radius:10px;padding:8px;margin-bottom:10px;text-align:center">
         <div>
           <div style="font-size:9px;color:var(--muted);text-transform:uppercase">ROE %</div>
-          <div style="font-size:13px;font-weight:700;color:#10b981;margin-top:2px">${roeVal}</div>
+          <div style="font-size:12px;font-weight:700;color:#10b981;margin-top:2px">${roeVal}</div>
         </div>
         <div>
           <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Debt/Equity</div>
-          <div style="font-size:13px;font-weight:700;color:#38bdf8;margin-top:2px">${deVal}</div>
+          <div style="font-size:12px;font-weight:700;color:#38bdf8;margin-top:2px">${deVal}</div>
         </div>
         <div>
-          <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Profit Margin</div>
-          <div style="font-size:13px;font-weight:700;color:#c084fc;margin-top:2px">${npmVal}</div>
+          <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Margin</div>
+          <div style="font-size:12px;font-weight:700;color:#c084fc;margin-top:2px">${npmVal}</div>
         </div>
       </div>
 
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-bottom:14px;padding:0 4px">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--muted);margin-bottom:10px;padding:0 2px">
         <span>Avg Vol (10d): <strong style="color:#fff">${volVal}</strong></span>
         <span>Quality Score: <strong style="color:var(--accent2)">${s.total_score || 0}/100</strong></span>
       </div>
 
       <!-- Monthly SIP Recommendation Box -->
-      <div style="background:linear-gradient(135deg,rgba(124,58,237,0.12),rgba(192,132,252,0.08));border:1px solid rgba(192,132,252,0.25);border-radius:10px;padding:10px 12px">
+      <div style="background:linear-gradient(135deg,rgba(124,58,237,0.12),rgba(192,132,252,0.08));border:1px solid rgba(192,132,252,0.25);border-radius:10px;padding:8px 12px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
-            <div style="font-size:10px;color:#c084fc;font-weight:700;text-transform:uppercase">Recommended Monthly SIP</div>
-            <div style="font-size:14px;font-weight:800;color:#fff;margin-top:2px">Buy ${sipQty} Share${sipQty > 1 ? 's' : ''} / mo</div>
+            <div style="font-size:9px;color:#c084fc;font-weight:700;text-transform:uppercase">Monthly SIP Outlay</div>
+            <div style="font-size:13px;font-weight:800;color:#fff;margin-top:1px">Buy ${sipQty} Share${sipQty > 1 ? 's' : ''} / mo</div>
           </div>
           <div style="text-align:right">
-            <div style="font-size:10px;color:var(--muted)">Est. Outlay</div>
-            <div style="font-size:14px;font-weight:800;color:#34d399;margin-top:2px">₹${sipCost}</div>
+            <div style="font-size:9px;color:var(--muted)">Est. Cost</div>
+            <div style="font-size:13px;font-weight:800;color:#34d399;margin-top:1px">₹${sipCost}</div>
           </div>
         </div>
       </div>
+
+      ${actionBtnHtml}
     </div>
     `;
   }).join('');
@@ -4885,7 +5003,7 @@ function renderPennyStocksTab() {
           <span style="font-size:24px">💎</span>
           <div>
             <div style="font-size:20px;font-weight:800;color:#c084fc">Quality Penny & Micro-Cap Wealth-Builder Screener</div>
-            <div style="font-size:12px;color:#a78bfa;margin-top:2px">Strict 6-Point Gate: ₹5-₹75 Price &bull; Debt/Equity ≤ 1.0 &bull; ROE ≥ 6% &bull; Positive Margin &bull; Liquidity ≥ 20k/day</div>
+            <div style="font-size:12px;color:#a78bfa;margin-top:2px">Strict 6-Point Gate + Technical Entry Filter (Support GTT & CMF Accumulation/Distribution)</div>
           </div>
         </div>
       </div>
@@ -4897,12 +5015,16 @@ function renderPennyStocksTab() {
 
     <!-- Filter & SIP Budget Controller Row -->
     <div class="filters" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <button onclick="pennyFilterCategory='all';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='all'?'active':''}" style="padding:6px 12px;font-size:11px">All Top 20</button>
-        <button onclick="pennyFilterCategory='debt_free';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='debt_free'?'active':''}" style="padding:6px 12px;font-size:11px">💎 Debt-Free Only (D/E ≤ 0.15)</button>
-        <button onclick="pennyFilterCategory='high_roe';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='high_roe'?'active':''}" style="padding:6px 12px;font-size:11px">🔥 High ROE (≥ 15%)</button>
-        <button onclick="pennyFilterCategory='under_30';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='under_30'?'active':''}" style="padding:6px 12px;font-size:11px">Sub-₹30 Micro-Caps</button>
-        <button onclick="pennyFilterCategory='under_50';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='under_50'?'active':''}" style="padding:6px 12px;font-size:11px">Sub-₹50 Micro-Caps</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:11px;color:var(--muted);font-weight:700;margin-right:2px">Gate Status:</span>
+        <button onclick="pennyFilterCategory='all';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='all'?'active':''}" style="padding:6px 12px;font-size:11px">↺ All (${pennyList.length})</button>
+        <button onclick="pennyFilterCategory='buy_now';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='buy_now'?'active':''}" style="padding:6px 12px;font-size:11px;border-color:#10b981;color:#34d399">🟢 BUY NOW (${buyNowCount})</button>
+        <button onclick="pennyFilterCategory='bought';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='bought'?'active':''}" style="padding:6px 12px;font-size:11px;border-color:#06b6d4;color:#22d3ee">🟢 BOUGHT (${boughtCount})</button>
+        <button onclick="pennyFilterCategory='wait';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='wait'?'active':''}" style="padding:6px 12px;font-size:11px;border-color:#6366f1;color:#a5b4fc">🔵 WAIT (${waitCount})</button>
+        <button onclick="pennyFilterCategory='watching';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='watching'?'active':''}" style="padding:6px 12px;font-size:11px;border-color:#64748b;color:#94a3b8">⬜ WATCHING (${watchingCount})</button>
+        <span style="border-left:1px solid var(--border);height:16px;margin:0 4px"></span>
+        <button onclick="pennyFilterCategory='debt_free';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='debt_free'?'active':''}" style="padding:6px 12px;font-size:11px">💎 Debt-Free</button>
+        <button onclick="pennyFilterCategory='high_roe';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='high_roe'?'active':''}" style="padding:6px 12px;font-size:11px">🔥 High ROE</button>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <label style="font-size:11px;color:var(--muted);font-weight:700">Monthly SIP Amount (₹):</label>
@@ -6263,22 +6385,69 @@ document.addEventListener('keydown', e => {
 });
 
 // ── LT Capital Accumulator & Portfolio Functions ─────────────────────────
+function syncLtWatchlistHoldings(summary) {
+  if (!summary || !Array.isArray(summary.holdings) || !Array.isArray(ltWatchlist)) return;
+  const hMap = {};
+  summary.holdings.forEach(h => { hMap[h.symbol] = h; });
+  ltWatchlist.forEach(item => {
+    if (hMap[item.symbol] && hMap[item.symbol].qty > 0) {
+      item.holding = hMap[item.symbol];
+    } else {
+      delete item.holding;
+    }
+  });
+  renderLtWatchlist();
+}
+
 function fetchLtPortfolioStatus() {
   if (typeof LT_PORTFOLIO_SUMMARY !== 'undefined' && LT_PORTFOLIO_SUMMARY) {
     renderLtPortfolioSummary(LT_PORTFOLIO_SUMMARY);
+    syncLtWatchlistHoldings(LT_PORTFOLIO_SUMMARY);
   }
   fetch('/api/lt-portfolio/status')
     .then(r => r.json())
     .then(res => {
       if (res && res.status === 'ok' && res.summary) {
         renderLtPortfolioSummary(res.summary);
+        syncLtWatchlistHoldings(res.summary);
       }
     })
     .catch(err => {
       if (typeof LT_PORTFOLIO_SUMMARY !== 'undefined' && LT_PORTFOLIO_SUMMARY) {
         renderLtPortfolioSummary(LT_PORTFOLIO_SUMMARY);
+        syncLtWatchlistHoldings(LT_PORTFOLIO_SUMMARY);
       }
     });
+}
+
+function openLtHoldingLogModal(symbol) {
+  const item = (typeof ltWatchlist !== 'undefined' && Array.isArray(ltWatchlist))
+    ? ltWatchlist.find(s => s.symbol === symbol)
+    : null;
+  const holding = item ? item.holding : null;
+
+  if (!holding) {
+    alert(`No active holding record found for ${symbol}. Use 🛒 Buy button to record a purchase.`);
+    return;
+  }
+
+  const pnl = holding.unrealized_pnl || 0;
+  const pnlPct = holding.unrealized_pnl_pct || 0;
+  const pnlStr = `${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)`;
+
+  const msg = `📋 PURCHASE LOG & HOLDING DETAILS — ${symbol}\n\n` +
+    `• Gate Status: 🟢 BOUGHT (Cooling Off Active)\n` +
+    `• Quantity Held: ${holding.qty} share(s)\n` +
+    `• Avg Buy Price: ₹${parseFloat(holding.avg_price).toFixed(2)}\n` +
+    `• Buy Date: ${holding.buy_date || 'N/A'}\n` +
+    `• Current Price (LTP): ₹${parseFloat(holding.live_price || (item ? item.ltp : 0) || 0).toFixed(2)}\n` +
+    `• Invested Capital: ₹${parseFloat(holding.buy_value || (holding.qty * holding.avg_price)).toFixed(2)}\n` +
+    `• Current Value: ₹${parseFloat(holding.market_value || (holding.qty * (holding.live_price || (item ? item.ltp : 0)))).toFixed(2)}\n` +
+    `• Live P&L: ${pnlStr}\n` +
+    `========================================\n` +
+    `This stock is currently held in your portfolio and set to Cooling Off status. You can track its live performance or click "+ Add" if you wish to pyramid.`;
+
+  alert(msg);
 }
 
 function renderLtPortfolioSummary(summary) {
