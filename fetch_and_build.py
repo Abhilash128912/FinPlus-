@@ -4100,21 +4100,59 @@ function openAddLtStockModal(prefillSymbol = '') {
     if (el('ltFormRole')) el('ltFormRole').value = '';
     if (el('ltFormGtt')) el('ltFormGtt').value = '';
   }
+
   if (modalBg) {
     modalBg.style.display = 'flex';
   } else {
-    const symInput = prompt('Enter Stock Symbol to add to LT Watchlist (e.g. BEL, TATAPOWER, RELIANCE):');
+    // Native Prompt Fallback (Works on any browser/environment unconditionally)
+    const symInput = prompt('➕ ADD STOCK TO LT WATCHLIST\n\nEnter Stock Symbol (e.g. BEL, TATAPOWER, RELIANCE, INFOSYS):', prefillSymbol);
     if (!symInput) return;
     const sym = symInput.trim().toUpperCase();
+    if (!sym) return;
+
+    const typeChoice = prompt(`Adding ${sym} to LT Watchlist\n\nEnter Type (1 for Private, 2 for PSU):`, '1');
+    const type = (typeChoice === '2') ? 'PSU' : 'Private';
+    const role = prompt(`Enter Portfolio Role for ${sym}:`, 'Core growth') || 'Core growth';
+
     const screenerItem = (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA)) ? SCREENER_DATA.find(s => s.symbol === sym) : null;
     const sector = screenerItem ? (screenerItem.sector || 'General') : 'General';
     const gtt = screenerItem && screenerItem.ltp ? (screenerItem.ltp * 0.95) : null;
-    const body = { symbol: sym, type: 'Private', durability_score: 75, sector: sector, portfolio_role: 'Growth', gtt_level: gtt };
+
+    const newStock = {
+      symbol: sym,
+      ticker: `${sym}.NS`,
+      type: type,
+      durability_score: 75,
+      sector: sector,
+      portfolio_role: role,
+      gtt_mode: gtt ? 'manual' : 'auto',
+      gtt_level: gtt,
+      ltp: screenerItem ? screenerItem.ltp : 0,
+      status: 'WAIT',
+      status_badge: '🔵 WAIT',
+      status_badge_class: 'badge-purple',
+      active: true,
+      added_date: new Date().toISOString().split('T')[0]
+    };
+
+    let idx = ltWatchlist.findIndex(s => s.symbol === sym);
+    if (idx >= 0) {
+      ltWatchlist[idx] = { ...ltWatchlist[idx], ...newStock, active: true };
+    } else {
+      ltWatchlist.push(newStock);
+    }
+
+    renderLtWatchlist();
+
     fetch('/api/lt-watchlist/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }).then(() => location.reload()).catch(() => location.reload());
+      body: JSON.stringify({ symbol: sym, type, durability_score: 75, sector, portfolio_role: role, gtt_level: gtt })
+    }).finally(() => {
+      fetchLtWatchlistApi();
+    });
+
+    alert(`✅ Successfully added ${sym} to LT Watchlist!`);
   }
 }
 
@@ -4124,40 +4162,59 @@ function closeAddLtStockModal() {
 }
 
 function submitAddLtStockForm(e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
   const el = id => document.getElementById(id);
-  const symbol = el('ltFormSymbol').value.trim().toUpperCase();
-  const type = el('ltFormType').value;
-  const durability_score = parseInt(el('ltFormDurability').value || 75);
-  const sector = el('ltFormSector').value.trim();
-  const portfolio_role = el('ltFormRole').value.trim();
-  const gtt_level = el('ltFormGtt').value ? parseFloat(el('ltFormGtt').value) : null;
+  const symbol = el('ltFormSymbol') ? el('ltFormSymbol').value.trim().toUpperCase() : '';
+  const type = el('ltFormType') ? el('ltFormType').value : 'Private';
+  const durability_score = parseInt(el('ltFormDurability') ? el('ltFormDurability').value : 75) || 75;
+  const sector = el('ltFormSector') ? el('ltFormSector').value.trim() : '';
+  const portfolio_role = el('ltFormRole') ? el('ltFormRole').value.trim() : '';
+  const gtt_level = (el('ltFormGtt') && el('ltFormGtt').value) ? parseFloat(el('ltFormGtt').value) : null;
 
-  const body = { symbol, type, durability_score, sector, portfolio_role, gtt_level };
+  if (!symbol) {
+    alert('Please enter a stock symbol.');
+    return;
+  }
+
+  const screenerItem = (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA)) ? SCREENER_DATA.find(s => s.symbol === symbol) : null;
+  const ltp = screenerItem ? screenerItem.ltp : 0;
+
+  const newStock = {
+    symbol,
+    ticker: `${symbol}.NS`,
+    type: type || 'Private',
+    durability_score: durability_score || 75,
+    sector: sector || (screenerItem ? screenerItem.sector : 'General'),
+    portfolio_role: portfolio_role || 'Growth',
+    gtt_mode: gtt_level ? 'manual' : 'auto',
+    gtt_level: gtt_level || (ltp ? ltp * 0.95 : null),
+    ltp: ltp,
+    status: 'WAIT',
+    status_badge: '🔵 WAIT',
+    status_badge_class: 'badge-purple',
+    active: true,
+    added_date: new Date().toISOString().split('T')[0]
+  };
+
+  let existingIndex = ltWatchlist.findIndex(s => s.symbol === symbol);
+  if (existingIndex >= 0) {
+    ltWatchlist[existingIndex] = { ...ltWatchlist[existingIndex], ...newStock, active: true };
+  } else {
+    ltWatchlist.push(newStock);
+  }
+
+  closeAddLtStockModal();
+  renderLtWatchlist();
 
   fetch('/api/lt-watchlist/add', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  }).then(r => r.json()).then(res => {
-    let existing = ltWatchlist.find(s => s.symbol === symbol);
-    if (existing) {
-      Object.assign(existing, body, { active: true });
-    } else {
-      ltWatchlist.push({ ...body, active: true, added_date: new Date().toISOString().split('T')[0] });
-    }
-    closeAddLtStockModal();
-    fetchLtWatchlistApi();
-  }).catch(err => {
-    let existing = ltWatchlist.find(s => s.symbol === symbol);
-    if (existing) {
-      Object.assign(existing, body, { active: true });
-    } else {
-      ltWatchlist.push({ ...body, active: true, added_date: new Date().toISOString().split('T')[0] });
-    }
-    closeAddLtStockModal();
+    body: JSON.stringify({ symbol, type, durability_score, sector, portfolio_role, gtt_level })
+  }).finally(() => {
     fetchLtWatchlistApi();
   });
+
+  alert(`✅ Successfully added ${symbol} to LT Watchlist!`);
 }
 
 function promptGttEdit(symbol, currentGtt) {
