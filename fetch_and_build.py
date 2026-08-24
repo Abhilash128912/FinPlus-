@@ -1107,10 +1107,11 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
     lt_summary = get_lt_portfolio_summary(screener_results)
     holding_map = {h.get("symbol", "").upper(): h for h in lt_summary.get("holdings", []) if int(h.get("qty", 0)) > 0}
 
-    # Automatically append any active portfolio holdings not present in lt_stocks
+    # Automatically append any active non-penny portfolio holdings not present in lt_stocks
     existing_symbols = {(s.get("symbol") or "").upper() for s in lt_stocks}
-    for h_sym in holding_map.keys():
-        if h_sym not in existing_symbols:
+    for h_sym, h in holding_map.items():
+        price = float(h.get("live_price") or h.get("last_price") or h.get("avg_price") or 0.0)
+        if price > 75.0 and h_sym not in existing_symbols:
             lt_stocks.append({
                 "symbol": h_sym,
                 "ticker": f"{h_sym}.NS",
@@ -1393,29 +1394,30 @@ def execute_lt_buy_order(symbol: str, qty: int, price: float) -> dict:
     ledger["transactions"] = transactions
     save_lt_capital_ledger(ledger)
 
-    # Ensure symbol is persisted in lt_watchlist.json so it is tracked in LT Watchlist dashboard
-    try:
-        if os.path.exists(LT_WL_FILE):
-            with open(LT_WL_FILE, "r", encoding="utf-8") as f:
-                wl_list = json.load(f)
-            if not any((item.get("symbol") or "").upper() == symbol for item in wl_list):
-                wl_list.append({
-                    "symbol": symbol,
-                    "ticker": f"{symbol}.NS",
-                    "type": "Private",
-                    "sector": "Portfolio Holding",
-                    "durability_score": 75,
-                    "portfolio_role": "Active Holding",
-                    "gtt_mode": "auto",
-                    "gtt_level": None,
-                    "active": True,
-                    "added_date": datetime.datetime.now().strftime("%Y-%m-%d"),
-                    "notes": "Auto-added upon purchase"
-                })
-                with open(LT_WL_FILE, "w", encoding="utf-8") as f:
-                    json.dump(wl_list, f, indent=2)
-    except Exception as e:
-        log(f"⚠ Could not auto-add {symbol} to lt_watchlist.json: {e}")
+    # Ensure non-penny symbol (price > 75.0) is persisted in lt_watchlist.json so it is tracked in LT Watchlist dashboard
+    if price > 75.0:
+        try:
+            if os.path.exists(LT_WL_FILE):
+                with open(LT_WL_FILE, "r", encoding="utf-8") as f:
+                    wl_list = json.load(f)
+                if not any((item.get("symbol") or "").upper() == symbol for item in wl_list):
+                    wl_list.append({
+                        "symbol": symbol,
+                        "ticker": f"{symbol}.NS",
+                        "type": "Private",
+                        "sector": "Portfolio Holding",
+                        "durability_score": 75,
+                        "portfolio_role": "Active Holding",
+                        "gtt_mode": "auto",
+                        "gtt_level": None,
+                        "active": True,
+                        "added_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                        "notes": "Auto-added upon purchase"
+                    })
+                    with open(LT_WL_FILE, "w", encoding="utf-8") as f:
+                        json.dump(wl_list, f, indent=2)
+        except Exception as e:
+            log(f"⚠ Could not auto-add {symbol} to lt_watchlist.json: {e}")
 
     return {
         "status": "ok",
@@ -3884,8 +3886,14 @@ function renderLtWatchlist() {
     }
   });
 
-  const activeList = ltWatchlist.filter(s => s.active !== false);
-  const retiredList = ltWatchlist.filter(s => s.active === false);
+  const isPenny = s => {
+    const p = parseFloat(s.ltp || 0);
+    const hp = s.holding ? parseFloat(s.holding.avg_price || 0) : 0;
+    return (p > 0 && p <= 75.0) || (hp > 0 && hp <= 75.0);
+  };
+
+  const activeList = ltWatchlist.filter(s => s.active !== false && !isPenny(s));
+  const retiredList = ltWatchlist.filter(s => s.active === false && !isPenny(s));
 
   const buyNowCount = activeList.filter(s => s.status === 'BUY_NOW').length;
   const boughtCount = activeList.filter(s => s.status === 'BOUGHT' || (s.holding && s.holding.qty > 0)).length;
@@ -3924,7 +3932,7 @@ function renderLtWatchlist() {
   }
 
   // Filter display list
-  let displayList = ltWatchlist.filter(s => (ltShowRetired ? true : s.active !== false));
+  let displayList = ltWatchlist.filter(s => !isPenny(s) && (ltShowRetired ? true : s.active !== false));
   if (ltFilterStatus !== 'ALL') {
     displayList = displayList.filter(s => s.status === ltFilterStatus);
   }
@@ -4878,7 +4886,8 @@ function renderPennyStocksTab() {
 
   holdingsList.forEach(h => {
     const sym = (h.symbol || '').toUpperCase();
-    if (h.qty > 0 && !pennyList.some(s => (s.symbol || '').toUpperCase() === sym)) {
+    const price = parseFloat(h.live_price || h.last_price || h.avg_price || 0);
+    if (h.qty > 0 && price <= 75.0 && !pennyList.some(s => (s.symbol || '').toUpperCase() === sym)) {
       pennyList.push({
         symbol: h.symbol,
         name: h.symbol,
@@ -4898,7 +4907,14 @@ function renderPennyStocksTab() {
   });
 
   const hMap = {};
-  holdingsList.forEach(h => { hMap[h.symbol.toUpperCase()] = h; });
+  holdingsList.forEach(h => {
+    const sym = (h.symbol || '').toUpperCase();
+    const price = parseFloat(h.live_price || h.last_price || h.avg_price || 0);
+    const isPennyData = (typeof PENNY_STOCKS_DATA !== 'undefined' && Array.isArray(PENNY_STOCKS_DATA)) && PENNY_STOCKS_DATA.some(s => (s.symbol || '').toUpperCase() === sym);
+    if (price <= 75.0 || isPennyData) {
+      hMap[sym] = h;
+    }
+  });
 
   const buyNowCount = pennyList.filter(s => s.status === 'BUY_NOW' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0)).length;
   const boughtCount = pennyList.filter(s => hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0).length;
