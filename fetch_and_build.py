@@ -2948,7 +2948,7 @@ details[open] summary::before {
       <button class="btn-add" onclick="addCustomBseStock()" style="padding:10px 18px;font-size:13px">Add Stock</button>
     </div>
 <!-- LT Watchlist Add Stock Modal -->
-<div class="modal-bg" id="ltAddModalBg" style="display:none" onclick="if(event.target===this)closeAddLtStockModal()">
+<div class="modal-bg" id="ltAddModalBg" style="display:none;z-index:99999" onclick="if(event.target===this)closeAddLtStockModal()">
   <div style="background:var(--card);border:1.5px solid var(--accent);border-radius:16px;padding:24px;width:90%;max-width:520px;box-shadow:0 12px 36px rgba(0,0,0,0.5)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <h3 style="font-size:18px;font-weight:700;color:var(--white)">➕ Add Stock to LT Watchlist</h3>
@@ -4084,7 +4084,9 @@ function renderLtWatchlist() {
 }
 
 function openAddLtStockModal(prefillSymbol = '') {
+  if (typeof prefillSymbol !== 'string') prefillSymbol = '';
   const el = id => document.getElementById(id);
+  const modalBg = el('ltAddModalBg');
   if (prefillSymbol) {
     if (el('ltFormSymbol')) el('ltFormSymbol').value = prefillSymbol;
     const screenerItem = (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA)) ? SCREENER_DATA.find(s => s.symbol === prefillSymbol) : null;
@@ -4092,9 +4094,28 @@ function openAddLtStockModal(prefillSymbol = '') {
       if (el('ltFormSector')) el('ltFormSector').value = screenerItem.sector || '';
       if (el('ltFormGtt')) el('ltFormGtt').value = screenerItem.ltp ? (screenerItem.ltp * 0.95).toFixed(2) : '';
     }
+  } else {
+    if (el('ltFormSymbol')) el('ltFormSymbol').value = '';
+    if (el('ltFormSector')) el('ltFormSector').value = '';
+    if (el('ltFormRole')) el('ltFormRole').value = '';
+    if (el('ltFormGtt')) el('ltFormGtt').value = '';
   }
-  const modalBg = el('ltAddModalBg');
-  if (modalBg) modalBg.style.display = 'flex';
+  if (modalBg) {
+    modalBg.style.display = 'flex';
+  } else {
+    const symInput = prompt('Enter Stock Symbol to add to LT Watchlist (e.g. BEL, TATAPOWER, RELIANCE):');
+    if (!symInput) return;
+    const sym = symInput.trim().toUpperCase();
+    const screenerItem = (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA)) ? SCREENER_DATA.find(s => s.symbol === sym) : null;
+    const sector = screenerItem ? (screenerItem.sector || 'General') : 'General';
+    const gtt = screenerItem && screenerItem.ltp ? (screenerItem.ltp * 0.95) : null;
+    const body = { symbol: sym, type: 'Private', durability_score: 75, sector: sector, portfolio_role: 'Growth', gtt_level: gtt };
+    fetch('/api/lt-watchlist/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(() => location.reload()).catch(() => location.reload());
+  }
 }
 
 function closeAddLtStockModal() {
