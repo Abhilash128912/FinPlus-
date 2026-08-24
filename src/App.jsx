@@ -133,7 +133,7 @@ export default function App() {
   // Free Cash with Broker (Baseline Initial Balances)
   const [swingFreeCashInput, setSwingFreeCashInput] = useState(() => {
     const saved = localStorage.getItem('finplus_free_cash_swing_v5') || localStorage.getItem(FREE_CASH_SWING_KEY);
-    if (!saved || saved === '249.40' || saved === '249.4') return '';
+    if (!saved || saved === '249.40' || saved === '249.4' || saved === '1233.12' || saved === '1233.1' || saved === '1287.16') return '';
     return saved;
   });
   const [ltFreeCashInput, setLtFreeCashInput] = useState(() => {
@@ -282,7 +282,12 @@ export default function App() {
               if (split.penny !== undefined) setPennyPct(split.penny);
             }
             if (freeCash) {
-              if (freeCash.swing !== undefined) setSwingFreeCashInput(String(freeCash.swing));
+              const val = String(freeCash.swing || '').trim();
+              if (val && val !== '249.40' && val !== '249.4' && val !== '1233.12' && val !== '1233.1' && val !== '1287.16') {
+                setSwingFreeCashInput(val);
+              } else {
+                setSwingFreeCashInput('');
+              }
               if (freeCash.lt !== undefined) setLtFreeCashInput(String(freeCash.lt));
               if (freeCash.penny !== undefined) setPennyFreeCashInput(String(freeCash.penny));
             }
@@ -678,7 +683,8 @@ export default function App() {
     const pennyNetPnl = pennyGrossPnl - pennyEstCharges;
     const pennyNetPct = pennyInvested > 0 ? (pennyNetPnl / pennyInvested) * 100 : 0;
 
-    const effectiveSwingFreeCash = (swingFreeCashInput && swingFreeCashInput !== '249.40' && swingFreeCashInput !== '249.4') ? (parseFloat(swingFreeCashInput) || 0) : capitalMath.swing.available;
+    const isStaleSwingCash = (val) => !val || val === '249.40' || val === '249.4' || val === '1233.12' || val === '1233.1' || val === '1287.16';
+    const effectiveSwingFreeCash = (!isStaleSwingCash(swingFreeCashInput)) ? (parseFloat(swingFreeCashInput) || 0) : capitalMath.swing.available;
     const effectiveLtFreeCash = ltFreeCashInput ? (parseFloat(ltFreeCashInput) || 0) : capitalMath.lt.available;
     const effectivePennyFreeCash = pennyFreeCashInput ? (parseFloat(pennyFreeCashInput) || 0) : capitalMath.penny.available;
 
