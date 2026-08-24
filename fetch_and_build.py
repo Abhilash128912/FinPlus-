@@ -2947,7 +2947,56 @@ details[open] summary::before {
       <input type="text" id="bseSymbolInput" placeholder="e.g. 500112.BO or IZMO.NS" style="flex:1;background:var(--card2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addCustomBseStock()">
       <button class="btn-add" onclick="addCustomBseStock()" style="padding:10px 18px;font-size:13px">Add Stock</button>
     </div>
-    <div id="bseAddStatus" style="font-size:12px;margin-top:8px"></div>
+<!-- LT Watchlist Add Stock Modal -->
+<div class="modal-bg" id="ltAddModalBg" style="display:none" onclick="if(event.target===this)closeAddLtStockModal()">
+  <div style="background:var(--card);border:1.5px solid var(--accent);border-radius:16px;padding:24px;width:90%;max-width:520px;box-shadow:0 12px 36px rgba(0,0,0,0.5)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h3 style="font-size:18px;font-weight:700;color:var(--white)">➕ Add Stock to LT Watchlist</h3>
+      <button class="modal-close" onclick="closeAddLtStockModal()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">✕</button>
+    </div>
+    
+    <form onsubmit="submitAddLtStockForm(event)">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase">Stock Symbol *</label>
+          <input type="text" id="ltFormSymbol" placeholder="e.g. BEL, TATAPOWER" required style="width:100%;background:var(--card2);border:1px solid var(--border);color:#fff;padding:9px 12px;border-radius:8px;font-size:13px;outline:none">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase">Ownership Type</label>
+          <select id="ltFormType" style="width:100%;background:var(--card2);border:1px solid var(--border);color:#fff;padding:9px 12px;border-radius:8px;font-size:13px;outline:none">
+            <option value="Private">Private</option>
+            <option value="PSU">PSU</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase">Durability Score (1-100)</label>
+          <input type="number" id="ltFormDurability" min="1" max="100" value="75" style="width:100%;background:var(--card2);border:1px solid var(--border);color:#fff;padding:9px 12px;border-radius:8px;font-size:13px;outline:none">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase">Manual GTT Target (₹)</label>
+          <input type="number" step="0.05" id="ltFormGtt" placeholder="Auto-trailing if blank" style="width:100%;background:var(--card2);border:1px solid var(--border);color:#fff;padding:9px 12px;border-radius:8px;font-size:13px;outline:none">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase">Sector</label>
+          <input type="text" id="ltFormSector" placeholder="e.g. Defense, Power" style="width:100%;background:var(--card2);border:1px solid var(--border);color:#fff;padding:9px 12px;border-radius:8px;font-size:13px;outline:none">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase">Portfolio Role</label>
+          <input type="text" id="ltFormRole" placeholder="e.g. Core growth" style="width:100%;background:var(--card2);border:1px solid var(--border);color:#fff;padding:9px 12px;border-radius:8px;font-size:13px;outline:none">
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px">
+        <button type="button" onclick="closeAddLtStockModal()" style="background:var(--card2);border:1px solid var(--border);color:var(--text);padding:9px 16px;border-radius:8px;font-size:12px;cursor:pointer">Cancel</button>
+        <button type="submit" style="background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;font-weight:700;padding:9px 20px;border-radius:8px;font-size:13px;cursor:pointer">Save Stock</button>
+      </div>
+    </form>
   </div>
 </div>
 
