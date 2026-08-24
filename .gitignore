@@ -12,5 +12,4 @@ node_modules/
 android/
 www/
 *.xlsx
-*.apk
-
+FINANCEFIXED.py/

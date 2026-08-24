@@ -1,0 +1,107 @@
+{
+  "positions": [
+    {
+      "id": "pos_midhani_kite",
+      "ticker": "MIDHANI",
+      "name": "Mishra Dhatu Nigam Limited",
+      "segment": "SWING",
+      "shares": 3,
+      "buyPrice": 433,
+      "buyDate": "2026-08-23",
+      "target1": 467.64,
+      "stopLoss": 415.68,
+      "notes": "Zerodha Kite Swing Position"
+    },
+    {
+      "id": "pos_cupid_kite",
+      "ticker": "CUPID",
+      "name": "Cupid Limited",
+      "segment": "SWING",
+      "shares": 6,
+      "buyPrice": 289.95,
+      "buyDate": "2026-08-23",
+      "target1": 313.15,
+      "stopLoss": 278.35,
+      "notes": "Zerodha Kite Swing Position"
+    },
+    {
+      "id": "pos_rvnl_indmoney",
+      "ticker": "RVNL",
+      "name": "Rail Vikas Nigam Limited",
+      "segment": "LT",
+      "shares": 1,
+      "buyPrice": 229.9,
+      "buyDate": "2026-08-23",
+      "target1": 287.38,
+      "stopLoss": 0,
+      "notes": "INDmoney Long-Term Core Position"
+    }
+  ],
+  "capitalLedger": [
+    {
+      "id": "cap_initial_kite",
+      "date": "2026-08-23",
+      "type": "INJECTION",
+      "amount": 5136.1,
+      "segment": "SWING",
+      "notes": "Zerodha Kite Capital (Invested + Free Cash)"
+    },
+    {
+      "id": "cap_initial_indmoney",
+      "date": "2026-08-23",
+      "type": "INJECTION",
+      "amount": 283.94,
+      "segment": "LT",
+      "notes": "INDmoney Long-Term Capital (Invested + Free Cash)"
+    }
+  ],
+  "soldHistory": [
+    {
+      "id": "sold_1787555336839",
+      "ticker": "KIRIINDUS",
+      "name": "Kiri Industries Limited",
+      "segment": "SWING",
+      "shares": 4,
+      "buyPrice": 462,
+      "sellPrice": 513.35,
+      "buyDate": "2026-08-23",
+      "sellDate": "2026-08-24",
+      "holdingDays": 1,
+      "broker": "Zerodha Kite",
+      "turnover": 2053.4,
+      "grossPnl": 205.4000000000001,
+      "taxes": 19.6599321164,
+      "netPnl": 185.7400678836001,
+      "returnPct": 11.11471861471862
+    },
+    {
+      "id": "sold_1787324151435",
+      "ticker": "MANALIPETC",
+      "name": "Manali Petrochemicals Limited",
+      "segment": "SWING",
+      "shares": 27,
+      "buyPrice": 73.09,
+      "sellPrice": 76.81,
+      "buyDate": "2026-08-19",
+      "sellDate": "2026-08-21",
+      "holdingDays": 2,
+      "grossPnl": 100.43999999999997,
+      "taxes": 19.8299319898,
+      "netPnl": 80.61006801019997,
+      "returnPct": 4.084769564169997,
+      "broker": "Zerodha Kite",
+      "notes": "Recorded Past Closed Trade"
+    }
+  ],
+  "freeCash": {
+    "swing": "249.40",
+    "lt": "54.04",
+    "penny": ""
+  },
+  "budget": "0",
+  "split": {
+    "swing": 60,
+    "lt": 30,
+    "penny": 10
+  }
+}

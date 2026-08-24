@@ -574,3 +574,124 @@ export async function fetchJournalFromCloud() {
   }
   return { success: false, error: "Cloud fetch offline." };
 }
+
+
+/**
+ * INDmoney Official Charges Calculator (Long-Term Delivery)
+ */
+export function calculateINDmoneyCharges(trade) {
+  const {
+    entry_price = 0,
+    exit_price = 0,
+    quantity = 0
+  } = trade || {};
+
+  const entry = Number(entry_price) || 0;
+  const exit = Number(exit_price) || 0;
+  const qty = Number(quantity) || 0;
+
+  if (entry <= 0 || qty <= 0) {
+    return {
+      brokerage: 0,
+      stt: 0,
+      exchange_txn: 0,
+      sebi: 0,
+      stamp_duty: 0,
+      gst: 0,
+      dp_charges: 0,
+      total: 0,
+      gross_pnl: 0,
+      net_pnl: 0
+    };
+  }
+
+  const buyTurnover = entry * qty;
+  const sellTurnover = (exit > 0 ? exit : entry) * qty;
+  const totalTurnover = buyTurnover + (exit > 0 ? sellTurnover : 0);
+
+  const grossPnl = exit > 0 ? (exit - entry) * qty : 0;
+
+  const brokerage = 0;
+  const stt = (buyTurnover * 0.001) + (exit > 0 ? (sellTurnover * 0.001) : 0);
+  const exchangeTxn = totalTurnover * 0.0000297;
+  const sebi = totalTurnover * 0.000001;
+  const stampDuty = buyTurnover * 0.00015;
+  const gst = (brokerage + exchangeTxn + sebi) * 0.18;
+  const dpCharges = exit > 0 ? 14.75 : 0;
+
+  const total = brokerage + stt + exchangeTxn + sebi + stampDuty + gst + dpCharges;
+  const netPnl = grossPnl - total;
+
+  return {
+    brokerage,
+    stt,
+    exchange_txn: exchangeTxn,
+    sebi,
+    stamp_duty: stampDuty,
+    gst,
+    dp_charges: dpCharges,
+    total,
+    gross_pnl: grossPnl,
+    net_pnl: netPnl
+  };
+}
+
+/**
+ * Zerodha Kite Official Charges Calculator (Swing & Penny Delivery)
+ */
+export function calculateKiteDeliveryCharges(trade) {
+  const {
+    entry_price = 0,
+    exit_price = 0,
+    quantity = 0
+  } = trade || {};
+
+  const entry = Number(entry_price) || 0;
+  const exit = Number(exit_price) || 0;
+  const qty = Number(quantity) || 0;
+
+  if (entry <= 0 || qty <= 0) {
+    return {
+      brokerage: 0,
+      stt: 0,
+      exchange_txn: 0,
+      sebi: 0,
+      stamp_duty: 0,
+      gst: 0,
+      dp_charges: 0,
+      total: 0,
+      gross_pnl: 0,
+      net_pnl: 0
+    };
+  }
+
+  const buyTurnover = entry * qty;
+  const sellTurnover = (exit > 0 ? exit : entry) * qty;
+  const totalTurnover = buyTurnover + (exit > 0 ? sellTurnover : 0);
+
+  const grossPnl = exit > 0 ? (exit - entry) * qty : 0;
+
+  const brokerage = 0;
+  const stt = (buyTurnover * 0.001) + (exit > 0 ? (sellTurnover * 0.001) : 0);
+  const exchangeTxn = totalTurnover * 0.0000297;
+  const sebi = totalTurnover * 0.000001;
+  const stampDuty = buyTurnover * 0.00015;
+  const gst = (brokerage + exchangeTxn + sebi) * 0.18;
+  const dpCharges = exit > 0 ? 15.34 : 0;
+
+  const total = brokerage + stt + exchangeTxn + sebi + stampDuty + gst + dpCharges;
+  const netPnl = grossPnl - total;
+
+  return {
+    brokerage,
+    stt,
+    exchange_txn: exchangeTxn,
+    sebi,
+    stamp_duty: stampDuty,
+    gst,
+    dp_charges: dpCharges,
+    total,
+    gross_pnl: grossPnl,
+    net_pnl: netPnl
+  };
+}

@@ -1,1 +1,1 @@
-web: python fetch_and_build.py
+web: uvicorn backend:app --host 0.0.0.0 --port $PORT

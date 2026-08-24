@@ -9,6 +9,8 @@ import socket
 from typing import Dict, List, Any, Optional
 from fastapi import FastAPI, Request, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import yfinance as yf
 
 app = FastAPI(title="Finplus PnL Independent YFinance Backend", version="2.0.0")
@@ -44,7 +46,11 @@ PRICE_CACHE: Dict[str, Dict[str, Any]] = {
     "TATASTEEL.NS": { "ltp": 184.24, "change": -1.05, "change_percent": -0.57, "prev_close": 185.29, "high": 186.00, "low": 183.00, "timestamp": time.time() },
     "UYFINCORP.NS": { "ltp": 20.17, "change": 5.00, "change_percent": 5.00, "prev_close": 19.17, "high": 20.17, "low": 19.10, "timestamp": time.time() },
     "GOLDBEES.NS": { "ltp": 124.98, "change": -0.68, "change_percent": -0.54, "prev_close": 125.66, "high": 126.50, "low": 124.80, "timestamp": time.time() },
-    "NIFTYBEES.NS": { "ltp": 278.40, "change": 0.13, "change_percent": 0.05, "prev_close": 278.27, "high": 279.50, "low": 277.50, "timestamp": time.time() }
+    "NIFTYBEES.NS": { "ltp": 278.40, "change": 0.13, "change_percent": 0.05, "prev_close": 278.27, "high": 279.50, "low": 277.50, "timestamp": time.time() },
+    "MIDHANI.NS": { "ltp": 423.95, "change": 3.45, "change_percent": 0.82, "prev_close": 420.50, "high": 426.00, "low": 418.00, "timestamp": time.time() },
+    "CUPID.NS": { "ltp": 284.65, "change": 2.15, "change_percent": 0.76, "prev_close": 282.50, "high": 286.00, "low": 280.00, "timestamp": time.time() },
+    "KIRIINDUS.NS": { "ltp": 477.90, "change": 16.60, "change_percent": 3.60, "prev_close": 461.30, "high": 482.00, "low": 460.00, "timestamp": time.time() },
+    "RVNL.NS": { "ltp": 225.30, "change": -2.10, "change_percent": -0.92, "prev_close": 227.40, "high": 230.00, "low": 224.00, "timestamp": time.time() }
 }
 CACHE_TTL_SECONDS = 20.0
 
@@ -457,8 +463,8 @@ def save_settings_file(settings: Dict[str, Any]):
             json.dump(settings, f, indent=2)
     push_to_github(SETTINGS_FILE, "finplus_settings.json")
 
-@app.get("/")
 @app.get("/health")
+@app.get("/api/health")
 def health_check():
     local_ips = get_local_ips()
     return {
@@ -625,43 +631,75 @@ async def post_all_sync_data(request: Request):
             "pullback_keys": len(pullback) if isinstance(pullback, dict) else 0,
             "settings_saved": bool(settings)
         }
-    return { "status": "error", "message": "Invalid sync payload" }
+PORTFOLIO_FILE = os.path.join(BASE_DIR, "finplus_portfolio_backup.json")
 
-SCAN_IN_PROGRESS = False
-
-def run_scan_in_background():
-    global SCAN_IN_PROGRESS
+@app.post("/api/backup/save")
+async def save_portfolio_backup(request: Request):
     try:
-        import scan_runner
-        scan_runner.main()
-    except Exception as e:
-        print(f"[Scan Error]: {e}")
-    finally:
-        SCAN_IN_PROGRESS = False
+        data = await request.json()
+        if isinstance(data, dict):
+            incoming_pos = data.get("positions", [])
+            # Protect existing data: keep the larger/more complete dataset
+            if os.path.exists(PORTFOLIO_FILE):
+                try:
+                    with open(PORTFOLIO_FILE, "r", encoding="utf-8") as existing_f:
+                        existing = json.load(existing_f)
+                        existing_pos = existing.get("positions", [])
+                        if len(existing_pos) > len(incoming_pos):
+                            data["positions"] = existing_pos
+                        if existing.get("capitalLedger") and not data.get("capitalLedger"):
+                            data["capitalLedger"] = existing["capitalLedger"]
+                        if existing.get("freeCash") and not data.get("freeCash"):
+                            data["freeCash"] = existing["freeCash"]
+                except Exception:
+                    pass
 
-@app.post("/api/scan")
-def trigger_scan(background_tasks: BackgroundTasks):
-    global SCAN_IN_PROGRESS
-    if SCAN_IN_PROGRESS:
-        return { "status": "error", "message": "Scan already in progress" }
-    SCAN_IN_PROGRESS = True
-    background_tasks.add_task(run_scan_in_background)
-    return { "status": "success", "message": "Scan started in background" }
-
-@app.get("/api/screener-data")
-def get_screener_data():
-    path = os.path.join(BASE_DIR, "screener_data.json")
-    if not os.path.exists(path):
-        return []
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            with file_lock:
+                with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+            push_to_github(PORTFOLIO_FILE, "finplus_portfolio_backup.json")
+        return { "status": "success" }
     except Exception as e:
         return { "status": "error", "message": str(e) }
 
-@app.get("/api/scan/status")
-def get_scan_status():
-    return { "scan_in_progress": SCAN_IN_PROGRESS }
+@app.get("/api/backup/load")
+def load_portfolio_backup():
+    with file_lock:
+        if not os.path.exists(PORTFOLIO_FILE):
+            load_from_github(PORTFOLIO_FILE, "finplus_portfolio_backup.json")
+        if not os.path.exists(PORTFOLIO_FILE):
+            return { "status": "empty", "data": None }
+        try:
+            with open(PORTFOLIO_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return { "status": "success", "data": data }
+        except Exception as e:
+            return { "status": "error", "message": str(e) }
+
+DIST_DIR = os.path.join(BASE_DIR, "dist")
+if os.path.exists(DIST_DIR):
+    ASSETS_DIR = os.path.join(DIST_DIR, "assets")
+    if os.path.exists(ASSETS_DIR):
+        app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+
+    @app.get("/")
+    def serve_root():
+        index_file = os.path.join(DIST_DIR, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"status": "online", "app": "Finplus PnL Independent Backend"}
+
+    @app.get("/{full_path:path}")
+    def serve_spa(full_path: str):
+        if full_path.startswith("api/") or full_path in ["health", "api/health", "docs", "openapi.json"]:
+            return {"error": "Not Found"}
+        target = os.path.join(DIST_DIR, full_path)
+        if os.path.exists(target) and os.path.isfile(target):
+            return FileResponse(target)
+        index_file = os.path.join(DIST_DIR, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"status": "online"}
 
 if __name__ == "__main__":
     import uvicorn

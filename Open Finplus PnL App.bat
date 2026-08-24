@@ -2,29 +2,39 @@
 title Finplus PnL Journal - Starting...
 echo.
 echo  ============================================================
-echo   FINPLUS PnL JOURNAL  -  3-PILLAR SYSTEM
-echo   Unified App Server on http://localhost:8080
+echo   FINPLUS PnL JOURNAL  -  MOBILE ^& CLOUD SYNC
+echo   Cloud Backend: https://finplus.onrender.com
 echo  ============================================================
 echo.
 
 cd /d "%~dp0"
 
-echo  [1/3] Clearing any stale process on port 8080...
-for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8080" ^| findstr "LISTENING"') do (
+echo  [1/3] Clearing stale processes on port 3000 ^& clearing build cache...
+
+:: Kill any stale process on port 3000
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":3000" ^| findstr "LISTENING"') do (
+    echo    - Killing stale PID %%P on port 3000
     taskkill /F /PID %%P >nul 2>&1
 )
 
-echo  [2/3] Fetching latest portfolio and syncing with Render Cloud...
+:: Clear Vite cache to force fresh app render
+if exist node_modules\.vite rmdir /s /q node_modules\.vite 2>nul
+if exist __pycache__ rmdir /s /q __pycache__ 2>nul
+
+echo  Done clearing cache.
+echo.
+
+echo  [2/3] Fetching latest trades ^& portfolio entered on Mobile App (Render Cloud)...
 python sync_from_cloud.py
 
-echo  [3/3] Launching Finplus PnL Journal on http://localhost:8080 ...
-start http://localhost:8080
-
+echo.
+echo  [3/3] Starting Finplus PnL Journal Web Server on http://localhost:3000 ...
 echo.
 echo  ============================================================
-echo   App running on http://localhost:8080
-echo   Keep this console window open while using the app.
+echo   App will open on http://localhost:3000 automatically.
+echo   Keep this window open while using the app.
+echo   To stop the app, close this window.
 echo  ============================================================
 echo.
 
-python -m uvicorn backend:app --host 0.0.0.0 --port 8080
+call npm.cmd run dev

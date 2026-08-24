@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   loadJournalEngine, 
   saveJournalEngine, 
-  calculateZerodhaCharges, 
+  calculateZerodhaCharges,
+  calculateINDmoneyCharges,
+  calculateKiteDeliveryCharges,
   createTradeUUID,
-  getTradeKey,
-  mergeJournalTrades,
   exportMasterJsonBackup, 
-  importMasterJsonBackup, 
-  exportJournalCSV,
-  importJournalCSV
+  importMasterJsonBackup
 } from './journal/journal_engine';
 import { 
   TrendingUp, 
@@ -22,5944 +20,2098 @@ import {
   Trash2, 
   Edit3, 
   X, 
-  ShieldAlert, 
   DollarSign,
   Activity,
   FileText,
   Calendar,
-  Filter,
-  Clock,
   Layers,
-  Search,
-  Eye,
-  RefreshCw,
-  Save,
-  Wifi,
-  WifiOff,
-  Copy,
-  Check,
-  Settings
+  ArrowUpRight,
+  ArrowDownRight,
+  RotateCcw,
+  Shield,
+  Zap,
+  Award,
+  Wallet
 } from 'lucide-react';
 
+const API_BASE_URL = typeof window !== 'undefined' && window.location.origin.includes('http') ? window.location.origin : 'http://localhost:8000';
+const RENDER_BACKEND_URL = 'https://finplus.onrender.com';
+const STORAGE_KEY = 'finplus_3pillar_portfolio_v5';
+const LEDGER_KEY = 'finplus_capital_ledger_v5';
+const FREE_CASH_SWING_KEY = 'finplus_free_cash_swing_v5';
+const FREE_CASH_LT_KEY = 'finplus_free_cash_lt_v5';
 
-// Helper to sanitize pullback portfolio: keep active holdings, custom user stocks, and preserve past realized PnL trade history while hiding sold stocks from active watchlist
-const sanitizePullbackPortfolio = (data) => {
-  if (!data || typeof data !== 'object') return data;
-  const cleaned = { ...data };
+const INITIAL_POSITIONS = [
+  {
+    id: "pos_midhani_kite",
+    ticker: "MIDHANI",
+    name: "Mishra Dhatu Nigam Limited",
+    segment: "SWING",
+    shares: 3,
+    buyPrice: 433.0,
+    buyDate: "2026-08-23",
+    target1: 467.64,
+    stopLoss: 415.68,
+    notes: "Zerodha Kite Swing Position"
+  },
+  {
+    id: "pos_cupid_kite",
+    ticker: "CUPID",
+    name: "Cupid Limited",
+    segment: "SWING",
+    shares: 6,
+    buyPrice: 289.95,
+    buyDate: "2026-08-23",
+    target1: 313.15,
+    stopLoss: 278.35,
+    notes: "Zerodha Kite Swing Position"
+  },
+  {
+    id: "pos_kiriindus_kite",
+    ticker: "KIRIINDUS",
+    name: "Kiri Industries Limited",
+    segment: "SWING",
+    shares: 4,
+    buyPrice: 462.0,
+    buyDate: "2026-08-23",
+    target1: 498.96,
+    stopLoss: 443.52,
+    notes: "Zerodha Kite Swing Position"
+  },
+  {
+    id: "pos_rvnl_indmoney",
+    ticker: "RVNL",
+    name: "Rail Vikas Nigam Limited",
+    segment: "LT",
+    shares: 1,
+    buyPrice: 229.90,
+    buyDate: "2026-08-23",
+    target1: 287.38,
+    stopLoss: 0,
+    notes: "INDmoney Long-Term Core Position"
+  }
+];
 
-  Object.keys(cleaned).forEach(key => {
-    if (key !== 'capital_settings' && key !== 'option_trading' && key !== 'mtf_trading' && key !== 'UYFINCORP.NS') {
-      const stock = cleaned[key];
-      const txs = (stock && Array.isArray(stock.transactions)) ? stock.transactions : [];
-      const netShares = txs.reduce((acc, t) => acc + (Number(t.shares) || 0), 0);
-
-      if (txs.length === 0) {
-        // Unbought pre-populated stock with 0 transactions -> remove completely
-        delete cleaned[key];
-      } else if (netShares <= 0) {
-        // Stock has completed sell transactions -> preserve trade history for PnL summary, but hide from active watchlist & signals
-        cleaned[key] = {
-          ...stock,
-          in_watchlist: false
-        };
-      }
-    }
-  });
-  return cleaned;
-};
+const INITIAL_CAPITAL_LEDGER = [
+  {
+    id: "cap_initial_kite",
+    date: "2026-08-23",
+    type: "INJECTION",
+    amount: 5136.10,
+    segment: "SWING",
+    notes: "Zerodha Kite Capital (Invested + Free Cash)"
+  },
+  {
+    id: "cap_initial_indmoney",
+    date: "2026-08-23",
+    type: "INJECTION",
+    amount: 283.94,
+    segment: "LT",
+    notes: "INDmoney Long-Term Capital (Invested + Free Cash)"
+  }
+];
 
 export default function App() {
-  // Master Trade State
-  const [trades, setTrades] = useState(() => loadJournalEngine());
-  const [activeTab, setActiveTab] = useState('home'); // 'home' | 'trades' | 'capital' | 'screener' | 'sip' | 'mtf' | 'overview'
+  // ══════════════════════════════════════════════════════════════
+  // ZONE 1: ALL REACT STATE HOOKS (Strictly First)
+  // ══════════════════════════════════════════════════════════════
+  const [activeTab, setActiveTab] = useState('capital'); // 'capital', 'swing', 'lt', 'penny', 'history', 'settings'
+  const [toastMsg, setToastMsg] = useState(null);
 
-  // Screener States
-  const [screenerData, setScreenerData] = useState([]);
-  const [screenerLoading, setScreenerLoading] = useState(false);
-  const [screenerSearchQuery, setScreenerSearchQuery] = useState('');
-  const [screenerFilter, setScreenerFilter] = useState('all'); // 'all' | 'qualified'
-  const [screenerSortCol, setScreenerSortCol] = useState('total_score');
-  const [screenerSortAsc, setScreenerSortAsc] = useState(false);
-  const [localScanActive, setLocalScanActive] = useState(false);
-  const [selectedScreenerStock, setSelectedScreenerStock] = useState(null);
-  const [serverUrl, setServerUrl] = useState(() => {
-    return localStorage.getItem('finplus_server_url') || '';
-  });
-  const [serverStatus, setServerStatus] = useState('offline');
-  const [serverUrlInput, setServerUrlInput] = useState(() => {
-    return localStorage.getItem('finplus_server_url') || '';
-  });
+  // Stock Universe Data
+  const [stockUniverse, setStockUniverse] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // PnL View Mode: 'overall' | 'daily'
-  const [pnlViewMode, setPnlViewMode] = useState('overall');
-  const getTodayDateStr = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-  const [selectedDailyDate, setSelectedDailyDate] = useState(() => getTodayDateStr());
+  // Capital Allocator State
+  const [monthlyBudgetInput, setMonthlyBudgetInput] = useState(() => {
+    return localStorage.getItem('finplus_monthly_income_budget') || '0';
+  });
+  const [swingPct, setSwingPct] = useState(() => Number(localStorage.getItem('finplus_split_swing')) || 60);
+  const [ltPct, setLtPct] = useState(() => Number(localStorage.getItem('finplus_split_lt')) || 30);
+  const [pennyPct, setPennyPct] = useState(() => Number(localStorage.getItem('finplus_split_penny')) || 10);
 
-  // Capital Management & Risk Settings (Persisted in localStorage)
-  const [openingCapitalInput, setOpeningCapitalInput] = useState(() => {
-    return localStorage.getItem('finplus_opening_capital') || '3933.52';
+  // Free Cash with Broker (Baseline Initial Balances)
+  const [swingFreeCashInput, setSwingFreeCashInput] = useState(() => {
+    const saved = localStorage.getItem('finplus_free_cash_swing_v5') || localStorage.getItem(FREE_CASH_SWING_KEY);
+    if (!saved || saved === '249.40' || saved === '249.4') return '';
+    return saved;
   });
-  const [brokerAdjustmentInput, setBrokerAdjustmentInput] = useState(() => {
-    return localStorage.getItem('finplus_broker_adjustment') || '0';
+  const [ltFreeCashInput, setLtFreeCashInput] = useState(() => {
+    const saved = localStorage.getItem(FREE_CASH_LT_KEY);
+    return saved !== null ? saved : '54.04';
   });
-  const [depositsInput, setDepositsInput] = useState(() => {
-    return localStorage.getItem('finplus_deposits') || '0';
-  });
-  const [withdrawalsInput, setWithdrawalsInput] = useState(() => {
-    return localStorage.getItem('finplus_withdrawals') || '0';
+  const [pennyFreeCashInput, setPennyFreeCashInput] = useState(() => {
+    return localStorage.getItem('finplus_free_cash_penny_v4') || '';
   });
 
-  // 1000-Day Challenge Daily Rollover Risk Settings (Single Risk Rule: ₹250/day)
-  const [dailyRiskLimitInput, setDailyRiskLimitInput] = useState(() => {
-    return localStorage.getItem('finplus_daily_risk_limit') || '250';
-  });
-  const [challengeStartDateInput, setChallengeStartDateInput] = useState(() => {
-    const val = localStorage.getItem('finplus_challenge_start_date');
-    return val && val !== '2026-07-24' ? val : '2026-07-23';
-  });
-  const [totalChallengeDaysInput, setTotalChallengeDaysInput] = useState(() => {
-    return localStorage.getItem('finplus_total_challenge_days') || '1000';
-  });
+  const swingFreeCash = parseFloat(swingFreeCashInput) || 0;
+  const ltFreeCash = parseFloat(ltFreeCashInput) || 0;
+  const pennyFreeCash = parseFloat(pennyFreeCashInput) || 0;
 
-  // Segment Capital Allocation & Monthly Risk SL State (4 Active Trading Segments - Total 100%)
-  const [allocIntraday, setAllocIntraday] = useState(() => localStorage.getItem('finplus_alloc_intraday') || '50');
-  const [allocNatgas, setAllocNatgas] = useState(() => localStorage.getItem('finplus_alloc_natgas') || '25');
-  const [allocNifty, setAllocNifty] = useState(() => localStorage.getItem('finplus_alloc_nifty') || '15');
-  const [allocCrude, setAllocCrude] = useState(() => localStorage.getItem('finplus_alloc_crude') || '10');
-
-  const [monthlySlIntraday, setMonthlySlIntraday] = useState(() => localStorage.getItem('finplus_msl_intraday') || '5');
-  const [monthlySlNatgas, setMonthlySlNatgas] = useState(() => localStorage.getItem('finplus_msl_natgas') || '10');
-  const [monthlySlNifty, setMonthlySlNifty] = useState(() => localStorage.getItem('finplus_msl_nifty') || '15');
-  const [monthlySlCrude, setMonthlySlCrude] = useState(() => localStorage.getItem('finplus_msl_crude') || '10');
-  
-  const currentYearMonthStr = new Date().toISOString().slice(0, 7);
-  const [selectedRiskMonth, setSelectedRiskMonth] = useState(currentYearMonthStr);
-  const RENDER_BACKEND_URL = 'https://finplus.onrender.com';
-  const isNativeMobileApp = Boolean(window.Capacitor?.isNativePlatform?.()) || window.location.protocol === 'capacitor:';
-  const API_BASE_URL = serverUrl 
-    || (isNativeMobileApp ? RENDER_BACKEND_URL : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://127.0.0.1:8000' : RENDER_BACKEND_URL));
-  const [liveLtps, setLiveLtps] = useState({
-    "ASHOKLEY": 177.54, "ASHOKLEY.NS": 177.54,
-    "BEL": 410.40, "BEL.NS": 410.40,
-    "BORANA": 324.40, "BORANA.NS": 324.40,
-    "EMMVEE": 314.15, "EMMVEE.NS": 314.15,
-    "FEDERALBNK": 352.65, "FEDERALBNK.NS": 352.65,
-    "ITC": 277.50, "ITC.NS": 277.50,
-    "NMDC": 84.77, "NMDC.NS": 84.77,
-    "PANAMAPET": 507.25, "PANAMAPET.NS": 507.25,
-    "TATAPOWER": 381.30, "TATAPOWER.NS": 381.30,
-    "TATASTEEL": 184.24, "TATASTEEL.NS": 184.24,
-    "UYFINCORP": 20.17, "UYFINCORP.NS": 20.17,
-    "GOLDBEES": 124.98, "GOLDBEES.NS": 124.98,
-    "NIFTYBEES": 278.40, "NIFTYBEES.NS": 278.40
-  });
-  const [toast, setToast] = useState(null);
-
-  // Dynamic 5% Pullback SIP & MTF State
-  const [pullbackData, setPullbackData] = useState(() => {
-    const defaultData = {
-      "capital_settings": { "start_date": "2026-07-03", "initial_capital": 3477.97, "daily_rate": 200.0 },
-      "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "in_watchlist": true, "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 19.33 },
-      "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "in_watchlist": false, "transactions": [{ "date": "2026-07-13", "price": 160.53, "shares": 2 }, { "date": "2026-08-17", "price": 177.54, "shares": -2, "type": "SELL" }], "local_peak": 179.33, "date_added": "2026-07-03", "initial_reference_price": 160.53 },
-      "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "in_watchlist": false, "transactions": [{ "date": "2026-07-29", "price": 403.52, "shares": 3 }, { "date": "2026-08-17", "price": 411.60, "shares": -3, "type": "SELL" }], "local_peak": 412.95, "date_added": "2026-07-03", "initial_reference_price": 403.52 },
-      "BORANA.NS": { "name": "BORANA", "category": "Growth", "in_watchlist": false, "transactions": [{ "date": "2026-08-06", "price": 342.00, "shares": 1 }, { "date": "2026-08-17", "price": 324.40, "shares": -1, "type": "SELL" }], "local_peak": 353.95, "date_added": "2026-08-06", "initial_reference_price": 351.00 },
-      "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "in_watchlist": false, "transactions": [{ "date": "2026-08-11", "price": 330.98, "shares": 2 }, { "date": "2026-08-12", "price": 314.10, "shares": -2, "type": "SELL" }], "local_peak": 330.98, "date_added": "2026-08-11", "initial_reference_price": 314.15 },
-      "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "in_watchlist": false, "transactions": [{ "date": "2026-08-03", "price": 359.10, "shares": 1 }, { "date": "2026-08-11", "price": 353.10, "shares": 1 }, { "date": "2026-08-17", "price": 352.65, "shares": -2, "type": "SELL" }], "local_peak": 359.10, "date_added": "2026-07-03", "initial_reference_price": 355.75 },
-      "ITC.NS": { "name": "ITC Limited", "category": "Core", "in_watchlist": false, "transactions": [{ "date": "2026-07-14", "price": 275.45, "shares": 1 }, { "date": "2026-08-17", "price": 277.50, "shares": -1, "type": "SELL" }], "local_peak": 286.25, "date_added": "2026-07-03", "initial_reference_price": 275.45 },
-      "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "in_watchlist": false, "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }, { "date": "2026-08-11", "price": 85.29, "shares": 5 }, { "date": "2026-08-17", "price": 84.77, "shares": -6, "type": "SELL" }], "local_peak": 85.49, "date_added": "2026-07-03", "initial_reference_price": 84.80 },
-      "PANAMAPET.NS": { "name": "Panama Petrochem Limited", "category": "Growth", "in_watchlist": false, "transactions": [{ "date": "2026-08-11", "price": 544.95, "shares": 3 }, { "date": "2026-08-12", "price": 567.65, "shares": -3, "type": "SELL" }], "local_peak": 598.70, "date_added": "2026-08-11", "initial_reference_price": 506.15 },
-      "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "in_watchlist": false, "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }, { "date": "2026-08-17", "price": 381.30, "shares": -1, "type": "SELL" }], "local_peak": 390.40, "date_added": "2026-07-03", "initial_reference_price": 382.25 },
-      "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "in_watchlist": false, "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }, { "date": "2026-08-14", "price": 181.45, "shares": 1 }, { "date": "2026-08-17", "price": 184.24, "shares": -2, "type": "SELL" }], "local_peak": 191.53, "date_added": "2026-07-05", "initial_reference_price": 182.82 },
-      "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "in_watchlist": false, "transactions": [{ "date": "2026-08-12", "price": 277.40, "shares": 3 }, { "date": "2026-08-13", "price": 278.05, "shares": 3 }, { "date": "2026-08-14", "price": 277.75, "shares": -1, "type": "SELL" }, { "date": "2026-08-14", "price": 277.25, "shares": -5, "type": "SELL" }], "local_peak": 286.50, "date_added": "2026-08-11", "initial_reference_price": 286.50 },
-      "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "in_watchlist": false, "transactions": [{ "date": "2026-08-12", "price": 126.25, "shares": 6 }, { "date": "2026-08-13", "price": 125.84, "shares": 4 }, { "date": "2026-08-14", "price": 123.90, "shares": -10, "type": "SELL" }], "local_peak": 126.66, "date_added": "2026-08-11", "initial_reference_price": 74.20 },
-      "MARKSANS.NS": { "name": "Marksans Pharma Limited", "category": "Park", "in_watchlist": false, "transactions": [{ "date": "2026-08-14", "price": 317.35, "shares": 5 }, { "date": "2026-08-17", "price": 328.93, "shares": -1, "type": "SELL" }, { "date": "2026-08-17", "price": 328.93, "shares": -4, "type": "SELL" }], "local_peak": 335.45, "date_added": "2026-08-14", "initial_reference_price": 316.80 },
-      "mtf_trading": []
-    };
-
-    const saved = localStorage.getItem('finplus_pullback_portfolio');
+  // Capital Ledger (Injections & Withdrawals)
+  const [capitalLedger, setCapitalLedger] = useState(() => {
+    const saved = localStorage.getItem(LEDGER_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        const sanitized = sanitizePullbackPortfolio({ ...defaultData, ...parsed });
-        localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(sanitized));
-        return sanitized;
-      } catch (e) {}
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch(e) {}
     }
-    localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(defaultData));
-    return defaultData;
+    return INITIAL_CAPITAL_LEDGER;
   });
 
-  // Pullback Forms State
-  const [newSipTicker, setNewSipTicker] = useState('');
-  const [newSipName, setNewSipName] = useState('');
-  const [newSipCategory, setNewSipCategory] = useState('Core');
-  const [newSipShares, setNewSipShares] = useState('1');
-  const [newSipBuyPrice, setNewSipBuyPrice] = useState('');
-  const [newSipTxDate, setNewSipTxDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [nifty500List, setNifty500List] = useState([]);
-  const [showNiftyDropdown, setShowNiftyDropdown] = useState(false);
-
-  // Load bundled NSE stock list (2413 stocks with company names) for autocomplete
-  useEffect(() => {
-    const loadNseStocks = async () => {
+  // Portfolio Positions State (Swing, Long-Term, Penny)
+  const [positions, setPositions] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
       try {
-        const res = await fetch('/nse_stocks.json');
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            setNifty500List(data);
-          }
-        }
-      } catch (e) {
-        console.warn('Could not load bundled NSE stock list', e);
-      }
-    };
-    loadNseStocks();
-  }, []);
-
-  // Combined master stock list from bundled NSE stocks JSON + API fallback
-  // Master ETF & Index Fund List for Park category
-  const POPULAR_ETFS = React.useMemo(() => [
-    { symbol: "GOLDBEES", name: "Nippon India ETF Gold BeES", isEtf: true, aliases: ["gold", "goldb", "goldbees", "gold bees", "gold etf", "nippon gold", "gold be"] },
-    { symbol: "NIFTYBEES", name: "Nippon India ETF Nifty 50 BeES", isEtf: true, aliases: ["nifty", "niftyb", "niftybees", "nifty bees", "nifty 50", "nifty etf", "nippon nifty"] },
-    { symbol: "BANKBEES", name: "Nippon India ETF Nifty Bank BeES", isEtf: true, aliases: ["bank", "bankbees", "bank bees", "bank etf", "nifty bank", "banknifty etf"] },
-    { symbol: "LIQUIDBEES", name: "Nippon India ETF Liquid BeES", isEtf: true, aliases: ["liquid", "liquidbees", "liquid bees", "liquid etf", "cash", "park cash"] },
-    { symbol: "SILVERBEES", name: "Nippon India ETF Silver BeES", isEtf: true, aliases: ["silver", "silverbees", "silver bees", "silver etf", "nippon silver"] },
-    { symbol: "ITBEES", name: "Nippon India ETF Nifty IT", isEtf: true, aliases: ["it", "itbees", "it bees", "it etf", "tech etf", "nifty it"] },
-    { symbol: "JUNIORBEES", name: "Nippon India ETF Nifty Next 50", isEtf: true, aliases: ["junior", "juniorbees", "junior bees", "next 50", "nifty next 50"] },
-    { symbol: "CPSEETF", name: "CPSE ETF", isEtf: true, aliases: ["cpse", "cpse etf", "psu etf", "cpseetf"] },
-    { symbol: "MON100", name: "Motilal Oswal Nasdaq 100 ETF", isEtf: true, aliases: ["nasdaq", "mon100", "nasdaq 100", "us tech", "motilal nasdaq"] },
-    { symbol: "AUTOBEES", name: "Nippon India ETF Nifty Auto", isEtf: true, aliases: ["auto", "autobees", "auto bees", "auto etf"] },
-    { symbol: "PHARMABEES", name: "Nippon India ETF Nifty Pharma", isEtf: true, aliases: ["pharma", "pharmabees", "pharma bees", "pharma etf"] },
-    { symbol: "HDFCGOLD", name: "HDFC Gold ETF", isEtf: true, aliases: ["hdfc gold", "hdfc gold etf"] },
-    { symbol: "GOLDIETF", name: "ICICI Prudential Gold ETF", isEtf: true, aliases: ["icici gold", "goldietf", "icici prudential gold"] },
-    { symbol: "SETFNIF50", name: "SBI Nifty 50 ETF", isEtf: true, aliases: ["sbi nifty", "sbi nifty 50", "setfnif50"] }
-  ], []);
-
-  // Combined master stock list from bundled NSE stocks JSON + ETFs
-  const combinedStockList = React.useMemo(() => {
-    const etfMapped = POPULAR_ETFS.map(e => ({
-      symbol: e.symbol,
-      name: e.name,
-      isEtf: true,
-      aliases: [
-        e.symbol.toLowerCase(),
-        e.name.toLowerCase(),
-        ...(e.aliases || []).map(a => a.toLowerCase())
-      ]
-    }));
-
-    if (nifty500List && nifty500List.length > 0) {
-      const stockMapped = nifty500List.map(s => ({
-        symbol: s.s || s.symbol || '',
-        name: s.n || s.name || s.s || s.symbol || '',
-        isEtf: false,
-        aliases: [
-          (s.s || s.symbol || '').toLowerCase(),
-          (s.n || s.name || '').toLowerCase()
-        ]
-      }));
-      return [...etfMapped, ...stockMapped];
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch(e) {}
     }
-    return etfMapped;
-  }, [nifty500List, POPULAR_ETFS]);
+    return INITIAL_POSITIONS;
+  });
 
-  // Ranked suggestions with alias & prefix matching (shared for SIP + MTF)
-  const filteredNiftySuggestions = React.useMemo(() => {
-    const query = newSipTicker.toLowerCase().replace('.ns', '').trim();
-    if (!query || query.length < 2) return [];
-    const scored = combinedStockList.map(s => {
-      const sym = (s.symbol || '').toLowerCase();
-      const name = (s.name || '').toLowerCase();
-      const aliases = s.aliases || [];
-      let score = 0;
-      if (sym === query || aliases.includes(query)) score = 100;
-      else if (sym.startsWith(query)) score = 90;
-      else if (aliases.some(a => a.startsWith(query))) score = 85;
-      else if (name.startsWith(query)) score = 75;
-      else if (sym.includes(query)) score = 60;
-      else if (aliases.some(a => a.includes(query))) score = 55;
-      else if (name.includes(query)) score = 40;
-      return { stock: s, score };
-    }).filter(item => item.score > 0);
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 8).map(item => item.stock);
-  }, [newSipTicker, combinedStockList]);
+  // Sold History Ledger
+  const [soldHistory, setSoldHistory] = useState(() => {
+    const saved = localStorage.getItem('finplus_sold_history_v1');
+    if (saved) {
+      try { return JSON.parse(saved); } catch(e) {}
+    }
+    return [];
+  });
 
-  // Live auto-fill company name & default buy price when suggestion matches current input
+  // Live LTP Polling State
+  const [liveLtps, setLiveLtps] = useState({
+    'MIDHANI': 423.95,
+    'CUPID': 284.65,
+    'KIRIINDUS': 477.90,
+    'RVNL': 225.30
+  });
+  const [lastLtpUpdate, setLastLtpUpdate] = useState(() => new Date().toLocaleTimeString());
+  const [isLtpLoading, setIsLtpLoading] = useState(false);
+
+  // Modal: Record New Buy Form State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addSegment, setAddSegment] = useState('SWING'); // 'SWING', 'LT', 'PENNY'
+  const [formTicker, setFormTicker] = useState('');
+  const [formName, setFormName] = useState('');
+  const [formShares, setFormShares] = useState('1');
+  const [formBuyPrice, setFormBuyPrice] = useState('');
+  const [formBuyDate, setFormBuyDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [formTarget1, setFormTarget1] = useState('');
+  const [formStopLoss, setFormStopLoss] = useState('');
+  const [formNotes, setFormNotes] = useState('');
+
+  // Modal: Sell Active Position Form State
+  const [sellModalPos, setSellModalPos] = useState(null);
+  const [sellFormShares, setSellFormShares] = useState('1');
+  const [sellFormPrice, setSellFormPrice] = useState('');
+  const [sellFormDate, setSellFormDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  // Modal: Past Closed Trade Form State
+  const [showPastSoldModal, setShowPastSoldModal] = useState(false);
+  const [pastSoldSegment, setPastSoldSegment] = useState('SWING');
+  const [pastSoldTicker, setPastSoldTicker] = useState('');
+  const [pastSoldName, setPastSoldName] = useState('');
+  const [pastSoldShares, setPastSoldShares] = useState('1');
+  const [pastSoldBuyPrice, setPastSoldBuyPrice] = useState('');
+  const [pastSoldBuyDate, setPastSoldBuyDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [pastSoldSellPrice, setPastSoldSellPrice] = useState('');
+  const [pastSoldSellDate, setPastSoldSellDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [pastSoldNotes, setPastSoldNotes] = useState('');
+  const [showPastSoldSuggestions, setShowPastSoldSuggestions] = useState(false);
+
+  // Modal: Capital Event Form State
+  const [showCapModal, setShowCapModal] = useState(false);
+  const [capEventType, setCapEventType] = useState('INJECTION');
+  const [capEventAmount, setCapEventAmount] = useState('');
+  const [capEventSegment, setCapEventSegment] = useState('ALL');
+  const [capEventNotes, setCapEventNotes] = useState('');
+
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  // ZONE 2: ALL REACT SIDE-EFFECTS (Strictly Second)
+  // ══════════════════════════════════════════════════════════════
+  // Load NSE stock database on mount
   useEffect(() => {
-    if (!newSipTicker.trim()) {
-      setNewSipName('');
-      setNewSipBuyPrice('');
-      return;
-    }
-    if (filteredNiftySuggestions.length > 0) {
-      const topMatch = filteredNiftySuggestions[0];
-      setNewSipName(topMatch.name || topMatch.symbol);
-      const cleanSym = topMatch.symbol.toUpperCase().replace('.NS', '');
-      const ltp = liveLtps[cleanSym] || liveLtps[`${cleanSym}.NS`];
-      if (ltp && !newSipBuyPrice) {
-        setNewSipBuyPrice(String(ltp));
-      }
-      // Auto-switch category to Park if it's an ETF
-      if (topMatch.isEtf || cleanSym.endsWith('BEES') || cleanSym.endsWith('ETF') || topMatch.name.toLowerCase().includes('etf')) {
-        setNewSipCategory('Park');
-      }
-    }
-  }, [newSipTicker, filteredNiftySuggestions, liveLtps]);
-
-  const [txTicker, setTxTicker] = useState('TATAPOWER.NS');
-  const [txType, setTxType] = useState('BUY');
-  const [txDate, setTxDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [txPrice, setTxPrice] = useState('');
-  const [txShares, setTxShares] = useState('1');
-
-  // SIP Form Mode ('BUY' or 'SELL') & SIP View Mode ('holdings' or 'sold')
-  const [sipFormMode, setSipFormMode] = useState('BUY'); // 'BUY' | 'SELL'
-  const [sipViewMode, setSipViewMode] = useState('holdings'); // 'holdings' | 'sold'
-
-  // SIP Sell Form State (in main SIP panel)
-  const [sipSellSelectedTicker, setSipSellSelectedTicker] = useState('');
-  const [sipSellFormShares, setSipSellFormShares] = useState('1');
-  const [sipSellFormPrice, setSipSellFormPrice] = useState('');
-  const [sipSellFormDate, setSipSellFormDate] = useState(() => new Date().toISOString().split('T')[0]);
-
-  // SIP Sell Modal State (quick action from table)
-  const [sipSellModalStock, setSipSellModalStock] = useState(null);
-  const [sipSellModalShares, setSipSellModalShares] = useState('1');
-  const [sipSellModalPrice, setSipSellModalPrice] = useState('');
-  const [sipSellModalDate, setSipSellModalDate] = useState(() => new Date().toISOString().split('T')[0]);
-
-  // SIP Edit Stock & Transactions Modal State
-  const [sipEditModalStock, setSipEditModalStock] = useState(null);
-  const [editSipName, setEditSipName] = useState('');
-  const [editSipCategory, setEditSipCategory] = useState('Core');
-  const [editSipPeak, setEditSipPeak] = useState('');
-  const [editSipTxs, setEditSipTxs] = useState([]);
-
-  // 3-Tier Strategy Allocation Category ('Swing Trading' | 'Day Trading (Nifty Pair)' | 'Long-Term Investment')
-  const [strategyCategory, setStrategyCategory] = useState('Swing Trading');
-
-
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [detectedIps, setDetectedIps] = useState([]);
-  const [lastSyncedTime, setLastSyncedTime] = useState(() => localStorage.getItem('finplus_last_synced_time') || '');
-
-  // Full Unified Bidirectional Sync with Server (Trades + Pullback Stocks + Capital & Risk Settings)
-  const handleSyncAll = async (targetUrl = null, silent = false) => {
-    setIsSyncing(true);
-    const activeCandidates = targetUrl 
-      ? [targetUrl] 
-      : Array.from(new Set([
-          serverUrl, 
-          API_BASE_URL, 
-          (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? `${window.location.protocol}//${window.location.hostname}:8000` : null),
-          'http://127.0.0.1:8000', 
-          'http://localhost:8000', 
-          RENDER_BACKEND_URL
-        ].filter(Boolean)));
-    
-    let syncSuccess = false;
-    let syncMsg = '';
-
-    for (const endpoint of activeCandidates) {
-      try {
-        const cleanEndpoint = endpoint.trim().replace(/\/$/, '');
-        // 1. Fetch current server dataset
-        const res = await fetch(`${cleanEndpoint}/api/sync/all`, { method: 'GET' });
-        if (res.ok) {
-          const sData = await res.json();
-          if (sData && sData.status === 'success') {
-            // A. Merge Trades
-            let mergedTrades = trades;
-            if (Array.isArray(sData.trades)) {
-              mergedTrades = mergeJournalTrades(trades, sData.trades);
-              setTrades(mergedTrades);
-              saveJournalEngine(mergedTrades);
-            }
-
-            // B. Merge Pullback Data & MTF
-            let mergedPullback = pullbackData;
-            if (sData.pullback && typeof sData.pullback === 'object') {
-              const currentSaved = localStorage.getItem('finplus_pullback_portfolio');
-              let localP = pullbackData;
-              if (currentSaved) {
-                try { localP = JSON.parse(currentSaved); } catch(e) {}
-              }
-              mergedPullback = sanitizePullbackPortfolio({ ...localP, ...sData.pullback });
-              
-              // Merge MTF array safely
-              const backendMtf = Array.isArray(sData.pullback.mtf_trading) ? sData.pullback.mtf_trading : (sData.pullback.mtf_trading?.trades || []);
-              const localMtf = Array.isArray(localP.mtf_trading) ? localP.mtf_trading : (localP.mtf_trading?.trades || []);
-              const mtfMap = new Map();
-              backendMtf.forEach(t => {
-                if (t) {
-                  const key = t.id !== undefined && t.id !== null ? `id_${t.id}` : `${t.ticker}_${t.buy_date}_${t.shares}`;
-                  mtfMap.set(key, t);
-                }
-              });
-              localMtf.forEach(t => {
-                if (t) {
-                  const key = t.id !== undefined && t.id !== null ? `id_${t.id}` : `${t.ticker}_${t.buy_date}_${t.shares}`;
-                  const existing = mtfMap.get(key);
-                  if (!existing) mtfMap.set(key, t);
-                  else mtfMap.set(key, { ...existing, ...t });
-                }
-              });
-              mergedPullback.mtf_trading = Array.from(mtfMap.values()).filter(t => t && t.ticker !== 'LODHA.NS' && t.ticker !== 'INDUSTOWER.NS' && t.ticker !== 'NAUKRI.NS');
-              setPullbackData(mergedPullback);
-              localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(mergedPullback));
-            }
-
-            // C. Merge Settings
-            if (sData.settings && typeof sData.settings === 'object' && Object.keys(sData.settings).length > 0) {
-              const st = sData.settings;
-              if (st.finplus_opening_capital) { setOpeningCapitalInput(st.finplus_opening_capital); localStorage.setItem('finplus_opening_capital', st.finplus_opening_capital); }
-              if (st.finplus_broker_adjustment !== undefined) { setBrokerAdjustmentInput(st.finplus_broker_adjustment); localStorage.setItem('finplus_broker_adjustment', st.finplus_broker_adjustment); }
-              if (st.finplus_deposits !== undefined) { setDepositsInput(st.finplus_deposits); localStorage.setItem('finplus_deposits', st.finplus_deposits); }
-              if (st.finplus_withdrawals !== undefined) { setWithdrawalsInput(st.finplus_withdrawals); localStorage.setItem('finplus_withdrawals', st.finplus_withdrawals); }
-              if (st.finplus_daily_risk_limit !== undefined) { setDailyRiskLimitInput(st.finplus_daily_risk_limit); localStorage.setItem('finplus_daily_risk_limit', st.finplus_daily_risk_limit); }
-              if (st.finplus_challenge_start_date) { setChallengeStartDateInput(st.finplus_challenge_start_date); localStorage.setItem('finplus_challenge_start_date', st.finplus_challenge_start_date); }
-              if (st.finplus_total_challenge_days) { setTotalChallengeDaysInput(st.finplus_total_challenge_days); localStorage.setItem('finplus_total_challenge_days', st.finplus_total_challenge_days); }
-              if (st.finplus_alloc_intraday) { setAllocIntraday(st.finplus_alloc_intraday); localStorage.setItem('finplus_alloc_intraday', st.finplus_alloc_intraday); }
-              if (st.finplus_alloc_natgas) { setAllocNatgas(st.finplus_alloc_natgas); localStorage.setItem('finplus_alloc_natgas', st.finplus_alloc_natgas); }
-              if (st.finplus_alloc_nifty) { setAllocNifty(st.finplus_alloc_nifty); localStorage.setItem('finplus_alloc_nifty', st.finplus_alloc_nifty); }
-              if (st.finplus_alloc_crude) { setAllocCrude(st.finplus_alloc_crude); localStorage.setItem('finplus_alloc_crude', st.finplus_alloc_crude); }
-              if (st.finplus_msl_intraday) { setMonthlySlIntraday(st.finplus_msl_intraday); localStorage.setItem('finplus_msl_intraday', st.finplus_msl_intraday); }
-              if (st.finplus_msl_natgas) { setMonthlySlNatgas(st.finplus_msl_natgas); localStorage.setItem('finplus_msl_natgas', st.finplus_msl_natgas); }
-              if (st.finplus_msl_nifty) { setMonthlySlNifty(st.finplus_msl_nifty); localStorage.setItem('finplus_msl_nifty', st.finplus_msl_nifty); }
-              if (st.finplus_msl_crude) { setMonthlySlCrude(st.finplus_msl_crude); localStorage.setItem('finplus_msl_crude', st.finplus_msl_crude); }
-            }
-
-            // 2. Push unified union back to server
-            const currentSettings = {
-              finplus_opening_capital: localStorage.getItem('finplus_opening_capital') || openingCapitalInput,
-              finplus_broker_adjustment: localStorage.getItem('finplus_broker_adjustment') || brokerAdjustmentInput,
-              finplus_deposits: localStorage.getItem('finplus_deposits') || depositsInput,
-              finplus_withdrawals: localStorage.getItem('finplus_withdrawals') || withdrawalsInput,
-              finplus_daily_risk_limit: localStorage.getItem('finplus_daily_risk_limit') || dailyRiskLimitInput,
-              finplus_challenge_start_date: localStorage.getItem('finplus_challenge_start_date') || challengeStartDateInput,
-              finplus_total_challenge_days: localStorage.getItem('finplus_total_challenge_days') || totalChallengeDaysInput,
-              finplus_alloc_intraday: localStorage.getItem('finplus_alloc_intraday') || allocIntraday,
-              finplus_alloc_natgas: localStorage.getItem('finplus_alloc_natgas') || allocNatgas,
-              finplus_alloc_nifty: localStorage.getItem('finplus_alloc_nifty') || allocNifty,
-              finplus_alloc_crude: localStorage.getItem('finplus_alloc_crude') || allocCrude,
-              finplus_msl_intraday: localStorage.getItem('finplus_msl_intraday') || monthlySlIntraday,
-              finplus_msl_natgas: localStorage.getItem('finplus_msl_natgas') || monthlySlNatgas,
-              finplus_msl_nifty: localStorage.getItem('finplus_msl_nifty') || monthlySlNifty,
-              finplus_msl_crude: localStorage.getItem('finplus_msl_crude') || monthlySlCrude
-            };
-
-            await fetch(`${cleanEndpoint}/api/sync/all`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                trades: mergedTrades,
-                pullback: mergedPullback,
-                settings: currentSettings
-              })
-            });
-
-            const timeStr = new Date().toLocaleTimeString();
-            setLastSyncedTime(timeStr);
-            localStorage.setItem('finplus_last_synced_time', timeStr);
-            setServerStatus('online');
-            syncSuccess = true;
-            const stockCount = Object.keys(mergedPullback).filter(k => k.includes('.NS')).length;
-            syncMsg = `Synced: ${mergedTrades.length} trades, ${stockCount} stocks & settings updated!`;
-            break;
-          }
-        }
-      } catch (e) {}
-    }
-
-    setIsSyncing(false);
-    if (!silent) {
-      if (syncSuccess) {
-        showToast(syncMsg, 'success');
-      } else {
-        showToast('Could not connect to sync server. Check IP & Wi-Fi connection.', 'error');
-      }
-    }
-    return syncSuccess;
-  };
-
-  // Initial sync on mount
-  useEffect(() => {
-    handleSyncAll(null, true);
-  }, [API_BASE_URL, serverUrl]);
-
-  // Server Health Status Check Effect
-  useEffect(() => {
-    const checkServerStatus = async () => {
-      const candidates = Array.from(new Set([
-        serverUrl, 
-        API_BASE_URL, 
-        (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? `${window.location.protocol}//${window.location.hostname}:8000` : null),
-        'http://127.0.0.1:8000', 
-        'http://localhost:8000', 
-        RENDER_BACKEND_URL
-      ].filter(Boolean)));
-
-      for (const endpoint of candidates) {
-        try {
-          const res = await fetch(`${endpoint}/health`, { method: 'GET' });
-          if (res.ok) {
-            const data = await res.json();
-            setServerStatus('online');
-            if (data.local_ips && Array.isArray(data.local_ips)) {
-              setDetectedIps(data.local_ips);
-            }
-            return;
-          }
-        } catch (e) {}
-      }
-      setServerStatus('offline');
+    const parseUniverse = (data) => {
+      if (!Array.isArray(data)) return [];
+      return data.map(d => ({
+        symbol: d.symbol || d.ticker || d.Symbol || d.s,
+        name: d.name || d.companyName || d.Name || d.n || d.symbol || d.s,
+        ltp: Number(d.ltp || d.price || 0)
+      })).filter(d => d.symbol);
     };
 
-    checkServerStatus();
-    const interval = setInterval(checkServerStatus, 12000);
-    return () => clearInterval(interval);
-  }, [API_BASE_URL, serverUrl]);
-
-  const handleSaveServerUrl = async () => {
-    const trimmed = serverUrlInput.trim().replace(/\/$/, '');
-    localStorage.setItem('finplus_server_url', trimmed);
-    setServerUrl(trimmed);
-    showToast('Connecting and synchronizing with server...');
-    await handleSyncAll(trimmed, false);
-  };
-
-  const addStockToSipWatchlist = async (ticker, name, currentPrice) => {
-    let cleanSymbol = ticker.toUpperCase().replace('.NS', '');
-    const formatted = `${cleanSymbol}.NS`;
-    const existingStock = pullbackData[formatted] || pullbackData[cleanSymbol];
-    if (existingStock) {
-      showToast(`${formatted} is already in your Watchlist!`, 'info');
-      return;
-    }
-    const refPrice = currentPrice > 0 ? currentPrice : 0;
-    const txDateStr = new Date().toISOString().split('T')[0];
-    const updated = {
-      ...pullbackData,
-      [formatted]: {
-        name: name || cleanSymbol,
-        category: 'Core',
-        transactions: [],
-        local_peak: refPrice,
-        date_added: txDateStr,
-        initial_reference_price: refPrice
-      }
-    };
-    savePullbackState(updated);
-    if (refPrice > 0) {
-      setLiveLtps(prev => ({ ...prev, [formatted]: refPrice, [cleanSymbol]: refPrice }));
-    }
-    showToast(`Added ${formatted} to Watchlist (Pending Initial Buy)!`);
-  };
-
-
-  // Periodically fetch live yfinance LTPs for all monitored stocks in Pullback SIP & MTF
-  useEffect(() => {
-    const fetchYfinanceLivePrices = async () => {
-      const sipTickers = Object.keys(pullbackData).filter(k => k !== 'capital_settings' && k !== 'option_trading' && k !== 'mtf_trading');
-      let mtfList = [];
-      if (Array.isArray(pullbackData.mtf_trading)) {
-        mtfList = pullbackData.mtf_trading;
-      } else if (pullbackData.mtf_trading && Array.isArray(pullbackData.mtf_trading.trades)) {
-        mtfList = pullbackData.mtf_trading.trades;
-      }
-      const mtfTickers = mtfList.map(m => m.ticker).filter(Boolean);
-      const tickers = Array.from(new Set([...sipTickers, ...mtfTickers]));
-      if (tickers.length === 0) return;
-
-      const queryStr = tickers.join(',');
-      let fetchedPrices = {};
-
-      const apiEndpoints = Array.from(new Set([API_BASE_URL, RENDER_BACKEND_URL, 'http://127.0.0.1:8000'].filter(Boolean)));
-      for (const endpoint of apiEndpoints) {
-        try {
-          const res = await fetch(`${endpoint}/api/investment/yfinance-prices?tickers=${encodeURIComponent(queryStr)}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.prices) {
-              Object.entries(data.prices).forEach(([sym, info]) => {
-                if (info && info.ltp) {
-                  const clean = sym.replace('.NS', '').trim();
-                  fetchedPrices[sym] = info.ltp;
-                  fetchedPrices[clean] = info.ltp;
-                  fetchedPrices[clean.toUpperCase()] = info.ltp;
-                }
-              });
-              if (Object.keys(fetchedPrices).length > 0) break;
-            }
-          }
-        } catch (e) {}
-      }
-
-      // Tier 3: Direct Yahoo Finance API fallback for any un-priced ticker
-      for (const sym of tickers) {
-        const clean = sym.replace('.NS', '').trim();
-        if (!fetchedPrices[sym]) {
-          try {
-            const yRes = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}`);
-            if (yRes.ok) {
-              const yData = await yRes.json();
-              const price = yData?.chart?.result?.[0]?.meta?.regularMarketPrice;
-              if (price) {
-                fetchedPrices[sym] = price;
-                fetchedPrices[clean] = price;
-              }
-            }
-          } catch (e) {}
-        }
-      }
-
-      if (Object.keys(fetchedPrices).length > 0) {
-        setLiveLtps(prev => ({ ...prev, ...fetchedPrices }));
-      }
-    };
-
-    fetchYfinanceLivePrices();
-    const interval = setInterval(fetchYfinanceLivePrices, 10000);
-    return () => clearInterval(interval);
-  }, [pullbackData]);
-
-  // Persist pullbackData to localStorage and backend (multi-endpoint sync)
-  const savePullbackState = async (updatedData) => {
-    const cleanedData = sanitizePullbackPortfolio(updatedData);
-    setPullbackData(cleanedData);
-    localStorage.setItem('finplus_pullback_portfolio', JSON.stringify(cleanedData));
-    const endpoints = Array.from(new Set([API_BASE_URL, RENDER_BACKEND_URL, 'http://127.0.0.1:8000'].filter(Boolean)));
-    for (const endpoint of endpoints) {
-      try {
-        await fetch(`${endpoint}/api/investment/pullback`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cleanedData)
-        });
-      } catch (e) {}
-    }
-  };
-
-  // Pullback & MTF Top-Level Scope Calculations
-  const sipCapSettings = pullbackData.capital_settings || { start_date: '2026-07-03', initial_capital: 330.51, daily_rate: 200.0 };
-  const sipStartDt = new Date(sipCapSettings.start_date || '2026-07-03');
-  const todayDt = new Date();
-  sipStartDt.setHours(0, 0, 0, 0);
-  todayDt.setHours(0, 0, 0, 0);
-  const sipDaysPassed = Math.max(0, Math.floor((todayDt.getTime() - sipStartDt.getTime()) / (1000 * 60 * 60 * 24)));
-  const totalSipAccumulatedCap = (Number(sipCapSettings.initial_capital) || 0) + (sipDaysPassed * (Number(sipCapSettings.daily_rate) || 200));
-
-  const stockTickersList = Object.keys(pullbackData).filter(k => k !== 'capital_settings' && k !== 'option_trading' && k !== 'mtf_trading');
-
-  let totalSipDeployedCost = 0;
-  let totalSipCurrentVal = 0;
-  let totalSipRealizedProfit = 0;
-  let totalSipBuyTxCount = 0;
-  let totalSipSellTxCount = 0;
-
-  const pullbackStockSummary = stockTickersList.map(ticker => {
-    const details = pullbackData[ticker] || {};
-    const txs = details.transactions || [];
-    let netShares = 0;
-    let netCost = 0;
-    let realizedProfit = 0;
-
-    txs.forEach(t => {
-      const sh = Number(t.shares) || 0;
-      const pr = Number(t.price) || 0;
-      if (sh > 0) {
-        netShares += sh;
-        netCost += sh * pr;
-        totalSipBuyTxCount++;
-      } else if (sh < 0) {
-        totalSipSellTxCount++;
-        const sellShares = Math.abs(sh);
-        const avgBuy = netShares > 0 ? netCost / netShares : pr;
-        realizedProfit += (pr - avgBuy) * sellShares;
-        netShares = Math.max(0, netShares - sellShares);
-        netCost = netShares * avgBuy;
-      }
-    });
-
-    totalSipDeployedCost += netCost;
-    totalSipRealizedProfit += realizedProfit;
-
-    const cleanSym = ticker.replace('.NS', '').trim();
-    const category = details.category || 'Core';
-    const isPark = category === 'Park';
-    const ltp = liveLtps[cleanSym] || liveLtps[ticker] || details.initial_reference_price || (txs.length > 0 ? txs[txs.length - 1].price : 0);
-    const peak = details.local_peak || ltp;
-    const targetBuyPrice = isPark ? 0 : peak * 0.95; // 5% Pullback Target Price Level (disabled for Park)
-    const currentVal = netShares * ltp;
-    totalSipCurrentVal += currentVal;
-
-    const unrealizedPnl = currentVal - netCost;
-    const pnlPct = netCost > 0 ? (unrealizedPnl / netCost) * 100 : 0;
-    const pullbackPct = (peak > 0 && !isPark) ? ((peak - ltp) / peak) * 100 : 0;
-
-    // Chronological Last Buy Transaction Date & Cool-down Math
-    const buyTxs = txs.filter(t => Number(t.shares) > 0).sort((a, b) => new Date(a.date) - new Date(b.date));
-    const lastBuyTx = buyTxs.length > 0 ? buyTxs[buyTxs.length - 1] : null;
-    
-    let daysSinceLastBuyStr = 'Never';
-    let daysSinceLastBuyNum = 9999;
-    let daysNeverBought = 0;  // days since added, for stocks never bought
-    let cooldownUntilStr = '';
-    let isCoolingDown = false;
-
-    if (lastBuyTx && lastBuyTx.date) {
-      const lastBuyDt = new Date(lastBuyTx.date);
-      lastBuyDt.setHours(0,0,0,0);
-      daysSinceLastBuyNum = Math.max(0, Math.floor((todayDt.getTime() - lastBuyDt.getTime()) / (1000 * 60 * 60 * 24)));
-      daysSinceLastBuyStr = `${daysSinceLastBuyNum} days`;
-      
-      const allowedDt = new Date(lastBuyDt.getTime() + (7 * 24 * 60 * 60 * 1000));
-      cooldownUntilStr = allowedDt.toISOString().split('T')[0];
-      if (daysSinceLastBuyNum < 7) {
-        isCoolingDown = true;
-      }
-    } else {
-      const dateAdded = new Date(details.date_added || '2026-07-03');
-      dateAdded.setHours(0,0,0,0);
-      daysNeverBought = Math.max(0, Math.floor((todayDt.getTime() - dateAdded.getTime()) / (1000 * 60 * 60 * 24)));
-      daysSinceLastBuyStr = `Never (${daysNeverBought}d added)`;
-    }
-
-    let systemStatus = '🟢 Active';
-    let signalClass = 'active';
-
-    if (isPark) {
-      systemStatus = '🅿️ Parked ETF / Reserve';
-      signalClass = 'park';
-    } else if (netShares === 0) {
-      if (ltp <= targetBuyPrice || pullbackPct >= 5.0) {
-        systemStatus = '🟢 BUY TRIGGERED';
-        signalClass = 'buy';
-      } else if (daysNeverBought >= 25) {
-        systemStatus = '🟢 BUY TRIGGERED (25d Waiting Period)';
-        signalClass = 'buy';
-      } else {
-        systemStatus = `🟣 Pending Initial Buy (${daysNeverBought}/25d)`;
-        signalClass = 'pending';
-      }
-    } else if (isCoolingDown) {
-      systemStatus = `⏳ COOLDOWN (Until ${cooldownUntilStr})`;
-      signalClass = 'cooldown';
-    } else if (ltp <= targetBuyPrice || pullbackPct >= 5.0) {
-      systemStatus = '🟢 BUY TRIGGERED';
-      signalClass = 'buy';
-    } else if (daysSinceLastBuyNum >= 25 && daysSinceLastBuyNum < 9000) {
-      systemStatus = '⏱️ TIME-OUT BUY';
-      signalClass = 'timeout';
-    }
-
-    return {
-      ticker,
-      cleanSym,
-      name: details.name || ticker,
-      category: details.category || 'Core',
-      netShares,
-      avgCost: netShares > 0 ? netCost / netShares : 0,
-      netCost,
-      ltp,
-      peak,
-      targetBuyPrice,
-      currentVal,
-      unrealizedPnl,
-      pnlPct,
-      pullbackPct,
-      daysSinceLastBuyStr,
-      daysSinceLastBuyNum,
-      isCoolingDown,
-      cooldownUntilStr,
-      systemStatus,
-      signalClass,
-      lastTxDateStr: lastBuyTx ? lastBuyTx.date : (details.date_added || '2026-07-03')
-    };
-  });
-
-  // Zerodha Equity Delivery Statutory Charges Engine (Zero Brokerage, 0.1% STT, 0.015% Stamp Duty, 0.00297% NSE Txn, 18% GST)
-  let totalSipDeliveryTaxes = 0;
-  let totalSipStt = 0;
-  let totalSipStampDuty = 0;
-  let totalSipExchangeTxn = 0;
-  let totalSipGst = 0;
-  let totalSipDpCharges = 0;
-
-  stockTickersList.forEach(ticker => {
-    const details = pullbackData[ticker] || {};
-    const txs = details.transactions || [];
-    txs.forEach(t => {
-      const sh = Number(t.shares) || 0;
-      const pr = Number(t.price) || 0;
-      const amt = Math.abs(sh) * pr;
-      if (sh > 0) {
-        const stt = amt * 0.001; // 0.1% STT on Buy
-        const stamp = amt * 0.00015; // 0.015% Stamp Duty on Buy
-        const txn = amt * 0.0000297; // 0.00297% NSE Exchange Txn
-        const sebi = amt * 0.000001; // SEBI turnover fee
-        const gst = (txn + sebi) * 0.18; // 18% GST
-        const total = stt + stamp + txn + sebi + gst;
-
-        totalSipDeliveryTaxes += total;
-        totalSipStt += stt;
-        totalSipStampDuty += stamp;
-        totalSipExchangeTxn += txn;
-        totalSipGst += gst;
-      } else if (sh < 0) {
-        const stt = amt * 0.001; // 0.1% STT on Sell
-        const txn = amt * 0.0000297;
-        const sebi = amt * 0.000001;
-        const gst = (txn + sebi) * 0.18;
-        const dp = 15.34; // ₹13 + 18% GST DP Charge
-        const total = stt + txn + sebi + gst + dp;
-
-        totalSipDeliveryTaxes += total;
-        totalSipStt += stt;
-        totalSipExchangeTxn += txn;
-        totalSipGst += gst;
-        totalSipDpCharges += dp;
-      }
-    });
-  });
-
-  const totalSipUnrealizedPnl = totalSipCurrentVal - totalSipDeployedCost;
-  const totalSipNetPnl = totalSipUnrealizedPnl - totalSipDeliveryTaxes;
-  const totalSipNetPnlPct = totalSipDeployedCost > 0 ? (totalSipNetPnl / totalSipDeployedCost) * 100 : 0;
-
-  // Detailed list of all historical SIP Sell transactions
-  const sipSoldTradesList = [];
-  let totalSipSellTaxes = 0;
-
-  stockTickersList.forEach(ticker => {
-    const details = pullbackData[ticker] || {};
-    const txs = details.transactions || [];
-    let runningShares = 0;
-    let runningCost = 0;
-
-    txs.forEach((t, idx) => {
-      const sh = Number(t.shares) || 0;
-      const pr = Number(t.price) || 0;
-      if (sh > 0) {
-        runningShares += sh;
-        runningCost += sh * pr;
-      } else if (sh < 0) {
-        const sellShares = Math.abs(sh);
-        const avgBuy = runningShares > 0 ? runningCost / runningShares : pr;
-        const grossProfit = (pr - avgBuy) * sellShares;
-        const profitPct = avgBuy > 0 ? ((pr - avgBuy) / avgBuy) * 100 : 0;
-
-        const amt = sellShares * pr;
-        const stt = amt * 0.001;
-        const txn = amt * 0.0000297;
-        const sebi = amt * 0.000001;
-        const gst = (txn + sebi) * 0.18;
-        const dp = 15.34; // ₹13 + 18% GST Zerodha DP charge
-        const sellTaxes = stt + txn + sebi + gst + dp;
-        const netProfit = grossProfit - sellTaxes;
-
-        totalSipSellTaxes += sellTaxes;
-
-        sipSoldTradesList.push({
-          id: `${ticker}-${idx}-${t.date}`,
-          ticker,
-          cleanSym: ticker.replace('.NS', '').trim(),
-          name: details.name || ticker,
-          category: details.category || 'Core',
-          sellDate: t.date,
-          sharesSold: sellShares,
-          avgBuyPrice: avgBuy,
-          sellPrice: pr,
-          sellValue: amt,
-          grossPnl: grossProfit,
-          grossPnlPct: profitPct,
-          taxes: sellTaxes,
-          netPnl: netProfit,
-          txIndex: idx
-        });
-
-        runningShares = Math.max(0, runningShares - sellShares);
-        runningCost = runningShares * avgBuy;
-      }
-    });
-  });
-
-  // Sort sold trades by date descending (most recent first)
-  sipSoldTradesList.sort((a, b) => new Date(b.sellDate) - new Date(a.sellDate));
-
-  const totalSipRealizedNetProfit = totalSipRealizedProfit - totalSipSellTaxes;
-  const totalSipCombinedNetPnl = (totalSipUnrealizedPnl + totalSipRealizedProfit) - totalSipDeliveryTaxes;
-
-  const availableSipCash = Math.max(0, totalSipAccumulatedCap - totalSipDeployedCost + (totalSipRealizedProfit * 0.5));
-  const mutualFundSweepProfit = totalSipRealizedProfit * 0.5;
-
-  // Keep sipSellSelectedTicker synced with active open holdings if empty or invalidated
-  React.useEffect(() => {
-    const openHoldings = pullbackStockSummary.filter(s => s.netShares > 0);
-    if (openHoldings.length > 0) {
-      const exists = openHoldings.some(s => s.ticker === sipSellSelectedTicker);
-      if (!exists) {
-        const defaultHolding = openHoldings[0];
-        setSipSellSelectedTicker(defaultHolding.ticker);
-        if (!sipSellFormPrice && defaultHolding.ltp > 0) {
-          setSipSellFormPrice(String(defaultHolding.ltp));
-        }
-      }
-    } else if (sipSellSelectedTicker) {
-      setSipSellSelectedTicker('');
-    }
-  }, [pullbackStockSummary, sipSellSelectedTicker, sipSellFormPrice]);
-
-  // 3-Tier Strategy Capital Allocation Engine (Fresh Start 2026-08-17)
-  const baseOpenCap = Number(openingCapitalInput) || 0;
-  const baseBrokerAdj = Number(brokerAdjustmentInput) || 0;
-  const baseDeposits = Number(depositsInput) || 0;
-  const baseWithdrawals = Number(withdrawalsInput) || 0;
-  
-  // Total Net Operating Capital Pool (Opening Capital + Broker Adjustment + Deposits - Withdrawals)
-  const masterOpeningCapital = baseOpenCap + baseBrokerAdj + baseDeposits - baseWithdrawals;
-  const currentMonthStr = new Date().toISOString().substring(0, 7); // e.g. '2026-08'
-
-  // Current Month Trades starting fresh from 2026-08-17
-  const currentMonthTrades = trades.filter(t => {
-    const dt = t.created_at || t.entry_date || t.date || '';
-    return dt >= '2026-08-17';
-  });
-
-  // Strategy 1: Swing Trading Trades
-  const swingTrades = currentMonthTrades.filter(t => {
-    const cat = (t.strategy_category || t.instrument_type || '').toLowerCase();
-    return cat.includes('swing') || cat.includes('delivery') || (!cat.includes('day') && !cat.includes('pair') && !cat.includes('long'));
-  });
-  const swingRealizedNetPnl = swingTrades.reduce((acc, t) => acc + (calculateZerodhaCharges(t).net_pnl || 0), 0);
-
-  // Strategy 2: Day Trading - Nifty Pair Trades
-  const dayPairTrades = currentMonthTrades.filter(t => {
-    const cat = (t.strategy_category || t.instrument_type || '').toLowerCase();
-    return cat.includes('day') || cat.includes('pair') || cat.includes('intraday') || cat.includes('nifty');
-  });
-  const dayPairMonthlyNetPnl = dayPairTrades.reduce((acc, t) => acc + (calculateZerodhaCharges(t).net_pnl || 0), 0);
-
-  // Day Trading Base Allocation = 25% of Master Capital
-  const dayPairBaseAllocRupees = masterOpeningCapital * 0.25;
-  const dayPairMaxLossRupees = dayPairBaseAllocRupees * 0.15; // 15% Monthly Max Loss Stop Loss in ₹
-  const dayPairMonthlyLossPct = dayPairBaseAllocRupees > 0 ? (dayPairMonthlyNetPnl / dayPairBaseAllocRupees) * 100 : 0;
-
-  // 15% Monthly Loss Circuit Breaker Rule
-  const isDayPairCircuitBreakerTriggered = dayPairMonthlyNetPnl < 0 && (Math.abs(dayPairMonthlyNetPnl) >= dayPairMaxLossRupees || dayPairMonthlyLossPct <= -15.0);
-
-  // Dynamic Effective Allocation Percentages & Rupees
-  // If Circuit Breaker Triggered: Day Trading = 0%, Swing Trading = 75% (50% base + 25% transferred!)
-  const effectiveSwingAllocPct = isDayPairCircuitBreakerTriggered ? 75.0 : 50.0;
-  const effectiveDayPairAllocPct = isDayPairCircuitBreakerTriggered ? 0.0 : 25.0;
-  const effectiveLongTermAllocPct = 25.0;
-
-  const swingAllocRupees = masterOpeningCapital * (effectiveSwingAllocPct / 100.0);
-  const dayPairAllocRupees = masterOpeningCapital * (effectiveDayPairAllocPct / 100.0);
-  const longTermAllocRupees = masterOpeningCapital * (effectiveLongTermAllocPct / 100.0);
-
-  // Handlers for 5% Pullback SIP & MTF Margin Trading
-  const handleAddStockToWatchlist = async (e) => {
-    e.preventDefault();
-    if (!newSipTicker.trim()) return;
-    let inputSym = newSipTicker.trim().toUpperCase();
-    const inputClean = inputSym.replace('.NS', '').trim().toLowerCase();
-
-    const matchedStock = combinedStockList.find(s => {
-      const sym = (s.symbol || '').toUpperCase();
-      const name = (s.name || '').toUpperCase();
-      const cleanSym = sym.replace('.NS', '');
-      const aliases = (s.aliases || []).map(a => a.toUpperCase());
-      return cleanSym === inputSym || sym === inputSym || name === inputSym || aliases.includes(inputSym) || aliases.includes(inputClean.toUpperCase());
-    });
-
-    let cleanSymbol = matchedStock ? matchedStock.symbol.toUpperCase().replace('.NS', '') : inputSym.replace(/\s+/g, '').replace('.NS', '');
-    const formatted = `${cleanSymbol}.NS`;
-
-    const sharesNum = Number(newSipShares) || 0;
-    const priceNum = Number(newSipBuyPrice) || 0;
-    const txDateStr = newSipTxDate || new Date().toISOString().split('T')[0];
-
-    const existingStock = pullbackData[formatted] || pullbackData[cleanSymbol] || pullbackData[inputSym];
-
-    if (existingStock) {
-      // IF STOCK ALREADY EXISTS IN PORTFOLIO/WATCHLIST (e.g. ITC.NS)
-      if (sharesNum > 0 && priceNum > 0) {
-        const updatedTxs = [
-          ...(existingStock.transactions || []),
-          { date: txDateStr, price: priceNum, shares: sharesNum }
-        ];
-
-        let totalSh = 0;
-        let totalCost = 0;
-        updatedTxs.forEach(t => {
-          const s = Number(t.shares) || 0;
-          const p = Number(t.price) || 0;
-          if (s > 0) { totalSh += s; totalCost += s * p; }
-          else if (s < 0) { totalSh = Math.max(0, totalSh + s); }
-        });
-        const newAvg = totalSh > 0 ? totalCost / totalSh : priceNum;
-
-        const updated = {
-          ...pullbackData,
-          [formatted]: {
-            ...existingStock,
-            transactions: updatedTxs
-          }
-        };
-
-        savePullbackState(updated);
-        showToast(`Logged purchase of ${sharesNum} share(s) of ${formatted} @ ₹${priceNum.toFixed(2)}! Total position: ${totalSh} share(s) @ avg ₹${newAvg.toFixed(2)}.`);
-        setNewSipTicker('');
-        setNewSipName('');
-        setNewSipShares('1');
-        setNewSipBuyPrice('');
-        setShowNiftyDropdown(false);
-        return;
-      } else {
-        showToast(`${formatted} is already in your Watchlist. Enter Shares (>0) & Buy Price (₹) to record an additional purchase.`, 'info');
-        setShowNiftyDropdown(false);
-        return;
-      }
-    }
-
-    let liveFetchedPrice = 0;
-    const apiEndpoints = [API_BASE_URL, 'https://finplus.onrender.com', 'http://127.0.0.1:8000'];
-    for (const endpoint of apiEndpoints) {
-      try {
-        const res = await fetch(`${endpoint}/api/investment/yfinance-prices?tickers=${encodeURIComponent(formatted)}`);
-        if (res.ok) {
-          const data = await res.json();
-          const pObj = data.prices?.[formatted] || data.prices?.[cleanSymbol] || data.prices?.[inputSym];
-          if (pObj && pObj.ltp) {
-            liveFetchedPrice = pObj.ltp;
-            break;
-          }
-        }
-      } catch (e) {}
-    }
-
-    const finalName = (matchedStock ? matchedStock.name : newSipName.trim()) || cleanSymbol;
-    const initialTxs = (sharesNum > 0 && priceNum > 0)
-      ? [{ date: txDateStr, price: priceNum, shares: sharesNum }]
-      : [];
-
-    const refPrice = liveFetchedPrice > 0 ? liveFetchedPrice : (priceNum > 0 ? priceNum : 0);
-
-    const updated = {
-      ...pullbackData,
-      [formatted]: {
-        name: finalName,
-        category: newSipCategory,
-        transactions: initialTxs,
-        local_peak: refPrice,
-        date_added: txDateStr,
-        initial_reference_price: refPrice
-      }
-    };
-
-    savePullbackState(updated);
-    if (refPrice > 0) {
-      setLiveLtps(prev => ({ ...prev, [formatted]: refPrice, [cleanSymbol]: refPrice }));
-    }
-
-    if (sharesNum > 0 && priceNum > 0) {
-      showToast(`Added ${formatted} (${finalName}) to portfolio with ${sharesNum} share(s) @ ₹${priceNum.toFixed(2)}!`);
-    } else {
-      showToast(`Added ${formatted} (${finalName}) to Watchlist (Pending Initial Buy)!`);
-    }
-
-    setNewSipTicker('');
-    setNewSipName('');
-    setNewSipShares('1');
-    setNewSipBuyPrice('');
-    setShowNiftyDropdown(false);
-  };
-
-  const handleFreshStartPortfolio = () => {
-    if (!window.confirm("Clear pre-populated stock watchlist and start fresh from today?\n\nThis will remove pre-populated stocks (like ITC, BEL, etc.) from your SIP watchlist, keeping ONLY UYFINCORP (your 12 shares holding), and reset the SIP start date to today.")) return;
-
-    const todayStr = '2026-08-17';
-    const freshData = {
-      "capital_settings": { "start_date": todayStr, "initial_capital": 3477.97, "daily_rate": 200.0 },
-      "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "in_watchlist": true, "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 19.33 },
-      "mtf_trading": pullbackData.mtf_trading || []
-    };
-
-    localStorage.setItem('finplus_pullback_version_tag', '20260817_fresh_start_v5');
-    savePullbackState(freshData);
-    showToast("SIP Watchlist cleared! Only UYFINCORP preserved. Search and add stocks after your research.");
-  };
-
-  const handleDeleteStockFromWatchlist = (ticker) => {
-    const cleanSym = ticker.replace('.NS', '').trim();
-    const stockObj = pullbackData[ticker] || {};
-    const hasTransactions = Array.isArray(stockObj.transactions) && stockObj.transactions.length > 0;
-
-    if (!window.confirm(`Are you sure you want to remove ${cleanSym} from your Active Watchlist?${hasTransactions ? ' (All historical buy & sell records will remain safely preserved in Sold History).' : ''}`)) return;
-
-    const updated = { ...pullbackData };
-    if (hasTransactions) {
-      // Keep transaction history intact, but mark as hidden from active watchlist
-      updated[ticker] = {
-        ...stockObj,
-        in_watchlist: false
-      };
-      showToast(`Removed ${cleanSym} from Active Watchlist (past trade history preserved in Sold History)!`);
-    } else {
-      delete updated[ticker];
-      showToast(`Removed ${cleanSym} from 5% SIP Watchlist!`);
-    }
-
-    savePullbackState(updated);
-  };
-
-  const handleRecordSipSellSubmit = (e) => {
-    e.preventDefault();
-    const openHoldings = pullbackStockSummary.filter(s => s.netShares > 0);
-    const targetTicker = sipSellSelectedTicker || (openHoldings.length > 0 ? openHoldings[0].ticker : '');
-
-    if (!targetTicker) {
-      showToast("Please select a stock holding to sell.", "error");
-      return;
-    }
-    const holding = pullbackStockSummary.find(s => s.ticker === targetTicker);
-    if (!holding || holding.netShares <= 0) {
-      showToast("No shares available to sell for this stock.", "error");
-      return;
-    }
-    const sharesNum = parseInt(sipSellFormShares) || 0;
-    const priceNum = parseFloat(sipSellFormPrice) || (holding.ltp > 0 ? holding.ltp : 0);
-    const txDateStr = sipSellFormDate || new Date().toISOString().split('T')[0];
-
-    if (sharesNum <= 0) {
-      showToast("Please enter a valid share quantity (> 0).", "error");
-      return;
-    }
-    if (sharesNum > holding.netShares) {
-      showToast(`Cannot sell ${sharesNum} shares. You currently hold ${holding.netShares} shares.`, "error");
-      return;
-    }
-    if (priceNum <= 0) {
-      showToast("Please enter a valid sell execution price (₹).", "error");
-      return;
-    }
-
-    const stockObj = pullbackData[targetTicker] || { name: targetTicker, category: 'Core', transactions: [] };
-    const existingTxs = stockObj.transactions || [];
-    const newTx = { date: txDateStr, price: priceNum, shares: -Math.abs(sharesNum), type: 'SELL' };
-
-    const updated = {
-      ...pullbackData,
-      [targetTicker]: {
-        ...stockObj,
-        transactions: [...existingTxs, newTx]
-      }
-    };
-
-    savePullbackState(updated);
-    const avgCost = holding.avgCost || priceNum;
-    const realizedProfit = (priceNum - avgCost) * sharesNum;
-    showToast(`Recorded SALE of ${sharesNum} share(s) of ${holding.cleanSym} @ ₹${priceNum.toFixed(2)} (Realized: ${realizedProfit >= 0 ? '+' : ''}₹${realizedProfit.toFixed(2)})!`);
-    
-    setSipSellFormShares('1');
-    setSipSellFormPrice('');
-  };
-
-  const handleConfirmSellModal = (e) => {
-    e.preventDefault();
-    if (!sipSellModalStock) return;
-    const ticker = sipSellModalStock.ticker;
-    const holding = pullbackStockSummary.find(s => s.ticker === ticker);
-    const availableShares = holding ? holding.netShares : (sipSellModalStock.netShares || 0);
-
-    const sharesNum = parseInt(sipSellModalShares) || 0;
-    const priceNum = parseFloat(sipSellModalPrice) || 0;
-    const txDateStr = sipSellModalDate || new Date().toISOString().split('T')[0];
-
-    if (sharesNum <= 0) {
-      showToast("Please enter a valid share quantity (> 0).", "error");
-      return;
-    }
-    if (sharesNum > availableShares) {
-      showToast(`Cannot sell ${sharesNum} shares. You currently hold ${availableShares} shares.`, "error");
-      return;
-    }
-    if (priceNum <= 0) {
-      showToast("Please enter a valid sell execution price (₹).", "error");
-      return;
-    }
-
-    const stockObj = pullbackData[ticker] || { name: ticker, category: 'Core', transactions: [] };
-    const existingTxs = stockObj.transactions || [];
-    const newTx = { date: txDateStr, price: priceNum, shares: -Math.abs(sharesNum), type: 'SELL' };
-
-    const updated = {
-      ...pullbackData,
-      [ticker]: {
-        ...stockObj,
-        transactions: [...existingTxs, newTx]
-      }
-    };
-
-    savePullbackState(updated);
-    const avgCost = sipSellModalStock.avgCost || (holding ? holding.avgCost : priceNum);
-    const realizedProfit = (priceNum - avgCost) * sharesNum;
-    showToast(`Recorded SALE of ${sharesNum} share(s) of ${sipSellModalStock.cleanSym} @ ₹${priceNum.toFixed(2)} (Realized: ${realizedProfit >= 0 ? '+' : ''}₹${realizedProfit.toFixed(2)})!`);
-
-    setSipSellModalStock(null);
-  };
-
-  const handleDeleteSipTx = (ticker, txIndex) => {
-    const stockObj = pullbackData[ticker];
-    if (!stockObj || !stockObj.transactions) return;
-    const tx = stockObj.transactions[txIndex];
-    const txLabel = tx ? `${tx.shares > 0 ? 'Buy' : 'Sell'} of ${Math.abs(tx.shares)} share(s) @ ₹${tx.price} on ${tx.date}` : 'transaction';
-    if (!window.confirm(`Are you sure you want to delete this ${txLabel} for ${ticker.replace('.NS', '')}?`)) return;
-
-    const updatedTxs = stockObj.transactions.filter((_, idx) => idx !== txIndex);
-    const updated = {
-      ...pullbackData,
-      [ticker]: {
-        ...stockObj,
-        transactions: updatedTxs
-      }
-    };
-
-    savePullbackState(updated);
-    showToast(`Deleted transaction for ${ticker.replace('.NS', '')}!`);
-  };
-
-  const handleOpenSipEditModal = (stock) => {
-    const ticker = stock.ticker;
-    const details = pullbackData[ticker] || {};
-    const txs = Array.isArray(details.transactions) ? details.transactions : [];
-    
-    setSipEditModalStock(stock);
-    setEditSipName(details.name || stock.name || stock.cleanSym);
-    setEditSipCategory(details.category || stock.category || 'Core');
-    setEditSipPeak(details.local_peak ? String(details.local_peak) : (stock.peak ? String(stock.peak) : ''));
-    setEditSipTxs(txs.map((t, idx) => ({
-      id: idx,
-      date: t.date || new Date().toISOString().split('T')[0],
-      shares: Math.abs(Number(t.shares) || 1),
-      price: Number(t.price) || 0,
-      type: (Number(t.shares) < 0 || t.type === 'SELL') ? 'SELL' : 'BUY'
-    })));
-  };
-
-  const handleSaveSipEdit = (e) => {
-    if (e) e.preventDefault();
-    if (!sipEditModalStock) return;
-    const ticker = sipEditModalStock.ticker;
-    const existing = pullbackData[ticker] || {};
-
-    const formattedTxs = editSipTxs
-      .filter(t => Math.abs(Number(t.shares)) > 0 && Number(t.price) > 0)
-      .map(t => {
-        const sharesNum = Math.abs(Number(t.shares));
-        const isSell = t.type === 'SELL';
-        return {
-          date: t.date || new Date().toISOString().split('T')[0],
-          price: parseFloat(t.price),
-          shares: isSell ? -sharesNum : sharesNum,
-          ...(isSell ? { type: 'SELL' } : {})
-        };
+    fetch('/stock_universe.json')
+      .then(r => r.json())
+      .then(data => {
+        const parsed = parseUniverse(data);
+        if (parsed.length > 0) setStockUniverse(parsed);
+      })
+      .catch(() => {
+        fetch('/nse_stocks.json')
+          .then(r => r.json())
+          .then(data => {
+            const parsed = parseUniverse(data);
+            if (parsed.length > 0) setStockUniverse(parsed);
+          })
+          .catch(() => {});
       });
 
-    const peakNum = editSipPeak ? parseFloat(editSipPeak) : (existing.local_peak || 0);
-
-    const updated = {
-      ...pullbackData,
-      [ticker]: {
-        ...existing,
-        name: editSipName.trim() || ticker,
-        category: editSipCategory,
-        local_peak: peakNum,
-        transactions: formattedTxs
-      }
-    };
-
-    savePullbackState(updated);
-    setSipEditModalStock(null);
-    showToast(`Updated ${sipEditModalStock.cleanSym} successfully!`);
-  };
-
-
-
-  // Form State for Adding New Trade
-  const [symbol, setSymbol] = useState('');
-  const [entryPrice, setEntryPrice] = useState('');
-  const [quantity, setQuantity] = useState('100');
-  const [stopLoss, setStopLoss] = useState('');
-  const [targetPrice, setTargetPrice] = useState('');
-  const [instrumentType, setInstrumentType] = useState('Intraday');
-  const [customSlPct, setCustomSlPct] = useState('0.8');
-
-  const SEGMENT_SL_CONFIG = {
-    'Intraday': { slPct: 0.8, presets: [0.5, 0.8, 1.0], range: '0.5% – 1.0%', riskRule: 'Max 1% capital risk', label: 'Intraday Equities' },
-    'Intraday Short': { slPct: 0.8, presets: [0.5, 0.8, 1.0], range: '0.5% – 1.0%', riskRule: 'Max 1% capital risk', label: 'Intraday Equities' },
-    'Stock Options': { slPct: 15.0, presets: [10.0, 15.0, 20.0], range: '10.0% – 20.0%', riskRule: 'Max 2%–3% of option buying pool', label: 'Stock Options (F&O)' },
-    'Delivery': { slPct: 6.0, presets: [5.0, 6.0, 7.0], range: '5.0% – 7.0%', riskRule: 'Max 2% capital risk', label: 'Delivery / Swing Trading' },
-    'Crude Oil Options': { slPct: 1.0, presets: [0.8, 1.0, 1.2], range: '0.8% – 1.2%', riskRule: 'Fixed capital risk (₹3,000–₹5,000)', label: 'Crude Oil Main' },
-    'Crude Oil Mini': { slPct: 1.0, presets: [0.8, 1.0, 1.2], range: '0.8% – 1.2%', riskRule: 'Fixed capital risk (₹300–₹500)', label: 'Crude Oil Mini' },
-    'Natural Gas Options': { slPct: 2.0, presets: [1.5, 2.0, 2.5], range: '1.5% – 2.5%', riskRule: 'Fixed capital risk (extreme volatility)', label: 'Natural Gas Main' },
-    'Natural Gas Mini': { slPct: 2.0, presets: [1.5, 2.0, 2.5], range: '1.5% – 2.5%', riskRule: 'Fixed capital risk (extreme volatility)', label: 'Natural Gas Mini' },
-    'Nifty Options': { slPct: 17.5, presets: [15.0, 17.5, 20.0], range: '15.0% – 20.0%', riskRule: 'Max 2%–3% of option buying pool', label: 'Nifty Options (Buyers)' }
-  };
-
-  const getSegmentConfig = (type) => {
-    if (!type) return SEGMENT_SL_CONFIG['Intraday'];
-    const key = type.trim();
-    if (SEGMENT_SL_CONFIG[key]) return SEGMENT_SL_CONFIG[key];
-    const lower = key.toLowerCase();
-    if (lower.includes('stock option') || lower.includes('stock options')) return SEGMENT_SL_CONFIG['Stock Options'];
-    if (lower.includes('delivery') || lower.includes('swing') || lower.includes('equity')) return SEGMENT_SL_CONFIG['Delivery'];
-    if (lower.includes('crude') && lower.includes('mini')) return SEGMENT_SL_CONFIG['Crude Oil Mini'];
-    if (lower.includes('crude')) return SEGMENT_SL_CONFIG['Crude Oil Options'];
-    if (lower.includes('natural') && lower.includes('mini')) return SEGMENT_SL_CONFIG['Natural Gas Mini'];
-    if (lower.includes('natural') || lower.includes('natgas')) return SEGMENT_SL_CONFIG['Natural Gas Options'];
-    if (lower.includes('nifty') || lower.includes('option')) return SEGMENT_SL_CONFIG['Nifty Options'];
-    return SEGMENT_SL_CONFIG['Intraday'];
-  };
-
-  // Auto-calculate SL & Target dynamically based on segment guide rules
-  // Rounds to nearest 0.05 increment (exchange-compliant step size)
-  const roundToStep = (val, stepDown) => {
-    const steps = Math.round(val / 0.05);
-    const floorVal = (Math.floor(val / 0.05) * 0.05);
-    const ceilVal  = (Math.ceil(val  / 0.05) * 0.05);
-    const result = stepDown ? floorVal : ceilVal;
-    return parseFloat(result.toFixed(2));
-  };
-
-  const calculateAutoSLAndTarget = (priceVal, typeVal, slPctVal) => {
-    const price = parseFloat(priceVal);
-    const config = getSegmentConfig(typeVal);
-    const useSlPct = parseFloat(slPctVal) || (config ? config.slPct : 1.0);
-
-    if (isNaN(price) || price <= 0) return { sl: '', target: '', config, slPctUsed: useSlPct };
-
-    const isShort = typeVal === 'Intraday Short';
-    const rawSl = isShort ? price * (1 + (useSlPct / 100)) : price * (1 - (useSlPct / 100));
-    const rawTgt = isShort ? price * (1 - (2 * useSlPct / 100)) : price * (1 + (2 * useSlPct / 100));
-
-    const slPrice  = isShort ? roundToStep(rawSl, false) : roundToStep(rawSl, true);
-    const tgtPrice = isShort ? roundToStep(rawTgt, true) : roundToStep(rawTgt, false);
-
-    return {
-      sl: slPrice.toFixed(2),
-      target: tgtPrice.toFixed(2),
-      config,
-      slPctUsed: useSlPct
-    };
-  };
-
-  const getLotIntelligenceInfo = (symbolStr, typeStr) => {
-    const sym = (symbolStr || '').toUpperCase().trim();
-    const type = (typeStr || '').trim();
-
-    if (type === 'Stock Options' || (type.includes('Stock') && type.includes('Option'))) {
-      return { lotSize: 500, label: 'Stock Option Lot (e.g. 500 qty)', defaultQty: '500' };
-    }
-    if (type === 'Crude Oil Mini' || sym.includes('CRUDEOILM') || (sym.includes('CRUDE') && sym.includes('MINI'))) {
-      return { lotSize: 10, label: '1 Lot = 10 qty (Crude Mini)', defaultQty: '10' };
-    }
-    if (type === 'Crude Oil Options' || sym.includes('CRUDEOIL') || sym.includes('CRUDE')) {
-      return { lotSize: 100, label: '1 Lot = 100 qty (Crude Main)', defaultQty: '100' };
-    }
-    if (type === 'Natural Gas Mini' || sym.includes('NATGASMINI') || (sym.includes('NATURAL') && sym.includes('MINI'))) {
-      return { lotSize: 250, label: '1 Lot = 250 qty (NatGas Mini)', defaultQty: '250' };
-    }
-    if (type === 'Natural Gas Options' || sym.includes('NATURALGAS') || sym.includes('NATGAS')) {
-      return { lotSize: 1250, label: '1 Lot = 1250 qty (NatGas Main)', defaultQty: '1250' };
-    }
-    if (type === 'Nifty Options' || sym.includes('NIFTY')) {
-      return { lotSize: 65, label: '1 Lot = 65 qty (Nifty)', defaultQty: '65' };
-    }
-    return { lotSize: 1, label: '1 Share (Equity)', defaultQty: '100' };
-  };
-
-  const handleSlPctChange = (newPctStr) => {
-    setCustomSlPct(newPctStr.toString());
-    if (entryPrice) {
-      const { sl, target } = calculateAutoSLAndTarget(entryPrice, instrumentType, newPctStr);
-      setStopLoss(sl);
-      setTargetPrice(target);
-    }
-  };
-
-  const detectSegmentFromSymbol = (symbolStr) => {
-    const s = (symbolStr || '').toUpperCase().trim();
-    if (!s) return 'Intraday';
-
-    if (s.includes('CRUDEOILM') || (s.includes('CRUDE') && s.includes('MINI'))) {
-      return 'Crude Oil Mini';
-    }
-    if (s.includes('CRUDEOIL') || s.includes('CRUDE')) {
-      return 'Crude Oil Options';
-    }
-    if (s.includes('NATGASMINI') || (s.includes('NATURAL') && s.includes('MINI')) || (s.includes('NAT') && s.includes('MINI'))) {
-      return 'Natural Gas Mini';
-    }
-    if (s.includes('NATURALGAS') || s.includes('NATGAS') || s.includes('NAT')) {
-      return 'Natural Gas Options';
-    }
-    if (s.includes('NIFTY') || s.includes('BANKNIFTY') || s.includes('FINNIFTY')) {
-      return 'Nifty Options';
-    }
-    if (/\b(CE|PE)\b/.test(s) || s.endsWith('CE') || s.endsWith('PE')) {
-      return 'Stock Options';
-    }
-    return 'Intraday';
-  };
-
-  const getDefaultStrategyCategoryForType = (type) => {
-    if (!type) return 'Swing Trading';
-    const lower = type.toLowerCase();
-    if (lower.includes('nifty') || lower.includes('intraday') || lower.includes('pair')) {
-      return 'Day Trading (Nifty Pair)';
-    }
-    if (lower.includes('long') || lower.includes('investment') || lower.includes('sip') || lower.includes('delivery')) {
-      return 'Long-Term Investment';
-    }
-    return 'Swing Trading';
-  };
-
-  const handleSymbolChange = (e) => {
-    const val = e.target.value;
-    setSymbol(val);
-    const newType = detectSegmentFromSymbol(val);
-    setInstrumentType(newType);
-    setStrategyCategory(getDefaultStrategyCategoryForType(newType));
-
-    const cfg = getSegmentConfig(newType);
-    setCustomSlPct(cfg.slPct.toString());
-
-    const lotInfo = getLotIntelligenceInfo(val, newType);
-    setQuantity(lotInfo.defaultQty);
-
-    if (entryPrice) {
-      const { sl, target } = calculateAutoSLAndTarget(entryPrice, newType, cfg.slPct);
-      setStopLoss(sl);
-      setTargetPrice(target);
-    }
-  };
-
-  const handleEntryPriceChange = (e) => {
-    const val = e.target.value;
-    setEntryPrice(val);
-    const { sl, target } = calculateAutoSLAndTarget(val, instrumentType, customSlPct);
-    setStopLoss(sl);
-    setTargetPrice(target);
-  };
-
-  const handleInstrumentTypeChange = (e) => {
-    const newType = e.target.value;
-    setInstrumentType(newType);
-    setStrategyCategory(getDefaultStrategyCategoryForType(newType));
-    const cfg = getSegmentConfig(newType);
-    const defaultPct = cfg.slPct.toString();
-    setCustomSlPct(defaultPct);
-    const lotInfo = getLotIntelligenceInfo(symbol, newType);
-    setQuantity(lotInfo.defaultQty);
-    if (entryPrice) {
-      const { sl, target } = calculateAutoSLAndTarget(entryPrice, newType, defaultPct);
-      setStopLoss(sl);
-      setTargetPrice(target);
-    }
-  };
-
-  // Exit Price Modal State
-  const [editingTrade, setEditingTrade] = useState(null);
-  const [exitPriceInput, setExitPriceInput] = useState('');
-
-  // Full Edit Trade Transaction Modal State
-  const [fullEditTrade, setFullEditTrade] = useState(null);
-  const [editSymbol, setEditSymbol] = useState('');
-  const [editType, setEditType] = useState('Intraday');
-  const [editEntryPrice, setEditEntryPrice] = useState('');
-  const [editQuantity, setEditQuantity] = useState('');
-  const [editStopLoss, setEditStopLoss] = useState('');
-  const [editTargetPrice, setEditTargetPrice] = useState('');
-  const [editExitPrice, setEditExitPrice] = useState('');
-  const [editStatus, setEditStatus] = useState('ACTIVE');
-
-  // Selected trade for viewing detailed contract note charges
-  const [selectedChargeTrade, setSelectedChargeTrade] = useState(null);
-
-  // Toast Helper
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
-  };
-
-  // Sync trades to local storage on any state change
-  useEffect(() => {
-    saveJournalEngine(trades);
-  }, [trades]);
-
-  // Sync capital management, segment allocations & monthly SL risk settings to localStorage and backend
-  useEffect(() => {
-    localStorage.setItem('finplus_opening_capital', openingCapitalInput);
-    localStorage.setItem('finplus_broker_adjustment', brokerAdjustmentInput);
-    localStorage.setItem('finplus_deposits', depositsInput);
-    localStorage.setItem('finplus_withdrawals', withdrawalsInput);
-    localStorage.setItem('finplus_daily_risk_limit', dailyRiskLimitInput);
-    localStorage.setItem('finplus_challenge_start_date', challengeStartDateInput);
-    localStorage.setItem('finplus_total_challenge_days', totalChallengeDaysInput);
-
-    localStorage.setItem('finplus_alloc_intraday', allocIntraday);
-    localStorage.setItem('finplus_alloc_natgas', allocNatgas);
-    localStorage.setItem('finplus_alloc_nifty', allocNifty);
-    localStorage.setItem('finplus_alloc_crude', allocCrude);
-
-    localStorage.setItem('finplus_msl_intraday', monthlySlIntraday);
-    localStorage.setItem('finplus_msl_natgas', monthlySlNatgas);
-    localStorage.setItem('finplus_msl_nifty', monthlySlNifty);
-    localStorage.setItem('finplus_msl_crude', monthlySlCrude);
-
-    const timer = setTimeout(() => {
-      const payload = {
-        finplus_opening_capital: openingCapitalInput,
-        finplus_broker_adjustment: brokerAdjustmentInput,
-        finplus_deposits: depositsInput,
-        finplus_withdrawals: withdrawalsInput,
-        finplus_daily_risk_limit: dailyRiskLimitInput,
-        finplus_challenge_start_date: challengeStartDateInput,
-        finplus_total_challenge_days: totalChallengeDaysInput,
-        finplus_alloc_intraday: allocIntraday,
-        finplus_alloc_natgas: allocNatgas,
-        finplus_alloc_nifty: allocNifty,
-        finplus_alloc_crude: allocCrude,
-        finplus_msl_intraday: monthlySlIntraday,
-        finplus_msl_natgas: monthlySlNatgas,
-        finplus_msl_nifty: monthlySlNifty,
-        finplus_msl_crude: monthlySlCrude
-      };
-      const candidateServers = Array.from(new Set([
-        serverUrl,
-        API_BASE_URL,
-        (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? `${window.location.protocol}//${window.location.hostname}:8000` : null),
-        'http://127.0.0.1:8000',
-        'http://localhost:8000',
-        RENDER_BACKEND_URL
-      ].filter(Boolean)));
-
-      for (const s of candidateServers) {
-        fetch(`${s}/api/settings`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        }).catch(() => {});
-      }
-    }, 1500);
-
-    return () => clearTimeout(timer);
-  }, [
-    openingCapitalInput, brokerAdjustmentInput, depositsInput, withdrawalsInput,
-    dailyRiskLimitInput, challengeStartDateInput, totalChallengeDaysInput,
-    allocIntraday, allocNatgas, allocNifty, allocCrude,
-    monthlySlIntraday, monthlySlNatgas, monthlySlNifty, monthlySlCrude,
-    API_BASE_URL, serverUrl
-  ]);
-
-  // Master Live Price Polling Engine (Every 4 seconds via Independent YFinance Backend)
-  useEffect(() => {
-    const pollMasterLivePrices = async () => {
-      try {
-        const safeList = Array.isArray(trades) ? trades.filter(Boolean) : [];
-        const activePositions = safeList.filter(t => t && t.status === 'ACTIVE');
-        const activeSymbols = activePositions.map(t => (t.symbol || '').trim()).filter(Boolean);
-
-        const pullbackTickers = Object.keys(pullbackData).filter(k => k !== 'capital_settings' && k !== 'option_trading' && k !== 'mtf_trading');
-        
-        let mtfItems = [];
-        if (Array.isArray(pullbackData.mtf_trading)) {
-          mtfItems = pullbackData.mtf_trading;
-        } else if (pullbackData.mtf_trading && Array.isArray(pullbackData.mtf_trading.trades)) {
-          mtfItems = pullbackData.mtf_trading.trades;
-        }
-        const mtfTickers = mtfItems.map(m => m.ticker).filter(Boolean);
-
-        const allSymbols = Array.from(new Set([...activeSymbols, ...pullbackTickers, ...mtfTickers]));
-        if (allSymbols.length === 0) return;
-
-        const queryStr = allSymbols.join(',');
-
-        let fetchedMap = {};
-        let backendUpdatedPeaks = false;
-
-        const endpointsToTry = Array.from(new Set([API_BASE_URL, RENDER_BACKEND_URL, 'http://127.0.0.1:8000'].filter(Boolean)));
-        for (const endpoint of endpointsToTry) {
-          try {
-            const res = await fetch(`${endpoint}/api/investment/yfinance-prices?tickers=${encodeURIComponent(queryStr)}`);
-            if (res.ok) {
-              const data = await res.json();
-              if (data && data.prices) {
-                Object.entries(data.prices).forEach(([sym, info]) => {
-                  if (info) {
-                    const ltpVal = typeof info === 'number' ? info : info.ltp;
-                    if (ltpVal) {
-                      fetchedMap[sym] = ltpVal;
-                      const clean = sym.replace('.NS', '').trim();
-                      fetchedMap[clean] = ltpVal;
-                      fetchedMap[clean.toUpperCase()] = ltpVal;
-                    }
-                  }
-                });
-                backendUpdatedPeaks = !!data.updated_peaks;
-                if (Object.keys(fetchedMap).length > 0) break;
-              }
+    // Always restore latest synced portfolio dataset from cloud/disk backup on app mount
+    const endpoints = Array.from(new Set([RENDER_BACKEND_URL, API_BASE_URL].filter(Boolean)));
+    for (const ep of endpoints) {
+      fetch(`${ep}/api/backup/load`)
+        .then(r => r.json())
+        .then(res => {
+          if (res && res.status === 'success' && res.data) {
+            const { positions: diskPos, capitalLedger: diskLedger, soldHistory: diskSold, budget, split, freeCash } = res.data;
+            if (Array.isArray(diskPos)) setPositions(diskPos);
+            if (Array.isArray(diskLedger)) setCapitalLedger(diskLedger);
+            if (Array.isArray(diskSold)) setSoldHistory(diskSold);
+            if (budget) setMonthlyBudgetInput(budget);
+            if (split) {
+              if (split.swing !== undefined) setSwingPct(split.swing);
+              if (split.lt !== undefined) setLtPct(split.lt);
+              if (split.penny !== undefined) setPennyPct(split.penny);
             }
-          } catch (err) {
-            try {
-              const res = await fetch(`${endpoint}/api/ltp?symbols=${encodeURIComponent(queryStr)}`);
-              if (res.ok) {
-                const data = await res.json();
-                if (data && data.ltps) {
-                  Object.entries(data.ltps).forEach(([sym, ltpVal]) => {
-                    fetchedMap[sym] = ltpVal;
-                    const clean = sym.replace('.NS', '').trim();
-                    fetchedMap[clean] = ltpVal;
-                    fetchedMap[clean.toUpperCase()] = ltpVal;
-                  });
-                  if (Object.keys(fetchedMap).length > 0) break;
-                }
-              }
-            } catch (e) {}
-          }
-        }
-
-        // Direct Yahoo Finance API browser fallback if any symbol unpriced
-        for (const sym of allSymbols) {
-          const clean = sym.replace('.NS', '').trim();
-          if (!fetchedMap[sym] && !fetchedMap[clean]) {
-            try {
-              const formatted = sym.includes('.NS') || sym.includes('=') || sym.includes('^') ? sym : `${clean}.NS`;
-              const yRes = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(formatted)}?interval=1d&range=1d`);
-              if (yRes.ok) {
-                const yData = await yRes.json();
-                const price = yData?.chart?.result?.[0]?.meta?.regularMarketPrice;
-                if (price && price > 0) {
-                  fetchedMap[sym] = price;
-                  fetchedMap[clean] = price;
-                  fetchedMap[clean.toUpperCase()] = price;
-                }
-              }
-            } catch (e) {}
-          }
-        }
-
-        if (Object.keys(fetchedMap).length > 0) {
-          setLiveLtps(prev => ({ ...prev, ...fetchedMap }));
-        }
-
-        if (backendUpdatedPeaks) {
-          try {
-            const freshRes = await fetch(`${API_BASE_URL}/api/investment/pullback`);
-            if (freshRes.ok) {
-              const freshData = await freshRes.json();
-              if (freshData && Object.keys(freshData).length > 0) {
-                setPullbackData(freshData);
-              }
+            if (freeCash) {
+              if (freeCash.swing !== undefined) setSwingFreeCashInput(String(freeCash.swing));
+              if (freeCash.lt !== undefined) setLtFreeCashInput(String(freeCash.lt));
+              if (freeCash.penny !== undefined) setPennyFreeCashInput(String(freeCash.penny));
             }
-          } catch (e) {}
-        }
-      } catch (e) {}
-    };
-
-    pollMasterLivePrices();
-    const interval = setInterval(pollMasterLivePrices, 4000);
-    return () => clearInterval(interval);
-  }, [trades, pullbackData]);
-
-  // Restore trades from local backend disk on mount
-  useEffect(() => {
-    const fetchBackendTrades = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/trades/journal`);
-        if (res.ok) {
-          const data = await res.json();
-          const diskTrades = Array.isArray(data.trades) ? data.trades : (Array.isArray(data) ? data : []);
-          if (diskTrades.length > 0) {
-            setTrades(prev => mergeJournalTrades(prev, diskTrades));
           }
-        }
-      } catch (e) {}
-    };
-    fetchBackendTrades();
+        })
+        .catch(() => {});
+    }
   }, []);
 
-    // Handle Add New Trade
-  const handleAddTrade = (e) => {
-    e.preventDefault();
-    if (!symbol.trim() || !entryPrice || parseFloat(entryPrice) <= 0) {
-      showToast("Please provide a valid symbol and entry price.", "error");
-      return;
-    }
+  // Save State to LocalStorage & Backend Disk Backup File
+  useEffect(() => {
+    localStorage.setItem('finplus_monthly_income_budget', monthlyBudgetInput);
+    localStorage.setItem('finplus_split_swing', String(swingPct));
+    localStorage.setItem('finplus_split_lt', String(ltPct));
+    localStorage.setItem('finplus_split_penny', String(pennyPct));
+    localStorage.setItem(FREE_CASH_SWING_KEY, swingFreeCashInput);
+    localStorage.setItem('finplus_free_cash_swing_v5', swingFreeCashInput);
+    localStorage.setItem(FREE_CASH_LT_KEY, ltFreeCashInput);
+    localStorage.setItem(LEDGER_KEY, JSON.stringify(capitalLedger));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
+    localStorage.setItem('finplus_sold_history_v1', JSON.stringify(soldHistory));
 
-    if (isDayPairCircuitBreakerTriggered && strategyCategory === 'Day Trading (Nifty Pair)') {
-      showToast("🔴 Day Trading is paused for this month due to -15% Monthly Loss Circuit Breaker. Capital is transferred to Swing Trading.", "error");
-      return;
-    }
+    // Auto disk backup sync to both local server & Render cloud
+    const endpoints = Array.from(new Set([API_BASE_URL, RENDER_BACKEND_URL].filter(Boolean)));
+    const backupPayload = JSON.stringify({
+      positions,
+      capitalLedger,
+      soldHistory,
+      freeCash: { swing: swingFreeCashInput, lt: ltFreeCashInput, penny: pennyFreeCashInput },
+      budget: monthlyBudgetInput,
+      split: { swing: swingPct, lt: ltPct, penny: pennyPct }
+    });
 
-    const newTrade = {
-      uuid: createTradeUUID(),
-      symbol: symbol.trim().toUpperCase(),
-      entry_price: parseFloat(entryPrice),
-      quantity: parseInt(quantity) || 1,
-      stop_loss: stopLoss ? parseFloat(stopLoss) : null,
-      target_price: targetPrice ? parseFloat(targetPrice) : null,
-      instrument_type: instrumentType,
-      strategy_category: strategyCategory,
-      exit_price: null,
-      status: 'ACTIVE',
-      created_at: new Date().toISOString()
+    for (const ep of endpoints) {
+      try {
+        fetch(`${ep}/api/backup/save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: backupPayload
+        }).catch(() => {});
+      } catch(e) {}
+    }
+  }, [monthlyBudgetInput, swingPct, ltPct, pennyPct, capitalLedger, positions, soldHistory, swingFreeCash, ltFreeCash, pennyFreeCash]);
+
+  // Live LTP Poller (Only for Active Held Stocks)
+  useEffect(() => {
+    const heldSymbols = Array.from(new Set(positions.filter(p => p.shares > 0).map(p => p.ticker.replace('.NS', '').trim().toUpperCase()))).filter(Boolean);
+    if (heldSymbols.length === 0) return;
+
+    const fetchLivePrices = async () => {
+      setIsLtpLoading(true);
+      const symQueryWithNS = heldSymbols.map(s => s.endsWith('.NS') ? s : `${s}.NS`).join(',');
+      const symQueryPlain = heldSymbols.join(',');
+      
+      const endpoints = [
+        `http://localhost:5000/api/ltp?ticker=${encodeURIComponent(symQueryWithNS)}`,
+        `http://127.0.0.1:5000/api/ltp?ticker=${encodeURIComponent(symQueryWithNS)}`,
+        `http://localhost:8000/api/investment/yfinance-prices?symbols=${encodeURIComponent(symQueryPlain)}`,
+        `http://127.0.0.1:8000/api/investment/yfinance-prices?symbols=${encodeURIComponent(symQueryPlain)}`,
+        `https://finplus.onrender.com/api/investment/yfinance-prices?symbols=${encodeURIComponent(symQueryPlain)}`,
+        `https://finplus-g0b5.onrender.com/api/ltp?ticker=${encodeURIComponent(symQueryWithNS)}`
+      ];
+
+      for (const ep of endpoints) {
+        try {
+          const res = await fetch(ep, { signal: AbortSignal.timeout(4000) });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && typeof data === 'object') {
+              const sourceMap = data.prices && typeof data.prices === 'object' ? data.prices : data;
+              const updated = {};
+              for (const [k, v] of Object.entries(sourceMap)) {
+                const sym = k.replace('.NS', '').trim().toUpperCase();
+                const price = typeof v === 'number' ? v : Number(v?.price || v?.ltp || v || 0);
+                if (price > 0) updated[sym] = price;
+              }
+              if (Object.keys(updated).length > 0) {
+                setLiveLtps(prev => ({ ...prev, ...updated }));
+                setLastLtpUpdate(new Date().toLocaleTimeString());
+                break;
+              }
+            }
+          }
+        } catch(e) {}
+      }
+      setIsLtpLoading(false);
     };
 
-    const updated = [newTrade, ...trades];
-    setTrades(updated);
-    showToast(`Added trade for ${newTrade.symbol} @ ₹${newTrade.entry_price}`);
+    fetchLivePrices();
+    const timer = setInterval(fetchLivePrices, 20000);
+    return () => clearInterval(timer);
+  }, [positions]);
 
-    // Reset Form
-    setSymbol('');
-    setEntryPrice('');
-    setStopLoss('');
-    setTargetPrice('');
-  };
-
-  // Handle Exit Trade
-  const handleExitTrade = (e) => {
-    e.preventDefault();
-    if (!editingTrade || !exitPriceInput || parseFloat(exitPriceInput) <= 0) {
-      showToast("Please enter a valid exit price.", "error");
-      return;
+  // ══════════════════════════════════════════════════════════════
+  // ZONE 3: ALL COMPUTED MEMOS (Strictly After States & Effects)
+  // ══════════════════════════════════════════════════════════════
+  // Search suggestions for New Buy Modal
+  const stockSuggestions = useMemo(() => {
+    const q = formTicker.trim().toUpperCase();
+    if (!q || q.length < 1 || !stockUniverse.length) return [];
+    const exactSym = [];
+    const nameMatches = [];
+    for (const item of stockUniverse) {
+      const sym = (item.symbol || '').toUpperCase();
+      const name = (item.name || '').toUpperCase();
+      if (sym.startsWith(q)) exactSym.push(item);
+      else if (sym.includes(q) || name.includes(q)) nameMatches.push(item);
+      if (exactSym.length + nameMatches.length >= 15) break;
     }
+    return [...exactSym, ...nameMatches].slice(0, 10);
+  }, [formTicker, stockUniverse]);
 
-    const exitVal = parseFloat(exitPriceInput);
-    const updated = trades.map(t => {
-      if ((t.uuid && t.uuid === editingTrade.uuid) || (t.id && t.id === editingTrade.id)) {
-        return {
-          ...t,
-          exit_price: exitVal,
-          status: 'CLOSED',
-          updated_at: new Date().toISOString()
-        };
-      }
-      return t;
-    });
-
-    setTrades(updated);
-    showToast(`Closed ${editingTrade.symbol} at ₹${exitVal}`);
-    setEditingTrade(null);
-    setExitPriceInput('');
-  };
-
-  // Handle Delete Trade
-  const handleDeleteTrade = (tradeToDelete) => {
-    if (!window.confirm(`Delete position log for ${tradeToDelete.symbol}?`)) return;
-    const updated = trades.filter(t => {
-      if (tradeToDelete.uuid) return t.uuid !== tradeToDelete.uuid;
-      if (tradeToDelete.id) return t.id !== tradeToDelete.id;
-      return true;
-    });
-    setTrades(updated);
-    showToast("Trade log deleted.", "info");
-  };
-
-  // Open Full Edit Trade Modal
-  const handleOpenEditModal = (trade) => {
-    setFullEditTrade(trade);
-    setEditSymbol(trade.symbol || '');
-    setEditType(trade.instrument_type || 'Intraday');
-    setEditEntryPrice(trade.entry_price || '');
-    setEditQuantity(trade.quantity || '');
-    setEditStopLoss(trade.stop_loss || '');
-    setEditTargetPrice(trade.target_price || '');
-    setEditExitPrice(trade.exit_price || '');
-    setEditStatus(trade.status || 'ACTIVE');
-  };
-
-  // Save Full Edit Trade
-  const handleSaveFullTradeEdit = (e) => {
-    e.preventDefault();
-    if (!fullEditTrade) return;
-    if (!editSymbol.trim() || !editEntryPrice || parseFloat(editEntryPrice) <= 0) {
-      showToast("Please enter a valid symbol and entry price.", "error");
-      return;
+  // Search suggestions for Past Closed Trade Modal
+  const pastSoldSuggestions = useMemo(() => {
+    const q = pastSoldTicker.trim().toUpperCase();
+    if (!q || q.length < 1 || !stockUniverse.length) return [];
+    const exactSym = [];
+    const nameMatches = [];
+    for (const item of stockUniverse) {
+      const sym = (item.symbol || '').toUpperCase();
+      const name = (item.name || '').toUpperCase();
+      if (sym.startsWith(q)) exactSym.push(item);
+      else if (sym.includes(q) || name.includes(q)) nameMatches.push(item);
+      if (exactSym.length + nameMatches.length >= 15) break;
     }
+    return [...exactSym, ...nameMatches].slice(0, 10);
+  }, [pastSoldTicker, stockUniverse]);
 
-    const updated = trades.map(t => {
-      if ((t.uuid && t.uuid === fullEditTrade.uuid) || (t.id && t.id === fullEditTrade.id)) {
-        const exitVal = editExitPrice ? parseFloat(editExitPrice) : null;
-        const newStatus = exitVal && exitVal > 0 ? 'CLOSED' : editStatus;
-        return {
-          ...t,
-          symbol: editSymbol.trim().toUpperCase(),
-          instrument_type: editType,
-          entry_price: parseFloat(editEntryPrice),
-          quantity: parseInt(editQuantity) || 1,
-          stop_loss: editStopLoss ? parseFloat(editStopLoss) : null,
-          target_price: editTargetPrice ? parseFloat(editTargetPrice) : null,
-          exit_price: exitVal,
-          status: newStatus,
-          updated_at: new Date().toISOString()
-        };
-      }
-      return t;
-    });
+  // ── Capital Engine Math (Nearest Rupee Rounding) ──
+  const capitalMath = useMemo(() => {
+    const totalBudget = Number(monthlyBudgetInput) || 0;
 
-    setTrades(updated);
-    showToast(`Updated trade transaction log for ${editSymbol.toUpperCase()}!`);
-    setFullEditTrade(null);
-  };
+    // Total Injections & Withdrawals from Ledger
+    let totalInjectedFromLedger = 0;
+    let totalWithdrawn = 0;
+    let swingInjected = 0;
+    let ltInjected = 0;
+    let pennyInjected = 0;
 
-  // Master JSON Export & Restore
-  const handleExportJson = () => {
-    if (trades.length === 0) {
-      showToast("No trade logs available to export.", "error");
-      return;
-    }
-    exportMasterJsonBackup(trades);
-    showToast("Master trade journal exported as JSON backup!");
-  };
-
-  const handleImportJsonFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const res = importMasterJsonBackup(evt.target.result, trades);
-      if (res.success) {
-        setTrades(res.trades);
-        if (res.settings) {
-          if (res.settings.openingCapital) setOpeningCapitalInput(res.settings.openingCapital);
-          if (res.settings.brokerAdjustment) setBrokerAdjustmentInput(res.settings.brokerAdjustment);
-          if (res.settings.deposits) setDepositsInput(res.settings.deposits);
-          if (res.settings.withdrawals) setWithdrawalsInput(res.settings.withdrawals);
-          if (res.settings.dailyRiskLimit) setDailyRiskLimitInput(res.settings.dailyRiskLimit);
-          if (res.settings.challengeStartDate) setChallengeStartDateInput(res.settings.challengeStartDate);
-          if (res.settings.totalChallengeDays) setTotalChallengeDaysInput(res.settings.totalChallengeDays);
+    capitalLedger.forEach(item => {
+      const amt = Number(item.amount) || 0;
+      if (item.type === 'INJECTION') {
+        totalInjectedFromLedger += amt;
+        if (item.segment === 'ALL') {
+          swingInjected += Math.round(amt * (swingPct / 100));
+          ltInjected += Math.round(amt * (ltPct / 100));
+          pennyInjected += Math.round(amt * (pennyPct / 100));
+        } else if (item.segment === 'SWING') {
+          swingInjected += amt;
+        } else if (item.segment === 'LT') {
+          ltInjected += amt;
+        } else if (item.segment === 'PENNY') {
+          pennyInjected += amt;
         }
-        showToast(`Imported ${res.count} trades & capital settings successfully!`);
-      } else {
-        showToast(res.error || "Failed to import JSON file.", "error");
+      } else if (item.type === 'WITHDRAWAL') {
+        totalWithdrawn += amt;
+        if (item.segment === 'ALL') {
+          swingInjected -= Math.round(amt * (swingPct / 100));
+          ltInjected -= Math.round(amt * (ltPct / 100));
+          pennyInjected -= Math.round(amt * (pennyPct / 100));
+        } else if (item.segment === 'SWING') {
+          swingInjected -= amt;
+        } else if (item.segment === 'LT') {
+          ltInjected -= amt;
+        } else if (item.segment === 'PENNY') {
+          pennyInjected -= amt;
+        }
       }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
+    });
 
-  const handleImportCsvFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const res = importJournalCSV(evt.target.result, trades);
-      if (res.success) {
-        setTrades(res.trades);
-        showToast(`Imported ${res.count} trade records from CSV successfully!`);
-      } else {
-        showToast(res.error || "Failed to import CSV file.", "error");
+    // Deployed Capital in Active Positions
+    let swingDeployed = 0;
+    let ltDeployed = 0;
+    let pennyDeployed = 0;
+
+    positions.forEach(p => {
+      if (p.shares > 0) {
+        const cost = p.shares * p.buyPrice;
+        if (p.segment === 'SWING') swingDeployed += cost;
+        else if (p.segment === 'LT') ltDeployed += cost;
+        else if (p.segment === 'PENNY') pennyDeployed += cost;
       }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
+    });
 
-  // Metrics Calculations
-  const safeTrades = Array.isArray(trades) ? trades.filter(Boolean) : [];
-  const closedTrades = safeTrades.filter(t => t && t.status === 'CLOSED' && Number(t.exit_price) > 0);
-  const activeTrades = safeTrades.filter(t => t && t.status === 'ACTIVE');
+    // Realized Net Profits from Sold Trades (Recycled Capital)
+    let swingRealized = 0;
+    let ltRealized = 0;
+    let pennyRealized = 0;
 
-  let totalRealizedNetPnl = 0;
-  let totalGrossPnl = 0;
-  let totalZerodhaCharges = 0;
-  let winningTradesCount = 0;
+    soldHistory.forEach(s => {
+      const pnl = Number(s.netPnl) || 0;
+      if (s.segment === 'SWING') swingRealized += pnl;
+      else if (s.segment === 'LT') ltRealized += pnl;
+      else if (s.segment === 'PENNY') pennyRealized += pnl;
+    });
 
-  closedTrades.forEach(t => {
-    const chg = calculateZerodhaCharges(t);
-    totalRealizedNetPnl += chg.net_pnl;
-    totalGrossPnl += chg.gross_pnl;
-    totalZerodhaCharges += chg.total;
-    if (chg.net_pnl > 0) winningTradesCount++;
-  });
+    // ── Capital Allocation Logic (60% / 30% / 10% Automatic Split & Clean Free Cash) ──
+    let swingAllocated = 0;
+    let ltAllocated = 0;
+    let pennyAllocated = 0;
 
-  // Cumulative totals (Journal closed trades + SIP closed trades)
-  const closedSipTradesCount = sipSoldTradesList.length;
-  const closedSipWinningTradesCount = sipSoldTradesList.filter(t => (t.netPnl || 0) > 0).length;
-
-  const cumulativeRealizedNetPnl = totalRealizedNetPnl + totalSipRealizedNetProfit;
-  const cumulativeGrossPnl = totalGrossPnl + totalSipRealizedProfit;
-  const cumulativeCharges = totalZerodhaCharges + totalSipSellTaxes;
-  const cumulativeClosedTradesCount = closedTrades.length + closedSipTradesCount;
-  const cumulativeWinningTradesCount = winningTradesCount + closedSipWinningTradesCount;
-  const cumulativeWinRatePct = cumulativeClosedTradesCount > 0 
-    ? ((cumulativeWinningTradesCount / cumulativeClosedTradesCount) * 100).toFixed(1)
-    : '0';
-
-  const winRatePct = closedTrades.length > 0 ? ((winningTradesCount / closedTrades.length) * 100).toFixed(1) : '0';
-
-  // Helper to extract YYYY-MM-DD from trade created_at, entry_date, date, or updated_at
-  const getTradeDateStr = (t) => {
-    if (!t) return getTodayDateStr();
-    const raw = t.created_at || t.entry_date || t.date || t.entry_scan_time || t.timestamp || t.updated_at;
-    if (!raw) return getTodayDateStr();
-    return String(raw).split('T')[0];
-  };
-
-  // Group Closed Trades by Date for Daily Breakdown
-  const dailyPnlBreakdownMap = {};
-  closedTrades.forEach(t => {
-    const chg = calculateZerodhaCharges(t);
-    const dateKey = getTradeDateStr(t);
-    if (!dailyPnlBreakdownMap[dateKey]) {
-      dailyPnlBreakdownMap[dateKey] = {
-        date: dateKey,
-        tradesCount: 0,
-        winsCount: 0,
-        grossPnl: 0,
-        totalCharges: 0,
-        netPnl: 0
-      };
+    if (totalBudget > 0) {
+      // 1. If user inputs Capital / Monthly Budget, split automatically by target percentages (60%, 30%, 10%)
+      swingAllocated = Math.round(totalBudget * (swingPct / 100));
+      ltAllocated = Math.round(totalBudget * (ltPct / 100));
+      pennyAllocated = Math.round(totalBudget * (pennyPct / 100));
+    } else if (capitalLedger.length > 0) {
+      // 2. If capital is logged in ledger, use the ledger allocated amounts
+      swingAllocated = swingInjected;
+      ltAllocated = ltInjected;
+      pennyAllocated = pennyInjected;
+    } else {
+      // 3. Baseline if no budget and no ledger: Deployed stocks + Free Cash in broker
+      swingAllocated = Math.round(swingDeployed + swingFreeCash);
+      ltAllocated = Math.round(ltDeployed + ltFreeCash);
+      pennyAllocated = Math.round(pennyDeployed + pennyFreeCash);
     }
-    dailyPnlBreakdownMap[dateKey].tradesCount += 1;
-    if (chg.net_pnl > 0) dailyPnlBreakdownMap[dateKey].winsCount += 1;
-    dailyPnlBreakdownMap[dateKey].grossPnl += chg.gross_pnl;
-    dailyPnlBreakdownMap[dateKey].totalCharges += chg.total;
-    dailyPnlBreakdownMap[dateKey].netPnl += chg.net_pnl;
-  });
 
-  const dailyPnlSummaryList = Object.values(dailyPnlBreakdownMap).sort((a, b) => b.date.localeCompare(a.date));
+    const totalAllocated = swingAllocated + ltAllocated + pennyAllocated;
 
-  // Selected Date Metrics Calculation
-  const dailyClosedTrades = closedTrades.filter(t => getTradeDateStr(t) === selectedDailyDate);
-  let selectedDailyNetPnl = 0;
-  let selectedDailyGrossPnl = 0;
-  let selectedDailyCharges = 0;
-  let selectedDailyWinsCount = 0;
+    // ── Pillar Buying Power Logic ──
+    // Long-Term & Penny: Permanent deployment (Allocated - Deployed + Realized Profits)
+    const ltAvailable = Math.max(0, Math.round(ltAllocated + ltRealized - ltDeployed));
+    const pennyAvailable = Math.max(0, Math.round(pennyAllocated + pennyRealized - pennyDeployed));
 
-  dailyClosedTrades.forEach(t => {
-    const chg = calculateZerodhaCharges(t);
-    selectedDailyNetPnl += chg.net_pnl;
-    selectedDailyGrossPnl += chg.gross_pnl;
-    selectedDailyCharges += chg.total;
-    if (chg.net_pnl > 0) selectedDailyWinsCount += 1;
-  });
+    // Swing Trading: Revolving Capital (Available Cash = Injected Allocated + Realized Profits - Active Deployed Stocks)
+    const swingAvailable = Math.max(0, Math.round(swingAllocated + swingRealized - swingDeployed));
+    const swingTotalPool = Math.round(swingDeployed + swingAvailable);
 
-  const selectedDailyWinRatePct = dailyClosedTrades.length > 0
-    ? ((selectedDailyWinsCount / dailyClosedTrades.length) * 100).toFixed(1)
-    : '0';
-
-  let totalUnrealizedPnl = 0;
-  activeTrades.forEach(t => {
-    const sym = (t.symbol || '').trim();
-    const ltp = liveLtps[sym] ?? liveLtps[sym.toUpperCase()] ?? liveLtps[t.symbol] ?? t.entry_price;
-    const isShort = t.instrument_type === 'Intraday Short';
-    const diff = isShort ? (t.entry_price - ltp) : (ltp - t.entry_price);
-    totalUnrealizedPnl += diff * t.quantity;
-  });
-
-  // Capital Management Auto Calculations
-  const openingCapitalNum = parseFloat(openingCapitalInput) || 0;
-  const brokerAdjNum = parseFloat(brokerAdjustmentInput) || 0;
-  const depositsNum = parseFloat(depositsInput) || 0;
-  const withdrawalsNum = parseFloat(withdrawalsInput) || 0;
-
-  // Net Operating Base Capital (Opening + Broker Adjustment + Deposits - Withdrawals)
-  const netBaseCapitalNum = openingCapitalNum + brokerAdjNum + depositsNum - withdrawalsNum;
-
-  const totalTradeNetPnl = totalRealizedNetPnl + totalUnrealizedPnl;
-  const closingCapitalNum = netBaseCapitalNum + totalTradeNetPnl;
-
-  // Current Month Segment Allocation & Monthly Risk SL Tracker
-  // Available Closed Months List for Risk SL Audit
-  const availableClosedMonths = Array.from(new Set(
-    (Array.isArray(closedTrades) ? closedTrades : [])
-      .map(t => getTradeDateStr(t).slice(0, 7))
-      .filter(m => m && m.length === 7)
-  )).sort((a, b) => b.localeCompare(a));
-
-  if (!availableClosedMonths.includes(currentYearMonthStr)) {
-    availableClosedMonths.unshift(currentYearMonthStr);
-  }
-
-  // Selected Month Closed Trades
-  const selectedMonthClosedTrades = (Array.isArray(closedTrades) ? closedTrades : []).filter(t => {
-    if (!t) return false;
-    const mStr = getTradeDateStr(t).slice(0, 7);
-    return mStr === (selectedRiskMonth || currentYearMonthStr);
-  });
-
-  const getSegmentSelectedMonthPnl = (segKey) => {
-    const lower = segKey.toLowerCase();
-    return selectedMonthClosedTrades.filter(t => {
-      const type = (t.instrument_type || '').toLowerCase();
-      if (lower.includes('intraday')) return type.includes('intraday');
-      if (lower.includes('natural') || lower.includes('natgas')) return type.includes('natural') || type.includes('natgas');
-      if (lower.includes('nifty')) return type.includes('nifty');
-      if (lower.includes('crude')) return type.includes('crude');
-      return false;
-    }).reduce((acc, t) => {
-      const chg = calculateZerodhaCharges(t);
-      return acc + (chg.net_pnl || 0);
-    }, 0);
-  };
-
-  // Empirical Performance Stats across Lifetime Trades per Segment
-  const getSegmentEmpiricalStats = (segKey) => {
-    const lower = segKey.toLowerCase();
-    const segTrades = (Array.isArray(closedTrades) ? closedTrades : []).filter(t => {
-      const type = (t.instrument_type || '').toLowerCase();
-      if (lower.includes('intraday')) return type.includes('intraday');
-      if (lower.includes('natural') || lower.includes('natgas')) return type.includes('natural') || type.includes('natgas');
-      if (lower.includes('nifty')) return type.includes('nifty');
-      if (lower.includes('crude')) return type.includes('crude');
-      return false;
-    });
-
-    const totalCount = segTrades.length;
-    let winCount = 0;
-    let lossCount = 0;
-    let grossWins = 0;
-    let grossLosses = 0;
-
-    segTrades.forEach(t => {
-      const chg = calculateZerodhaCharges(t);
-      const netPnl = chg.net_pnl;
-      if (netPnl > 0) {
-        winCount += 1;
-        grossWins += netPnl;
-      } else if (netPnl < 0) {
-        lossCount += 1;
-        grossLosses += Math.abs(netPnl);
-      }
-    });
-
-    const winRate = totalCount > 0 ? ((winCount / totalCount) * 100).toFixed(1) : '0.0';
-    const profitFactor = grossLosses > 0 ? (grossWins / grossLosses).toFixed(2) : (grossWins > 0 ? '∞' : '0.00');
-    const avgWin = winCount > 0 ? grossWins / winCount : 0;
-    const avgLoss = lossCount > 0 ? grossLosses / lossCount : 0;
-    const riskRewardRatio = avgLoss > 0 ? (avgWin / avgLoss).toFixed(2) : (avgWin > 0 ? '1:2+' : '0.00');
+    const totalRealizedPnl = swingRealized + ltRealized + pennyRealized;
+    const totalNetCapital = Math.round(swingTotalPool + (ltDeployed + ltAvailable) + (pennyDeployed + pennyAvailable));
 
     return {
-      totalCount,
-      winCount,
-      lossCount,
-      winRate,
-      profitFactor,
-      riskRewardRatio
+      totalBudget,
+      totalInjected: Math.round(totalAllocated),
+      totalWithdrawn: Math.round(totalWithdrawn),
+      totalNetCapital,
+      swing: {
+        budget: Math.round((totalBudget || totalAllocated) * (swingPct / 100)),
+        injected: Math.round(swingAllocated),
+        deployed: Math.round(swingDeployed),
+        realized: Math.round(swingRealized),
+        available: swingAvailable,
+        totalPool: swingTotalPool,
+        broker: 'Zerodha Kite'
+      },
+      lt: {
+        budget: Math.round((totalBudget || totalAllocated) * (ltPct / 100)),
+        injected: Math.round(ltAllocated),
+        deployed: Math.round(ltDeployed),
+        realized: Math.round(ltRealized),
+        available: ltAvailable,
+        broker: 'INDMONEY'
+      },
+      penny: {
+        budget: Math.round((totalBudget || totalAllocated) * (pennyPct / 100)),
+        injected: Math.round(pennyAllocated),
+        deployed: Math.round(pennyDeployed),
+        realized: Math.round(pennyRealized),
+        available: pennyAvailable,
+        broker: 'Zerodha Kite'
+      }
     };
+  }, [monthlyBudgetInput, swingPct, ltPct, pennyPct, capitalLedger, positions, soldHistory, swingFreeCash, ltFreeCash, pennyFreeCash]);
+
+  // ── Holding Details Calculator ──
+  const holdingCards = useMemo(() => {
+    const today = new Date();
+    return positions.map(pos => {
+      const cleanSym = pos.ticker.replace('.NS', '').trim().toUpperCase();
+      const ltp = liveLtps[cleanSym] || pos.buyPrice;
+      const currentVal = pos.shares * ltp;
+      const costBasis = pos.shares * pos.buyPrice;
+      const unrealizedPnl = currentVal - costBasis;
+      const pnlPct = costBasis > 0 ? (unrealizedPnl / costBasis) * 100 : 0;
+
+      // Holding Days Counter
+      let holdingDays = 0;
+      if (pos.buyDate) {
+        const dt = new Date(pos.buyDate);
+        if (!isNaN(dt.getTime())) {
+          holdingDays = Math.max(0, Math.floor((today - dt) / (1000 * 60 * 60 * 24)));
+        }
+      }
+
+      // Brokerage Calculator
+      let estCharges = { total: 0, stt: 0, dp_charges: 0 };
+      if (pos.segment === 'LT') {
+        estCharges = calculateINDmoneyCharges({ entry_price: pos.buyPrice, exit_price: ltp, quantity: pos.shares });
+      } else {
+        estCharges = calculateKiteDeliveryCharges({ entry_price: pos.buyPrice, exit_price: ltp, quantity: pos.shares });
+      }
+
+      return {
+        ...pos,
+        cleanSym,
+        ltp,
+        currentVal,
+        costBasis,
+        unrealizedPnl,
+        pnlPct,
+        holdingDays,
+        estCharges
+      };
+    });
+  }, [positions, liveLtps]);
+
+  // ── Consolidated Portfolio & Capital Summary (Across All Platforms & Segments) ──
+  const portfolioSummary = useMemo(() => {
+    let totalInvested = 0;
+    let totalCurrentVal = 0;
+    let swingInvested = 0;
+    let swingCurrentVal = 0;
+    let ltInvested = 0;
+    let ltCurrentVal = 0;
+    let pennyInvested = 0;
+    let pennyCurrentVal = 0;
+
+    holdingCards.forEach(h => {
+      const cost = Number(h.costBasis) || 0;
+      const val = Number(h.currentVal) || cost;
+      totalInvested += cost;
+      totalCurrentVal += val;
+
+      if (h.segment === 'SWING') {
+        swingInvested += cost;
+        swingCurrentVal += val;
+      } else if (h.segment === 'LT') {
+        ltInvested += cost;
+        ltCurrentVal += val;
+      } else if (h.segment === 'PENNY') {
+        pennyInvested += cost;
+        pennyCurrentVal += val;
+      }
+    });
+
+    let totalEstCharges = 0;
+    let swingEstCharges = 0;
+    let ltEstCharges = 0;
+    let pennyEstCharges = 0;
+
+    holdingCards.forEach(h => {
+      const chg = Number(h.estCharges?.total) || 0;
+      totalEstCharges += chg;
+      if (h.segment === 'SWING') swingEstCharges += chg;
+      else if (h.segment === 'LT') ltEstCharges += chg;
+      else if (h.segment === 'PENNY') pennyEstCharges += chg;
+    });
+
+    const grossUnrealizedPnl = totalCurrentVal - totalInvested;
+    const grossUnrealizedPct = totalInvested > 0 ? (grossUnrealizedPnl / totalInvested) * 100 : 0;
+    
+    // Net Unrealized PnL (After Est. Brokerage, STT, DP Charges, Stamp Duty & GST)
+    const totalUnrealizedPnl = grossUnrealizedPnl - totalEstCharges;
+    const totalUnrealizedPct = totalInvested > 0 ? (totalUnrealizedPnl / totalInvested) * 100 : 0;
+
+    // Realized Closed Trade Totals & Sold Cost Basis
+    let totalRealizedNetPnl = 0;
+    let totalRealizedGrossPnl = 0;
+    let totalRealizedTaxes = 0;
+    let totalSoldInvested = 0;
+
+    soldHistory.forEach(s => {
+      totalRealizedNetPnl += Number(s.netPnl) || 0;
+      totalRealizedGrossPnl += Number(s.grossPnl) || 0;
+      totalRealizedTaxes += Number(s.taxes) || 0;
+      totalSoldInvested += (Number(s.shares) || 0) * (Number(s.buyPrice) || 0);
+    });
+
+    // Total Combined Lifetime PnL (Realized + Unrealized Post-Tax)
+    const totalCombinedNetPnl = totalUnrealizedPnl + totalRealizedNetPnl;
+    const totalCombinedGrossPnl = grossUnrealizedPnl + totalRealizedGrossPnl;
+    const totalCombinedTaxes = totalEstCharges + totalRealizedTaxes;
+    const totalCombinedPct = totalInvested > 0 ? (totalCombinedNetPnl / totalInvested) * 100 : 0;
+
+    // Segment Gross PnL
+    const swingGrossPnl = swingCurrentVal - swingInvested;
+    const swingGrossPct = swingInvested > 0 ? (swingGrossPnl / swingInvested) * 100 : 0;
+
+    const ltGrossPnl = ltCurrentVal - ltInvested;
+    const ltGrossPct = ltInvested > 0 ? (ltGrossPnl / ltInvested) * 100 : 0;
+
+    const pennyGrossPnl = pennyCurrentVal - pennyInvested;
+    const pennyGrossPct = pennyInvested > 0 ? (pennyGrossPnl / pennyInvested) * 100 : 0;
+
+    // Segment Net PnL (After Est. Brokerage & Taxes)
+    const swingNetPnl = swingGrossPnl - swingEstCharges;
+    const swingNetPct = swingInvested > 0 ? (swingNetPnl / swingInvested) * 100 : 0;
+
+    const ltNetPnl = ltGrossPnl - ltEstCharges;
+    const ltNetPct = ltInvested > 0 ? (ltNetPnl / ltInvested) * 100 : 0;
+
+    const pennyNetPnl = pennyGrossPnl - pennyEstCharges;
+    const pennyNetPct = pennyInvested > 0 ? (pennyNetPnl / pennyInvested) * 100 : 0;
+
+    const effectiveSwingFreeCash = (swingFreeCashInput && swingFreeCashInput !== '249.40' && swingFreeCashInput !== '249.4') ? (parseFloat(swingFreeCashInput) || 0) : capitalMath.swing.available;
+    const effectiveLtFreeCash = ltFreeCashInput ? (parseFloat(ltFreeCashInput) || 0) : capitalMath.lt.available;
+    const effectivePennyFreeCash = pennyFreeCashInput ? (parseFloat(pennyFreeCashInput) || 0) : capitalMath.penny.available;
+
+    const totalFreeCash = effectiveSwingFreeCash + effectiveLtFreeCash + effectivePennyFreeCash;
+    const totalAccountCapital = totalCurrentVal + totalFreeCash; // Universal Account Net Worth = Live Value of ALL Holdings (Kite + INDmoney) + Effective Free Cash
+    const totalBaseCapital = totalInvested + totalFreeCash;
+
+    return {
+      totalInvested,
+      totalCurrentVal,
+      totalUnrealizedPnl,
+      totalUnrealizedPct,
+      totalFreeCash,
+      totalAccountCapital,
+      totalBaseCapital,
+      totalEstCharges,
+      grossUnrealizedPnl,
+      grossUnrealizedPct,
+      totalRealizedNetPnl,
+      totalRealizedGrossPnl,
+      totalRealizedTaxes,
+      totalCombinedNetPnl,
+      totalCombinedGrossPnl,
+      totalCombinedTaxes,
+      totalCombinedPct,
+      swing: {
+        invested: swingInvested,
+        currentVal: swingCurrentVal,
+        grossPnl: swingGrossPnl,
+        grossPct: swingGrossPct,
+        estCharges: swingEstCharges,
+        netPnl: swingNetPnl,
+        netPct: swingNetPct,
+        freeCash: effectiveSwingFreeCash,
+        totalCap: swingCurrentVal + effectiveSwingFreeCash,
+        broker: 'Zerodha Kite'
+      },
+      lt: {
+        invested: ltInvested,
+        currentVal: ltCurrentVal,
+        grossPnl: ltGrossPnl,
+        grossPct: ltGrossPct,
+        estCharges: ltEstCharges,
+        netPnl: ltNetPnl,
+        netPct: ltNetPct,
+        freeCash: effectiveLtFreeCash,
+        totalCap: ltCurrentVal + effectiveLtFreeCash,
+        broker: 'INDMONEY'
+      },
+      penny: {
+        invested: pennyInvested,
+        currentVal: pennyCurrentVal,
+        grossPnl: pennyGrossPnl,
+        grossPct: pennyGrossPct,
+        estCharges: pennyEstCharges,
+        netPnl: pennyNetPnl,
+        netPct: pennyNetPct,
+        freeCash: effectivePennyFreeCash,
+        totalCap: pennyCurrentVal + effectivePennyFreeCash,
+        broker: 'Zerodha Kite'
+      }
+    };
+  }, [holdingCards, swingFreeCash, ltFreeCash, pennyFreeCash]);
+
+  // ── Handle Add Position ──
+  const handleAddPositionSubmit = (e) => {
+    e.preventDefault();
+    const ticker = formTicker.trim().toUpperCase();
+    const shares = Number(formShares) || 1;
+    const buyPrice = Number(formBuyPrice) || 0;
+    const requiredCapital = shares * buyPrice;
+
+    if (!ticker || buyPrice <= 0 || shares <= 0) {
+      showToast('❌ Please enter a valid Symbol, Share Count, and Buy Price.');
+      return;
+    }
+
+    // Seamless baseline capital allocation - no popup blockers for initial portfolio setup
+
+    const newPos = {
+      id: `pos_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      ticker,
+      name: formName.trim() || ticker,
+      segment: addSegment,
+      shares,
+      buyPrice,
+      buyDate: formBuyDate,
+      target1: Number(formTarget1) || (addSegment === 'SWING' ? buyPrice * 1.08 : 0),
+      stopLoss: Number(formStopLoss) || (addSegment === 'SWING' ? buyPrice * 0.96 : 0),
+      notes: formNotes.trim()
+    };
+
+    setPositions(prev => [newPos, ...prev]);
+    setShowAddModal(false);
+    setFormTicker('');
+    setFormName('');
+    setFormShares('1');
+    setFormBuyPrice('');
+    setFormTarget1('');
+    setFormStopLoss('');
+    setFormNotes('');
+    showToast(`✅ Recorded purchase of ${shares} shares of ${ticker} in ${addSegment}!`);
   };
 
-  const segmentAllocList = [
-    {
-      name: 'Intraday (Equities/Indices)',
-      rank: '#1 Most Profitable',
-      color: '#34d399',
-      rationale: 'Core Income Engine: Maximizes exposure where your win-rate is highest.',
-      allocState: allocIntraday,
-      setAllocState: setAllocIntraday,
-      mslState: monthlySlIntraday,
-      setMslState: setMonthlySlIntraday,
-      currentPnl: getSegmentSelectedMonthPnl('intraday'),
-      stats: getSegmentEmpiricalStats('intraday')
-    },
-    {
-      name: 'Natural Gas',
-      rank: '#2 Moderately Profitable',
-      color: '#38bdf8',
-      rationale: 'Growth Driver: High volatility requires strict position sizing.',
-      allocState: allocNatgas,
-      setAllocState: setAllocNatgas,
-      mslState: monthlySlNatgas,
-      setMslState: setMonthlySlNatgas,
-      currentPnl: getSegmentSelectedMonthPnl('natural'),
-      stats: getSegmentEmpiricalStats('natural')
-    },
-    {
-      name: 'Nifty Options',
-      rank: '#3 Moderately Risky',
-      color: '#c084fc',
-      rationale: 'Asymmetric Risk: Capped risk (if buying) or high margin (if selling).',
-      allocState: allocNifty,
-      setAllocState: setAllocNifty,
-      mslState: monthlySlNifty,
-      setMslState: setMonthlySlNifty,
-      currentPnl: getSegmentSelectedMonthPnl('nifty'),
-      stats: getSegmentEmpiricalStats('nifty')
-    },
-    {
-      name: 'Crude Oil',
-      rank: '#4 Most Risky',
-      color: '#fb923c',
-      rationale: 'Protection Mode: Low exposure limits damage from global gaps.',
-      allocState: allocCrude,
-      setAllocState: setAllocCrude,
-      mslState: monthlySlCrude,
-      setMslState: setMonthlySlCrude,
-      currentPnl: getSegmentSelectedMonthPnl('crude'),
-      stats: getSegmentEmpiricalStats('crude')
+  // ── Handle Sell / Realize Trade ──
+  const handleOpenSellModal = (pos) => {
+    setSellModalPos(pos);
+    setSellFormShares(String(pos.shares));
+    setSellFormPrice(String(pos.ltp || pos.buyPrice));
+    setSellFormDate(new Date().toISOString().split('T')[0]);
+  };
+
+    // ── Handle Past Closed Trade Submission ──
+  const handlePastSoldSubmit = (e) => {
+    e.preventDefault();
+    const cleanSym = pastSoldTicker.replace('.NS', '').trim().toUpperCase();
+    const shares = Number(pastSoldShares);
+    const buyPrice = Number(pastSoldBuyPrice);
+    const sellPrice = Number(pastSoldSellPrice);
+
+    if (!cleanSym) {
+      showToast('❌ Please enter a valid stock symbol.');
+      return;
     }
-  ];
+    if (isNaN(shares) || shares <= 0) {
+      showToast('❌ Please enter valid shares.');
+      return;
+    }
+    if (isNaN(buyPrice) || buyPrice <= 0 || isNaN(sellPrice) || sellPrice <= 0) {
+      showToast('❌ Please enter valid buy and sell prices.');
+      return;
+    }
 
-  const currentCapitalBase = (closingCapitalNum > 0 ? closingCapitalNum : (netBaseCapitalNum > 0 ? netBaseCapitalNum : 0));
-  const totalMonthlyRiskBudget = segmentAllocList.reduce((acc, s) => {
-    const allocPct = Number(s.allocState) || 0;
-    const mslPct = Number(s.mslState) || 0;
-    return acc + (currentCapitalBase * (allocPct / 100) * (mslPct / 100));
-  }, 0);
-
-  const currentMonthTotalPnl = segmentAllocList.reduce((acc, s) => acc + s.currentPnl, 0);
-
-  const breachedSegmentsCount = segmentAllocList.filter(s => {
-    const allocPct = Number(s.allocState) || 0;
-    const mslPct = Number(s.mslState) || 0;
-    const maxLoss = currentCapitalBase * (allocPct / 100) * (mslPct / 100);
-    const lossUsed = s.currentPnl < 0 ? Math.abs(s.currentPnl) : 0;
-    return maxLoss > 0 && lossUsed >= maxLoss;
-  }).length;
-
-  // Single Daily Rollover Risk Limit (Base Limit ₹250/day)
-  const dailyRiskLimit = parseFloat(dailyRiskLimitInput) || 250;
-  const totalChallengeDays = parseInt(totalChallengeDaysInput) || 1000;
-
-  // Day Counter Calculation
-  const startDateObj = new Date(challengeStartDateInput || new Date().toISOString().split('T')[0]);
-  const todayObj = new Date();
-  startDateObj.setHours(0, 0, 0, 0);
-  todayObj.setHours(0, 0, 0, 0);
-  
-  const diffTime = Math.max(0, todayObj.getTime() - startDateObj.getTime());
-  const currentDayCount = Math.min(totalChallengeDays, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1);
-  const challengeProgressPct = Math.min(100, ((currentDayCount / totalChallengeDays) * 100)).toFixed(1);
-
-  // Daily Loss Carryover Engine
-  const todayStr = getTodayDateStr();
-  const tradesByDate = {};
-
-  closedTrades.forEach(t => {
-    const chg = calculateZerodhaCharges(t);
-    const tradeDate = getTradeDateStr(t);
-    tradesByDate[tradeDate] = (tradesByDate[tradeDate] || 0) + chg.net_pnl;
-  });
-
-  const sortedPastDates = Object.keys(tradesByDate).filter(d => d < todayStr).sort();
-
-  // Cumulative Carried Loss Engine:
-  // Total CUMULATIVE allowance = days elapsed × ₹250 daily limit.
-  // This means after 15 days, the total risk budget is 15 × ₹250 = ₹3,750.
-  const totalPastNetPnl = sortedPastDates.reduce((acc, d) => acc + (tradesByDate[d] || 0), 0);
-
-  // Cumulative budget earned so far (all days elapsed including today)
-  const totalCumulativeBudget = currentDayCount * dailyRiskLimit;
-  // Past budget (all challenge days elapsed prior to today)
-  const pastChallengeDaysCount = Math.max(0, currentDayCount - 1);
-  const totalPastAllowance = pastChallengeDaysCount * dailyRiskLimit;
-  // Carried loss = how much total net loss exceeds the past cumulative daily budget
-  const cumulativeCarriedLoss = Math.max(0, -(totalPastNetPnl) - totalPastAllowance);
-
-  // Today's total realized PnL (closed trades only — unrealized excluded to avoid cross-day distortion)
-  const todayTotalPnl = tradesByDate[todayStr] || 0;
-  const todayCurrentLoss = todayTotalPnl < 0 ? Math.abs(todayTotalPnl) : 0;
-  
-  // Today's Starting Risk Budget = what's left of cumulative budget after subtracting all past losses
-  const totalLossesSoFar = Math.max(0, -(totalPastNetPnl));
-  const todayStartingRisk = Math.max(0, totalCumulativeBudget - totalLossesSoFar);
-
-  // Today's Available Risk Allowance Remaining
-  const availableRiskLimitToday = Math.max(0, todayStartingRisk - todayCurrentLoss);
-
-  // Excess loss today over today's available starting risk
-  const todayExcessLoss = Math.max(0, todayCurrentLoss - todayStartingRisk);
-  
-  // Total Carried Loss to Tomorrow (cumulative past carried loss plus any excess loss incurred today)
-  const totalCarriedLossTomorrow = cumulativeCarriedLoss + todayExcessLoss;
-
-  // Tomorrow's Available Risk Allowance
-  const nextDayAvailableRisk = Math.max(0, dailyRiskLimit - totalCarriedLossTomorrow);
-
-  const isRiskWarningActive = cumulativeCarriedLoss > 0 || todayCurrentLoss >= dailyRiskLimit;
-
-  // Average Daily Net P&L Calculation (Net P&L divided by elapsed Days)
-  const averageDailyNetPnl = currentDayCount > 0 ? (totalRealizedNetPnl / currentDayCount) : 0;
-
-  // Expectancy Per Trade (Edge per Trade)
-  const expectancyPerTrade = closedTrades.length > 0 ? (totalRealizedNetPnl / closedTrades.length) : 0;
-
-  // Disciplined Trading Days Streak (Consecutive days without exceeding daily risk limit)
-  const allTradingDates = Object.keys(tradesByDate).sort().reverse();
-  let disciplineStreakDays = 0;
-  for (const dStr of allTradingDates) {
-    const netPnl = tradesByDate[dStr] || 0;
-    if (netPnl >= -dailyRiskLimit) {
-      disciplineStreakDays += 1;
+    // Taxes & Brokerage
+    let taxes = 0;
+    const broker = pastSoldSegment === 'LT' ? 'INDMONEY' : 'Zerodha Kite';
+    if (pastSoldSegment === 'LT') {
+      const chg = calculateINDmoneyCharges({ entry_price: buyPrice, exit_price: sellPrice, quantity: shares });
+      taxes = chg.total || 0;
     } else {
-      break;
+      const chg = calculateKiteDeliveryCharges({ entry_price: buyPrice, exit_price: sellPrice, quantity: shares });
+      taxes = chg.total || 0;
     }
-  }
 
-  // Risk Stack Binding Constraint Evaluation
-  let bindingConstraintLabel = "🟢 ACTIVE: Within All Risk Limits";
-  let bindingConstraintLevel = "none";
+    const grossPnl = (sellPrice - buyPrice) * shares;
+    const netPnl = grossPnl - taxes;
+    const costBasis = buyPrice * shares;
+    const returnPct = costBasis > 0 ? (netPnl / costBasis) * 100 : 0;
 
-  if (availableRiskLimitToday <= 0) {
-    bindingConstraintLabel = `⚡ BINDING: Daily Risk Limit (₹0.00 Remaining)`;
-    bindingConstraintLevel = "daily";
-  } else if (breachedSegmentsCount > 0) {
-    bindingConstraintLabel = `⚡ BINDING: Monthly Segment SL Limit Reached (${breachedSegmentsCount} Segments)`;
-    bindingConstraintLevel = "segment";
-  } else if (cumulativeCarriedLoss > 0) {
-    bindingConstraintLabel = `⚠️ BINDING: Carried Loss Active (₹${cumulativeCarriedLoss.toFixed(2)} Deducted)`;
-    bindingConstraintLevel = "carried";
-  }
+    let holdingDays = 0;
+    if (pastSoldBuyDate && pastSoldSellDate) {
+      const d1 = new Date(pastSoldBuyDate);
+      const d2 = new Date(pastSoldSellDate);
+      if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
+        holdingDays = Math.max(0, Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)));
+      }
+    }
+
+    const newSoldRecord = {
+      id: `sold_${Date.now()}`,
+      ticker: cleanSym,
+      name: pastSoldName.trim() || cleanSym,
+      segment: pastSoldSegment,
+      shares,
+      buyPrice,
+      sellPrice,
+      buyDate: pastSoldBuyDate,
+      sellDate: pastSoldSellDate,
+      holdingDays,
+      grossPnl,
+      taxes,
+      netPnl,
+      returnPct,
+      broker,
+      notes: pastSoldNotes.trim() || 'Recorded Past Closed Trade'
+    };
+
+    setSoldHistory(prev => [newSoldRecord, ...prev]);
+    setShowPastSoldModal(false);
+    setPastSoldTicker('');
+    setPastSoldName('');
+    setPastSoldShares('1');
+    setPastSoldBuyPrice('');
+    setPastSoldSellPrice('');
+    setPastSoldNotes('');
+    showToast(`✅ Recorded closed trade for ${cleanSym} with Net P&L of ${netPnl >= 0 ? '+' : ''}₹${netPnl.toFixed(2)}!`);
+  };
+
+  const handleSellSubmit = (e) => {
+    e.preventDefault();
+    if (!sellModalPos) return;
+
+    const sellQty = Number(sellFormShares) || 0;
+    const sellPrice = Number(sellFormPrice) || 0;
+
+    if (sellQty <= 0 || sellQty > sellModalPos.shares || sellPrice <= 0) {
+      showToast('❌ Invalid sell quantity or exit price.');
+      return;
+    }
+
+    const isFullSell = sellQty === sellModalPos.shares;
+
+    // Calculate exact Brokerage & Charges
+    let charges = { total: 0, gross_pnl: 0, net_pnl: 0 };
+    if (sellModalPos.segment === 'LT') {
+      charges = calculateINDmoneyCharges({ entry_price: sellModalPos.buyPrice, exit_price: sellPrice, quantity: sellQty });
+    } else {
+      charges = calculateKiteDeliveryCharges({ entry_price: sellModalPos.buyPrice, exit_price: sellPrice, quantity: sellQty });
+    }
+
+    const soldRecord = {
+      id: `sold_${Date.now()}`,
+      ticker: sellModalPos.ticker,
+      name: sellModalPos.name,
+      segment: sellModalPos.segment,
+      shares: sellQty,
+      buyPrice: sellModalPos.buyPrice,
+      sellPrice,
+      buyDate: sellModalPos.buyDate,
+      sellDate: sellFormDate,
+      holdingDays: sellModalPos.holdingDays,
+      broker: sellModalPos.segment === 'LT' ? 'INDMONEY' : 'Zerodha Kite',
+      turnover: sellQty * sellPrice,
+      grossPnl: charges.gross_pnl,
+      taxes: charges.total,
+      netPnl: charges.net_pnl,
+      returnPct: sellModalPos.buyPrice > 0 ? ((sellPrice - sellModalPos.buyPrice) / sellModalPos.buyPrice) * 100 : 0
+    };
+
+    setSoldHistory(prev => [soldRecord, ...prev]);
+
+    // ── AUTOMATIC FREE BROKER CASH RECYCLING ──
+    // Capital engine (capitalMath) automatically recycles freed capital and net proceeds into available cash when positions & soldHistory update.
+    // If custom free cash overrides were set, update them relative to current effective free cash, otherwise clear override to let engine compute.
+    if (sellModalPos.segment === 'SWING') {
+      if (swingFreeCashInput && swingFreeCashInput !== '249.40' && swingFreeCashInput !== '249.4') {
+        setSwingFreeCashInput(prev => (Math.max(0, parseFloat(prev || '0') + netProceeds)).toFixed(2));
+      } else {
+        setSwingFreeCashInput('');
+      }
+    } else if (sellModalPos.segment === 'LT') {
+      if (ltFreeCashInput) {
+        setLtFreeCashInput(prev => (Math.max(0, parseFloat(prev || '0') + netProceeds)).toFixed(2));
+      } else {
+        setLtFreeCashInput('');
+      }
+    } else if (sellModalPos.segment === 'PENNY') {
+      if (pennyFreeCashInput) {
+        setPennyFreeCashInput(prev => (Math.max(0, parseFloat(prev || '0') + netProceeds)).toFixed(2));
+      } else {
+        setPennyFreeCashInput('');
+      }
+    }
+
+    if (isFullSell) {
+      setPositions(prev => prev.filter(p => p.id !== sellModalPos.id));
+    } else {
+      setPositions(prev => prev.map(p => p.id === sellModalPos.id ? { ...p, shares: p.shares - sellQty } : p));
+    }
+
+    setSellModalPos(null);
+    showToast(`💰 Recorded sale of ${sellQty} sh ${sellModalPos.ticker}! Net P&L: ${charges.net_pnl >= 0 ? '+' : ''}₹${charges.net_pnl.toFixed(2)} (Recycled into ${sellModalPos.segment} Available Capital).`);
+  };
+
+  // ── Handle Capital Event (Injection / Withdrawal) ──
+  const handleCapEventSubmit = (e) => {
+    e.preventDefault();
+    const amt = Number(capEventAmount);
+    if (isNaN(amt) || amt <= 0) {
+      showToast('❌ Please enter a valid capital amount.');
+      return;
+    }
+
+    const newEvent = {
+      id: `cap_${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
+      type: capEventType,
+      amount: amt,
+      segment: capEventSegment,
+      notes: capEventNotes.trim() || `${capEventType === 'INJECTION' ? 'Capital Injected' : 'Capital Withdrawn'}`
+    };
+
+    setCapitalLedger(prev => [newEvent, ...prev]);
+    setShowCapModal(false);
+    setCapEventAmount('');
+    setCapEventNotes('');
+    showToast(`✅ Recorded ${capEventType} of ₹${amt.toLocaleString('en-IN')}!`);
+  };
+
+  const handleExportBackup = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
+      positions,
+      capitalLedger,
+      soldHistory,
+      budget: monthlyBudgetInput,
+      split: { swing: swingPct, lt: ltPct, penny: pennyPct }
+    }, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `finplus_portfolio_backup_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    showToast('✅ Portfolio backup JSON exported successfully!');
+  };
+
+  const handleImportBackup = (e) => {
+    const fileReader = new FileReader();
+    if (e.target.files && e.target.files[0]) {
+      fileReader.readAsText(e.target.files[0], "UTF-8");
+      fileReader.onload = (event) => {
+        try {
+          const parsed = JSON.parse(event.target.result);
+          if (parsed && typeof parsed === 'object') {
+            if (Array.isArray(parsed.positions)) setPositions(parsed.positions);
+            if (Array.isArray(parsed.capitalLedger)) setCapitalLedger(parsed.capitalLedger);
+            if (Array.isArray(parsed.soldHistory)) setSoldHistory(parsed.soldHistory);
+            if (parsed.budget) setMonthlyBudgetInput(parsed.budget);
+            if (parsed.split) {
+              if (parsed.split.swing) setSwingPct(parsed.split.swing);
+              if (parsed.split.lt) setLtPct(parsed.split.lt);
+              if (parsed.split.penny) setPennyPct(parsed.split.penny);
+            }
+            showToast('✅ Portfolio backup JSON imported successfully!');
+          }
+        } catch(err) {
+          showToast('❌ Invalid JSON backup file.');
+        }
+      };
+    }
+  };
 
   return (
-    <div className="app-main-wrapper">
+    <div style={{ minHeight: '100vh', background: '#090d16', color: '#f8fafc', fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}>
       
       {/* Toast Notification */}
-      {toast && (
-        <div style={{
-          position: 'fixed',
-          top: '20px',
-          right: '20px',
-          background: toast.type === 'error' ? '#ef4444' : '#10b981',
-          color: 'white',
-          padding: '12px 20px',
-          borderRadius: '8px',
-          boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-          zIndex: 10000,
-          fontWeight: 700,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px'
-        }}>
-          {toast.type === 'error' ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
-          {toast.message}
+      {toastMsg && (
+        <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999, background: 'rgba(15, 23, 42, 0.95)', border: '1.5px solid #38bdf8', color: '#ffffff', padding: '14px 20px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>{toastMsg}</span>
         </div>
       )}
 
-      {/* Main Top Header - Styled Finplus Header */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontSize: '28px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.5px' }}>
-            Finplus PnL Journal
-          </h1>
-          <div style={{ color: '#a5b4fc', fontSize: '13px', marginTop: '4px', fontWeight: 500 }}>
-            1000-Day Discipline Protocol • Daily Rollover Risk Limit: ₹{dailyRiskLimit} / Day
+      {/* Main Top Header */}
+      <header style={{ background: '#0f172a', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '16px 24px', position: 'sticky', top: 0, zIndex: 100 }}>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', padding: '8px 12px', borderRadius: '10px', fontWeight: 900, fontSize: '16px', color: '#090d16', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Shield size={18} />
+              <span>FINPLUS</span>
+            </div>
+            <div>
+              <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.02em' }}>3-Pillar Disciplined Portfolio Journal</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8' }}>25% Monthly Income Strategy • Zero Day Trading • Kite &amp; INDmoney Accounting</div>
+            </div>
           </div>
-        </div>
 
-        {/* Action Controls - Action Control Buttons */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <button 
-            onClick={() => setActiveTab('settings')}
-            title="Open Cloud Synchronization & App Settings"
-            style={{
-              background: activeTab === 'settings' ? 'rgba(236, 72, 153, 0.25)' : 'rgba(99, 102, 241, 0.15)',
-              border: `1px solid ${activeTab === 'settings' ? '#ec4899' : 'rgba(99, 102, 241, 0.35)'}`,
-              color: activeTab === 'settings' ? '#f472b6' : '#a5b4fc',
-              padding: '10px 18px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontWeight: 700,
-              fontSize: '13px'
-            }}
-          >
-            <Settings size={16} />
-            Settings
-          </button>
+          {/* Quick Actions & LTP Poller Status */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {lastLtpUpdate && (
+              <span style={{ fontSize: '11px', color: '#a5b4fc', background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.25)', padding: '4px 10px', borderRadius: '20px' }}>
+                🟢 Held Stocks LTP Live: {lastLtpUpdate}
+              </span>
+            )}
+            <button 
+              onClick={handleExportBackup}
+              title="Download offline JSON backup file"
+              style={{ background: 'rgba(148, 163, 184, 0.12)', border: '1px solid rgba(148, 163, 184, 0.25)', color: '#cbd5e1', padding: '8px 12px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+            >
+              <Download size={14} />
+              <span>Export</span>
+            </button>
+            <label 
+              title="Import JSON backup file"
+              style={{ background: 'rgba(148, 163, 184, 0.12)', border: '1px solid rgba(148, 163, 184, 0.25)', color: '#cbd5e1', padding: '8px 12px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', margin: 0 }}
+            >
+              <Upload size={14} />
+              <span>Import</span>
+              <input type="file" accept=".json" onChange={handleImportBackup} style={{ display: 'none' }} />
+            </label>
+            <button 
+              onClick={() => { setShowCapModal(true); }}
+              style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#10b981', padding: '8px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Wallet size={14} />
+              + Capital Event
+            </button>
+            <button 
+              onClick={() => { setShowAddModal(true); }}
+              style={{ background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#090d16', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 900, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <PlusCircle size={14} />
+              Record New Buy
+            </button>
+          </div>
 
-          <button 
-            onClick={() => handleSyncAll(null, false)}
-            disabled={isSyncing}
-            title={serverStatus === 'online' ? `Server Online${lastSyncedTime ? ' • Last synced: ' + lastSyncedTime : ''} (Click to Sync Now)` : 'Server Offline • Click to Reconnect / Sync'}
-            style={{
-              background: serverStatus === 'online' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-              border: `1px solid ${serverStatus === 'online' ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`,
-              color: serverStatus === 'online' ? '#34d399' : '#f87171',
-              padding: '10px 18px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontWeight: 700,
-              fontSize: '13px'
-            }}
-          >
-            <RefreshCw size={16} className={isSyncing ? 'spin-icon' : ''} />
-            {isSyncing ? 'Syncing...' : (serverStatus === 'online' ? '🟢 Synced' : '🔴 Sync: Offline')}
-          </button>
-
-          <button 
-            onClick={handleExportJson}
-            title="Export JSON master backup"
-            style={{
-              background: 'rgba(16, 185, 129, 0.15)',
-              border: '1px solid rgba(16, 185, 129, 0.35)',
-              color: '#34d399',
-              padding: '10px 18px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontWeight: 700,
-              fontSize: '13px'
-            }}
-          >
-            <Download size={16} />
-            Export Journal (.json)
-          </button>
-
-          <label 
-            title="Restore JSON master backup"
-            style={{
-              background: 'rgba(99, 102, 241, 0.15)',
-              border: '1px solid rgba(99, 102, 241, 0.35)',
-              color: '#a5b4fc',
-              padding: '10px 18px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontWeight: 700,
-              fontSize: '13px'
-            }}
-          >
-            <Upload size={16} />
-            Restore Journal (.json)
-            <input type="file" accept=".json" onChange={handleImportJsonFile} style={{ display: 'none' }} />
-          </label>
-
-          <label 
-            title="Import CSV/Excel trade records"
-            style={{
-              background: 'rgba(6, 182, 212, 0.15)',
-              border: '1px solid rgba(6, 182, 212, 0.35)',
-              color: '#67e8f9',
-              padding: '10px 18px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontWeight: 700,
-              fontSize: '13px'
-            }}
-          >
-            <Upload size={16} />
-            Import CSV (.csv)
-            <input type="file" accept=".csv" onChange={handleImportCsvFile} style={{ display: 'none' }} />
-          </label>
-
-          <button 
-            onClick={() => exportJournalCSV(trades)}
-            title="Export CSV spreadsheet"
-            style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
-              color: '#cbd5e1',
-              padding: '10px 18px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontWeight: 600,
-              fontSize: '13px'
-            }}
-          >
-            <FileText size={16} />
-            Export CSV
-          </button>
         </div>
       </header>
 
-      {activeTab === 'home' && (<>
-      {/* 3-TIER CAPITAL ALLOCATION & CIRCUIT BREAKER ENGINE WIDGET */}
-      <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
-          <div>
-            <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              🎯 3-Tier Strategy Capital Allocation & Risk Circuit Breaker
-            </div>
-            <div style={{ fontSize: '12px', color: '#a5b4fc', marginTop: '2px' }}>
-              Fresh Start: <strong>2026-08-17</strong> • 50% Swing Trading | 25% Day Trading (Nifty Pair) | 25% Long-Term Investment
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{
-              fontSize: '11px',
-              fontWeight: 800,
-              padding: '4px 12px',
-              borderRadius: '6px',
-              background: isDayPairCircuitBreakerTriggered ? 'rgba(239, 68, 68, 0.2)' : 'rgba(52, 211, 153, 0.15)',
-              color: isDayPairCircuitBreakerTriggered ? '#f87171' : '#34d399',
-              border: `1px solid ${isDayPairCircuitBreakerTriggered ? 'rgba(239, 68, 68, 0.4)' : 'rgba(52, 211, 153, 0.3)'}`
-            }}>
-              {isDayPairCircuitBreakerTriggered ? '🔴 DAY TRADING PAUSED (-15% MONTHLY LOSS)' : '🟢 3-TIER ALLOCATION ACTIVE'}
-            </span>
-          </div>
-        </div>
-
-        {/* Strategy Allocation Cards Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            {/* ── GLOBAL EXECUTIVE CAPITAL & COMBINED PnL RIBBON (VISIBLE ON ALL TABS) ── */}
+      <div style={{ background: '#0b1120', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '16px 24px' }}>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
           
-          {/* Bucket 1: Swing Trading (50% or 75%) */}
-          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '18px', borderRadius: '12px', border: `1px solid ${isDayPairCircuitBreakerTriggered ? 'rgba(99, 102, 241, 0.5)' : 'rgba(255,255,255,0.08)'}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 900, color: '#818cf8' }}>
-                ⚡ SWING TRADING ({effectiveSwingAllocPct}%)
-              </div>
-              {isDayPairCircuitBreakerTriggered && (
-                <span style={{ fontSize: '10px', fontWeight: 800, color: '#38bdf8', background: 'rgba(56,189,248,0.15)', padding: '2px 6px', borderRadius: '4px' }}>
-                  +25% Reallocated
-                </span>
-              )}
+          {/* Card 1: Total Account Net Worth */}
+          <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '12px', padding: '14px 16px' }}>
+            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>TOTAL ACCOUNT NET WORTH</div>
+            <div style={{ fontSize: '22px', fontWeight: 900, color: '#38bdf8', marginTop: '4px' }}>
+              ₹{portfolioSummary.totalAccountCapital.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-
-            <div style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff', marginBottom: '6px' }}>
-              ₹{swingAllocRupees.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '8px' }}>
-              <span>Realized Net P&L:</span>
-              <strong style={{ color: swingRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>
-                {swingRealizedNetPnl >= 0 ? '+' : ''}₹{swingRealizedNetPnl.toFixed(2)}
-              </strong>
+            <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>
+              Holdings (Kite + INDmoney) ₹{portfolioSummary.totalCurrentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • Free Cash (Kite + INDmoney) ₹{portfolioSummary.totalFreeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
 
-          {/* Bucket 2: Day Trading - Nifty Pair Trading (25% or 0%) */}
-          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '18px', borderRadius: '12px', border: `1px solid ${isDayPairCircuitBreakerTriggered ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255,255,255,0.08)'}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 900, color: '#38bdf8' }}>
-                🎯 DAY TRADING: NIFTY PAIR ({effectiveDayPairAllocPct}%)
-              </div>
-              <span style={{ fontSize: '10px', fontWeight: 800, color: isDayPairCircuitBreakerTriggered ? '#f87171' : '#34d399', background: isDayPairCircuitBreakerTriggered ? 'rgba(239, 68, 68, 0.15)' : 'rgba(52, 211, 153, 0.15)', padding: '2px 6px', borderRadius: '4px' }}>
-                {isDayPairCircuitBreakerTriggered ? '🔴 -15% Breaker' : '🟢 Active'}
+          {/* Card 2: Net Realized Profit (Closed Trades) */}
+          <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: `1px solid ${(portfolioSummary.totalRealizedNetPnl || 0) >= 0 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`, borderRadius: '12px', padding: '14px 16px' }}>
+            <div style={{ fontSize: '11px', color: (portfolioSummary.totalRealizedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 800, textTransform: 'uppercase' }}>
+              {(portfolioSummary.totalRealizedNetPnl || 0) >= 0 ? 'NET REALIZED PROFIT (BOOKED)' : 'NET REALIZED LOSS (BOOKED)'}
+            </div>
+            <div style={{ fontSize: '22px', fontWeight: 900, color: (portfolioSummary.totalRealizedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', marginTop: '4px' }}>
+              {(portfolioSummary.totalRealizedNetPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.totalRealizedNetPnl || 0).toFixed(2)}
+            </div>
+            <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
+              From {soldHistory.length} Closed Trade{soldHistory.length === 1 ? '' : 's'} (Recycled)
+            </div>
+          </div>
+
+          {/* Card 3: Net Unrealized P&L (Open Positions) */}
+          <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: `1px solid ${portfolioSummary.totalUnrealizedPnl >= 0 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`, borderRadius: '12px', padding: '14px 16px' }}>
+            <div style={{ fontSize: '11px', color: portfolioSummary.totalUnrealizedPnl >= 0 ? '#10b981' : '#f87171', fontWeight: 800, textTransform: 'uppercase' }}>
+              {portfolioSummary.totalUnrealizedPnl >= 0 ? 'NET UNREALIZED PROFIT (OPEN)' : 'NET UNREALIZED LOSS (OPEN)'}
+            </div>
+            <div style={{ fontSize: '22px', fontWeight: 900, color: portfolioSummary.totalUnrealizedPnl >= 0 ? '#10b981' : '#f87171', marginTop: '4px' }}>
+              {portfolioSummary.totalUnrealizedPnl >= 0 ? '+' : ''}₹{portfolioSummary.totalUnrealizedPnl.toFixed(2)}
+            </div>
+            <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
+              Est. Taxes: -₹{(portfolioSummary.totalEstCharges || 0).toFixed(2)}
+            </div>
+          </div>
+
+          {/* Card 4: TOTAL COMBINED LIFETIME PROFIT (Realized + Unrealized) */}
+          <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.1))', border: `1.5px solid ${(portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171'}`, borderRadius: '12px', padding: '14px 16px' }}>
+<div style={{ fontSize: '11px', color: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 900, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>⭐ TOTAL COMBINED P&amp;L</span>
+              <span style={{ fontSize: '9px', padding: '1px 6px', borderRadius: '4px', background: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)' }}>
+                {(portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? 'NET GAIN' : 'NET LOSS'}
               </span>
             </div>
-
-            <div style={{ fontSize: '22px', fontWeight: 900, color: isDayPairCircuitBreakerTriggered ? '#94a3b8' : '#ffffff', marginBottom: '6px' }}>
-              ₹{dayPairAllocRupees.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <div style={{ fontSize: '22px', fontWeight: 900, color: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', marginTop: '4px' }}>
+              {(portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.totalCombinedNetPnl || 0).toFixed(2)}
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '8px', marginBottom: '4px' }}>
-              <span>Monthly 15% Max Loss SL:</span>
-              <strong style={{ color: '#fb7185' }}>
-                -₹{dayPairMaxLossRupees.toFixed(2)}
-              </strong>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8' }}>
-              <span>Monthly Net P&L:</span>
-              <strong style={{ color: dayPairMonthlyNetPnl >= 0 ? '#34d399' : '#f87171' }}>
-                {dayPairMonthlyNetPnl >= 0 ? '+' : ''}₹{dayPairMonthlyNetPnl.toFixed(2)} ({dayPairMonthlyLossPct.toFixed(1)}%)
-              </strong>
-            </div>
-          </div>
-
-          {/* Bucket 3: Long-Term Investment (25%) */}
-          <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '18px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 900, color: '#34d399' }}>
-                🌱 LONG-TERM INVESTMENT ({effectiveLongTermAllocPct}%)
-              </div>
-              <span style={{ fontSize: '10px', fontWeight: 800, color: '#34d399', background: 'rgba(52, 211, 153, 0.15)', padding: '2px 6px', borderRadius: '4px' }}>
-                UYFINCORP + SIP
-              </span>
-            </div>
-
-            <div style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff', marginBottom: '6px' }}>
-              ₹{longTermAllocRupees.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '8px' }}>
-              <span>Active Holdings Value:</span>
-              <strong style={{ color: '#38bdf8' }}>
-                ₹{totalSipDeployedCost.toFixed(2)}
-              </strong>
+            <div style={{ fontSize: '10px', fontWeight: 800, color: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', marginTop: '2px' }}>
+              Realized Booked + Live Open Gains
             </div>
           </div>
 
         </div>
       </div>
 
-      {/* TOP STATUS CARDS ROW (3 Wide Cards Top Summary Cards Row) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
-        
-        {/* Card 1: 📅 1000-DAY CHALLENGE & DISCIPLINE STREAK */}
-        <div className="glass-panel" style={{ padding: '22px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              📅 1000-DAY CHALLENGE
-            </div>
-            <span style={{ 
-              fontSize: '11px', 
-              fontWeight: 800, 
-              background: disciplineStreakDays > 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', 
-              color: disciplineStreakDays > 0 ? '#34d399' : '#f87171',
-              padding: '3px 8px',
-              borderRadius: '6px'
-            }}>
-              🔥 {disciplineStreakDays}-Day Discipline Streak
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ height: '8px', width: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }}></span>
-            <span style={{ fontSize: '24px', fontWeight: 900, color: '#10b981' }}>
-              Day {currentDayCount} <span style={{ fontSize: '14px', color: '#a5b4fc', fontWeight: 600 }}>/ {totalChallengeDays}</span>
-            </span>
-          </div>
-          <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '4px', height: '6px', width: '100%', marginTop: '12px', overflow: 'hidden' }}>
-            <div style={{ background: '#a855f7', height: '100%', width: `${challengeProgressPct}%`, transition: 'width 0.4s ease' }} />
-          </div>
-          <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '6px', display: 'flex', justifyContent: 'space-between' }}>
-            <span>{challengeProgressPct}% Completed</span>
-            <span>Started: {challengeStartDateInput}</span>
-          </div>
-        </div>
-
-        {/* Card 2: 🛡️ Daily Risk Protocol & Binding Constraint */}
-        <div className="glass-panel" style={{ padding: '22px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              🛡️ TODAY'S RISK BUDGET & ROLLOVER
-            </div>
-            <span style={{ 
-              fontSize: '10px', 
-              fontWeight: 800, 
-              background: bindingConstraintLevel === 'daily' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.15)', 
-              color: bindingConstraintLevel === 'daily' ? '#f87171' : '#34d399',
-              padding: '2px 6px',
-              borderRadius: '4px'
-            }}>
-              {bindingConstraintLevel === 'daily' ? '⚡ LIMIT BREACHED' : '🟢 RISK ALLOWED'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ height: '8px', width: '8px', borderRadius: '50%', background: availableRiskLimitToday > 0 ? '#10b981' : '#f87171', boxShadow: `0 0 10px ${availableRiskLimitToday > 0 ? '#10b981' : '#f87171'}` }}></span>
-            <span style={{ fontSize: '24px', fontWeight: 900, color: availableRiskLimitToday > 0 ? '#ffffff' : '#f87171' }}>
-              ₹{availableRiskLimitToday.toFixed(2)} <span style={{ fontSize: '13px', color: '#a5b4fc', fontWeight: 600 }}>/ ₹{dailyRiskLimit}</span>
-            </span>
-          </div>
-          <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '14px' }}>
-            {todayExcessLoss > 0 ? (
-              <>Excess Carried Loss: <strong style={{ color: '#f87171' }}>₹{totalCarriedLossTomorrow.toFixed(2)}</strong> | Tomorrow Available: <strong style={{ color: '#67e8f9' }}>₹{nextDayAvailableRisk.toFixed(2)}</strong></>
-            ) : (
-              <>Base Budget: ₹{dailyRiskLimit} | Carried Loss: ₹{cumulativeCarriedLoss.toFixed(2)}</>
-            )}
-          </div>
-        </div>
-
-        {/* Card 3: 📊 EXPECTANCY & EDGE PER TRADE */}
-        <div className="glass-panel" style={{ padding: '22px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              📊 EXPECTANCY & EDGE PER TRADE
-            </div>
-            <span style={{
-              fontSize: '11px',
-              fontWeight: 800,
-              background: expectancyPerTrade >= 0 ? 'rgba(52, 211, 153, 0.15)' : 'rgba(248, 113, 113, 0.15)',
-              color: expectancyPerTrade >= 0 ? '#34d399' : '#f87171',
-              padding: '2px 8px',
-              borderRadius: '6px'
-            }}>
-              Expectancy: {expectancyPerTrade >= 0 ? '+' : ''}₹{expectancyPerTrade.toFixed(2)}/T
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ height: '8px', width: '8px', borderRadius: '50%', background: averageDailyNetPnl >= 0 ? '#10b981' : '#f87171', boxShadow: `0 0 10px ${averageDailyNetPnl >= 0 ? '#10b981' : '#f87171'}` }}></span>
-            <span style={{ fontSize: '24px', fontWeight: 900, color: averageDailyNetPnl > 0 ? '#34d399' : (averageDailyNetPnl < 0 ? '#f87171' : '#ffffff') }}>
-              {averageDailyNetPnl >= 0 ? '+' : ''}₹{averageDailyNetPnl.toFixed(2)} <span style={{ fontSize: '13px', color: '#a5b4fc', fontWeight: 600 }}>/ day</span>
-            </span>
-          </div>
-          <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '14px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-            <span>Overall Win Rate: <strong>{winRatePct}%</strong> ({winningTradesCount}W / {closedTrades.length}T)</span>
-            <span>Edge: <strong>{expectancyPerTrade >= 0 ? '+' : ''}₹{expectancyPerTrade.toFixed(2)} / T</strong></span>
-          </div>
-        </div>
-
-      </div>
-
-      {/* SECTION HEADER: "Portfolio Performance Findings" */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff' }}>
-              Portfolio Performance Findings
-            </h2>
-
-            {/* PnL View Mode Segmented Toggle: Overall PnL vs Daily PnL */}
-            <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: '8px', padding: '3px' }}>
-              <button
-                type="button"
-                onClick={() => setPnlViewMode('overall')}
-                style={{
-                  background: pnlViewMode === 'overall' ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : 'transparent',
-                  color: pnlViewMode === 'overall' ? '#ffffff' : '#a5b4fc',
-                  border: 'none',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontWeight: 700,
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  boxShadow: pnlViewMode === 'overall' ? '0 2px 8px rgba(99, 102, 241, 0.4)' : 'none',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <Activity size={14} /> Overall P&L
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPnlViewMode('daily')}
-                style={{
-                  background: pnlViewMode === 'daily' ? 'linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)' : 'transparent',
-                  color: pnlViewMode === 'daily' ? '#ffffff' : '#a5b4fc',
-                  border: 'none',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontWeight: 700,
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  boxShadow: pnlViewMode === 'daily' ? '0 2px 8px rgba(20, 184, 166, 0.4)' : 'none',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <Calendar size={14} /> Daily P&L
-              </button>
-            </div>
-          </div>
-
-          <div style={{ fontSize: '12px', color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ height: '6px', width: '6px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
-            LTP Live Auto-Refreshed
-          </div>
-        </div>
-
-        {/* OVERALL PNL MODE PANELS */}
-        {pnlViewMode === 'overall' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '20px' }}>
-            
-            {/* Panel 1: Total Portfolio Net Overview & Risk Allowance */}
-            <div className="glass-panel" style={{ padding: '24px', gridColumn: '1 / -1', borderLeft: '4px solid #a855f7', background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(99, 102, 241, 0.04) 100%)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ height: '8px', width: '8px', borderRadius: '50%', background: '#c084fc', boxShadow: '0 0 10px #c084fc' }}></span>
-                  <span style={{ fontSize: '14px', fontWeight: 800, color: '#c084fc', textTransform: 'uppercase' }}>
-                    ⚡ Total Portfolio Net Overview (Journal + MTF + SIP)
-                  </span>
-                </div>
-                <span style={{ fontSize: '11px', background: 'rgba(168, 85, 247, 0.2)', color: '#e9d5ff', padding: '3px 10px', borderRadius: '6px', fontWeight: 700 }}>
-                  Day {currentDayCount} of {totalChallengeDays} Budget Earned: ₹{(currentDayCount * dailyRiskLimit).toLocaleString('en-IN')}
-                </span>
-              </div>
-
-              {(() => {
-                const overallPortfolioTotalNetPnl = totalRealizedNetPnl + totalSipCombinedNetPnl;
-                const netAfterRiskBudget = overallPortfolioTotalNetPnl + (currentDayCount * dailyRiskLimit);
-
-                return (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-                      <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ fontSize: '11px', color: '#14b8a6', fontWeight: 700 }}>NET TRADING P&L</div>
-                        <div style={{ fontSize: '18px', fontWeight: 900, color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
-                          {totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Journal Closed ({closedTrades.length} Trades)</div>
-                      </div>
-
-                      <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ fontSize: '11px', color: '#00b4d8', fontWeight: 700 }}>NET LONG-TERM SIP P&L</div>
-                        <div style={{ fontSize: '18px', fontWeight: 900, color: totalSipCombinedNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
-                          {totalSipCombinedNetPnl >= 0 ? '+' : ''}₹{totalSipCombinedNetPnl.toFixed(2)}
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>
-                          Realized ({totalSipRealizedProfit >= 0 ? '+' : ''}₹{totalSipRealizedProfit.toFixed(1)}) + Running ({totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toFixed(1)}) − Tax
-                        </div>
-                      </div>
-
-                      <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
-                        <div style={{ fontSize: '11px', color: '#c084fc', fontWeight: 700 }}>TOTAL NET P&L</div>
-                        <div style={{ fontSize: '18px', fontWeight: 900, color: overallPortfolioTotalNetPnl >= 0 ? '#34d399' : '#f87171', marginTop: '4px' }}>
-                          {overallPortfolioTotalNetPnl >= 0 ? '+' : ''}₹{overallPortfolioTotalNetPnl.toFixed(2)}
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>
-                          Trading + Long-Term Investment SIP
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Net Position After Risk Budget Allowance Banner */}
-                    <div style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center', 
-                      flexWrap: 'wrap', 
-                      gap: '12px',
-                      background: 'rgba(251, 191, 36, 0.08)', 
-                      border: '1px solid rgba(251, 191, 36, 0.4)', 
-                      borderRadius: '10px', 
-                      padding: '14px 18px' 
-                    }}>
-                      <div>
-                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#fbbf24' }}>
-                          🛡️ Net After Risk Budget:
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>
-                          Total Net P&L + Earned Budget Allowance (Day {currentDayCount} × ₹{dailyRiskLimit} = ₹{(currentDayCount * dailyRiskLimit).toLocaleString('en-IN')})
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '22px', fontWeight: 900, color: netAfterRiskBudget >= 0 ? '#34d399' : '#f87171' }}>
-                        {netAfterRiskBudget >= 0 ? '+' : ''}₹{netAfterRiskBudget.toFixed(2)}
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-
-            {/* Panel 2: Realized Net P&L Summary */}
-            <div className="glass-panel" style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <span style={{ height: '8px', width: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }}></span>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: '#34d399', textTransform: 'uppercase' }}>
-                  ● Cumulative Realized P&L Summary (Journal + MTF + SIP)
-                </span>
-              </div>
-
-              <div className="glass-panel-inner" style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 600 }}>NET REALIZED P&L</div>
-                  <div style={{ fontSize: '22px', fontWeight: 900, color: cumulativeRealizedNetPnl > 0 ? '#34d399' : (cumulativeRealizedNetPnl < 0 ? '#f87171' : '#ffffff'), marginTop: '4px' }}>
-                    {cumulativeRealizedNetPnl >= 0 ? '+' : ''}₹{cumulativeRealizedNetPnl.toFixed(2)}
-                  </div>
-                </div>
-
-                <div style={{ textAlign: 'center', borderLeft: '1px solid rgba(99, 102, 241, 0.2)', borderRight: '1px solid rgba(99, 102, 241, 0.2)' }}>
-                  <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 600 }}>AVG DAILY P&L</div>
-                  <div style={{ fontSize: '22px', fontWeight: 900, color: averageDailyNetPnl > 0 ? '#34d399' : (averageDailyNetPnl < 0 ? '#f87171' : '#ffffff'), marginTop: '4px' }}>
-                    {averageDailyNetPnl >= 0 ? '+' : ''}₹{averageDailyNetPnl.toFixed(2)}
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Day {currentDayCount} Avg</div>
-                </div>
-
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 600 }}>WIN RATE</div>
-                  <div style={{ fontSize: '22px', fontWeight: 900, color: '#c084fc', marginTop: '4px' }}>
-                    {cumulativeWinRatePct}%
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>{cumulativeWinningTradesCount} W / {cumulativeClosedTradesCount} T</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#a5b4fc', marginTop: '12px', padding: '0 4px' }}>
-                <span>Gross: ₹{cumulativeGrossPnl.toFixed(2)}</span>
-                <span>Taxes & Charges: ₹{cumulativeCharges.toFixed(2)}</span>
-              </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '6px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
-                Journal: <strong style={{ color: totalRealizedNetPnl >= 0 ? '#34d399' : '#f87171' }}>{totalRealizedNetPnl >= 0 ? '+' : ''}₹{totalRealizedNetPnl.toFixed(2)}</strong> | SIP Sold: <strong style={{ color: totalSipRealizedNetProfit >= 0 ? '#34d399' : '#f87171' }}>{totalSipRealizedNetProfit >= 0 ? '+' : ''}₹{totalSipRealizedNetProfit.toFixed(2)}</strong>
-              </div>
-            </div>
-
-            {/* Panel 2: Active Open Positions */}
-            <div className="glass-panel" style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <span style={{ height: '8px', width: '8px', borderRadius: '50%', background: '#6366f1', boxShadow: '0 0 10px #6366f1' }}></span>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: '#818cf8', textTransform: 'uppercase' }}>
-                  ● Active Open Positions
-                </span>
-              </div>
-
-              <div className="glass-panel-inner" style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 600 }}>UNREALIZED P&L</div>
-                  <div style={{ fontSize: '26px', fontWeight: 900, color: totalUnrealizedPnl > 0 ? '#34d399' : (totalUnrealizedPnl < 0 ? '#f87171' : '#ffffff'), marginTop: '4px' }}>
-                    {totalUnrealizedPnl >= 0 ? '+' : ''}₹{totalUnrealizedPnl.toFixed(2)}
-                  </div>
-                </div>
-
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 600 }}>POSITIONS HELD</div>
-                  <div style={{ fontSize: '26px', fontWeight: 900, color: '#67e8f9', marginTop: '4px' }}>
-                    {activeTrades.length}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '2px' }}>Live Polling Active</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#a5b4fc', marginTop: '12px', padding: '0 4px' }}>
-                <span>Live Tick Interval: 4s</span>
-                <span>Backend: Independent YFinance Engine</span>
-              </div>
-            </div>
-
-          </div>
-        )}
-
-        {/* DAILY PNL MODE PANELS & DATE SELECTOR */}
-        {pnlViewMode === 'daily' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            
-            {/* Daily Date Selector Bar */}
-            <div className="glass-panel" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Calendar size={16} style={{ color: '#14b8a6' }} /> Select Trading Date:
-                </div>
-                <input 
-                  type="date"
-                  value={selectedDailyDate}
-                  onChange={e => setSelectedDailyDate(e.target.value)}
-                  style={{
-                    background: 'rgba(15, 23, 42, 0.8)',
-                    border: '1px solid rgba(20, 184, 166, 0.4)',
-                    color: '#ffffff',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    outline: 'none'
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setSelectedDailyDate(getTodayDateStr())}
-                  style={{
-                    background: selectedDailyDate === getTodayDateStr() ? 'rgba(20, 184, 166, 0.25)' : 'rgba(255,255,255,0.06)',
-                    border: selectedDailyDate === getTodayDateStr() ? '1px solid #14b8a6' : '1px solid rgba(255,255,255,0.12)',
-                    color: selectedDailyDate === getTodayDateStr() ? '#34d399' : '#a5b4fc',
-                    padding: '8px 14px',
-                    borderRadius: '8px',
-                    fontWeight: 700,
-                    fontSize: '12px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Today ({getTodayDateStr()})
-                </button>
-              </div>
-
-              {/* Quick Date Shortcuts from Trading History */}
-              {dailyPnlSummaryList.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 600 }}>Trading History:</span>
-                  {dailyPnlSummaryList.slice(0, 5).map(item => (
-                    <button
-                      key={item.date}
-                      type="button"
-                      onClick={() => setSelectedDailyDate(item.date)}
-                      style={{
-                        background: selectedDailyDate === item.date ? 'rgba(20, 184, 166, 0.3)' : 'rgba(255, 255, 255, 0.05)',
-                        border: selectedDailyDate === item.date ? '1px solid #14b8a6' : '1px solid rgba(255, 255, 255, 0.1)',
-                        color: item.netPnl > 0 ? '#34d399' : (item.netPnl < 0 ? '#f87171' : '#ffffff'),
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {item.date}: {item.netPnl >= 0 ? '+' : ''}₹{item.netPnl.toFixed(0)}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Side-by-side Daily Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '20px' }}>
-              
-              {/* Daily Card 1: Selected Day Realized P&L */}
-              <div className="glass-panel" style={{ padding: '24px', borderLeft: `4px solid ${selectedDailyNetPnl >= 0 ? '#14b8a6' : '#f87171'}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ height: '8px', width: '8px', borderRadius: '50%', background: '#14b8a6', boxShadow: '0 0 10px #14b8a6' }}></span>
-                    <span style={{ fontSize: '14px', fontWeight: 800, color: '#2dd4bf', textTransform: 'uppercase' }}>
-                      ● Daily Realized P&L ({selectedDailyDate})
-                    </span>
-                  </div>
-                  <span style={{ fontSize: '11px', background: 'rgba(20, 184, 166, 0.15)', color: '#2dd4bf', padding: '3px 8px', borderRadius: '4px', fontWeight: 700 }}>
-                    {dailyClosedTrades.length} Trade{dailyClosedTrades.length === 1 ? '' : 's'} Logged
-                  </span>
-                </div>
-
-                <div className="glass-panel-inner" style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 600 }}>NET DAILY P&L</div>
-                    <div style={{ fontSize: '22px', fontWeight: 900, color: selectedDailyNetPnl > 0 ? '#34d399' : (selectedDailyNetPnl < 0 ? '#f87171' : '#ffffff'), marginTop: '4px' }}>
-                      {selectedDailyNetPnl >= 0 ? '+' : ''}₹{selectedDailyNetPnl.toFixed(2)}
-                    </div>
-                  </div>
-
-                  <div style={{ textAlign: 'center', borderLeft: '1px solid rgba(99, 102, 241, 0.2)', borderRight: '1px solid rgba(99, 102, 241, 0.2)' }}>
-                    <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 600 }}>DAILY WIN RATE</div>
-                    <div style={{ fontSize: '22px', fontWeight: 900, color: '#c084fc', marginTop: '4px' }}>
-                      {selectedDailyWinRatePct}%
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>{selectedDailyWinsCount} W / {dailyClosedTrades.length} T</div>
-                  </div>
-
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 600 }}>DAILY TAXES</div>
-                    <div style={{ fontSize: '22px', fontWeight: 900, color: '#f87171', marginTop: '4px' }}>
-                      ₹{selectedDailyCharges.toFixed(2)}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>Zerodha Charges</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#a5b4fc', marginTop: '12px', padding: '0 4px' }}>
-                  <span>Gross P&L: ₹{selectedDailyGrossPnl.toFixed(2)}</span>
-                  <span>Date Status: {dailyClosedTrades.length > 0 ? 'Closed Trades Found' : 'No Trades On This Date'}</span>
-                </div>
-              </div>
-
-              {/* Daily Card 2: Daily P&L History Breakdown Table */}
-              <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Calendar size={16} style={{ color: '#a855f7' }} />
-                    <span style={{ fontSize: '14px', fontWeight: 800, color: '#c084fc', textTransform: 'uppercase' }}>
-                      Daily P&L History Breakdown
-                    </span>
-                  </div>
-                  <span style={{ fontSize: '11px', color: '#a5b4fc' }}>{dailyPnlSummaryList.length} Active Days</span>
-                </div>
-
-                <div style={{ maxHeight: '160px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
-                  {dailyPnlSummaryList.length === 0 ? (
-                    <div style={{ fontSize: '12px', color: '#a5b4fc', textAlign: 'center', padding: '20px 0' }}>
-                      No trade dates recorded yet.
-                    </div>
-                  ) : (
-                    dailyPnlSummaryList.map(item => {
-                      const isSelected = item.date === selectedDailyDate;
-                      return (
-                        <div
-                          key={item.date}
-                          onClick={() => setSelectedDailyDate(item.date)}
-                          style={{
-                            background: isSelected ? 'rgba(20, 184, 166, 0.15)' : 'rgba(255, 255, 255, 0.04)',
-                            border: isSelected ? '1px solid #14b8a6' : '1px solid rgba(255, 255, 255, 0.08)',
-                            padding: '10px 14px',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          <div>
-                            <div style={{ fontSize: '13px', fontWeight: 800, color: isSelected ? '#34d399' : '#ffffff' }}>
-                              {item.date} {isSelected ? '(Selected)' : ''}
-                            </div>
-                            <div style={{ fontSize: '11px', color: '#a5b4fc' }}>
-                              {item.tradesCount} Trade{item.tradesCount > 1 ? 's' : ''} • Win Rate: {((item.winsCount / item.tradesCount) * 100).toFixed(0)}%
-                            </div>
-                          </div>
-
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '14px', fontWeight: 900, color: item.netPnl > 0 ? '#34d399' : (item.netPnl < 0 ? '#f87171' : '#ffffff') }}>
-                              {item.netPnl >= 0 ? '+' : ''}₹{item.netPnl.toFixed(2)}
-                            </div>
-                            <div style={{ fontSize: '10px', color: '#a5b4fc' }}>
-                              Gross: ₹{item.grossPnl.toFixed(0)} | Taxes: ₹{item.totalCharges.toFixed(0)}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-      </div>
-
-      {/* Trade Risk Warning Alert Banner */}
-      {isRiskWarningActive && (
-        <div style={{
-          background: 'rgba(245, 158, 11, 0.1)',
-          border: '1px solid rgba(245, 158, 11, 0.3)',
-          padding: '14px 20px',
-          borderRadius: '10px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px'
-        }}>
-          <ShieldAlert size={20} style={{ color: '#fbbf24', flexShrink: 0 }} />
-          <div style={{ fontSize: '13px', color: '#fef3c7' }}>
-            <strong>Risk Warning Active (Day {currentDayCount} of {totalChallengeDays}):</strong> {cumulativeCarriedLoss > 0 ? (
-              <>Carried loss of <strong>₹{cumulativeCarriedLoss.toFixed(2)}</strong> reduces today's available daily risk to <strong>₹{availableRiskLimitToday.toFixed(2)}</strong>.</>
-            ) : (
-              <>Daily loss limit (₹{dailyRiskLimit}) breached for today. Exercise strict discipline!</>
-            )}
-          </div>
-        </div>
-      )}
-      </>)}
-
-      {activeTab === 'trades' && (<>
-      {/* Add New Trade Planner Form */}
-      <form onSubmit={handleAddTrade} className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
-          <PlusCircle size={18} style={{ color: '#14b8a6' }} />
-          <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Log New Position</h2>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '14px' }}>
-          <div>
-            <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>SYMBOL</label>
-            <input 
-              type="text" 
-              placeholder="e.g. CRUDEOILM 6500 CE" 
-              value={symbol} 
-              onChange={handleSymbolChange} 
-              className="input-field" 
-              required
-            />
-          </div>
-
-          <div>
-            <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>STRATEGY BUCKET</label>
-            <select 
-              value={strategyCategory} 
-              onChange={e => setStrategyCategory(e.target.value)} 
-              className="input-field"
-              style={{ fontWeight: 800, color: strategyCategory === 'Day Trading (Nifty Pair)' ? '#38bdf8' : (strategyCategory === 'Long-Term Investment' ? '#34d399' : '#818cf8') }}
-            >
-              <option value="Swing Trading">⚡ Swing Trading (50% Allocation)</option>
-              <option value="Day Trading (Nifty Pair)">🎯 Day Trading: Nifty Pair (25% Allocation)</option>
-              <option value="Long-Term Investment">🌱 Long-Term Investment (25% Allocation)</option>
-            </select>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>INSTRUMENT TYPE</label>
-            <select 
-              value={instrumentType} 
-              onChange={handleInstrumentTypeChange} 
-              className="input-field"
-            >
-              <option value="Intraday">Intraday Buy</option>
-              <option value="Intraday Short">Intraday Short</option>
-              <option value="Stock Options">Stock Options (NSE F&O)</option>
-              <option value="Crude Oil Options">Crude Oil Main (Lot: 100)</option>
-              <option value="Crude Oil Mini">Crude Oil Mini (Lot: 10)</option>
-              <option value="Natural Gas Options">Natural Gas Main (Lot: 1250)</option>
-              <option value="Natural Gas Mini">Natural Gas Mini (Lot: 250)</option>
-              <option value="Nifty Options">Nifty Options (Lot: 65)</option>
-              <option value="Delivery">Equity Delivery</option>
-            </select>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>ENTRY PRICE (₹)</label>
-            <input 
-              type="number" 
-              step="0.05" 
-              placeholder="12.50" 
-              value={entryPrice} 
-              onChange={handleEntryPriceChange} 
-              className="input-field" 
-              required
-            />
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700 }}>QUANTITY</label>
-              <span style={{ fontSize: '10px', color: '#c084fc', fontWeight: 700 }}>
-                {getLotIntelligenceInfo(symbol, instrumentType).label}
-              </span>
-            </div>
-            <input 
-              type="number" 
-              placeholder="100" 
-              value={quantity} 
-              onChange={e => setQuantity(e.target.value)} 
-              className="input-field" 
-              required
-            />
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '4px' }}>
-              <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700 }}>STOP LOSS (₹)</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 700 }}>SL %:</span>
-                {(getSegmentConfig(instrumentType).presets || [0.8, 1.0, 1.2]).map(p => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => handleSlPctChange(p)}
-                    style={{
-                      background: parseFloat(customSlPct) === p ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255,255,255,0.05)',
-                      border: parseFloat(customSlPct) === p ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
-                      color: parseFloat(customSlPct) === p ? '#38bdf8' : '#94a3b8',
-                      borderRadius: '4px',
-                      padding: '1px 5px',
-                      fontSize: '10px',
-                      fontWeight: 800,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {p}%
-                  </button>
-                ))}
-                <input 
-                  type="number"
-                  step="0.1"
-                  value={customSlPct}
-                  onChange={e => handleSlPctChange(e.target.value)}
-                  style={{
-                    width: '42px',
-                    padding: '1px 4px',
-                    fontSize: '10px',
-                    fontWeight: 800,
-                    textAlign: 'center',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(56, 189, 248, 0.3)',
-                    borderRadius: '4px',
-                    color: '#38bdf8'
-                  }}
-                  title="Custom SL %"
-                />
-              </div>
-            </div>
-            <input 
-              type="number" 
-              step="0.05" 
-              placeholder="11.00" 
-              value={stopLoss} 
-              onChange={e => setStopLoss(e.target.value)} 
-              className="input-field"
-            />
-          </div>
-
-          <div>
-            <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>TARGET (₹)</label>
-            <input 
-              type="number" 
-              step="0.05" 
-              placeholder="15.00" 
-              value={targetPrice} 
-              onChange={e => setTargetPrice(e.target.value)} 
-              className="input-field"
-            />
-          </div>
-        </div>
-
-        {/* Active Strategy 15% Monthly SL Alert Banner */}
-        {(() => {
-          if (strategyCategory === 'Day Trading (Nifty Pair)') {
-            const lossUsed = dayPairMonthlyNetPnl < 0 ? Math.abs(dayPairMonthlyNetPnl) : 0;
-            if (isDayPairCircuitBreakerTriggered || (dayPairMaxLossRupees > 0 && lossUsed >= dayPairMaxLossRupees)) {
-              return (
-                <div style={{
-                  background: 'rgba(30, 27, 45, 0.95)',
-                  border: '1px solid rgba(239, 68, 68, 0.5)',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  color: '#f87171',
-                  fontSize: '12px',
-                  fontWeight: 700
-                }}>
-                  <AlertCircle size={18} style={{ color: '#f87171', flexShrink: 0 }} />
-                  <span>
-                    🛑 <strong>DAY TRADING CIRCUIT BREAKER BREACHED (-15% MONTHLY LOSS):</strong> Current fresh loss (₹{lossUsed.toFixed(2)}) reached your 15% monthly stop-loss limit (₹{dayPairMaxLossRupees.toFixed(2)} based on ₹{dayPairBaseAllocRupees.toFixed(0)} Day Trading capital). Day Trading is paused and capital transferred to Swing Trading.
-                  </span>
-                </div>
-              );
-            }
-          }
-          return null;
-        })()}
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
-          <button 
-            type="submit" 
-            style={{
-              background: '#14b8a6',
-              color: '#ffffff',
-              border: 'none',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              fontWeight: 800,
-              fontSize: '14px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            <PlusCircle size={18} />
-            Log Position
-          </button>
-        </div>
-      </form>
-
-      {/* View Mode Badge (kept from old tab bar) */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
-        <span style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 600 }}>Mode:</span>
-        <span style={{
-          background: pnlViewMode === 'daily' ? 'rgba(20, 184, 166, 0.2)' : 'rgba(99, 102, 241, 0.2)',
-          border: pnlViewMode === 'daily' ? '1px solid #14b8a6' : '1px solid #6366f1',
-          color: pnlViewMode === 'daily' ? '#34d399' : '#818cf8',
-          padding: '4px 10px',
-          borderRadius: '6px',
-          fontSize: '12px',
-          fontWeight: 800,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px'
-        }}>
-          {pnlViewMode === 'daily' ? <Calendar size={13} /> : <Activity size={13} />}
-          {pnlViewMode === 'daily' ? `Daily P&L (${selectedDailyDate})` : 'Overall P&L'}
-        </span>
-      </div>
-
-      {/* Active Positions Table */}
-      <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#818cf8', marginTop: '8px' }}>Active Open Positions ({activeTrades.length})</h2>
-      {true && (
-        <div className="glass-panel" style={{ padding: '24px', overflowX: 'auto' }}>
-          {activeTrades.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#a5b4fc' }}>
-              No open active positions. Log a trade above to start tracking.
-            </div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-              <thead>
-                <tr style={{ textAlign: 'left', color: '#a5b4fc', borderBottom: '1px solid rgba(99, 102, 241, 0.2)' }}>
-                  <th style={{ padding: '12px 8px' }}>Symbol</th>
-                  <th style={{ padding: '12px 8px' }}>Type</th>
-                  <th style={{ padding: '12px 8px' }}>Entry (₹)</th>
-                  <th style={{ padding: '12px 8px' }}>Qty</th>
-                  <th style={{ padding: '12px 8px' }}>Live LTP (₹)</th>
-                  <th style={{ padding: '12px 8px' }}>Unrealized P&L</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeTrades.map((t, idx) => {
-                  const sym = (t.symbol || '').trim();
-                  const ltp = liveLtps[sym] ?? liveLtps[sym.toUpperCase()] ?? liveLtps[t.symbol] ?? t.entry_price;
-                  const isShort = t.instrument_type === 'Intraday Short';
-                  const diff = isShort ? (t.entry_price - ltp) : (ltp - t.entry_price);
-                  const pnl = diff * t.quantity;
-
-                  return (
-                    <tr key={t.uuid || t.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                      <td style={{ padding: '16px 8px', fontWeight: 800, color: '#ffffff' }}>{t.symbol}</td>
-                      <td style={{ padding: '16px 8px' }}>
-                        <span style={{ background: 'rgba(99, 102, 241, 0.15)', padding: '4px 10px', borderRadius: '6px', fontSize: '12px' }}>{t.instrument_type}</span>
-                      </td>
-                      <td style={{ padding: '16px 8px', fontWeight: 600 }}>₹{t.entry_price.toFixed(2)}</td>
-                      <td style={{ padding: '16px 8px' }}>{t.quantity}</td>
-                      <td style={{ padding: '16px 8px', fontWeight: 800, color: '#67e8f9' }}>₹{ltp.toFixed(2)}</td>
-                      <td style={{ padding: '16px 8px', fontWeight: 800, color: pnl > 0 ? '#34d399' : (pnl < 0 ? '#f87171' : '#ffffff') }}>
-                        {pnl >= 0 ? '+' : ''}₹{pnl.toFixed(2)}
-                      </td>
-                      <td style={{ padding: '16px 8px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                          <button 
-                            onClick={() => handleOpenEditModal(t)}
-                            title="Edit Trade Transaction Details"
-                            style={{ background: 'rgba(168, 85, 247, 0.2)', border: '1px solid rgba(168, 85, 247, 0.4)', color: '#c084fc', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}
-                          >
-                            <Edit3 size={13} /> Edit
-                          </button>
-                          <button 
-                            onClick={() => {
-                              setEditingTrade(t);
-                              setExitPriceInput(ltp.toFixed(2));
-                            }}
-                            style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#34d399', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
-                          >
-                            Close Position
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteTrade(t)}
-                            style={{ background: 'rgba(239, 68, 68, 0.2)', border: 'none', color: '#f87171', padding: '6px 8px', borderRadius: '6px', cursor: 'pointer' }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {/* Closed Positions Table */}
-      <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#14b8a6' }}>Realized Closed Positions ({pnlViewMode === 'daily' ? dailyClosedTrades.length : closedTrades.length})</h2>
-      {true && (
-        <div className="glass-panel" style={{ padding: '24px', overflowX: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          
-          {/* Table Header Filter Indicator */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', background: 'rgba(15, 23, 42, 0.4)', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: '13px', color: '#a5b4fc', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Filter size={15} style={{ color: pnlViewMode === 'daily' ? '#14b8a6' : '#6366f1' }} />
-              {pnlViewMode === 'daily' ? (
-                <>Showing Closed Trades for Date: <strong style={{ color: '#34d399' }}>{selectedDailyDate}</strong> ({dailyClosedTrades.length} trade{dailyClosedTrades.length === 1 ? '' : 's'})</>
-              ) : (
-                <>Showing All-Time Realized Closed Positions (<strong style={{ color: '#ffffff' }}>{closedTrades.length}</strong> total)</>
-              )}
-            </div>
-
-            {pnlViewMode === 'daily' ? (
-              <button
-                type="button"
-                onClick={() => setPnlViewMode('overall')}
-                style={{
-                  background: 'rgba(99, 102, 241, 0.15)',
-                  border: '1px solid rgba(99, 102, 241, 0.3)',
-                  color: '#818cf8',
-                  padding: '6px 12px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                Show All Dates (Overall P&L)
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setPnlViewMode('daily')}
-                style={{
-                  background: 'rgba(20, 184, 166, 0.15)',
-                  border: '1px solid rgba(20, 184, 166, 0.3)',
-                  color: '#34d399',
-                  padding: '6px 12px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                Filter by Daily P&L Date
-              </button>
-            )}
-          </div>
-
-          {(() => {
-            const displayTradesList = pnlViewMode === 'daily' ? dailyClosedTrades : closedTrades;
-
-            if (displayTradesList.length === 0) {
-              return (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: '#a5b4fc' }}>
-                  {pnlViewMode === 'daily' ? (
-                    <>No realized closed positions logged on <strong>{selectedDailyDate}</strong>.</>
-                  ) : (
-                    <>No realized closed positions logged yet.</>
-                  )}
-                </div>
-              );
-            }
-
-            return (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                <thead>
-                  <tr style={{ textAlign: 'left', color: '#a5b4fc', borderBottom: '1px solid rgba(99, 102, 241, 0.2)' }}>
-                    <th style={{ padding: '12px 8px' }}>Symbol</th>
-                    <th style={{ padding: '12px 8px' }}>Type</th>
-                    <th style={{ padding: '12px 8px' }}>Date</th>
-                    <th style={{ padding: '12px 8px' }}>Entry (₹)</th>
-                    <th style={{ padding: '12px 8px' }}>Qty</th>
-                    <th style={{ padding: '12px 8px' }}>Exit Price (₹)</th>
-                    <th style={{ padding: '12px 8px' }}>Capital</th>
-                    <th style={{ padding: '12px 8px' }}>Net Realized P&L</th>
-                    <th style={{ padding: '12px 8px', textAlign: 'right' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayTradesList.map((t, idx) => {
-                    const chg = calculateZerodhaCharges(t);
-                    const capital = t.entry_price * t.quantity;
-                    const tradeDateStr = getTradeDateStr(t);
-                    return (
-                      <tr key={t.uuid || t.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                        <td style={{ padding: '16px 8px', fontWeight: 800, color: '#ffffff' }}>{t.symbol}</td>
-                        <td style={{ padding: '16px 8px' }}>
-                          <span style={{ background: 'rgba(99, 102, 241, 0.15)', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', color: '#a5b4fc' }}>
-                            {t.instrument_type}
-                          </span>
-                        </td>
-                        <td style={{ padding: '16px 8px', fontSize: '12px', color: '#a5b4fc', fontWeight: 600 }}>{tradeDateStr}</td>
-                        <td style={{ padding: '16px 8px', fontWeight: 600 }}>₹{t.entry_price.toFixed(2)}</td>
-                        <td style={{ padding: '16px 8px' }}>{t.quantity}</td>
-                        <td style={{ padding: '16px 8px', fontWeight: 800, color: '#67e8f9' }}>₹{t.exit_price.toFixed(2)}</td>
-                        <td style={{ padding: '16px 8px', color: '#a5b4fc' }}>₹{capital.toFixed(2)}</td>
-                        <td style={{ padding: '16px 8px' }}>
-                          <div style={{ fontSize: '15px', fontWeight: 800, color: chg.net_pnl > 0 ? '#34d399' : (chg.net_pnl < 0 ? '#f87171' : '#ffffff') }}>
-                            {chg.net_pnl >= 0 ? '+' : ''}₹{chg.net_pnl.toFixed(2)}
-                          </div>
-                          <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '2px' }}>
-                            Gross: ₹{chg.gross_pnl.toFixed(2)} | Charges: ₹{chg.total.toFixed(2)}
-                          </div>
-                        </td>
-                        <td style={{ padding: '16px 8px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button 
-                              onClick={() => handleOpenEditModal(t)}
-                              title="Edit Trade Transaction Details"
-                              style={{ background: 'rgba(168, 85, 247, 0.2)', border: '1px solid rgba(168, 85, 247, 0.4)', color: '#c084fc', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}
-                            >
-                              <Edit3 size={13} /> Edit
-                            </button>
-                            <button 
-                              onClick={() => setSelectedChargeTrade(t)}
-                              title="View Zerodha Contract Note Tax Breakdown"
-                              style={{ background: 'rgba(6, 182, 212, 0.2)', border: 'none', color: '#67e8f9', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
-                            >
-                              Charges
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteTrade(t)}
-                              style={{ background: 'rgba(239, 68, 68, 0.2)', border: 'none', color: '#f87171', padding: '6px 8px', borderRadius: '6px', cursor: 'pointer' }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            );
-          })()}
-        </div>
-      )}
-      </>)}
-
-      {/* Capital Management Tab View */}
-      {activeTab === 'capital' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {/* Top Capital Executive Cards (All 6 Components Explicitly Visualized) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #6366f1' }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>1. OPENING CAPITAL</div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: 'white' }}>
-                ₹{openingCapitalNum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Starting Account Baseline</div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: `4px solid ${totalTradeNetPnl >= 0 ? '#10b981' : '#f87171'}` }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>2. TRADE NET P&L (AUTO)</div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: totalTradeNetPnl > 0 ? '#34d399' : (totalTradeNetPnl < 0 ? '#f87171' : '#ffffff') }}>
-                {totalTradeNetPnl >= 0 ? '+' : ''}₹{totalTradeNetPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Realized Net + Open PnL</div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #fde047' }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>3. BROKER ADJUSTMENT</div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: '#fde047' }}>
-                {brokerAdjNum >= 0 ? '+' : ''}₹{brokerAdjNum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>DP Fees / Manual Adjustments</div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #34d399' }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>4. DEPOSITS (+)</div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: '#34d399' }}>
-                +₹{depositsNum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Additional Capital Funds</div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #f87171' }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>5. WITHDRAWALS (-)</div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: '#f87171' }}>
-                -₹{withdrawalsNum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Fund Payouts</div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '20px', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.4)', borderLeft: '4px solid #c084fc' }}>
-              <div style={{ color: '#c084fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>6. FINAL CLOSING CAPITAL</div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: 'white' }}>
-                ₹{closingCapitalNum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#c084fc', fontWeight: 700, marginTop: '4px' }}>Auto Formula Calculated</div>
-            </div>
-
-          </div>
-
-          {/* Form to Edit Capital Baseline & Fund Flow Inputs */}
-          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
-              <DollarSign size={18} style={{ color: '#c084fc' }} />
-              <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Edit Capital Baseline & Fund Flow Inputs</h2>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  OPENING CAPITAL (₹)
-                </label>
-                <input 
-                  type="number" 
-                  step="100"
-                  value={openingCapitalInput}
-                  onChange={e => setOpeningCapitalInput(e.target.value)}
-                  className="input-field"
-                  placeholder="3933.52"
-                />
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Your starting account balance</div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  BROKER ADJUSTMENT VARIATION (₹)
-                </label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  value={brokerAdjustmentInput}
-                  onChange={e => setBrokerAdjustmentInput(e.target.value)}
-                  className="input-field"
-                  placeholder="0.00"
-                />
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>DP charges, interest, manual variations (Set to 0 if none)</div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  DEPOSITS / ADDITIONAL CAPITAL (₹)
-                </label>
-                <input 
-                  type="number" 
-                  step="100"
-                  value={depositsInput}
-                  onChange={e => setDepositsInput(e.target.value)}
-                  className="input-field"
-                  placeholder="0"
-                />
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>New funds added to trading account</div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  WITHDRAWALS (₹)
-                </label>
-                <input 
-                  type="number" 
-                  step="100"
-                  value={withdrawalsInput}
-                  onChange={e => setWithdrawalsInput(e.target.value)}
-                  className="input-field"
-                  placeholder="0"
-                />
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Funds withdrawn from broker account</div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  DAILY ROLLOVER RISK LIMIT (₹)
-                </label>
-                <input 
-                  type="number" 
-                  step="10"
-                  value={dailyRiskLimitInput}
-                  onChange={e => setDailyRiskLimitInput(e.target.value)}
-                  className="input-field"
-                  placeholder="250"
-                />
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Base daily risk limit (₹250/day)</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Link to Cloud Sync & Settings */}
-          <div className="glass-panel" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.25)', borderRadius: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Settings size={20} style={{ color: '#ec4899' }} />
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: 800, color: '#ffffff' }}>Mobile App Cloud Synchronization & Server Settings</div>
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '2px' }}>Configure Render Cloud Mode, Local Wi-Fi connection, or sync data.</div>
-              </div>
-            </div>
-            <button 
-              onClick={() => setActiveTab('settings')}
-              style={{ background: '#6366f1', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}
-            >
-              Open Settings Tab →
-            </button>
-          </div>
-
-        </div>
-      )}
-
-      {/* Dedicated Application Settings & Cloud Synchronization Tab */}
-      {activeTab === 'settings' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {/* Settings Top Banner */}
-          <div className="glass-panel" style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', borderLeft: '4px solid #ec4899' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ background: 'rgba(236, 72, 153, 0.2)', padding: '10px', borderRadius: '10px', color: '#ec4899' }}>
-                <Settings size={24} />
-              </div>
-              <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>Application Settings & Synchronization Hub</h2>
-                <div style={{ fontSize: '12px', color: '#a5b4fc', marginTop: '2px' }}>
-                  Cloud database sync via Render, Local Wi-Fi pairing, 1000-Day Challenge risk rules, and master backups.
-                </div>
-              </div>
-            </div>
-            <button 
-              onClick={() => handleSyncAll(null, false)}
-              disabled={isSyncing}
-              style={{ 
-                background: serverStatus === 'online' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', 
-                border: `1px solid ${serverStatus === 'online' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
-                color: serverStatus === 'online' ? '#34d399' : '#f87171', 
-                padding: '8px 16px', 
-                borderRadius: '6px', 
-                cursor: 'pointer', 
-                fontWeight: 700,
-                fontSize: '12px',
+      {/* Main App Container */}
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px' }}>
+
+        {/* Navigation Tabs */}
+        <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '14px', marginBottom: '24px', overflowX: 'auto' }}>
+          {[
+            { id: 'capital', label: '📊 3-Pillar Capital Engine', badge: `₹${capitalMath.totalNetCapital.toLocaleString('en-IN')}` },
+            { id: 'swing', label: '⚡ Swing Trading (Kite)', badge: positions.filter(p => p.segment === 'SWING').length },
+            { id: 'lt', label: '🛡️ Long-Term Core (INDmoney)', badge: positions.filter(p => p.segment === 'LT').length },
+            { id: 'penny', label: '💎 Quality Penny SIP (Kite)', badge: positions.filter(p => p.segment === 'PENNY').length },
+            { id: 'history', label: '📜 Realized P&L Ledger', badge: soldHistory.length },
+            { id: 'settings', label: '⚙️ Backup & Settings' }
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              style={{
+                background: activeTab === t.id ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                border: `1.5px solid ${activeTab === t.id ? '#38bdf8' : 'rgba(255, 255, 255, 0.08)'}`,
+                color: activeTab === t.id ? '#ffffff' : '#94a3b8',
+                padding: '10px 18px',
+                borderRadius: '10px',
+                fontWeight: 800,
+                fontSize: '13px',
+                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
+                gap: '8px',
+                whiteSpace: 'nowrap'
               }}
             >
-              <RefreshCw size={14} className={isSyncing ? 'spin-icon' : ''} />
-              {isSyncing ? 'Syncing...' : (serverStatus === 'online' ? '🟢 Cloud Online' : '🔴 Offline')}
+              <span>{t.label}</span>
+              {t.badge !== undefined && (
+                <span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '10px', background: activeTab === t.id ? '#38bdf8' : 'rgba(255,255,255,0.08)', color: activeTab === t.id ? '#090d16' : '#cbd5e1', fontWeight: 900 }}>
+                  {t.badge}
+                </span>
+              )}
             </button>
-          </div>
+          ))}
+        </div>
 
-          {/* Server Sync Configuration (For Mobile App Synchronization) */}
-          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', borderLeft: '4px solid #34d399' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {serverStatus === 'online' ? <Wifi size={20} style={{ color: '#34d399' }} /> : <WifiOff size={20} style={{ color: '#f87171' }} />}
+        {/* ── TAB 1: CAPITAL ALLOCATOR & ROLLOVER ENGINE ── */}
+        {activeTab === 'capital' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            
+            {/* Top Strategy Banner */}
+            <div style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,41,59,0.7))', border: '1.5px solid rgba(56,189,248,0.3)', borderRadius: '16px', padding: '24px', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
                 <div>
-                  <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Mobile App Synchronization Hub</h2>
-                  <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '2px' }}>
-                    Bidirectional real-time sync for Trades, SIP/MTF Portfolios & Capital Settings
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <span style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: '#090d16', fontWeight: 900, fontSize: '11px', padding: '4px 10px', borderRadius: '6px' }}>25% MONTHLY INCOME DISCIPLINE</span>
+                    <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', fontWeight: 800, fontSize: '11px', padding: '3px 8px', borderRadius: '6px' }}>🛑 Zero Day Trading</span>
+                  </div>
+                  <div style={{ fontSize: '24px', fontWeight: 900, color: '#ffffff', marginTop: '10px' }}>Disciplined Capital Allocator &amp; Rollover Engine</div>
+                  <div style={{ fontSize: '13px', color: '#94a3b8', maxWidth: '750px', marginTop: '6px', lineHeight: 1.5 }}>
+                    Your total capital injections are automatically divided into <strong>⚡ Swing Trading (60%)</strong>, <strong>🛡️ Long-Term Core (30%)</strong>, and <strong>💎 Quality Penny SIP (10%)</strong> with nearest whole rupee rounding. Unspent funds roll over automatically to preserve buying power.
                   </div>
                 </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {lastSyncedTime && (
-                  <span style={{ fontSize: '11px', color: '#a5b4fc' }}>
-                    Last synced: <strong style={{ color: '#ffffff' }}>{lastSyncedTime}</strong>
-                  </span>
-                )}
-                <span style={{ 
-                  fontSize: '11px', 
-                  fontWeight: 800, 
-                  background: serverStatus === 'online' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', 
-                  color: serverStatus === 'online' ? '#34d399' : '#f87171',
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}>
-                  <span style={{ height: '6px', width: '6px', borderRadius: '50%', background: serverStatus === 'online' ? '#34d399' : '#f87171' }} />
-                  {serverStatus === 'online' ? 'Connected & Online' : 'Offline / Unreachable'}
-                </span>
-              </div>
-            </div>
 
-            {/* Detected Local PC IPs (Helper for Mobile App Setup) */}
-            {detectedIps.length > 0 && (
-              <div style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.25)', borderRadius: '8px', padding: '14px' }}>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#a5b4fc', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Activity size={14} style={{ color: '#38bdf8' }} />
-                  DETECTED PC SERVER IP ADDRESSES (Enter this into your Mobile App):
-                </div>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  {detectedIps.map(ip => {
-                    const fullUrl = `http://${ip}:8000`;
-                    return (
-                      <div key={ip} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '6px 12px', borderRadius: '6px' }}>
-                        <code style={{ fontSize: '13px', fontWeight: 700, color: '#34d399' }}>{fullUrl}</code>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(fullUrl);
-                            showToast(`Copied ${fullUrl} to clipboard!`);
-                          }}
-                          style={{ background: 'rgba(99, 102, 241, 0.3)', border: 'none', color: '#ffffff', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}
-                        >
-                          <Copy size={12} /> Copy
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setServerUrlInput(fullUrl);
-                            handleSaveServerUrl();
-                          }}
-                          style={{ background: 'rgba(56, 189, 248, 0.2)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38bdf8', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 700 }}
-                        >
-                          Use this URL
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Mode Presets: Cloud Mode (Render) vs Local Wi-Fi */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
-              <div 
-                style={{ 
-                  background: (serverUrl === 'https://finplus.onrender.com' || (!serverUrl && isNativeMobileApp)) ? 'rgba(99, 102, 241, 0.2)' : 'rgba(15, 23, 42, 0.5)', 
-                  border: `1px solid ${(serverUrl === 'https://finplus.onrender.com' || (!serverUrl && isNativeMobileApp)) ? '#818cf8' : 'rgba(99, 102, 241, 0.2)'}`, 
-                  borderRadius: '8px', 
-                  padding: '14px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    ☁️ Cloud Mode (Render)
-                  </span>
-                  {(serverUrl === 'https://finplus.onrender.com' || (!serverUrl && isNativeMobileApp)) && (
-                    <span style={{ fontSize: '10px', fontWeight: 800, color: '#34d399', background: 'rgba(16, 185, 129, 0.2)', padding: '2px 8px', borderRadius: '10px' }}>
-                      ACTIVE
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: '11px', color: '#a5b4fc', lineHeight: '1.4' }}>
-                  <strong>Ideal for traveling / anywhere:</strong> Syncs via <code>https://finplus.onrender.com</code> over 4G/5G mobile data or any Wi-Fi network worldwide.
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setServerUrlInput('https://finplus.onrender.com');
-                    localStorage.setItem('finplus_server_url', 'https://finplus.onrender.com');
-                    setServerUrl('https://finplus.onrender.com');
-                    showToast('Switched to Cloud Mode (Render)! Connecting...');
-                    handleSyncAll('https://finplus.onrender.com', false);
-                  }}
-                  style={{
-                    background: '#6366f1',
-                    color: 'white',
-                    border: 'none',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    marginTop: '4px'
-                  }}
-                >
-                  Use Cloud Mode (Render)
-                </button>
-              </div>
-
-              <div 
-                style={{ 
-                  background: (serverUrl.includes('192.168.') || serverUrl.includes('10.') || serverUrl.includes('127.0.0.1') || serverUrl.includes('localhost')) ? 'rgba(16, 185, 129, 0.15)' : 'rgba(15, 23, 42, 0.5)', 
-                  border: `1px solid ${(serverUrl.includes('192.168.') || serverUrl.includes('10.') || serverUrl.includes('127.0.0.1') || serverUrl.includes('localhost')) ? '#34d399' : 'rgba(99, 102, 241, 0.2)'}`, 
-                  borderRadius: '8px', 
-                  padding: '14px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    🏠 Local Wi-Fi Mode
-                  </span>
-                  {(serverUrl.includes('192.168.') || serverUrl.includes('10.') || serverUrl.includes('127.0.0.1') || serverUrl.includes('localhost')) && (
-                    <span style={{ fontSize: '10px', fontWeight: 800, color: '#34d399', background: 'rgba(16, 185, 129, 0.2)', padding: '2px 8px', borderRadius: '10px' }}>
-                      ACTIVE
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: '11px', color: '#a5b4fc', lineHeight: '1.4' }}>
-                  <strong>Direct LAN connection:</strong> Connects directly to your PC when both devices are on the same home or office Wi-Fi network.
-                </div>
-                {detectedIps.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const localTarget = `http://${detectedIps[0]}:8000`;
-                      setServerUrlInput(localTarget);
-                      localStorage.setItem('finplus_server_url', localTarget);
-                      setServerUrl(localTarget);
-                      showToast(`Switched to Local Wi-Fi Mode (${localTarget})!`);
-                      handleSyncAll(localTarget, false);
-                    }}
-                    style={{
-                      background: 'rgba(16, 185, 129, 0.25)',
-                      border: '1px solid rgba(16, 185, 129, 0.5)',
-                      color: '#34d399',
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      marginTop: '4px'
-                    }}
-                  >
-                    Use Local PC Wi-Fi (http://{detectedIps[0]}:8000)
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  ACTIVE BACKEND SERVER URL (Cloud or Local)
-                </label>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {/* Monthly / Total Capital Input Control */}
+                <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1.5px solid #10b981', borderRadius: '12px', padding: '16px 20px', minWidth: '280px' }}>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Total Capital / Monthly Savings (₹)</label>
                   <input 
                     type="text" 
-                    value={serverUrlInput}
-                    onChange={e => setServerUrlInput(e.target.value)}
-                    className="input-field"
-                    style={{ flex: 1, minWidth: '220px' }}
-                    placeholder="e.g. https://finplus.onrender.com or http://10.54.126.26:8000"
+                    placeholder="e.g. 50000"
+                    value={monthlyBudgetInput === '0' ? '' : monthlyBudgetInput} 
+                    onChange={e => setMonthlyBudgetInput(e.target.value)}
+                    style={{ width: '100%', background: '#090d16', border: '1.5px solid #10b981', color: '#10b981', fontSize: '22px', fontWeight: 900, padding: '8px 12px', borderRadius: '8px' }}
                   />
-                  <button 
-                    onClick={handleSaveServerUrl}
-                    style={{ 
-                      background: '#6366f1', 
-                      color: 'white', 
-                      border: 'none', 
-                      padding: '10px 18px', 
-                      borderRadius: '6px', 
-                      cursor: 'pointer', 
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <Save size={15} />
-                    Save & Connect
-                  </button>
-                  <button 
-                    onClick={() => handleSyncAll(null, false)}
-                    disabled={isSyncing}
-                    style={{ 
-                      background: 'rgba(16, 185, 129, 0.2)', 
-                      border: '1px solid rgba(16, 185, 129, 0.4)',
-                      color: '#34d399', 
-                      padding: '10px 18px', 
-                      borderRadius: '6px', 
-                      cursor: 'pointer', 
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <RefreshCw size={15} className={isSyncing ? 'spin-icon' : ''} />
-                    {isSyncing ? 'Syncing...' : 'Sync All Data Now'}
-                  </button>
-                </div>
-                <div style={{ fontSize: '12px', color: '#a5b4fc', marginTop: '10px', lineHeight: '1.6' }}>
-                  <strong>How to access your app from mobile while traveling:</strong>
-                  <ul style={{ paddingLeft: '20px', marginTop: '4px' }}>
-                    <li>Select <strong>Cloud Mode (Render)</strong> above or set URL to <code>https://finplus.onrender.com</code>.</li>
-                    <li>The app communicates securely with your cloud backend hosted on Render over 4G/5G mobile internet.</li>
-                    <li>All trades, portfolio additions, MTF positions, and capital settings sync automatically without needing to be on the same Wi-Fi.</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 1000-Day Challenge Risk & Baseline Settings Card */}
-          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', borderLeft: '4px solid #6366f1' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
-              <DollarSign size={18} style={{ color: '#c084fc' }} />
-              <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Edit Capital Baseline & Challenge Risk Parameters</h2>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  OPENING CAPITAL (₹)
-                </label>
-                <input 
-                  type="number" 
-                  step="100"
-                  value={openingCapitalInput}
-                  onChange={e => setOpeningCapitalInput(e.target.value)}
-                  className="input-field"
-                  placeholder="3933.52"
-                />
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Your starting account balance</div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  BROKER ADJUSTMENT VARIATION (₹)
-                </label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  value={brokerAdjustmentInput}
-                  onChange={e => setBrokerAdjustmentInput(e.target.value)}
-                  className="input-field"
-                  placeholder="0.00"
-                />
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>DP charges, interest, manual variations</div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  DEPOSITS / ADDITIONAL CAPITAL (₹)
-                </label>
-                <input 
-                  type="number" 
-                  step="100"
-                  value={depositsInput}
-                  onChange={e => setDepositsInput(e.target.value)}
-                  className="input-field"
-                  placeholder="0"
-                />
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>New funds added to trading account</div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  WITHDRAWALS (₹)
-                </label>
-                <input 
-                  type="number" 
-                  step="100"
-                  value={withdrawalsInput}
-                  onChange={e => setWithdrawalsInput(e.target.value)}
-                  className="input-field"
-                  placeholder="0"
-                />
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Funds withdrawn from broker account</div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  DAILY ROLLOVER RISK LIMIT (₹)
-                </label>
-                <input 
-                  type="number" 
-                  step="10"
-                  value={dailyRiskLimitInput}
-                  onChange={e => setDailyRiskLimitInput(e.target.value)}
-                  className="input-field"
-                  placeholder="250"
-                />
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>Base daily risk limit (₹250/day)</div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                  CHALLENGE START DATE
-                </label>
-                <input 
-                  type="date" 
-                  value={challengeStartDateInput}
-                  onChange={e => setChallengeStartDateInput(e.target.value)}
-                  className="input-field"
-                />
-                <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>1000-Day Challenge start date</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Backup & Data Transfer Center */}
-          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', borderLeft: '4px solid #14b8a6' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
-              <FileText size={18} style={{ color: '#14b8a6' }} />
-              <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Data Backup & Master Export / Import</h2>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <button 
-                onClick={handleExportJson}
-                style={{
-                  background: 'rgba(16, 185, 129, 0.15)',
-                  border: '1px solid rgba(16, 185, 129, 0.35)',
-                  color: '#34d399',
-                  padding: '10px 18px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontWeight: 700,
-                  fontSize: '13px'
-                }}
-              >
-                <Download size={16} />
-                Export Journal (.json)
-              </button>
-
-              <label 
-                style={{
-                  background: 'rgba(99, 102, 241, 0.15)',
-                  border: '1px solid rgba(99, 102, 241, 0.35)',
-                  color: '#a5b4fc',
-                  padding: '10px 18px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontWeight: 700,
-                  fontSize: '13px'
-                }}
-              >
-                <Upload size={16} />
-                Restore Journal (.json)
-                <input type="file" accept=".json" onChange={handleImportJsonFile} style={{ display: 'none' }} />
-              </label>
-
-              <button 
-                onClick={() => exportJournalCSV(trades)}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  color: '#cbd5e1',
-                  padding: '10px 18px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontWeight: 600,
-                  fontSize: '13px'
-                }}
-              >
-                <FileText size={16} />
-                Export CSV (.csv)
-              </button>
-            </div>
-          </div>
-
-          {/* Segment-Wise Risk & Stop-Loss Guidelines Table */}
-          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', borderLeft: '4px solid #6366f1' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <ShieldAlert size={20} style={{ color: '#818cf8' }} />
-                <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>Segment-Wise Stop-Loss & Risk Management Matrix</h2>
-              </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#818cf8', background: 'rgba(99, 102, 241, 0.15)', padding: '4px 10px', borderRadius: '12px', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
-                Recommended Strategy
-              </span>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', color: '#a5b4fc', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    <th style={{ padding: '12px 16px' }}>Segment / Asset Class</th>
-                    <th style={{ padding: '12px 16px' }}>Ideal Stop-Loss (% of Asset Price)</th>
-                    <th style={{ padding: '12px 16px' }}>Recommended Risk per Trade</th>
-                    <th style={{ padding: '12px 16px' }}>Key Strategy Notes</th>
-                  </tr>
-                </thead>
-                <tbody style={{ color: '#e0e7ff' }}>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', background: 'rgba(255, 255, 255, 0.02)' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#38bdf8' }}>Intraday Equities</td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '4px 8px', borderRadius: '6px', fontWeight: 700 }}>
-                        0.5% to 1.0%
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 600 }}>Max 1% of total trading capital</td>
-                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '12px' }}>Tight risk control; close all positions before 3:15 PM</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#34d399' }}>Delivery / Swing Trading</td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{ background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', padding: '4px 8px', borderRadius: '6px', fontWeight: 700 }}>
-                        5.0% to 7.0%
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 600 }}>Max 2% of total trading capital</td>
-                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '12px' }}>Allows room for market volatility & multi-day trends</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', background: 'rgba(255, 255, 255, 0.02)' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#fb923c' }}>Crude Oil Futures</td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{ background: 'rgba(251, 146, 60, 0.15)', color: '#fb923c', padding: '4px 8px', borderRadius: '6px', fontWeight: 700 }}>
-                        0.8% to 1.2%
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 600 }}>Fixed capital risk (e.g., ₹3,000–₹5,000)</td>
-                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '12px' }}>MCX high leverage; monitor inventory EIA data</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#ef4444' }}>Natural Gas Futures</td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', padding: '4px 8px', borderRadius: '6px', fontWeight: 700 }}>
-                        1.5% to 2.5%
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 600 }}>Fixed capital risk (extreme volatility)</td>
-                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '12px' }}>Extreme intraday gaps & spikes; use strict position sizing</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', background: 'rgba(255, 255, 255, 0.02)' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#a855f7' }}>Stock Options (F&O)</td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', padding: '4px 8px', borderRadius: '6px', fontWeight: 700 }}>
-                        10.0% to 20.0% of premium
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 600 }}>Max 2% to 3% of option capital</td>
-                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '12px' }}>Zerodha Kite F&O rate: ₹20/order brokerage, 0.1% STT on sell premium</td>
-                  </tr>
-                  <tr style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#c084fc' }}>Nifty Options (Buyers)</td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{ background: 'rgba(192, 132, 252, 0.15)', color: '#c084fc', padding: '4px 8px', borderRadius: '6px', fontWeight: 700 }}>
-                        15.0% to 20.0% of premium
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 600 }}>Max 2% to 3% of option buying pool</td>
-                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '12px' }}>Protect against theta decay; slice risk relative to option capital</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-        </div>
-      )}
-
-      {/* Auto Segment Capital Allocation & Monthly Stop-Loss Manager Tab */}
-      {activeTab === 'capital' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {/* Executive Overview Header Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #10b981' }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>
-                TOTAL ACCOUNT CAPITAL
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: '#ffffff' }}>
-                ₹{((closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#34d399', marginTop: '4px', fontWeight: 700 }}>
-                100% Capital Pool Baseline
-              </div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid #6366f1' }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>
-                TOTAL MONTHLY RISK BUDGET
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: '#818cf8' }}>
-                ₹{totalMonthlyRiskBudget.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>
-                Combined Segment Max Stop-Loss Limits
-              </div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: `4px solid ${currentMonthTotalPnl >= 0 ? '#10b981' : '#fb7185'}` }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>
-                AUDITED MONTH REALIZED P&L
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: currentMonthTotalPnl > 0 ? '#34d399' : (currentMonthTotalPnl < 0 ? '#fb7185' : '#ffffff') }}>
-                {currentMonthTotalPnl >= 0 ? '+' : ''}₹{currentMonthTotalPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>
-                {selectedMonthClosedTrades.length} Closed Trades Audited
-              </div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '20px', borderLeft: `4px solid ${breachedSegmentsCount > 0 ? '#fb7185' : '#34d399'}`, background: breachedSegmentsCount > 0 ? 'rgba(251, 113, 133, 0.05)' : 'rgba(52, 211, 153, 0.05)' }}>
-              <div style={{ color: breachedSegmentsCount > 0 ? '#fb7185' : '#34d399', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '8px' }}>
-                MONTHLY BREACH PROTECTION
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: breachedSegmentsCount > 0 ? '#fb7185' : '#ffffff' }}>
-                {breachedSegmentsCount > 0 ? `${breachedSegmentsCount} LIMIT EXCEEDED` : 'ALL SAFE'}
-              </div>
-              <div style={{ fontSize: '11px', color: breachedSegmentsCount > 0 ? '#fb7185' : '#34d399', fontWeight: 700, marginTop: '4px' }}>
-                {breachedSegmentsCount > 0 ? 'Risk limit reached for segment' : 'All segments within monthly SL limits'}
-              </div>
-            </div>
-          </div>
-
-          {/* UNIFIED RISK STACK VISUALIZER & BINDING CONSTRAINT CARD */}
-          <div className="glass-panel" style={{ padding: '24px', background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.8) 100%)', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <ShieldAlert size={20} style={{ color: bindingConstraintLevel !== 'none' ? '#fb7185' : '#34d399' }} />
-                <span style={{ fontSize: '15px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  🛡️ Unified Multi-Layer Risk Stack & Active Constraint
-                </span>
-              </div>
-
-              {/* Binding Constraint Badge */}
-              <div style={{
-                background: bindingConstraintLevel === 'daily' ? 'rgba(239, 68, 68, 0.2)' : (bindingConstraintLevel === 'segment' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.15)'),
-                border: `1px solid ${bindingConstraintLevel === 'daily' ? '#ef4444' : (bindingConstraintLevel === 'segment' ? '#f59e0b' : '#10b981')}`,
-                color: bindingConstraintLevel === 'daily' ? '#f87171' : (bindingConstraintLevel === 'segment' ? '#fbbf24' : '#34d399'),
-                padding: '6px 14px',
-                borderRadius: '8px',
-                fontSize: '12px',
-                fontWeight: 800,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                {bindingConstraintLabel}
-              </div>
-            </div>
-
-            {/* Multi-Layer Risk Stack Bar */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#a5b4fc', fontWeight: 700, flexWrap: 'wrap', gap: '8px' }}>
-                <span>Layer 1: Today's Available Risk (₹{availableRiskLimitToday.toFixed(2)})</span>
-                <span>Layer 2: Monthly Segment Risk Budget (₹{totalMonthlyRiskBudget.toFixed(2)})</span>
-                <span>Layer 3: Total Account Capital (₹{((closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum)).toFixed(2)})</span>
-              </div>
-
-              {/* Visual Stack Progress Bar */}
-              <div style={{ position: 'relative', width: '100%', height: '24px', background: 'rgba(255,255,255,0.06)', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
-                {/* Outer Layer: Capital Pool Background (100%) */}
-                <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: '100%', background: 'rgba(99, 102, 241, 0.15)' }} />
-
-                {/* Middle Layer: Monthly Segment Risk Budget Bar */}
-                <div style={{ 
-                  position: 'absolute', 
-                  top: 0, 
-                  left: 0, 
-                  height: '100%', 
-                  width: `${Math.min(100, (totalMonthlyRiskBudget / Math.max(1, (closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum))) * 100)}%`, 
-                  background: 'linear-gradient(90deg, rgba(99, 102, 241, 0.5) 0%, rgba(168, 85, 247, 0.5) 100%)' 
-                }} />
-
-                {/* Inner Layer: Today's Available Risk Bar */}
-                <div style={{ 
-                  position: 'absolute', 
-                  top: 0, 
-                  left: 0, 
-                  height: '100%', 
-                  width: `${Math.min(100, (todayStartingRisk / Math.max(1, (closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum))) * 100)}%`, 
-                  background: availableRiskLimitToday > 0 ? 'linear-gradient(90deg, #10b981 0%, #34d399 100%)' : '#ef4444',
-                  boxShadow: availableRiskLimitToday > 0 ? '0 0 12px rgba(52, 211, 153, 0.6)' : 'none'
-                }} />
-              </div>
-
-              {/* Stack Legend & Context */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginTop: '4px' }}>
-                <div style={{ fontSize: '11px', color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: availableRiskLimitToday > 0 ? '#10b981' : '#ef4444', display: 'inline-block' }}></span>
-                  Today's Budget: <strong>₹{todayStartingRisk.toFixed(2)}</strong> (Used: ₹{todayCurrentLoss.toFixed(2)})
-                </div>
-                <div style={{ fontSize: '11px', color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#818cf8', display: 'inline-block' }}></span>
-                  Monthly Segment Cap: <strong>₹{totalMonthlyRiskBudget.toFixed(2)}</strong>
-                </div>
-                <div style={{ fontSize: '11px', color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ height: '10px', width: '10px', borderRadius: '50%', background: '#6366f1', display: 'inline-block' }}></span>
-                  Account Capital: <strong>₹{((closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum)).toFixed(2)}</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Main Segment Monthly Stop-Loss & Capital Allocation Table */}
-          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <ShieldAlert size={22} style={{ color: '#38bdf8' }} />
-                <div>
-                  <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>Segment Capital Allocation & Monthly Stop-Loss Control</h2>
-                  <p style={{ fontSize: '12px', color: '#a5b4fc', margin: 0 }}>
-                    Auto-computed capital pool and monthly maximum loss thresholds per segment based on your profitability ranking.
-                  </p>
-                </div>
-              </div>
-
-              {/* Historical Month Selector for Risk SL Audit */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.03)', padding: '6px 14px', borderRadius: '10px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
-                <Calendar size={16} style={{ color: '#38bdf8' }} />
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#a5b4fc' }}>Audit Month:</span>
-                <select 
-                  value={selectedRiskMonth} 
-                  onChange={e => setSelectedRiskMonth(e.target.value)} 
-                  className="input-field"
-                  style={{ width: '150px', padding: '4px 10px', fontSize: '12px', fontWeight: 800, color: '#38bdf8' }}
-                >
-                  {availableClosedMonths.map(mStr => {
-                    const [yr, mo] = mStr.split('-');
-                    const dObj = new Date(parseInt(yr), parseInt(mo) - 1, 1);
-                    const label = dObj.toLocaleString('default', { month: 'short', year: 'numeric' });
-                    return <option key={mStr} value={mStr}>{label} {mStr === currentYearMonthStr ? '(Active)' : ''}</option>;
-                  })}
-                </select>
-              </div>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', color: '#a5b4fc', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    <th style={{ padding: '12px 14px' }}>Segment / Rank & Empirical Stats</th>
-                    <th style={{ padding: '12px 14px' }}>Allocation %</th>
-                    <th style={{ padding: '12px 14px' }}>Segment Capital Pool (₹)</th>
-                    <th style={{ padding: '12px 14px' }}>Monthly SL %</th>
-                    <th style={{ padding: '12px 14px' }}>Monthly Max Loss SL (₹)</th>
-                    <th style={{ padding: '12px 14px' }}>Audited Month PnL (₹)</th>
-                    <th style={{ padding: '12px 14px' }}>Risk Used & Status</th>
-                  </tr>
-                </thead>
-                <tbody style={{ color: '#e0e7ff' }}>
-                  {segmentAllocList.map((seg, idx) => {
-                    const capitalPool = (closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum);
-                    const allocPct = Number(seg.allocState) || 0;
-                    const segCapital = capitalPool * (allocPct / 100);
-                    const mslPct = Number(seg.mslState) || 0;
-                    const monthlyMaxLoss = segCapital * (mslPct / 100);
-                    const monthPnl = seg.currentPnl;
-                    const lossUsed = monthPnl < 0 ? Math.abs(monthPnl) : 0;
-                    const usedPct = monthlyMaxLoss > 0 ? (lossUsed / monthlyMaxLoss) * 100 : 0;
-                    const isBreached = monthlyMaxLoss > 0 && lossUsed >= monthlyMaxLoss;
-                    const isWarning = !isBreached && usedPct >= 50;
-
-                    return (
-                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', background: isBreached ? 'rgba(251, 113, 133, 0.03)' : (idx % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent') }}>
-                        <td style={{ padding: '14px' }}>
-                          <div style={{ fontWeight: 800, color: seg.color, fontSize: '14px' }}>{seg.name}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
-                            <span style={{ background: `${seg.color}25`, color: seg.color, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 800 }}>
-                              {seg.rank}
-                            </span>
-                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>{seg.rationale}</span>
-                          </div>
-
-                          {/* Empirical Stats Badges */}
-                          <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                            {seg.stats.totalCount < 3 ? (
-                              <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.06)', color: '#94a3b8', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                                📊 Insufficient Data ({seg.stats.totalCount}/3 trades)
-                              </span>
-                            ) : (
-                              <>
-                                <span style={{ fontSize: '10px', background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>
-                                  Win Rate: {seg.stats.winRate}%
-                                </span>
-                                <span style={{ fontSize: '10px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>
-                                  PF: {seg.stats.profitFactor}
-                                </span>
-                                <span style={{ fontSize: '10px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>
-                                  R:R: 1:{seg.stats.riskRewardRatio}
-                                </span>
-                                <span style={{ fontSize: '10px', color: '#94a3b8' }}>
-                                  ({seg.stats.totalCount} T)
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </td>
-
-                        <td style={{ padding: '14px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <input 
-                              type="number" 
-                              step="0.5" 
-                              value={seg.allocState} 
-                              onChange={e => seg.setAllocState(e.target.value)} 
-                              className="input-field" 
-                              style={{ width: '65px', padding: '4px 8px', fontSize: '13px', fontWeight: 800, textAlign: 'center', color: seg.color }}
-                            />
-                            <span style={{ fontWeight: 800, color: seg.color }}>%</span>
-                          </div>
-                        </td>
-
-                        <td style={{ padding: '14px', fontWeight: 800, color: '#ffffff', fontSize: '15px' }}>
-                          ₹{segCapital.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-
-                        <td style={{ padding: '14px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <input 
-                              type="number" 
-                              step="1" 
-                              value={seg.mslState} 
-                              onChange={e => seg.setMslState(e.target.value)} 
-                              className="input-field" 
-                              style={{ width: '60px', padding: '4px 8px', fontSize: '13px', fontWeight: 800, textAlign: 'center', color: '#cbd5e1' }}
-                            />
-                            <span style={{ fontWeight: 800, color: '#a5b4fc' }}>%</span>
-                          </div>
-                        </td>
-
-                        <td style={{ padding: '14px', fontWeight: 800, color: '#cbd5e1', fontSize: '15px' }}>
-                          ₹{monthlyMaxLoss.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-
-                        <td style={{ padding: '14px', fontWeight: 800, fontSize: '14px', color: monthPnl > 0 ? '#34d399' : (monthPnl < 0 ? '#fb7185' : '#ffffff') }}>
-                          {monthPnl >= 0 ? '+' : ''}₹{monthPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-
-                        <td style={{ padding: '14px' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span style={{ fontSize: '11px', fontWeight: 800, color: isBreached ? '#fb7185' : (isWarning ? '#fde047' : '#34d399') }}>
-                                {isBreached ? '🛑 Risk Limit Reached' : (isWarning ? '⚠️ HIGH RISK WARNING' : '🟢 SAFE')}
-                              </span>
-                              <span style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700 }}>
-                                {usedPct.toFixed(0)}% Used
-                              </span>
-                            </div>
-
-                            {/* Risk Usage Progress Bar */}
-                            <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                              <div style={{ 
-                                width: `${Math.min(100, usedPct)}%`, 
-                                height: '100%', 
-                                background: isBreached ? '#fb7185' : (isWarning ? '#fde047' : '#34d399'),
-                                transition: 'width 0.3s ease'
-                              }} />
-                            </div>
-
-                            <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
-                              {isBreached ? `Loss exceeds ₹${monthlyMaxLoss.toFixed(0)} limit!` : `Remaining Risk Buffer: ₹${Math.max(0, monthlyMaxLoss - lossUsed).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {/* Summary Row for Unallocated Cash Reserve if total allocation < 100% */}
-                  {(() => {
-                    const capitalPool = (closingCapitalNum > 0 ? closingCapitalNum : netBaseCapitalNum);
-                    const totalAllocPct = (Number(allocIntraday) || 0) + (Number(allocNatgas) || 0) + (Number(allocNifty) || 0) + (Number(allocCrude) || 0);
-                    const unallocatedPct = 100 - totalAllocPct;
-                    const unallocatedRupees = capitalPool * (Math.max(0, unallocatedPct) / 100);
-
-                    if (unallocatedPct > 0.01) {
-                      return (
-                        <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(255, 255, 255, 0.02)' }}>
-                          <td style={{ padding: '14px' }}>
-                            <div style={{ fontWeight: 800, color: '#94a3b8', fontSize: '13px' }}>💵 Unallocated Cash Reserve</div>
-                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Unassigned capital pool retained as unhedged cash buffer</div>
-                          </td>
-                          <td style={{ padding: '14px', fontWeight: 800, color: '#94a3b8', fontSize: '13px' }}>
-                            {unallocatedPct.toFixed(1)}%
-                          </td>
-                          <td style={{ padding: '14px', fontWeight: 800, color: '#94a3b8', fontSize: '14px' }}>
-                            ₹{unallocatedRupees.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td colSpan={4} style={{ padding: '14px', fontSize: '11px', color: '#64748b' }}>
-                            {totalAllocPct.toFixed(1)}% Assigned across 4 segments | ₹{unallocatedRupees.toFixed(2)} held as cash reserve
-                          </td>
-                        </tr>
-                      );
-                    }
-                    if (totalAllocPct > 100) {
-                      return (
-                        <tr style={{ borderBottom: '1px solid rgba(239, 68, 68, 0.2)', background: 'rgba(239, 68, 68, 0.05)' }}>
-                          <td colSpan={7} style={{ padding: '12px 14px', color: '#f87171', fontSize: '12px', fontWeight: 700 }}>
-                            ⚠️ Warning: Total segment capital allocation exceeds 100% ({totalAllocPct}% assigned). Please adjust segment percentages to sum to 100%.
-                          </td>
-                        </tr>
-                      );
-                    }
-                    return null;
-                  })()}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-        </div>
-      )}
-
-      {/* Dynamic 5% Pullback SIP & Investment System Tab */}
-      {activeTab === 'sip' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {/* Top Executive Overview Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            <div className="glass-panel" style={{ padding: '18px', borderLeft: '4px solid #00b4d8' }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
-                TOTAL AMOUNT INVESTED
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff' }}>
-                ₹{totalSipDeployedCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>
-                Active open positions cost basis
-              </div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '18px', borderLeft: '4px solid #10b981' }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
-                CURRENT PORTFOLIO VALUE
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: 900, color: '#34d399' }}>
-                ₹{totalSipCurrentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#34d399', marginTop: '4px', fontWeight: 700 }}>
-                +{pullbackStockSummary.filter(s => s.netShares > 0).length} stock(s) with open positions
-              </div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '18px', borderLeft: `4px solid ${totalSipRealizedProfit >= 0 ? '#10b981' : '#fb7185'}` }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
-                REALIZED P&L (SOLD STOCKS)
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: 900, color: totalSipRealizedProfit >= 0 ? '#34d399' : '#fb7185' }}>
-                {totalSipRealizedProfit >= 0 ? '+' : ''}₹{totalSipRealizedProfit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>
-                {totalSipSellTxCount} sold trade(s) | Net: <span style={{ color: totalSipRealizedNetProfit >= 0 ? '#34d399' : '#fb7185', fontWeight: 800 }}>{totalSipRealizedNetProfit >= 0 ? '+' : ''}₹{totalSipRealizedNetProfit.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '18px', borderLeft: `4px solid ${totalSipUnrealizedPnl >= 0 ? '#10b981' : '#fb7185'}` }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
-                UNREALIZED PORTFOLIO P&L
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: 900, color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                {totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#fb7185', marginTop: '4px', fontWeight: 700 }}>
-                Gross: {totalSipDeployedCost > 0 ? `${totalSipUnrealizedPnl >= 0 ? '+' : ''}${((totalSipUnrealizedPnl / totalSipDeployedCost) * 100).toFixed(2)}%` : '0.00%'}
-              </div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '18px', borderLeft: '4px solid #f59e0b' }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
-                ZERODHA TAXES & CHARGES
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: 900, color: '#fbbf24' }}>
-                ₹{totalSipDeliveryTaxes.toFixed(2)}
-              </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>
-                STT: ₹{totalSipStt.toFixed(2)} | DP: ₹{totalSipDpCharges.toFixed(2)} | Txn+GST: ₹{(totalSipExchangeTxn + totalSipGst).toFixed(2)}
-              </div>
-            </div>
-
-            <div className="glass-panel" style={{ padding: '18px', borderLeft: `4px solid ${totalSipCombinedNetPnl >= 0 ? '#10b981' : '#fb7185'}` }}>
-              <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
-                COMBINED NET SIP P&L
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: 900, color: totalSipCombinedNetPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                {totalSipCombinedNetPnl >= 0 ? '+' : ''}₹{totalSipCombinedNetPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px', fontWeight: 700 }}>
-                Realized ({totalSipRealizedProfit >= 0 ? '+' : ''}₹{totalSipRealizedProfit.toFixed(1)}) + Unrealized ({totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toFixed(1)}) − Tax
-              </div>
-            </div>
-          </div>
-
-          {/* 5% Pullback Trigger Signals Panel */}
-          {pullbackStockSummary.filter(s => (s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false)) && s.category !== 'Park' && (s.pullbackPct >= 5.0 || s.daysSinceLastBuyNum >= 25 || s.signalClass === 'buy' || s.signalClass === 'timeout')).length > 0 && (
-            <div className="glass-panel" style={{ padding: '20px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                <TrendingUp size={20} style={{ color: '#34d399' }} />
-                <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
-                  🚨 Active 5% Pullback & Time-Out Buy Signals
-                </h3>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
-                {pullbackStockSummary.filter(s => (s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false)) && s.category !== 'Park' && (s.pullbackPct >= 5.0 || s.daysSinceLastBuyNum >= 25 || s.signalClass === 'buy' || s.signalClass === 'timeout')).map(s => (
-                  <div key={s.ticker} style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.1)', padding: '12px 16px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontWeight: 800, color: '#ffffff', fontSize: '14px' }}>{s.cleanSym} ({s.name})</div>
-                      <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '2px' }}>
-                        Peak: ₹{s.peak.toFixed(2)} | LTP: ₹{s.ltp.toFixed(2)} ({s.pullbackPct.toFixed(1)}% drop) | Target Buy: ₹{s.targetBuyPrice.toFixed(2)}
-                      </div>
-                    </div>
-                    <span style={{ 
-                      fontSize: '11px', 
-                      fontWeight: 800, 
-                      padding: '4px 10px', 
-                      borderRadius: '6px', 
-                      background: s.signalClass === 'buy' ? 'rgba(52, 211, 153, 0.2)' : (s.signalClass === 'timeout' ? 'rgba(251, 146, 60, 0.2)' : 'rgba(245, 158, 11, 0.2)'),
-                      color: s.signalClass === 'buy' ? '#34d399' : (s.signalClass === 'timeout' ? '#fb923c' : '#fde047'),
-                      border: `1px solid ${s.signalClass === 'buy' ? '#34d399' : (s.signalClass === 'timeout' ? '#fb923c' : '#fde047')}`
-                    }}>
-                      {s.systemStatus}
-                    </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px', fontSize: '11px' }}>
+                    <div style={{ color: '#38bdf8', fontWeight: 700 }}>⚡ Swing ({swingPct}%): ₹{capitalMath.swing.budget.toLocaleString('en-IN')}</div>
+                    <div style={{ color: '#10b981', fontWeight: 700 }}>🛡️ LT Core ({ltPct}%): ₹{capitalMath.lt.budget.toLocaleString('en-IN')}</div>
+                    <div style={{ color: '#c084fc', fontWeight: 700 }}>💎 Penny SIP ({pennyPct}%): ₹{capitalMath.penny.budget.toLocaleString('en-IN')}</div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Record SIP Transaction & Watchlist Management Section */}
-          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            
-            {/* Mode Switcher: Buy / Add Watchlist vs Sell / Exit Stock */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Activity size={18} style={{ color: '#38bdf8' }} />
-                <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
-                  ⚙️ SIP Transaction Management
-                </h3>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={() => setSipFormMode('BUY')}
-                  style={{
-                    background: sipFormMode === 'BUY' ? '#10b981' : 'rgba(255,255,255,0.06)',
-                    color: '#ffffff',
-                    border: `1px solid ${sipFormMode === 'BUY' ? '#34d399' : 'rgba(255,255,255,0.1)'}`,
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    fontWeight: 800,
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <PlusCircle size={14} />
-                  🛒 Buy / Add Stock
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSipFormMode('SELL');
-                    const firstHeld = pullbackStockSummary.find(s => s.netShares > 0);
-                    if (firstHeld && !sipSellSelectedTicker) {
-                      setSipSellSelectedTicker(firstHeld.ticker);
-                      setSipSellFormPrice(firstHeld.ltp > 0 ? String(firstHeld.ltp) : '');
-                      setSipSellFormShares('1');
-                    }
-                  }}
-                  style={{
-                    background: sipFormMode === 'SELL' ? '#f59e0b' : 'rgba(255,255,255,0.06)',
-                    color: '#ffffff',
-                    border: `1px solid ${sipFormMode === 'SELL' ? '#fbbf24' : 'rgba(255,255,255,0.1)'}`,
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    fontWeight: 800,
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <DollarSign size={14} />
-                  💰 Sell / Record Sold Stock
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleFreshStartPortfolio}
-                  title="Reset SIP portfolio starting fresh from today (keeps UYFINCORP holding)"
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    color: '#f87171',
-                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    fontWeight: 700,
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <RefreshCw size={14} />
-                  🔄 Start Fresh (SIP)
-                </button>
-              </div>
-            </div>
-
-            {/* FORM A: BUY / ADD WATCHLIST */}
-            {sipFormMode === 'BUY' && (
-              <form id="sip-watchlist-form" onSubmit={handleAddStockToWatchlist} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ position: 'relative' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700 }}>
-                      SEARCH NIFTY 500 TICKER / COMPANY
-                    </label>
-                    {filteredNiftySuggestions.length > 0 && newSipTicker.trim() && (
-                      <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 800, background: 'rgba(56, 189, 248, 0.12)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
-                        ✨ Match: {filteredNiftySuggestions[0].symbol.toUpperCase().replace('.NS', '')}.NS
-                      </span>
-                    )}
+              {/* Free Uninvested Cash with Brokers Control Panel */}
+              <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1.5px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px', padding: '16px', marginTop: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 900, color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>💰 Free Uninvested Cash with Brokers (Match Account Balances)</span>
                   </div>
-                  <input 
-                    type="text" 
-                    placeholder="Type company or ticker (e.g. SBI, Tata Steel, Reliance, INFY)" 
-                    value={newSipTicker} 
-                    onChange={e => {
-                      setNewSipTicker(e.target.value);
-                      setShowNiftyDropdown(true);
-                    }}
-                    onFocus={() => setShowNiftyDropdown(true)}
-                    className="input-field" 
-                    required 
-                  />
-                  
-                  {/* Autocomplete Dropdown List */}
-                  {showNiftyDropdown && filteredNiftySuggestions.length > 0 && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      zIndex: 9999,
-                      background: '#0f172a',
-                      border: '1px solid rgba(99, 102, 241, 0.4)',
-                      borderRadius: '8px',
-                      maxHeight: '220px',
-                      overflowY: 'auto',
-                      boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                      marginTop: '4px'
-                    }}>
-                      {filteredNiftySuggestions.map(item => {
-                        const cleanSym = item.symbol.toUpperCase().replace('.NS', '');
-                        const formattedSym = `${cleanSym}.NS`;
-                        const isItemEtf = item.isEtf || cleanSym.endsWith('BEES') || cleanSym.endsWith('ETF') || (item.name && item.name.toLowerCase().includes('etf'));
-                        return (
-                          <div 
-                            key={item.symbol} 
-                            onClick={() => {
-                              setNewSipTicker(formattedSym);
-                              setNewSipName(item.name || item.symbol);
-                              if (isItemEtf) {
-                                setNewSipCategory('Park');
-                              }
-                              const ltp = liveLtps[cleanSym] || liveLtps[formattedSym];
-                              if (ltp) setNewSipBuyPrice(String(ltp));
-                              setShowNiftyDropdown(false);
-                            }}
-                            style={{
-                              padding: '10px 14px',
-                              borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.2)'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                          >
-                            <div>
-                              <div style={{ fontWeight: 800, color: isItemEtf ? '#38bdf8' : '#ffffff', fontSize: '13px' }}>
-                                {formattedSym}
-                              </div>
-                              <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                                {item.name || item.symbol}
-                              </div>
-                            </div>
-                            <span style={{
-                              fontSize: '10px',
-                              color: isItemEtf ? '#38bdf8' : '#34d399',
-                              fontWeight: 800,
-                              background: isItemEtf ? 'rgba(56, 189, 248, 0.15)' : 'rgba(52, 211, 153, 0.1)',
-                              border: `1px solid ${isItemEtf ? 'rgba(56, 189, 248, 0.3)' : 'rgba(52, 211, 153, 0.2)'}`,
-                              padding: '2px 8px',
-                              borderRadius: '4px'
-                            }}>
-                              {isItemEtf ? '🅿️ ETF / Park' : 'Nifty 500'}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <span style={{ fontSize: '11px', color: '#a5b4fc', background: 'rgba(99, 102, 241, 0.15)', padding: '2px 8px', borderRadius: '6px' }}>
+                    Total Free Cash: ₹{(swingFreeCash + ltFreeCash + pennyFreeCash).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
                 </div>
-
-                <div>
-                  <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>COMPANY NAME (AUTO-FILLED)</label>
-                  <input type="text" placeholder="e.g. Infosys Limited" value={newSipName} onChange={e => setNewSipName(e.target.value)} className="input-field" />
-                </div>
-
-                {/* Purchase Details: Execution Price, Shares Qty, Buy Date */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
                   <div>
-                    <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800, display: 'block', marginBottom: '4px' }}>
-                      BUY PRICE (₹)
-                    </label>
+                    <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800, display: 'block', marginBottom: '4px' }}>⚡ SWING FREE CASH (Kite)</label>
                     <input 
-                      id="new-sip-buy-price-input"
-                      type="number" 
-                      step="0.05" 
-                      placeholder="e.g. 275.45" 
-                      value={newSipBuyPrice} 
-                      onChange={e => setNewSipBuyPrice(e.target.value)} 
-                      className="input-field" 
-                      style={{ borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
-                    />
-                    <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
-                      Exact buy execution price
-                    </span>
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: '11px', color: '#34d399', fontWeight: 800, display: 'block', marginBottom: '4px' }}>
-                      SHARES BOUGHT (QTY)
-                    </label>
-                    <input 
-                      type="number" 
-                      step="1" 
-                      min="0"
-                      placeholder="e.g. 1" 
-                      value={newSipShares} 
-                      onChange={e => setNewSipShares(e.target.value)} 
-                      className="input-field" 
-                      style={{ borderColor: 'rgba(52, 211, 153, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
-                    />
-                    <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
-                      0 = Watchlist only
-                    </span>
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BUY DATE</label>
-                    <input 
-                      type="date" 
-                      value={newSipTxDate} 
-                      onChange={e => setNewSipTxDate(e.target.value)} 
-                      className="input-field" 
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>CATEGORY</label>
-                  <select value={newSipCategory} onChange={e => setNewSipCategory(e.target.value)} className="input-field">
-                    <option value="Core">Core (#1 High Edge Baseline)</option>
-                    <option value="Growth">Growth (#2 Momentum High Beta)</option>
-                    <option value="Park">Park (ETF / Liquid Cash Reserve — No 5% Signal)</option>
-                  </select>
-                </div>
-
-                <button type="submit" style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', marginTop: '6px', fontSize: '14px' }}>
-                  {Number(newSipShares) > 0 ? '➕ Record Stock Purchase' : '📌 Add Stock to Watchlist'}
-                </button>
-              </form>
-            )}
-
-            {/* FORM B: RECORD SALE OF STOCKS */}
-            {sipFormMode === 'SELL' && (() => {
-              const openHoldings = pullbackStockSummary.filter(s => s.netShares > 0);
-              const selectedHolding = openHoldings.find(s => s.ticker === sipSellSelectedTicker) || openHoldings[0];
-
-              if (openHoldings.length === 0) {
-                return (
-                  <div style={{ textAlign: 'center', padding: '32px 16px', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '8px', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                    <AlertCircle size={28} style={{ color: '#f59e0b', margin: '0 auto 8px' }} />
-                    <div style={{ fontSize: '14px', fontWeight: 800, color: '#ffffff' }}>No Open Stock Positions to Sell</div>
-                    <p style={{ fontSize: '12px', color: '#94a3b8', maxWidth: '400px', margin: '6px auto 14px' }}>
-                      You currently have 0 active shares in your portfolio. Add stock purchases first using the "Buy / Add Stock" tab above.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setSipFormMode('BUY')}
-                      style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}
-                    >
-                      Go to Buy Form
-                    </button>
-                  </div>
-                );
-              }
-
-              const sellSharesNum = parseInt(sipSellFormShares) || 0;
-              const sellPriceNum = parseFloat(sipSellFormPrice) || (selectedHolding ? selectedHolding.ltp : 0);
-              const avgCost = selectedHolding ? selectedHolding.avgCost : 0;
-              const sellVal = sellSharesNum * sellPriceNum;
-              const costVal = sellSharesNum * avgCost;
-              const estGrossProfit = sellVal - costVal;
-              const estProfitPct = costVal > 0 ? (estGrossProfit / costVal) * 100 : 0;
-
-              // Zerodha Sell Charges estimation
-              const stt = sellVal * 0.001;
-              const txn = sellVal * 0.0000297;
-              const gst = txn * 0.18;
-              const dp = 15.34;
-              const estSellCharges = stt + txn + gst + dp;
-              const estNetProfit = estGrossProfit - estSellCharges;
-
-              return (
-                <form onSubmit={handleRecordSipSellSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div>
-                    <label style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 800, display: 'block', marginBottom: '6px' }}>
-                      SELECT STOCK POSITION TO SELL
-                    </label>
-                    <select
-                      value={sipSellSelectedTicker || (selectedHolding ? selectedHolding.ticker : '')}
+                      type="text" 
+                      placeholder="0.00"
+                      value={swingFreeCashInput} 
                       onChange={e => {
-                        const tick = e.target.value;
-                        setSipSellSelectedTicker(tick);
-                        const match = openHoldings.find(s => s.ticker === tick);
-                        if (match) {
-                          setSipSellFormPrice(match.ltp > 0 ? String(match.ltp) : '');
-                          setSipSellFormShares('1');
+                        const val = e.target.value;
+                        setSwingFreeCashInput(val);
+                        localStorage.setItem('finplus_free_cash_swing', val);
+                      }}
+                      style={{ width: '100%', background: '#090d16', border: '1px solid rgba(56, 189, 248, 0.4)', color: '#38bdf8', fontSize: '16px', fontWeight: 800, padding: '8px 12px', borderRadius: '8px' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#10b981', fontWeight: 800, display: 'block', marginBottom: '4px' }}>🛡️ LONG-TERM FREE CASH (INDMONEY)</label>
+                    <input 
+                      type="text" 
+                      placeholder="0.00"
+                      value={ltFreeCashInput} 
+                      onChange={e => {
+                        const val = e.target.value;
+                        setLtFreeCashInput(val);
+                        localStorage.setItem('finplus_free_cash_lt', val);
+                      }}
+                      style={{ width: '100%', background: '#090d16', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#10b981', fontSize: '16px', fontWeight: 800, padding: '8px 12px', borderRadius: '8px' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#c084fc', fontWeight: 800, display: 'block', marginBottom: '4px' }}>💎 PENNY SIP FREE CASH (Kite)</label>
+                    <input 
+                      type="text" 
+                      placeholder="0.00"
+                      value={pennyFreeCashInput} 
+                      onChange={e => {
+                        const val = e.target.value;
+                        setPennyFreeCashInput(val);
+                        localStorage.setItem('finplus_free_cash_penny', val);
+                      }}
+                      style={{ width: '100%', background: '#090d16', border: '1px solid rgba(192, 132, 252, 0.4)', color: '#c084fc', fontSize: '16px', fontWeight: 800, padding: '8px 12px', borderRadius: '8px' }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sliders to Customize Percentage Splits */}
+              <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '16px', marginTop: '20px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase', marginBottom: '12px' }}>⚙️ Split Percentage Targets</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 700, marginBottom: '6px' }}>
+                      <span style={{ color: '#38bdf8' }}>⚡ Swing Trading:</span>
+                      <span>{swingPct}% (₹{capitalMath.swing.budget.toLocaleString('en-IN')})</span>
+                    </div>
+                    <input type="range" min="30" max="80" step="5" value={swingPct} onChange={e => setSwingPct(Number(e.target.value))} style={{ width: '100%', accentColor: '#38bdf8' }} />
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 700, marginBottom: '6px' }}>
+                      <span style={{ color: '#10b981' }}>🛡️ Long-Term Core:</span>
+                      <span>{ltPct}% (₹{capitalMath.lt.budget.toLocaleString('en-IN')})</span>
+                    </div>
+                    <input type="range" min="10" max="50" step="5" value={ltPct} onChange={e => setLtPct(Number(e.target.value))} style={{ width: '100%', accentColor: '#10b981' }} />
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 700, marginBottom: '6px' }}>
+                      <span style={{ color: '#c084fc' }}>💎 Quality Penny SIP:</span>
+                      <span>{pennyPct}% (₹{capitalMath.penny.budget.toLocaleString('en-IN')})</span>
+                    </div>
+                    <input type="range" min="5" max="30" step="5" value={pennyPct} onChange={e => setPennyPct(Number(e.target.value))} style={{ width: '100%', accentColor: '#c084fc' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3 Pillar Summary Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
+              
+              {/* Pillar 1: Swing Trading */}
+              <div style={{ background: '#0f172a', border: '1.5px solid rgba(56, 189, 248, 0.4)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>PILLAR 1 • 60% (REVOLVING)</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>Broker: Zerodha Kite</span>
+                  </div>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>⚡ Swing Trading Fund</div>
+                  <div style={{ fontSize: '28px', fontWeight: 900, color: '#38bdf8', margin: '10px 0' }}>₹{capitalMath.swing.available.toLocaleString('en-IN')} <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>available cash</span></div>
+                  
+                  <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
+                      <span>New Injected Capital:</span>
+                      <strong>₹{capitalMath.swing.injected.toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
+                      <span>Active Deployed (Revolving):</span>
+                      <strong style={{ color: '#38bdf8' }}>₹{capitalMath.swing.deployed.toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
+                      <span>Realized Profits:</span>
+                      <strong style={{ color: capitalMath.swing.realized >= 0 ? '#10b981' : '#f87171' }}>{capitalMath.swing.realized >= 0 ? '+' : ''}₹{capitalMath.swing.realized.toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a5b4fc', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '6px', marginTop: '2px' }}>
+                      <span>Total Revolving Pool:</span>
+                      <strong style={{ color: '#a5b4fc' }}>₹{capitalMath.swing.totalPool.toLocaleString('en-IN')}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => { setAddSegment('SWING'); setShowAddModal(true); }}
+                  style={{ width: '100%', background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#090d16', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 900, fontSize: '13px', cursor: 'pointer' }}
+                >
+                  + Record Swing Buy
+                </button>
+              </div>
+
+              {/* Pillar 2: Long-Term Quality */}
+              <div style={{ background: '#0f172a', border: '1.5px solid rgba(16, 185, 129, 0.4)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>PILLAR 2 • 30%</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>Broker: INDMONEY</span>
+                  </div>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>🛡️ Long-Term Core Quality</div>
+                  <div style={{ fontSize: '28px', fontWeight: 900, color: '#10b981', margin: '10px 0' }}>₹{capitalMath.lt.available.toLocaleString('en-IN')} <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>available cash</span></div>
+                  
+                  <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
+                      <span>Total Allocated:</span>
+                      <strong>₹{capitalMath.lt.injected.toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
+                      <span>Active Deployed:</span>
+                      <strong style={{ color: '#10b981' }}>₹{capitalMath.lt.deployed.toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
+                      <span>Realized Profits:</span>
+                      <strong style={{ color: capitalMath.lt.realized >= 0 ? '#10b981' : '#f87171' }}>{capitalMath.lt.realized >= 0 ? '+' : ''}₹{capitalMath.lt.realized.toLocaleString('en-IN')}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => { setAddSegment('LT'); setShowAddModal(true); }}
+                  style={{ width: '100%', background: 'linear-gradient(135deg, #059669, #10b981)', color: '#090d16', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 900, fontSize: '13px', cursor: 'pointer' }}
+                >
+                  + Record LT Quality Buy
+                </button>
+              </div>
+
+              {/* Pillar 3: Quality Penny SIP */}
+              <div style={{ background: '#0f172a', border: '1.5px solid rgba(192, 132, 252, 0.4)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ background: 'rgba(192, 132, 252, 0.15)', color: '#c084fc', fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>PILLAR 3 • 10%</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>Broker: Zerodha Kite</span>
+                  </div>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>💎 Quality Penny SIP</div>
+                  <div style={{ fontSize: '28px', fontWeight: 900, color: '#c084fc', margin: '10px 0' }}>₹{capitalMath.penny.available.toLocaleString('en-IN')} <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>available cash</span></div>
+                  
+                  <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
+                      <span>Total Allocated:</span>
+                      <strong>₹{capitalMath.penny.injected.toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
+                      <span>Active Deployed:</span>
+                      <strong style={{ color: '#c084fc' }}>₹{capitalMath.penny.deployed.toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
+                      <span>Realized Profits:</span>
+                      <strong style={{ color: capitalMath.penny.realized >= 0 ? '#10b981' : '#f87171' }}>{capitalMath.penny.realized >= 0 ? '+' : ''}₹{capitalMath.penny.realized.toLocaleString('en-IN')}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => { setAddSegment('PENNY'); setShowAddModal(true); }}
+                  style={{ width: '100%', background: 'linear-gradient(135deg, #7c3aed, #c084fc)', color: '#090d16', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 900, fontSize: '13px', cursor: 'pointer' }}
+                >
+                  + Record Penny SIP Buy
+                </button>
+              </div>
+
+            </div>
+
+            {/* Capital Injections & Withdrawals Ledger Table */}
+            <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#ffffff' }}>📜 Capital Event Ledger (Injections &amp; Withdrawals)</div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {capitalLedger.length > 0 && (
+                    <button 
+                      onClick={() => {
+                        if (window.confirm('Reset and clear all capital injection/withdrawal records to ₹0?')) {
+                          setCapitalLedger([]);
+                          setMonthlyBudgetInput('0');
+                          showToast('🧹 All capital records reset to ₹0!');
                         }
                       }}
-                      className="input-field"
-                      style={{ borderColor: 'rgba(245, 158, 11, 0.4)', background: 'rgba(15, 23, 42, 0.9)' }}
-                      required
+                      style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', padding: '6px 12px', borderRadius: '6px', fontWeight: 800, fontSize: '11px', cursor: 'pointer' }}
                     >
-                      {openHoldings.map(h => (
-                        <option key={h.ticker} value={h.ticker}>
-                          {h.cleanSym} — {h.name} ({h.netShares} share{h.netShares > 1 ? 's' : ''} held @ avg ₹{h.avgCost.toFixed(2)} | LTP: ₹{h.ltp.toFixed(2)})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {selectedHolding && (
-                    <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '12px 16px', borderRadius: '8px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>AVAILABLE SHARES</div>
-                        <div style={{ fontSize: '16px', fontWeight: 900, color: '#34d399' }}>{selectedHolding.netShares} sh</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>AVG BUY COST</div>
-                        <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff' }}>₹{selectedHolding.avgCost.toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>CURRENT MARKET LTP</div>
-                        <div style={{ fontSize: '16px', fontWeight: 900, color: '#38bdf8' }}>₹{selectedHolding.ltp.toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>CATEGORY</div>
-                        <div style={{ fontSize: '14px', fontWeight: 800, color: selectedHolding.category === 'Core' ? '#34d399' : '#c084fc' }}>{selectedHolding.category}</div>
-                      </div>
-                    </div>
+                      🗑️ Reset to ₹0
+                    </button>
                   )}
-
-                  {/* Sell Inputs */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <label style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 800 }}>
-                          SHARES TO SELL
-                        </label>
-                        {selectedHolding && (
-                          <div style={{ display: 'flex', gap: '4px' }}>
-                            <button
-                              type="button"
-                              onClick={() => setSipSellFormShares('1')}
-                              style={{ fontSize: '9px', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#38bdf8', padding: '1px 5px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}
-                            >
-                              1
-                            </button>
-                            {selectedHolding.netShares > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => setSipSellFormShares(String(Math.max(1, Math.floor(selectedHolding.netShares / 2))))}
-                                style={{ fontSize: '9px', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fbbf24', padding: '1px 5px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}
-                              >
-                                50%
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => setSipSellFormShares(String(selectedHolding.netShares))}
-                              style={{ fontSize: '9px', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#34d399', padding: '1px 5px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}
-                            >
-                              All ({selectedHolding.netShares})
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <input
-                        type="number"
-                        step="1"
-                        min="1"
-                        max={selectedHolding ? selectedHolding.netShares : 1}
-                        value={sipSellFormShares}
-                        onChange={e => setSipSellFormShares(e.target.value)}
-                        className="input-field"
-                        style={{ borderColor: 'rgba(245, 158, 11, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800 }}>
-                          SELL EXECUTION PRICE (₹)
-                        </label>
-                        {selectedHolding && selectedHolding.ltp > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setSipSellFormPrice(String(selectedHolding.ltp))}
-                            style={{ fontSize: '9px', background: 'rgba(56, 189, 248, 0.15)', border: 'none', color: '#38bdf8', padding: '1px 6px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}
-                          >
-                            Set LTP
-                          </button>
-                        )}
-                      </div>
-                      <input
-                        type="number"
-                        step="0.05"
-                        placeholder="e.g. 405.85"
-                        value={sipSellFormPrice}
-                        onChange={e => setSipSellFormPrice(e.target.value)}
-                        className="input-field"
-                        style={{ borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SELL DATE</label>
-                      <input
-                        type="date"
-                        value={sipSellFormDate}
-                        onChange={e => setSipSellFormDate(e.target.value)}
-                        className="input-field"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  {/* Real-time P&L Preview Banner */}
-                  {sellSharesNum > 0 && sellPriceNum > 0 && selectedHolding && (
-                    <div style={{ background: estGrossProfit >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', border: `1px solid ${estGrossProfit >= 0 ? 'rgba(52, 211, 153, 0.3)' : 'rgba(248, 113, 113, 0.3)'}`, padding: '12px 16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                      <div>
-                        <div style={{ fontSize: '11px', color: '#a5b4fc' }}>
-                          Proceeds: <strong style={{ color: '#ffffff' }}>₹{sellVal.toFixed(2)}</strong> (Cost: ₹{costVal.toFixed(2)}) | Zerodha Est. Charges: <strong style={{ color: '#fbbf24' }}>₹{estSellCharges.toFixed(2)}</strong> (STT + ₹15.34 DP)
-                        </div>
-                        <div style={{ fontSize: '13px', fontWeight: 800, marginTop: '2px', color: estGrossProfit >= 0 ? '#34d399' : '#fb7185' }}>
-                          Estimated Gross Realized P&L: {estGrossProfit >= 0 ? '+' : ''}₹{estGrossProfit.toFixed(2)} ({estProfitPct >= 0 ? '+' : ''}{estProfitPct.toFixed(2)}%)
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>ESTIMATED NET PROFIT</div>
-                        <div style={{ fontSize: '18px', fontWeight: 900, color: estNetProfit >= 0 ? '#34d399' : '#fb7185' }}>
-                          {estNetProfit >= 0 ? '+' : ''}₹{estNetProfit.toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    style={{
-                      background: '#f59e0b',
-                      color: '#ffffff',
-                      border: 'none',
-                      padding: '12px',
-                      borderRadius: '8px',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      marginTop: '6px',
-                      fontSize: '14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px'
-                    }}
+                  <button 
+                    onClick={() => setShowCapModal(true)}
+                    style={{ background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38bdf8', padding: '6px 12px', borderRadius: '6px', fontWeight: 800, fontSize: '11px', cursor: 'pointer' }}
                   >
-                    <DollarSign size={16} />
-                    Confirm & Record Sale of {sellSharesNum} Share(s)
+                    + Log Capital Event
                   </button>
-                </form>
-              );
-            })()}
-
-          </div>
-
-          {/* View Switcher: Active Holdings vs Stock Allocation vs Sold History */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', background: 'rgba(15, 23, 42, 0.4)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: '14px', color: '#ffffff', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Filter size={16} style={{ color: '#38bdf8' }} />
-              SIP Portfolio View:
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => setSipViewMode('holdings')}
-                style={{
-                  background: sipViewMode === 'holdings' ? '#10b981' : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${sipViewMode === 'holdings' ? '#34d399' : 'rgba(255,255,255,0.1)'}`,
-                  color: '#ffffff',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                📋 Active Holdings & Targets ({pullbackStockSummary.filter(s => s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false)).length})
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSipViewMode('allocation')}
-                style={{
-                  background: sipViewMode === 'allocation' ? '#38bdf8' : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${sipViewMode === 'allocation' ? '#38bdf8' : 'rgba(255,255,255,0.1)'}`,
-                  color: '#ffffff',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                📊 Stock Invested Capital & Allocation ({pullbackStockSummary.filter(s => s.netShares > 0).length})
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSipViewMode('sold')}
-                style={{
-                  background: sipViewMode === 'sold' ? '#f59e0b' : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${sipViewMode === 'sold' ? '#fbbf24' : 'rgba(255,255,255,0.1)'}`,
-                  color: '#ffffff',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                🏁 Sold Stocks & Realized History ({sipSoldTradesList.length})
-              </button>
-            </div>
-          </div>
-
-          {/* VIEW 1: ACTIVE HOLDINGS & WATCHLIST TABLE */}
-          {sipViewMode === 'holdings' && (
-            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <div>
-                  <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>📋 Pullback SIP Targets & Alerts</h2>
-                  <p style={{ fontSize: '12px', color: '#a5b4fc', margin: 0 }}>
-                    Automated SIP triggers purchase whenever a stock pulls back 5% from its recent local peak (after a 7-day cool-down).
-                  </p>
                 </div>
-                <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 700 }}>
-                  {pullbackStockSummary.filter(s => s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false)).length} Stocks Monitored
-                </span>
               </div>
 
-              {/* PORTFOLIO ALLOCATION & PERFORMANCE SUMMARY BANNER */}
-              {(() => {
-                const openHoldings = pullbackStockSummary.filter(s => s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false));
-                const totalCost = openHoldings.reduce((sum, s) => sum + (s.netCost || 0), 0);
-                const totalVal = openHoldings.reduce((sum, s) => sum + (s.currentVal || 0), 0);
-                const totalPnl = totalVal - totalCost;
-                const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
-
-                const parkCost = openHoldings.filter(s => s.category === 'Park').reduce((sum, s) => sum + (s.netCost || 0), 0);
-                const coreCost = openHoldings.filter(s => s.category === 'Core').reduce((sum, s) => sum + (s.netCost || 0), 0);
-                const growthCost = openHoldings.filter(s => s.category === 'Growth').reduce((sum, s) => sum + (s.netCost || 0), 0);
-
-                const parkPctNum = totalCost > 0 ? (parkCost / totalCost) * 100 : 0;
-                const corePctNum = totalCost > 0 ? (coreCost / totalCost) * 100 : 0;
-                const growthPctNum = totalCost > 0 ? (growthCost / totalCost) * 100 : 0;
-
-                const sortedByCost = [...openHoldings].filter(s => s.netShares > 0).sort((a, b) => (b.netCost || 0) - (a.netCost || 0));
-                const topStock = sortedByCost.length > 0 ? sortedByCost[0] : null;
-                const topStockAlloc = (topStock && totalCost > 0) ? ((topStock.netCost / totalCost) * 100).toFixed(1) : '0';
-
-                return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '18px', borderRadius: '12px' }}>
-                    {/* Top Stat Cards */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '12px' }}>
-                      <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '12px 14px', borderRadius: '8px' }}>
-                        <div style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          TOTAL INVESTED AMOUNT
-                        </div>
-                        <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', marginTop: '2px' }}>
-                          ₹{totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
-                          {openHoldings.filter(s => s.netShares > 0).length} Open Stock Positions
-                        </div>
-                      </div>
-
-                      <div style={{ background: 'rgba(52, 211, 153, 0.08)', border: '1px solid rgba(52, 211, 153, 0.25)', padding: '12px 14px', borderRadius: '8px' }}>
-                        <div style={{ fontSize: '10px', color: '#34d399', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          TOTAL CURRENT VALUE
-                        </div>
-                        <div style={{ fontSize: '18px', fontWeight: 900, color: '#34d399', marginTop: '2px' }}>
-                          ₹{totalVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
-                          Live Market Valuation
-                        </div>
-                      </div>
-
-                      <div style={{ background: totalPnl >= 0 ? 'rgba(52, 211, 153, 0.08)' : 'rgba(248, 113, 113, 0.08)', border: `1px solid ${totalPnl >= 0 ? 'rgba(52, 211, 153, 0.25)' : 'rgba(248, 113, 113, 0.25)'}`, padding: '12px 14px', borderRadius: '8px' }}>
-                        <div style={{ fontSize: '10px', color: totalPnl >= 0 ? '#34d399' : '#fb7185', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          NET PROFIT / LOSS
-                        </div>
-                        <div style={{ fontSize: '18px', fontWeight: 900, color: totalPnl >= 0 ? '#34d399' : '#fb7185', marginTop: '2px' }}>
-                          {totalPnl >= 0 ? '+' : ''}₹{totalPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({totalPnlPct >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%)
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
-                          Total Portfolio Return
-                        </div>
-                      </div>
-
-                      <div style={{ background: 'rgba(168, 85, 247, 0.08)', border: '1px solid rgba(168, 85, 247, 0.25)', padding: '12px 14px', borderRadius: '8px' }}>
-                        <div style={{ fontSize: '10px', color: '#c084fc', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                          TOP ALLOCATED STOCK
-                        </div>
-                        <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff', marginTop: '2px' }}>
-                          {topStock ? `${topStock.cleanSym} (${topStockAlloc}%)` : 'N/A'}
-                        </div>
-                        <div style={{ fontSize: '10px', color: '#c084fc', marginTop: '2px' }}>
-                          Highest Capital Concentration
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Category Allocation Breakdown Bar */}
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '11px', fontWeight: 800 }}>
-                        <span style={{ color: '#a5b4fc' }}>PORTFOLIO ALLOCATION BREAKDOWN BY CATEGORY:</span>
-                        <div style={{ display: 'flex', gap: '14px' }}>
-                          <span style={{ color: '#38bdf8' }}>🅿️ Park: {parkPctNum.toFixed(1)}% (₹{parkCost.toFixed(0)})</span>
-                          <span style={{ color: '#34d399' }}>🛡️ Core: {corePctNum.toFixed(1)}% (₹{coreCost.toFixed(0)})</span>
-                          <span style={{ color: '#c084fc' }}>🚀 Growth: {growthPctNum.toFixed(1)}% (₹{growthCost.toFixed(0)})</span>
-                        </div>
-                      </div>
-                      <div style={{ height: '10px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '5px', overflow: 'hidden', display: 'flex' }}>
-                        <div style={{ width: `${parkPctNum}%`, background: '#38bdf8', height: '100%' }} title={`Park ETFs: ${parkPctNum.toFixed(1)}%`} />
-                        <div style={{ width: `${corePctNum}%`, background: '#34d399', height: '100%' }} title={`Core Stocks: ${corePctNum.toFixed(1)}%`} />
-                        <div style={{ width: `${growthPctNum}%`, background: '#c084fc', height: '100%' }} title={`Growth Stocks: ${growthPctNum.toFixed(1)}%`} />
-                      </div>
-                    </div>
-
-                    {/* Actionable Allocation Recommendation Box */}
-                    <div style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.25)', padding: '10px 14px', borderRadius: '8px', fontSize: '12px', color: '#e0e7ff', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '16px' }}>💡</span>
-                      <div>
-                        <strong>Allocation Improvement Insights: </strong>
-                        {growthPctNum < 15 ? (
-                          <span>Growth stocks represent <strong>{growthPctNum.toFixed(1)}%</strong> (vs 15–20% target). Consider prioritizing Growth candidates (e.g. TATASTEEL, BORANA) when 5% pullback triggers fire to balance upside potential.</span>
-                        ) : (
-                          <span>Your category distribution (Park {parkPctNum.toFixed(1)}% | Core {corePctNum.toFixed(1)}% | Growth {growthPctNum.toFixed(1)}%) is well-balanced across defensive safety and capital growth.</span>
-                        )}
-                        {topStock && Number(topStockAlloc) > 20 && (
-                          <span style={{ marginLeft: '6px', color: '#fbbf24' }}>Notice: <strong>{topStock.cleanSym}</strong> has high single-stock weight ({topStockAlloc}%). Recommended single-stock cap: 15–20%.</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', color: '#a5b4fc', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      <th style={{ padding: '12px 14px' }}>Stock (Ticker)</th>
-                      <th style={{ padding: '12px 14px' }}>Category</th>
-                      <th style={{ padding: '12px 14px' }}>Shares</th>
-                      <th style={{ padding: '12px 14px' }}>Avg Price (₹)</th>
-                      <th style={{ padding: '12px 14px', color: '#34d399', background: 'rgba(52, 211, 153, 0.08)' }}>Total Invested (₹)</th>
-                      <th style={{ padding: '12px 14px' }}>LTP (₹)</th>
-                      <th style={{ padding: '12px 14px', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.08)' }}>Current Value (₹)</th>
-                      <th style={{ padding: '12px 14px' }}>P&L</th>
-                      <th style={{ padding: '12px 14px' }}>Local Peak</th>
-                      <th style={{ padding: '12px 14px' }}>Target Buy Price</th>
-                      <th style={{ padding: '12px 14px' }}>Days Since Last Buy</th>
-                      <th style={{ padding: '12px 14px' }}>Allocation (%)</th>
-                      <th style={{ padding: '12px 14px' }}>System Status</th>
-                      <th style={{ padding: '12px 14px' }}>Actions</th>
+                    <tr style={{ background: 'rgba(255,255,255,0.03)', color: '#94a3b8', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                      <th style={{ padding: '10px 12px' }}>DATE</th>
+                      <th style={{ padding: '10px 12px' }}>EVENT TYPE</th>
+                      <th style={{ padding: '10px 12px' }}>TARGET SEGMENT</th>
+                      <th style={{ padding: '10px 12px' }}>AMOUNT (₹)</th>
+                      <th style={{ padding: '10px 12px' }}>NOTES / REASON</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'right' }}>ACTION</th>
                     </tr>
                   </thead>
-                  <tbody style={{ color: '#e0e7ff' }}>
-                    {pullbackStockSummary
-                      .filter(s => s.netShares > 0 || (pullbackData[s.ticker] && pullbackData[s.ticker].in_watchlist !== false))
-                      .map((s, idx) => {
-                      const isBuyTriggered = s.signalClass === 'buy';
-                      const isCooldown = s.signalClass === 'cooldown';
-                      const isPending = s.signalClass === 'pending';
-                      const allocPct = totalSipDeployedCost > 0 ? ((s.netCost / totalSipDeployedCost) * 100).toFixed(1) : '0.0';
-
-                      let rowBg = idx % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent';
-                      if (isBuyTriggered) rowBg = 'rgba(52, 211, 153, 0.22)';
-                      else if (isCooldown) rowBg = 'rgba(245, 158, 11, 0.05)';
-                      else if (isPending) rowBg = 'rgba(168, 85, 247, 0.05)';
-
-                      return (
-                        <tr key={s.ticker} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: rowBg, borderLeft: isBuyTriggered ? '4px solid #34d399' : 'none' }}>
-                          <td style={{ padding: '14px', fontWeight: 800 }}>
-                            <div style={{ color: '#ffffff', fontSize: '14px' }}>{s.name} ({s.cleanSym})</div>
-                          </td>
-                          <td style={{ padding: '14px' }}>
-                            <span style={{
-                              background: s.category === 'Core' ? 'rgba(52, 211, 153, 0.2)' : (s.category === 'Growth' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(56, 189, 248, 0.2)'),
-                              color: s.category === 'Core' ? '#34d399' : (s.category === 'Growth' ? '#c084fc' : '#38bdf8'),
-                              border: `1px solid ${s.category === 'Core' ? 'rgba(52, 211, 153, 0.3)' : (s.category === 'Growth' ? 'rgba(168, 85, 247, 0.3)' : 'rgba(56, 189, 248, 0.3)')}`,
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              fontSize: '11px',
-                              fontWeight: 800
-                            }}>
-                              {s.category === 'Park' ? '🅿️ Park' : s.category}
-                            </span>
-                          </td>
-                          <td style={{ padding: '14px', fontWeight: 800, color: '#ffffff' }}>{s.netShares}</td>
-
-                          {/* Distinct Avg Buy Price */}
-                          <td style={{ padding: '14px', fontWeight: 700, color: '#cbd5e1' }}>
-                            {s.netShares > 0 ? `₹${s.avgCost.toFixed(2)}` : 'N/A'}
-                          </td>
-
-                          {/* Standalone Explicit Total Invested Amount Column */}
-                          <td style={{ padding: '14px', fontWeight: 900, color: '#34d399', fontSize: '14px', background: 'rgba(52, 211, 153, 0.08)' }}>
-                            {s.netShares > 0 ? `₹${s.netCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}
-                          </td>
-
-                          {/* Distinct LTP */}
-                          <td style={{ padding: '14px', fontWeight: 700, color: '#cbd5e1' }}>
-                            {s.ltp > 0 ? `₹${s.ltp.toFixed(2)}` : 'Fetching...'}
-                          </td>
-
-                          {/* Standalone Explicit Total Current Value Column */}
-                          <td style={{ padding: '14px', fontWeight: 900, color: '#38bdf8', fontSize: '14px', background: 'rgba(56, 189, 248, 0.08)' }}>
-                            {s.netShares > 0 ? `₹${s.currentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}
-                          </td>
-
-                          <td style={{ padding: '14px', fontWeight: 800, color: s.unrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                            {s.netShares > 0 ? `₹${s.unrealizedPnl.toFixed(2)} (${s.pnlPct >= 0 ? '+' : ''}${s.pnlPct.toFixed(2)}%)` : 'N/A'}
-                          </td>
-                          <td style={{ padding: '14px', fontWeight: 700, color: '#cbd5e1' }}>{s.peak > 0 ? `₹${s.peak.toFixed(2)}` : 'Fetching...'}</td>
-                          <td style={{ padding: '14px', fontWeight: 900, color: s.category === 'Park' ? '#94a3b8' : '#34d399', background: s.category === 'Park' ? 'transparent' : 'rgba(52, 211, 153, 0.08)' }}>
-                            {s.category === 'Park' ? '— (Parked)' : (s.targetBuyPrice > 0 ? `₹${s.targetBuyPrice.toFixed(2)}` : 'Fetching...')}
-                          </td>
-                          <td style={{ padding: '14px', fontWeight: 700, color: isBuyTriggered ? '#34d399' : '#e2e8f0' }}>
-                            {s.daysSinceLastBuyStr}
-                          </td>
-                          <td style={{ padding: '14px', minWidth: '120px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ fontWeight: 800, color: '#a5b4fc', fontSize: '12px', minWidth: '38px' }}>{allocPct}%</span>
-                              <div style={{ flex: 1, height: '6px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                                <div style={{ 
-                                  width: `${Math.min(100, Number(allocPct))}%`, 
-                                  height: '100%', 
-                                  background: s.category === 'Core' ? '#34d399' : (s.category === 'Growth' ? '#c084fc' : '#38bdf8'),
-                                  borderRadius: '3px'
-                                }} />
-                              </div>
-                            </div>
-                          </td>
-                          <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
-                            <span style={{ 
-                              fontSize: '11px', 
-                              fontWeight: 800, 
-                              padding: '6px 12px', 
-                              borderRadius: '6px', 
-                              whiteSpace: 'nowrap',
-                              display: 'inline-block',
-                              lineHeight: '1.4',
-                              background: s.category === 'Park' ? 'rgba(56, 189, 248, 0.15)' : (isBuyTriggered ? '#10b981' : (isCooldown ? 'rgba(245, 158, 11, 0.2)' : (isPending ? 'rgba(168, 85, 247, 0.2)' : 'rgba(52, 211, 153, 0.15)'))),
-                              color: s.category === 'Park' ? '#38bdf8' : (isBuyTriggered ? '#ffffff' : (isCooldown ? '#fde047' : (isPending ? '#c084fc' : '#34d399'))),
-                              border: `1px solid ${s.category === 'Park' ? 'rgba(56, 189, 248, 0.3)' : (isBuyTriggered ? '#10b981' : (isCooldown ? '#fde047' : (isPending ? '#c084fc' : '#34d399')))}`
-                            }}>
-                              {s.systemStatus}
-                            </span>
-                          </td>
-                          <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
-                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                              <button
-                                onClick={() => handleOpenSipEditModal(s)}
-                                title="Edit stock details, category, or historical transactions"
-                                style={{
-                                  background: 'rgba(99, 102, 241, 0.15)',
-                                  color: '#818cf8',
-                                  border: '1px solid rgba(99, 102, 241, 0.3)',
-                                  padding: '6px 10px',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  fontWeight: 700,
-                                  fontSize: '11px'
-                                }}
-                              >
-                                <Edit3 size={13} />
-                                Edit
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  setSipFormMode('BUY');
-                                  setNewSipTicker(s.ticker);
-                                  setNewSipName(s.name);
-                                  setNewSipShares('1');
-                                  setNewSipBuyPrice(s.ltp > 0 ? s.ltp.toFixed(2) : '');
-                                  setTimeout(() => {
-                                    const formEl = document.getElementById('sip-watchlist-form');
-                                    if (formEl) {
-                                      formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                    }
-                                    const priceInput = document.getElementById('new-sip-buy-price-input');
-                                    if (priceInput) priceInput.focus();
-                                  }, 50);
-                                }}
-                                title="Log additional buy transaction for this stock"
-                                style={{
-                                  background: 'rgba(16, 185, 129, 0.15)',
-                                  color: '#34d399',
-                                  border: '1px solid rgba(16, 185, 129, 0.3)',
-                                  padding: '6px 10px',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  fontWeight: 700,
-                                  fontSize: '11px'
-                                }}
-                              >
-                                <PlusCircle size={13} />
-                                Log Buy
-                              </button>
-
-                              {s.netShares > 0 && (
-                                <button
-                                  onClick={() => {
-                                    setSipSellModalStock({
-                                      ticker: s.ticker,
-                                      cleanSym: s.cleanSym,
-                                      name: s.name,
-                                      category: s.category,
-                                      netShares: s.netShares,
-                                      avgCost: s.avgCost,
-                                      ltp: s.ltp
-                                    });
-                                    setSipSellModalShares('1');
-                                    setSipSellModalPrice(s.ltp > 0 ? String(s.ltp) : '');
-                                    setSipSellModalDate(new Date().toISOString().split('T')[0]);
-                                  }}
-                                  title="Record sold shares / exit position for this stock"
-                                  style={{
-                                    background: 'rgba(245, 158, 11, 0.15)',
-                                    color: '#fbbf24',
-                                    border: '1px solid rgba(245, 158, 11, 0.3)',
-                                    padding: '6px 10px',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    fontWeight: 700,
-                                    fontSize: '11px'
-                                  }}
-                                >
-                                  <DollarSign size={13} />
-                                  Log Sell
-                                </button>
-                              )}
-
-                              <button
-                                onClick={() => handleDeleteStockFromWatchlist(s.ticker)}
-                                title="Remove stock from 5% SIP Watchlist"
-                                style={{
-                                  background: 'rgba(239, 68, 68, 0.15)',
-                                  color: '#f87171',
-                                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                                  padding: '6px 10px',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  fontWeight: 700,
-                                  fontSize: '11px'
-                                }}
-                              >
-                                <Trash2 size={13} />
-                                Remove
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                  <tbody>
+                    {capitalLedger.map((item, idx) => (
+                      <tr key={item.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <td style={{ padding: '10px 12px', color: '#cbd5e1' }}>{item.date}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span style={{
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            fontWeight: 800,
+                            fontSize: '10px',
+                            background: item.type === 'INJECTION' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                            color: item.type === 'INJECTION' ? '#10b981' : '#f87171'
+                          }}>
+                            {item.type}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px', color: '#a5b4fc', fontWeight: 700 }}>{item.segment}</td>
+                        <td style={{ padding: '10px 12px', fontWeight: 800, color: item.type === 'INJECTION' ? '#10b981' : '#f87171' }}>
+                          {item.type === 'INJECTION' ? '+' : '-'}₹{Number(item.amount).toLocaleString('en-IN')}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{item.notes || '—'}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                          <button 
+                            onClick={() => {
+                              if (window.confirm('Delete this capital event?')) {
+                                setCapitalLedger(prev => prev.filter(c => c.id !== item.id));
+                              }
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px' }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
-                  <tfoot>
-                    <tr style={{ borderTop: '2px solid #38bdf8', background: 'rgba(15, 23, 42, 0.95)', fontWeight: 900, color: '#ffffff' }}>
-                      <td style={{ padding: '14px' }}>
-                        <div style={{ fontSize: '13px', color: '#38bdf8', fontWeight: 900 }}>📊 TOTAL PORTFOLIO</div>
-                        <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 600 }}>Aligned with Zerodha Holdings</div>
-                      </td>
-                      <td style={{ padding: '14px', fontSize: '11px', color: '#34d399', fontWeight: 800 }}>
-                        {pullbackStockSummary.filter(s => s.netShares > 0).length} Holdings
-                      </td>
-                      <td style={{ padding: '14px', fontWeight: 900, color: '#ffffff' }}>
-                        {pullbackStockSummary.filter(s => s.netShares > 0).reduce((sum, s) => sum + (Number(s.netShares) || 0), 0)}
-                      </td>
-                      <td style={{ padding: '14px', color: '#cbd5e1' }}>—</td>
-                      <td style={{ padding: '14px', fontWeight: 900, color: '#34d399', fontSize: '14px', background: 'rgba(52, 211, 153, 0.12)' }}>
-                        ₹{totalSipDeployedCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '14px', color: '#cbd5e1' }}>—</td>
-                      <td style={{ padding: '14px', fontWeight: 900, color: '#38bdf8', fontSize: '14px', background: 'rgba(56, 189, 248, 0.12)' }}>
-                        ₹{totalSipCurrentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '14px', fontWeight: 900, color: totalSipUnrealizedPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                        <div>{totalSipUnrealizedPnl >= 0 ? '+' : ''}₹{totalSipUnrealizedPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({totalSipDeployedCost > 0 ? ((totalSipUnrealizedPnl / totalSipDeployedCost) * 100).toFixed(2) : '0.00'}%)</div>
-                      </td>
-                      <td style={{ padding: '14px', color: '#94a3b8' }}>—</td>
-                      <td style={{ padding: '14px', color: '#94a3b8' }}>—</td>
-                      <td style={{ padding: '14px', color: '#94a3b8' }}>—</td>
-                      <td style={{ padding: '14px', fontWeight: 900, color: '#38bdf8' }}>
-                        100.0%
-                      </td>
-                      <td colSpan={2} style={{ padding: '14px', fontSize: '11px', color: '#a5b4fc', whiteSpace: 'nowrap' }}>
-                        <span style={{ background: 'rgba(52, 211, 153, 0.15)', color: '#34d399', padding: '4px 8px', borderRadius: '4px', border: '1px solid rgba(52, 211, 153, 0.3)', fontWeight: 800 }}>
-                          🟢 Live Portfolio Tracked
-                        </span>
-                      </td>
-                    </tr>
-                  </tfoot>
                 </table>
               </div>
             </div>
-          )}
 
-          {/* VIEW 2: SOLD STOCKS & REALIZED HISTORY TABLE */}
-          {sipViewMode === 'sold' && (
-            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          </div>
+        )}
+
+        {/* ── TABS 2, 3, 4: ACTIVE HOLDINGS (SWING, LT, PENNY) ── */}
+        {(activeTab === 'swing' || activeTab === 'lt' || activeTab === 'penny') && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            
+            {/* Segment Executive Capital & PnL Ribbon */}
+            <div style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.8))', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
-                  <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>🏁 Sold Stocks & Realized History</h2>
-                  <p style={{ fontSize: '12px', color: '#a5b4fc', margin: 0 }}>
-                    Chronological audit log of all sold shares with exact cost basis, realized profit/loss, and Zerodha delivery & DP charges.
-                  </p>
+                  <div style={{ fontSize: '20px', fontWeight: 900, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {activeTab === 'swing' && '⚡ Active Swing Trading Positions'}
+                    {activeTab === 'lt' && '🛡️ Long-Term Core Quality Portfolio'}
+                    {activeTab === 'penny' && '💎 Quality Penny SIP Accumulation'}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                    Broker: <strong style={{ color: activeTab === 'lt' ? '#10b981' : '#38bdf8' }}>{activeTab === 'lt' ? 'INDMONEY (Zero Delivery Brokerage, ₹14.75 DP)' : 'Zerodha Kite (Free Delivery, ₹15.34 DP)'}</strong>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 700 }}>
-                    {sipSoldTradesList.length} Sale Transaction(s)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSipFormMode('SELL');
-                      const formEl = document.getElementById('sip-watchlist-form');
-                      if (formEl) formEl.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                    style={{
-                      background: 'rgba(245, 158, 11, 0.2)',
-                      color: '#fbbf24',
-                      border: '1px solid rgba(245, 158, 11, 0.4)',
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      fontSize: '11px',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <PlusCircle size={12} />
-                    Record New Sale
-                  </button>
+
+                <button 
+                  onClick={() => { setAddSegment(activeTab.toUpperCase()); setShowAddModal(true); }}
+                  style={{ background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#090d16', border: 'none', padding: '10px 18px', borderRadius: '8px', fontWeight: 900, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <PlusCircle size={15} />
+                  + Record {activeTab.toUpperCase()} Buy
+                </button>
+              </div>
+
+              {/* Segment-Specific Metrics Row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', background: 'rgba(0,0,0,0.3)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>DEPLOYED CAPITAL</div>
+                  <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff', marginTop: '2px' }}>
+                    ₹{portfolioSummary[activeTab]?.invested.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>FREE BROKER CASH</div>
+                  <div style={{ fontSize: '16px', fontWeight: 900, color: '#10b981', marginTop: '2px' }}>
+                    ₹{portfolioSummary[activeTab]?.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>TOTAL SEGMENT CAPITAL</div>
+                  <div style={{ fontSize: '16px', fontWeight: 900, color: '#38bdf8', marginTop: '2px' }}>
+                    ₹{portfolioSummary[activeTab]?.totalCap.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase' }}>EST. CHARGES</div>
+                  <div style={{ fontSize: '16px', fontWeight: 900, color: '#fbbf24', marginTop: '2px' }}>
+                    -₹{(portfolioSummary[activeTab]?.estCharges || 0).toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>NET UNREALIZED P&amp;L</div>
+                  <div style={{ fontSize: '16px', fontWeight: 900, color: (portfolioSummary[activeTab]?.netPnl || 0) >= 0 ? '#10b981' : '#f87171', marginTop: '2px' }}>
+                    {(portfolioSummary[activeTab]?.netPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary[activeTab]?.netPnl || 0).toFixed(2)}
+                    <span style={{ fontSize: '11px', marginLeft: '4px' }}>
+                      ({(portfolioSummary[activeTab]?.netPct || 0) >= 0 ? '+' : ''}{(portfolioSummary[activeTab]?.netPct || 0).toFixed(2)}%)
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '1px' }}>
+                    Gross: {(portfolioSummary[activeTab]?.grossPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary[activeTab]?.grossPnl || 0).toFixed(2)} ({(portfolioSummary[activeTab]?.grossPct || 0) >= 0 ? '+' : ''}{(portfolioSummary[activeTab]?.grossPct || 0).toFixed(2)}%)
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Holdings Table */}
+            {holdingCards.filter(p => p.segment === activeTab.toUpperCase()).length === 0 ? (
+              <div style={{ background: '#0f172a', border: '1.5px dashed rgba(255,255,255,0.12)', borderRadius: '16px', padding: '40px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>📂</div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#ffffff' }}>No Active {activeTab.toUpperCase()} Holdings</div>
+                <div style={{ fontSize: '12px', color: '#94a3b8', maxWidth: '420px', margin: '6px auto 16px' }}>
+                  You currently own zero shares in this segment. Capital is safely held as cash reserve.
+                </div>
+                <button 
+                  onClick={() => { setAddSegment(activeTab.toUpperCase()); setShowAddModal(true); }}
+                  style={{ background: 'rgba(56, 189, 248, 0.15)', border: '1px solid #38bdf8', color: '#38bdf8', padding: '8px 18px', borderRadius: '8px', fontWeight: 800, fontSize: '12px', cursor: 'pointer' }}
+                >
+                  + Add Your First Purchase
+                </button>
+              </div>
+            ) : (
+              <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.03)', color: '#94a3b8', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                      <th style={{ padding: '12px 14px' }}>STOCK</th>
+                      <th style={{ padding: '12px 14px' }}>QTY</th>
+                      <th style={{ padding: '12px 14px' }}>BUY AVG (₹)</th>
+                      <th style={{ padding: '12px 14px' }}>INVESTED (₹)</th>
+                      <th style={{ padding: '12px 14px' }}>LIVE LTP (₹)</th>
+                      <th style={{ padding: '12px 14px' }}>CURRENT VAL (₹)</th>
+                      <th style={{ padding: '12px 14px' }}>EST. CHARGES</th>
+                      <th style={{ padding: '12px 14px' }}>NET UNREALIZED P&amp;L</th>
+                      <th style={{ padding: '12px 14px' }}>HOLDING DAYS</th>
+                      {activeTab === 'swing' && <th style={{ padding: '12px 14px' }}>TARGET / SL</th>}
+                      <th style={{ padding: '12px 14px', textAlign: 'right' }}>ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {holdingCards.filter(p => p.segment === activeTab.toUpperCase()).map(h => (
+                      <tr key={h.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <td style={{ padding: '12px 14px' }}>
+                          <div style={{ fontWeight: 900, color: '#ffffff', fontSize: '13px' }}>{h.cleanSym}</div>
+                          <div style={{ fontSize: '10px', color: '#94a3b8' }}>{h.name}</div>
+                        </td>
+                        <td style={{ padding: '12px 14px', fontWeight: 800, color: '#a5b4fc' }}>{h.shares}</td>
+                        <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>₹{h.buyPrice.toFixed(2)}</td>
+                        <td style={{ padding: '12px 14px', fontWeight: 700, color: '#cbd5e1' }}>₹{h.costBasis.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td style={{ padding: '12px 14px', fontWeight: 900, color: '#38bdf8' }}>₹{h.ltp.toFixed(2)}</td>
+                        <td style={{ padding: '12px 14px', fontWeight: 800, color: '#ffffff' }}>₹{h.currentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td style={{ padding: '12px 14px' }}>
+                          <div style={{ color: '#fbbf24', fontWeight: 800, fontSize: '12px' }}>
+                            -₹{(h.estCharges?.total || 0).toFixed(2)}
+                          </div>
+                          <div style={{ fontSize: '9px', color: '#94a3b8' }}>
+                            STT: ₹{(h.estCharges?.stt || 0).toFixed(1)} | DP: ₹{(h.estCharges?.dp_charges || 0).toFixed(1)}
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 14px' }}>
+                          <div style={{ fontWeight: 900, color: (h.unrealizedPnl - (h.estCharges?.total || 0)) >= 0 ? '#10b981' : '#f87171', fontSize: '13px' }}>
+                            {(h.unrealizedPnl - (h.estCharges?.total || 0)) >= 0 ? '+' : ''}₹{(h.unrealizedPnl - (h.estCharges?.total || 0)).toFixed(2)}
+                          </div>
+                          <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                            Gross: {h.unrealizedPnl >= 0 ? '+' : ''}₹{h.unrealizedPnl.toFixed(2)} ({h.pnlPct >= 0 ? '+' : ''}{h.pnlPct.toFixed(2)}%)
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 14px' }}>
+                          <span style={{ background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: '6px', color: '#cbd5e1', fontWeight: 700, fontSize: '11px' }}>
+                            {h.holdingDays} day{h.holdingDays === 1 ? '' : 's'}
+                          </span>
+                        </td>
+                        {activeTab === 'swing' && (
+                          <td style={{ padding: '12px 14px', fontSize: '11px' }}>
+                            <div style={{ color: '#10b981' }}>Tgt: ₹{h.target1 ? h.target1.toFixed(2) : '—'}</div>
+                            <div style={{ color: '#f87171' }}>SL: ₹{h.stopLoss ? h.stopLoss.toFixed(2) : '—'}</div>
+                          </td>
+                        )}
+                        <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                            <button
+                              onClick={() => handleOpenSellModal(h)}
+                              style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#10b981', padding: '5px 10px', borderRadius: '6px', fontWeight: 800, fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              <DollarSign size={12} />
+                              Sell &amp; Exit
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Delete ${h.cleanSym} record?`)) {
+                                  setPositions(prev => prev.filter(p => p.id !== h.id));
+                                }
+                              }}
+                              style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.25)', color: '#f87171', padding: '5px 8px', borderRadius: '6px', cursor: 'pointer' }}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+          </div>
+        )}
+
+        {/* ── TAB 5: REALIZED SOLD HISTORY LEDGER ── */}
+        {activeTab === 'history' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: '#ffffff' }}>📜 Realized Gains &amp; Tax Journal</div>
+                <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                  All historical closed trades with exact Brokerage, STT, and DP charges deducted. Realized capital is automatically recycled into available cash.
                 </div>
               </div>
 
-              {sipSoldTradesList.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '48px 16px', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '10px', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                  <AlertCircle size={32} style={{ color: '#a5b4fc', margin: '0 auto 10px' }} />
-                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>No Sold Stock Transactions Recorded Yet</div>
-                  <p style={{ fontSize: '12px', color: '#94a3b8', maxWidth: '440px', margin: '8px auto 16px' }}>
-                    When you exit or sell shares from your SIP holdings, click "Log Sell" in the Active Holdings table or use the "Sell / Record Sold Stock" form above.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setSipViewMode('holdings')}
-                    style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '12px' }}
-                  >
-                    View Active Holdings
-                  </button>
+              <button 
+                onClick={() => setShowPastSoldModal(true)}
+                style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: '#090d16', border: 'none', padding: '10px 18px', borderRadius: '8px', fontWeight: 900, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <PlusCircle size={15} />
+                + Record Past Closed Trade
+              </button>
+            </div>
+
+            {soldHistory.length === 0 ? (
+              <div style={{ background: '#0f172a', border: '1.5px dashed rgba(255,255,255,0.12)', borderRadius: '16px', padding: '40px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>📜</div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#ffffff' }}>No Closed / Sold Trades Yet</div>
+                <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                  When you sell any active position, its net realized profit and tax breakdown will appear here.
                 </div>
-              ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', color: '#a5b4fc', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        <th style={{ padding: '12px 14px' }}>Stock (Ticker)</th>
-                        <th style={{ padding: '12px 14px' }}>Category</th>
-                        <th style={{ padding: '12px 14px' }}>Sell Date</th>
-                        <th style={{ padding: '12px 14px' }}>Shares Sold</th>
-                        <th style={{ padding: '12px 14px' }}>Avg Buy Price</th>
-                        <th style={{ padding: '12px 14px' }}>Sell Price</th>
-                        <th style={{ padding: '12px 14px' }}>Sale Value</th>
-                        <th style={{ padding: '12px 14px' }}>Gross Realized P&L</th>
-                        <th style={{ padding: '12px 14px' }}>Zerodha Charges (incl. DP)</th>
-                        <th style={{ padding: '12px 14px' }}>Net Realized Profit</th>
-                        <th style={{ padding: '12px 14px' }}>Actions</th>
+              </div>
+            ) : (
+              <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.03)', color: '#94a3b8', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                      <th style={{ padding: '12px 14px' }}>STOCK &amp; SEGMENT</th>
+                      <th style={{ padding: '12px 14px' }}>QTY</th>
+                      <th style={{ padding: '12px 14px' }}>BUY AVG (₹)</th>
+                      <th style={{ padding: '12px 14px' }}>SELL PRICE (₹)</th>
+                      <th style={{ padding: '12px 14px' }}>HOLD DURATION</th>
+                      <th style={{ padding: '12px 14px' }}>GROSS P&amp;L</th>
+                      <th style={{ padding: '12px 14px' }}>BROKER / TAXES</th>
+                      <th style={{ padding: '12px 14px' }}>NET REALIZED P&amp;L</th>
+                      <th style={{ padding: '12px 14px', textAlign: 'right' }}>ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {soldHistory.map((s, idx) => (
+                      <tr key={s.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <td style={{ padding: '12px 14px' }}>
+                          <div style={{ fontWeight: 900, color: '#ffffff' }}>{s.ticker.replace('.NS', '')}</div>
+                          <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>{s.segment} • {s.broker}</div>
+                        </td>
+                        <td style={{ padding: '12px 14px', fontWeight: 800 }}>{s.shares}</td>
+                        <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>₹{Number(s.buyPrice).toFixed(2)}</td>
+                        <td style={{ padding: '12px 14px', fontWeight: 800, color: '#38bdf8' }}>₹{Number(s.sellPrice).toFixed(2)}</td>
+                        <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>{s.holdingDays} day{s.holdingDays === 1 ? '' : 's'}</td>
+                        <td style={{ padding: '12px 14px', fontWeight: 800, color: s.grossPnl >= 0 ? '#10b981' : '#f87171' }}>
+                          {s.grossPnl >= 0 ? '+' : ''}₹{Number(s.grossPnl).toFixed(2)}
+                        </td>
+                        <td style={{ padding: '12px 14px', color: '#fbbf24', fontSize: '11px' }}>
+                          -₹{Number(s.taxes).toFixed(2)}
+                        </td>
+                        <td style={{ padding: '12px 14px' }}>
+                          <div style={{ fontWeight: 900, fontSize: '13px', color: s.netPnl >= 0 ? '#10b981' : '#f87171' }}>
+                            {s.netPnl >= 0 ? '+' : ''}₹{Number(s.netPnl).toFixed(2)}
+                          </div>
+                          <div style={{ fontSize: '10px', color: s.returnPct >= 0 ? '#10b981' : '#f87171' }}>
+                            ({s.returnPct >= 0 ? '+' : ''}{Number(s.returnPct).toFixed(2)}%)
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                          <button 
+                            onClick={() => {
+                              if (window.confirm('Delete this sold history entry?')) {
+                                setSoldHistory(prev => prev.filter(item => item.id !== s.id));
+                              }
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px' }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody style={{ color: '#e0e7ff' }}>
-                      {sipSoldTradesList.map((st, idx) => {
-                        const isProfit = st.grossPnl >= 0;
-                        const isNetProfit = st.netPnl >= 0;
-                        return (
-                          <tr key={st.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: idx % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'transparent' }}>
-                            <td style={{ padding: '14px', fontWeight: 800 }}>
-                              <div style={{ color: '#ffffff', fontSize: '14px' }}>{st.name}</div>
-                              <div style={{ color: '#38bdf8', fontSize: '11px' }}>{st.cleanSym}.NS</div>
-                            </td>
-                            <td style={{ padding: '14px' }}>
-                              <span style={{ background: st.category === 'Core' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(168, 85, 247, 0.2)', color: st.category === 'Core' ? '#34d399' : '#c084fc', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
-                                {st.category}
-                              </span>
-                            </td>
-                            <td style={{ padding: '14px', color: '#cbd5e1', fontWeight: 700 }}>{st.sellDate}</td>
-                            <td style={{ padding: '14px', fontWeight: 800, color: '#fbbf24' }}>{st.sharesSold} sh</td>
-                            <td style={{ padding: '14px', color: '#cbd5e1' }}>₹{st.avgBuyPrice.toFixed(2)}</td>
-                            <td style={{ padding: '14px', fontWeight: 800, color: '#38bdf8' }}>₹{st.sellPrice.toFixed(2)}</td>
-                            <td style={{ padding: '14px', fontWeight: 700, color: '#ffffff' }}>₹{st.sellValue.toFixed(2)}</td>
-                            <td style={{ padding: '14px', fontWeight: 800, color: isProfit ? '#34d399' : '#fb7185' }}>
-                              {isProfit ? '+' : ''}₹{st.grossPnl.toFixed(2)} ({isProfit ? '+' : ''}{st.grossPnlPct.toFixed(2)}%)
-                            </td>
-                            <td style={{ padding: '14px', color: '#fbbf24', fontSize: '12px' }}>
-                              ₹{st.taxes.toFixed(2)}
-                            </td>
-                            <td style={{ padding: '14px', fontWeight: 900, color: isNetProfit ? '#34d399' : '#fb7185' }}>
-                              {isNetProfit ? '+' : ''}₹{st.netPnl.toFixed(2)}
-                            </td>
-                            <td style={{ padding: '14px', whiteSpace: 'nowrap' }}>
-                              <button
-                                onClick={() => handleDeleteSipTx(st.ticker, st.txIndex)}
-                                title="Undo / Delete this sold transaction"
-                                style={{
-                                  background: 'rgba(239, 68, 68, 0.15)',
-                                  color: '#f87171',
-                                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                                  padding: '6px 10px',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  fontWeight: 700,
-                                  fontSize: '11px'
-                                }}
-                              >
-                                <Trash2 size={13} />
-                                Delete
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      {(() => {
-                        const totalSoldShares = sipSoldTradesList.reduce((sum, st) => sum + st.sharesSold, 0);
-                        const totalSoldVal = sipSoldTradesList.reduce((sum, st) => sum + st.sellValue, 0);
-                        return (
-                          <tr style={{ borderTop: '2px solid rgba(99, 102, 241, 0.5)', background: 'rgba(15, 23, 42, 0.95)', fontWeight: 900, color: '#ffffff' }}>
-                            <td style={{ padding: '14px' }}>
-                              <div style={{ fontSize: '13px', color: '#fbbf24' }}>🏁 TOTAL REALIZED</div>
-                              <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 600 }}>All Sold Transactions</div>
-                            </td>
-                            <td style={{ padding: '14px', fontSize: '11px', color: '#38bdf8' }}>
-                              {sipSoldTradesList.length} Sales
-                            </td>
-                            <td style={{ padding: '14px' }}>-</td>
-                            <td style={{ padding: '14px', color: '#fbbf24' }}>{totalSoldShares} sh</td>
-                            <td style={{ padding: '14px' }}>-</td>
-                            <td style={{ padding: '14px' }}>-</td>
-                            <td style={{ padding: '14px', color: '#ffffff' }}>₹{totalSoldVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                            <td style={{ padding: '14px', color: totalSipRealizedProfit >= 0 ? '#34d399' : '#fb7185' }}>
-                              {totalSipRealizedProfit >= 0 ? '+' : ''}₹{totalSipRealizedProfit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td style={{ padding: '14px', color: '#fbbf24' }}>
-                              ₹{totalSipSellTaxes.toFixed(2)}
-                            </td>
-                            <td style={{ padding: '14px', color: totalSipRealizedNetProfit >= 0 ? '#34d399' : '#fb7185' }}>
-                              {totalSipRealizedNetProfit >= 0 ? '+' : ''}₹{totalSipRealizedNetProfit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td style={{ padding: '14px' }}>-</td>
-                          </tr>
-                        );
-                      })()}
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* Margin Trading (MTF) Manager Tab */}
-      {activeTab === 'mtf' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Top Filter & Accumulation View Mode Bar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', background: 'rgba(15, 23, 42, 0.4)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: '14px', color: '#ffffff', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Filter size={16} style={{ color: '#fbbf24' }} />
-              MTF Accumulation View Mode:
-            </div>
+        {/* ── TAB 6: BACKUP & SETTINGS ── */}
+        {activeTab === 'settings' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '700px' }}>
+            <div style={{ fontSize: '20px', fontWeight: 900, color: '#ffffff' }}>⚙️ Master JSON Backups &amp; Data Integrity</div>
+            
+            <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 800, color: '#ffffff', marginBottom: '8px' }}>Export Master Portfolio Backup</div>
+              <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '14px' }}>
+                Download a clean JSON snapshot containing all your 25% income allocations, capital events, active holdings, and sold trades.
+              </div>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <button 
+                  onClick={() => {
+                    const backupData = {
+                      version: '3pillar_v1',
+                      timestamp: new Date().toISOString(),
+                      monthly_budget: monthlyBudgetInput,
+                      split_swing: swingPct,
+                      split_lt: ltPct,
+                      split_penny: pennyPct,
+                      swing_free_cash: swingFreeCashInput,
+                      lt_free_cash: ltFreeCashInput,
+                      penny_free_cash: pennyFreeCashInput,
+                      capital_ledger: capitalLedger,
+                      positions,
+                      sold_history: soldHistory
+                    };
+                    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `finplus_3pillar_backup_${new Date().toISOString().split('T')[0]}.json`;
+                    a.click();
+                    showToast('✅ Master backup downloaded successfully!');
+                  }}
+                  style={{ background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#090d16', border: 'none', padding: '10px 18px', borderRadius: '8px', fontWeight: 900, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Download size={14} />
+                  Download JSON Backup
+                </button>
 
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                type="button"
-                onClick={() => setMtfViewMode('overall')}
-                style={{
-                  background: mtfViewMode === 'overall' ? '#6366f1' : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${mtfViewMode === 'overall' ? '#818cf8' : 'rgba(255,255,255,0.1)'}`,
-                  color: '#ffffff',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  cursor: 'pointer'
-                }}
-              >
-                📊 Overall Accumulation ({mtfSummaryList.length})
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMtfViewMode('active')}
-                style={{
-                  background: mtfViewMode === 'active' ? '#10b981' : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${mtfViewMode === 'active' ? '#34d399' : 'rgba(255,255,255,0.1)'}`,
-                  color: '#ffffff',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  cursor: 'pointer'
-                }}
-              >
-                🟢 Active Positions ({mtfSummaryList.filter(t => t.status === 'Active').length})
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMtfViewMode('closed')}
-                style={{
-                  background: mtfViewMode === 'closed' ? '#f59e0b' : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${mtfViewMode === 'closed' ? '#fbbf24' : 'rgba(255,255,255,0.1)'}`,
-                  color: '#ffffff',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  cursor: 'pointer'
-                }}
-              >
-                🏁 Closed Positions ({mtfSummaryList.filter(t => t.status === 'Closed').length})
-              </button>
+                <label style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#10b981', padding: '10px 18px', borderRadius: '8px', fontWeight: 800, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Upload size={14} />
+                  Restore / Import JSON Backup
+                  <input
+                    type="file"
+                    accept=".json"
+                    style={{ display: 'none' }}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        try {
+                          const data = JSON.parse(event.target.result);
+                          if (data.positions) setPositions(data.positions);
+                          if (data.sold_history) setSoldHistory(data.sold_history);
+                          if (data.capital_ledger) setCapitalLedger(data.capital_ledger);
+                          if (data.monthly_budget) setMonthlyBudgetInput(data.monthly_budget);
+                          if (data.swing_free_cash !== undefined) {
+                            setSwingFreeCashInput(String(data.swing_free_cash));
+                            localStorage.setItem('finplus_free_cash_swing', String(data.swing_free_cash));
+                          }
+                          if (data.lt_free_cash !== undefined) {
+                            setLtFreeCashInput(String(data.lt_free_cash));
+                            localStorage.setItem('finplus_free_cash_lt', String(data.lt_free_cash));
+                          }
+                          if (data.penny_free_cash !== undefined) {
+                            setPennyFreeCashInput(String(data.penny_free_cash));
+                            localStorage.setItem('finplus_free_cash_penny', String(data.penny_free_cash));
+                          }
+                          showToast('✅ Master backup restored successfully!');
+                        } catch (err) {
+                          showToast('❌ Invalid JSON backup file.');
+                        }
+                      };
+                      reader.readAsText(file);
+                    }}
+                  />
+                </label>
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Executive Overview Cards */}
-          {(() => {
-            const activeCount = mtfSummaryList.filter(t => t.status === 'Active').length;
-            const closedCount = mtfSummaryList.filter(t => t.status === 'Closed').length;
+      </div>
 
-            const dispDeployed = mtfViewMode === 'closed' ? 0 : (mtfViewMode === 'active' ? activeMtfDeployedMargin : overallMtfDeployedMargin);
-            const dispFunding = mtfViewMode === 'closed' ? 0 : (mtfViewMode === 'active' ? activeMtfBrokerFunding : overallMtfBrokerFunding);
-            const dispGrossPnl = mtfViewMode === 'closed' ? closedMtfGrossPnl : (mtfViewMode === 'active' ? activeMtfGrossPnl : overallMtfGrossPnl);
-            const dispCharges = mtfViewMode === 'closed' ? closedMtfCarryingCharges : (mtfViewMode === 'active' ? activeMtfCarryingCharges : overallMtfCarryingCharges);
-            const dispNetPnl = mtfViewMode === 'closed' ? closedMtfNetPnl : (mtfViewMode === 'active' ? activeMtfNetPnl : overallMtfNetPnl);
-            const dispInterest = mtfViewMode === 'closed' ? closedMtfInterest14 : (mtfViewMode === 'active' ? activeMtfInterest14 : overallMtfInterest14);
+            {/* ── MODAL: RECORD PAST CLOSED TRADE ── */}
+      {showPastSoldModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0f172a', border: '1.5px solid rgba(16, 185, 129, 0.4)', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '520px', boxShadow: '0 20px 50px rgba(0,0,0,0.6)', maxHeight: '90vh', overflowY: 'auto' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>Record Past Closed Trade</div>
+              <button onClick={() => setShowPastSoldModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
 
-            return (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '16px' }}>
-                <div className="glass-panel" style={{ padding: '18px', borderLeft: '4px solid #f59e0b' }}>
-                  <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
-                    MARGIN DEPLOYED (YOU FUNDED)
-                  </div>
-                  <div style={{ fontSize: '22px', fontWeight: 900, color: '#ffffff' }}>
-                    ₹{dispDeployed.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#fbbf24', marginTop: '4px', fontWeight: 700 }}>
-                    Actual cash margin invested
-                  </div>
-                </div>
-
-                <div className="glass-panel" style={{ padding: '18px', borderLeft: '4px solid #6366f1' }}>
-                  <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
-                    BROKER FUNDING LEVERAGE
-                  </div>
-                  <div style={{ fontSize: '22px', fontWeight: 900, color: '#818cf8' }}>
-                    ₹{dispFunding.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>
-                    Capital borrowed @ 14% p.a.
-                  </div>
-                </div>
-
-                <div className="glass-panel" style={{ padding: '18px', borderLeft: `4px solid ${dispGrossPnl >= 0 ? '#10b981' : '#fb7185'}` }}>
-                  <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
-                    GROSS P&L (BEFORE FEES)
-                  </div>
-                  <div style={{ fontSize: '22px', fontWeight: 900, color: dispGrossPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                    {dispGrossPnl >= 0 ? '+' : ''}₹{dispGrossPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>
-                    Price movement before interest & fees
-                  </div>
-                </div>
-
-                <div className="glass-panel" style={{ padding: '18px', borderLeft: '4px solid #ec4899' }}>
-                  <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
-                    TOTAL MTF CARRYING COSTS
-                  </div>
-                  <div style={{ fontSize: '22px', fontWeight: 900, color: '#f472b6' }}>
-                    ₹{dispCharges.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '4px' }}>
-                    Interest + Tariff Fees
-                  </div>
-                </div>
-
-                <div className="glass-panel" style={{ padding: '18px', borderLeft: `4px solid ${dispNetPnl >= 0 ? '#10b981' : '#fb7185'}` }}>
-                  <div style={{ color: '#a5b4fc', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '6px' }}>
-                    REAL NET P&L (AFTER FEES)
-                  </div>
-                  <div style={{ fontSize: '22px', fontWeight: 900, color: dispNetPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                    {dispNetPnl >= 0 ? '+' : ''}₹{dispNetPnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div style={{ fontSize: '11px', color: dispNetPnl >= 0 ? '#34d399' : '#fb7185', marginTop: '4px', fontWeight: 800 }}>
-                    Net of all MTF interest & statutory charges
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Form: Record New MTF Trade (With Customizable Broker Funding & Broker Platform) */}
-          <div className="glass-panel" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff', marginBottom: '16px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '10px' }}>
-              ⚙️ Record New MTF Leveraged Trade
-            </h3>
-
-            <form onSubmit={handleRecordMtfTx} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+            <form onSubmit={handlePastSoldSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              
               <div>
-                <label style={{ fontSize: '11px', color: '#fbbf24', fontWeight: 800, display: 'block', marginBottom: '4px' }}>BROKER PLATFORM</label>
-                <select
-                  value={mtfBroker}
-                  onChange={e => setMtfBroker(e.target.value)}
-                  className="input-field"
-                  style={{
-                    borderColor: mtfBroker === 'Zerodha' ? 'rgba(56, 189, 248, 0.6)' : 'rgba(52, 211, 153, 0.6)',
-                    background: 'rgba(15, 23, 42, 0.9)',
-                    color: mtfBroker === 'Zerodha' ? '#38bdf8' : '#34d399',
-                    fontWeight: 800
-                  }}
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>PILLAR / SEGMENT</label>
+                <select 
+                  value={pastSoldSegment} 
+                  onChange={e => setPastSoldSegment(e.target.value)}
+                  style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
                 >
-                  <option value="Zerodha">🪁 Zerodha (Kite) — 0.04%/day (14.6% p.a.)</option>
-                  <option value="INDmoney">🟢 INDmoney — 14.0% p.a.</option>
+                  <option value="SWING">⚡ Swing Trading (Zerodha Kite)</option>
+                  <option value="LT">🛡️ Long-Term Core (INDMONEY)</option>
+                  <option value="PENNY">💎 Quality Penny SIP (Zerodha Kite)</option>
                 </select>
-                <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', display: 'block', fontWeight: 600 }}>
-                  {mtfBroker === 'Zerodha' ? '14.6% p.a. int + 0.3% brok + ₹17.70/side pledge' : '14.0% p.a. int + 0.05% brok + ₹23.60 pledge'}
-                </span>
               </div>
 
               <div style={{ position: 'relative' }}>
-                <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>TICKER SYMBOL</label>
-                <input
-                  type="text"
-                  placeholder="Type 2+ letters: REL, HDFC, TATA..."
-                  value={mtfTicker}
-                  onChange={e => { setMtfTicker(e.target.value.toUpperCase()); setShowMtfDropdown(true); }}
-                  onFocus={() => setShowMtfDropdown(true)}
-                  onBlur={() => setTimeout(() => setShowMtfDropdown(false), 180)}
-                  className="input-field"
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                  STOCK SYMBOL (NSE) <span style={{ color: '#38bdf8', fontSize: '10px', fontWeight: 600 }}>• Auto-search 2,414 stocks</span>
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="Type symbol or company name (e.g. REL, TATA, TIMEX)..." 
+                  value={pastSoldTicker} 
+                  onChange={e => {
+                    setPastSoldTicker(e.target.value.toUpperCase());
+                    setShowPastSoldSuggestions(true);
+                  }}
+                  onFocus={() => setShowPastSoldSuggestions(true)}
                   required
                   autoComplete="off"
+                  style={{ width: '100%', background: '#090d16', border: '1px solid rgba(56, 189, 248, 0.4)', color: '#ffffff', padding: '10px 12px', borderRadius: '8px', fontWeight: 800, fontSize: '13px' }}
                 />
-                {showMtfDropdown && filteredMtfSuggestions.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999, background: 'rgba(15,15,30,0.98)', border: '1px solid rgba(99,102,241,0.4)', borderRadius: '8px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)', maxHeight: '220px', overflowY: 'auto' }}>
-                    {filteredMtfSuggestions.map(s => (
+
+                {showPastSoldSuggestions && pastSoldSuggestions.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000,
+                    background: '#0b1120',
+                    border: '1.5px solid #38bdf8',
+                    borderRadius: '8px',
+                    marginTop: '4px',
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    boxShadow: '0 12px 30px rgba(0,0,0,0.8)'
+                  }}>
+                    {pastSoldSuggestions.map((item, idx) => (
                       <div
-                        key={s.symbol}
-                        onMouseDown={() => {
-                          setMtfTicker(s.symbol);
-                          setShowMtfDropdown(false);
-                          const ltp = liveLtps[s.symbol] || liveLtps[`${s.symbol}.NS`];
-                          if (ltp && !mtfBuyPrice) setMtfBuyPrice(String(ltp));
+                        key={item.symbol || idx}
+                        onClick={() => {
+                          setPastSoldTicker(item.symbol);
+                          setPastSoldName(item.name || item.symbol);
+                          setShowPastSoldSuggestions(false);
                         }}
-                        style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.15)'}
+                        style={{ padding: '10px 14px', borderBottom: idx < pastSoldSuggestions.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.15)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
                         <div>
-                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#a5b4fc' }}>{s.symbol}</div>
-                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{s.name}</div>
+                          <div style={{ fontWeight: 900, color: '#38bdf8', fontSize: '13px' }}>{item.symbol}</div>
+                          <div style={{ fontSize: '11px', color: '#cbd5e1' }}>{item.name}</div>
                         </div>
-                        {(liveLtps[s.symbol] || liveLtps[`${s.symbol}.NS`]) && (
-                          <div style={{ fontSize: '12px', fontWeight: 700, color: '#34d399' }}>
-                            ₹{(liveLtps[s.symbol] || liveLtps[`${s.symbol}.NS`]).toFixed(2)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SHARES (QTY)</label>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    value={pastSoldShares} 
+                    onChange={e => setPastSoldShares(e.target.value)}
+                    required
+                    style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BUY PRICE (₹)</label>
+                  <input 
+                    type="number" 
+                    step="0.05" 
+                    placeholder="e.g. 450.00" 
+                    value={pastSoldBuyPrice} 
+                    onChange={e => setPastSoldBuyPrice(e.target.value)}
+                    required
+                    style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BUY DATE</label>
+                  <input 
+                    type="date" 
+                    value={pastSoldBuyDate} 
+                    onChange={e => setPastSoldBuyDate(e.target.value)}
+                    style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SELL / EXIT PRICE (₹)</label>
+                  <input 
+                    type="number" 
+                    step="0.05" 
+                    placeholder="e.g. 500.00" 
+                    value={pastSoldSellPrice} 
+                    onChange={e => setPastSoldSellPrice(e.target.value)}
+                    required
+                    style={{ width: '100%', background: '#090d16', border: '1.5px solid #38bdf8', color: '#38bdf8', fontSize: '16px', padding: '10px', borderRadius: '8px', fontWeight: 900 }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SELL / EXIT DATE</label>
+                <input 
+                  type="date" 
+                  value={pastSoldSellDate} 
+                  onChange={e => setPastSoldSellDate(e.target.value)}
+                  style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>EXIT NOTES / REASON (OPTIONAL)</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Hit 1:2 R:R Target, Trailing SL hit, etc." 
+                  value={pastSoldNotes} 
+                  onChange={e => setPastSoldNotes(e.target.value)}
+                  style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowPastSoldModal(false)}
+                  style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}
+                >
+                  Record Closed Trade
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: RECORD NEW BUY ── */}
+      {showAddModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0f172a', border: '1.5px solid rgba(56, 189, 248, 0.4)', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '480px', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>Record New Purchase</div>
+              <button onClick={() => setShowAddModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+
+            <form onSubmit={handleAddPositionSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SELECT PILLAR / SEGMENT</label>
+                <select 
+                  value={addSegment} 
+                  onChange={e => setAddSegment(e.target.value)}
+                  style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
+                >
+                  <option value="SWING">⚡ Swing Trading (Zerodha Kite) — Avail: ₹{capitalMath.swing.available.toLocaleString('en-IN')}</option>
+                  <option value="LT">🛡️ Long-Term Core (INDMONEY) — Avail: ₹{capitalMath.lt.available.toLocaleString('en-IN')}</option>
+                  <option value="PENNY">💎 Quality Penny SIP (Zerodha Kite) — Avail: ₹{capitalMath.penny.available.toLocaleString('en-IN')}</option>
+                </select>
+              </div>
+
+              <div style={{ position: 'relative' }}>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                  STOCK SYMBOL (NSE) <span style={{ color: '#38bdf8', fontSize: '10px', fontWeight: 600 }}>• Auto-search 2,414 stocks</span>
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="Type symbol or company name (e.g. REL, TATA, TIMEX)..." 
+                  value={formTicker} 
+                  onChange={e => {
+                    setFormTicker(e.target.value.toUpperCase());
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  required
+                  autoComplete="off"
+                  style={{ width: '100%', background: '#090d16', border: '1px solid rgba(56, 189, 248, 0.4)', color: '#ffffff', padding: '10px 12px', borderRadius: '8px', fontWeight: 800, fontSize: '13px' }}
+                />
+
+                {/* Autocomplete Dropdown */}
+                {showSuggestions && stockSuggestions.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000,
+                    background: '#0b1120',
+                    border: '1.5px solid #38bdf8',
+                    borderRadius: '8px',
+                    marginTop: '4px',
+                    maxHeight: '220px',
+                    overflowY: 'auto',
+                    boxShadow: '0 12px 30px rgba(0,0,0,0.8)'
+                  }}>
+                    {stockSuggestions.map((item, idx) => (
+                      <div
+                        key={item.symbol || idx}
+                        onClick={() => {
+                          setFormTicker(item.symbol);
+                          setFormName(item.name || item.symbol);
+                          if (item.ltp && item.ltp > 0 && !formBuyPrice) {
+                            setFormBuyPrice(String(item.ltp));
+                          }
+                          setShowSuggestions(false);
+                        }}
+                        style={{
+                          padding: '10px 14px',
+                          borderBottom: idx < stockSuggestions.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          transition: 'background 0.15s ease'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.15)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 900, color: '#38bdf8', fontSize: '13px' }}>
+                            {item.symbol}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '1px' }}>
+                            {item.name}
+                          </div>
+                        </div>
+                        {item.ltp > 0 && (
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 800, color: '#10b981' }}>
+                              ₹{Number(item.ltp).toFixed(2)}
+                            </div>
+                            <div style={{ fontSize: '9px', color: '#94a3b8' }}>Latest LTP</div>
                           </div>
                         )}
                       </div>
@@ -5968,932 +2120,246 @@ export default function App() {
                 )}
               </div>
 
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SHARES</label>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    value={formShares} 
+                    onChange={e => setFormShares(e.target.value)}
+                    required
+                    style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BUY PRICE (₹)</label>
+                  <input 
+                    type="number" 
+                    step="any" 
+                    placeholder="e.g. 19.33" 
+                    value={formBuyPrice} 
+                    onChange={e => setFormBuyPrice(e.target.value)}
+                    required
+                    style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
+                  />
+                </div>
+              </div>
+
               <div>
-                <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BUY PRICE (₹)</label>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>PURCHASE DATE</label>
+                <input 
+                  type="date" 
+                  value={formBuyDate} 
+                  onChange={e => setFormBuyDate(e.target.value)}
+                  style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }}
+                />
+              </div>
+
+              {addSegment === 'SWING' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#10b981', fontWeight: 700, display: 'block', marginBottom: '4px' }}>TARGET 1:2 R:R (₹)</label>
+                    <input 
+                      type="number" 
+                      step="any" 
+                      placeholder="Optional target" 
+                      value={formTarget1} 
+                      onChange={e => setFormTarget1(e.target.value)}
+                      style={{ width: '100%', background: '#090d16', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#ffffff', padding: '10px', borderRadius: '8px' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#f87171', fontWeight: 700, display: 'block', marginBottom: '4px' }}>STOP LOSS (₹)</label>
+                    <input 
+                      type="number" 
+                      step="any" 
+                      placeholder="Optional SL" 
+                      value={formStopLoss} 
+                      onChange={e => setFormStopLoss(e.target.value)}
+                      style={{ width: '100%', background: '#090d16', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ffffff', padding: '10px', borderRadius: '8px' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowAddModal(false)}
+                  style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  style={{ background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}
+                >
+                  Record Purchase
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: SELL & EXIT POSITION ── */}
+      {sellModalPos && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0f172a', border: '1.5px solid #10b981', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '440px', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>Sell &amp; Realize Trade</div>
+                <div style={{ fontSize: '11px', color: '#a5b4fc' }}>{sellModalPos.cleanSym} • {sellModalPos.segment} ({sellModalPos.segment === 'LT' ? 'INDMONEY' : 'Zerodha Kite'})</div>
+              </div>
+              <button onClick={() => setSellModalPos(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+
+            <form onSubmit={handleSellSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SHARES TO SELL (MAX {sellModalPos.shares})</label>
                 <input 
                   type="number" 
-                  step="0.05" 
-                  placeholder="e.g. 1091.70" 
-                  value={mtfBuyPrice} 
-                  onChange={e => setMtfBuyPrice(e.target.value)} 
-                  className="input-field" 
-                  required 
+                  min="1" 
+                  max={sellModalPos.shares}
+                  value={sellFormShares} 
+                  onChange={e => setSellFormShares(e.target.value)}
+                  required
+                  style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
                 />
               </div>
 
               <div>
-                <label style={{ fontSize: '11px', color: '#34d399', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SHARES (QTY)</label>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>EXIT / SALE PRICE (₹)</label>
+                <input 
+                  type="number" 
+                  step="any" 
+                  value={sellFormPrice} 
+                  onChange={e => setSellFormPrice(e.target.value)}
+                  required
+                  style={{ width: '100%', background: '#090d16', border: '1px solid #10b981', color: '#10b981', fontSize: '18px', padding: '10px', borderRadius: '8px', fontWeight: 900 }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SALE DATE</label>
+                <input 
+                  type="date" 
+                  value={sellFormDate} 
+                  onChange={e => setSellFormDate(e.target.value)}
+                  style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setSellModalPos(null)}
+                  style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  style={{ background: 'linear-gradient(135deg, #059669, #10b981)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}
+                >
+                  Confirm Sale &amp; Recycle Capital
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: LOG CAPITAL EVENT (INJECTION / WITHDRAWAL) ── */}
+      {showCapModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0f172a', border: '1.5px solid #10b981', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '440px', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>Log Capital Event</div>
+              <button onClick={() => setShowCapModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+
+            <form onSubmit={handleCapEventSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>EVENT TYPE</label>
+                <select 
+                  value={capEventType} 
+                  onChange={e => setCapEventType(e.target.value)}
+                  style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
+                >
+                  <option value="INJECTION">➕ Capital Injection (Fresh Deposit / 25% Savings)</option>
+                  <option value="WITHDRAWAL">➖ Capital Withdrawal (Cash Taken Out)</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>TARGET SEGMENT</label>
+                <select 
+                  value={capEventSegment} 
+                  onChange={e => setCapEventSegment(e.target.value)}
+                  style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
+                >
+                  <option value="ALL">🌐 All Segments (Auto-split 60% Swing, 30% LT, 10% Penny)</option>
+                  <option value="SWING">⚡ Swing Trading Only</option>
+                  <option value="LT">🛡️ Long-Term Core Only</option>
+                  <option value="PENNY">💎 Quality Penny Only</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>AMOUNT (₹ - Whole Rupees)</label>
                 <input 
                   type="number" 
                   step="1" 
-                  min="1" 
-                  placeholder="e.g. 10" 
-                  value={mtfShares} 
-                  onChange={e => setMtfShares(e.target.value)} 
-                  className="input-field" 
-                  required 
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', color: '#818cf8', fontWeight: 800, display: 'block', marginBottom: '4px' }}>BROKER FUNDED (%)</label>
-                <input 
-                  type="number" 
-                  step="0.1" 
-                  placeholder="e.g. 68.0" 
-                  value={mtfBrokerFundedPct} 
-                  onChange={e => setMtfBrokerFundedPct(e.target.value)} 
-                  className="input-field" 
-                  style={{ borderColor: 'rgba(129, 140, 248, 0.4)' }}
-                  required 
-                />
-                <span style={{ fontSize: '10px', color: '#fbbf24', marginTop: '2px', display: 'block', fontWeight: 700 }}>
-                  Default 68.0% (You fund {(100.0 - (parseFloat(mtfBrokerFundedPct) || 68.0)).toFixed(1)}%)
-                </span>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BUY DATE</label>
-                <input 
-                  type="date" 
-                  value={mtfBuyDate} 
-                  onChange={e => setMtfBuyDate(e.target.value)} 
-                  className="input-field" 
+                  placeholder="e.g. 1312" 
+                  value={capEventAmount} 
+                  onChange={e => setCapEventAmount(e.target.value)}
                   required
+                  style={{ width: '100%', background: '#090d16', border: '1.5px solid #10b981', color: '#10b981', fontSize: '20px', padding: '10px', borderRadius: '8px', fontWeight: 900 }}
                 />
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <button type="submit" style={{ width: '100%', background: '#6366f1', color: '#ffffff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', fontSize: '14px' }}>
-                  ➕ Record MTF Trade
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>NOTES / DESCRIPTION</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. August 2026 25% Income Allocation" 
+                  value={capEventNotes} 
+                  onChange={e => setCapEventNotes(e.target.value)}
+                  style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowCapModal(false)}
+                  style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  style={{ background: 'linear-gradient(135deg, #059669, #10b981)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}
+                >
+                  Log Event
                 </button>
               </div>
+
             </form>
-          </div>
 
-          {/* MTF Positions Breakdown */}
-          <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-              <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>⚡ Margin Trading Facility (MTF) Positions</h2>
-                <p style={{ fontSize: '12px', color: '#a5b4fc', margin: 0 }}>
-                  Live tracking of margin borrowing, broker platform selection (Zerodha Kite vs INDmoney), daily interest accrual, and exact tariff fees.
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800, background: 'rgba(56, 189, 248, 0.15)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
-                  Kite: 14.6% p.a. (0.04%/day)
-                </span>
-                <span style={{ fontSize: '11px', color: '#34d399', fontWeight: 800, background: 'rgba(52, 211, 153, 0.15)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(52, 211, 153, 0.3)' }}>
-                  INDmoney: 14.0% p.a.
-                </span>
-              </div>
-            </div>
-
-            {(() => {
-              const displayList = mtfSummaryList.filter(t => {
-                if (mtfViewMode === 'active') return t.status === 'Active';
-                if (mtfViewMode === 'closed') return t.status === 'Closed';
-                return true;
-              });
-
-              if (displayList.length === 0) {
-                return (
-                  <div style={{ textAlign: 'center', padding: '40px 0', color: '#a5b4fc' }}>
-                    No MTF positions match the selected view mode (<strong>{mtfViewMode.toUpperCase()}</strong>).
-                  </div>
-                );
-              }
-
-              return (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
-                  {displayList.map(t => {
-                    const isZerodha = (t.broker || 'Zerodha') === 'Zerodha';
-                    const intRateLabel = isZerodha ? '14.60% p.a. (0.04%/day)' : '14.00% p.a.';
-                    const brokRateLabel = isZerodha ? '0.3% capped @ ₹20/side' : '0.05% capped @ ₹20/side';
-                    const pledgeLabel = isZerodha 
-                      ? (t.status === 'Closed' ? '₹17.70 pledge + ₹17.70 unpledge' : '₹17.70 pledge (Active)') 
-                      : '₹23.60 flat per ISIN';
-
-                    return (
-                      <div key={t.id} style={{ 
-                        background: 'rgba(15, 23, 42, 0.75)', 
-                        borderRadius: '14px', 
-                        border: '1px solid rgba(99, 102, 241, 0.25)', 
-                        padding: '20px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '16px'
-                      }}>
-                        {/* Header: Ticker, Status, Broker Badge, Live Value */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <div>
-                            <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                              {t.cleanSym}
-                              <span style={{ 
-                                fontSize: '11px', 
-                                padding: '2px 8px', 
-                                borderRadius: '4px',
-                                background: t.status === 'Active' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(255,255,255,0.08)',
-                                color: t.status === 'Active' ? '#34d399' : '#a5b4fc',
-                                border: `1px solid ${t.status === 'Active' ? 'rgba(52, 211, 153, 0.4)' : 'rgba(255,255,255,0.1)'}`
-                              }}>
-                                ● {t.status}
-                              </span>
-                              <span 
-                                onClick={() => handleToggleMtfBroker(t.id)}
-                                title="Click to switch broker between Zerodha (Kite) and INDmoney"
-                                style={{ 
-                                  fontSize: '11px', 
-                                  padding: '2px 8px', 
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  background: isZerodha ? 'rgba(56, 189, 248, 0.15)' : 'rgba(52, 211, 153, 0.15)',
-                                  color: isZerodha ? '#38bdf8' : '#34d399',
-                                  border: `1px solid ${isZerodha ? 'rgba(56, 189, 248, 0.4)' : 'rgba(52, 211, 153, 0.4)'}`,
-                                  fontWeight: 800
-                                }}
-                              >
-                                {isZerodha ? '🪁 Zerodha (Kite)' : '🟢 INDmoney'} ⚡
-                              </span>
-                            </div>
-                            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                              Buy Date: <strong style={{ color: '#cbd5e1' }}>{t.buyDtStr}</strong> ({t.holdingDays} day{t.holdingDays === 1 ? '' : 's'} held)
-                            </div>
-                          </div>
-
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700 }}>CURRENT VALUE</div>
-                            <div style={{ fontSize: '18px', fontWeight: 900, color: '#38bdf8' }}>
-                              ₹{t.currentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                              LTP: ₹{t.ltp.toFixed(2)} ({t.shares} Qty)
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Section A: Invested Value & Customizable Funding Split */}
-                        <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                            <div style={{ fontSize: '12px', fontWeight: 800, color: '#a5b4fc' }}>
-                              <span style={{ background: 'rgba(99, 102, 241, 0.2)', padding: '2px 6px', borderRadius: '4px', color: '#818cf8', marginRight: '6px' }}>A</span>
-                              Invested Value
-                            </div>
-                            <div style={{ fontSize: '14px', fontWeight: 900, color: '#ffffff' }}>
-                              ₹{t.totalBuyVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                          </div>
-                          
-                          <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '10px' }}>
-                            {t.shares} Qty at ₹{t.buy_price.toFixed(2)} Avg.
-                          </div>
-
-                          {/* Funding Progress Bar */}
-                          <div style={{ height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden', display: 'flex', marginBottom: '10px' }}>
-                            <div style={{ width: `${t.brokerFundedPct}%`, background: '#818cf8' }} title={`Broker Funded (${t.brokerFundedPct}%)`}></div>
-                            <div style={{ width: `${t.userFundedPct}%`, background: '#f59e0b' }} title={`You Funded (${t.userFundedPct}%)`}></div>
-                          </div>
-
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                            <div style={{ color: '#818cf8', fontWeight: 700 }}>
-                              — Broker Funded ({t.brokerFundedPct.toFixed(1)}%): <strong style={{ color: '#ffffff' }}>₹{t.funding.toFixed(2)}</strong>
-                            </div>
-                            <div style={{ color: '#fbbf24', fontWeight: 700 }}>
-                              — You Funded ({t.userFundedPct.toFixed(1)}%): <strong style={{ color: '#ffffff' }}>₹{t.marginPaid.toFixed(2)}</strong>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Section B: Gross P&L vs Real Net P&L (Clear Visibility) */}
-                        <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                            <div style={{ fontSize: '12px', fontWeight: 800, color: '#a5b4fc' }}>
-                              <span style={{ background: 'rgba(52, 211, 153, 0.2)', padding: '2px 6px', borderRadius: '4px', color: '#34d399', marginRight: '6px' }}>B</span>
-                              Gross P&L (Before Fees)
-                            </div>
-                            <div style={{ fontSize: '14px', fontWeight: 800, color: t.grossPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                              {t.grossPnl >= 0 ? '+' : ''}₹{t.grossPnl.toFixed(2)}
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
-                            <div style={{ fontSize: '12px', fontWeight: 900, color: '#ffffff' }}>
-                              🎯 Real Net P&L (After MTF Charges):
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontSize: '15px', fontWeight: 900, color: t.netPnl >= 0 ? '#34d399' : '#fb7185' }}>
-                                {t.netPnl >= 0 ? '+' : ''}₹{t.netPnl.toFixed(2)}
-                              </div>
-                              <div style={{ fontSize: '10px', color: t.netReturnPct >= 0 ? '#34d399' : '#fb7185', fontWeight: 800 }}>
-                                {t.netReturnPct >= 0 ? '+' : ''}{t.netReturnPct.toFixed(2)}% return on margin paid
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Section C: 🛡️ 5% Fixed Trailing Stop Loss Tracker */}
-                        <div style={{ 
-                          background: 'rgba(15, 23, 42, 0.9)', 
-                          padding: '14px', 
-                          borderRadius: '10px', 
-                          border: `1px solid ${t.tslStatusBorder}` 
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                            <div style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 800, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <ShieldAlert size={14} style={{ color: t.tslStatusColor }} />
-                              5% Trailing Stop Loss Level
-                            </div>
-                            <span style={{ 
-                              fontSize: '11px', 
-                              padding: '2px 8px', 
-                              borderRadius: '4px', 
-                              fontWeight: 800, 
-                              background: t.tslStatusBg, 
-                              color: t.tslStatusColor, 
-                              border: `1px solid ${t.tslStatusBorder}` 
-                            }}>
-                              {t.tslStatusTag}
-                            </span>
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
-                            <div>
-                              <span style={{ color: '#94a3b8', fontSize: '10px', display: 'block' }}>PEAK STOCK PRICE (HIGH)</span>
-                              <strong style={{ color: '#ffffff', fontSize: '13px' }}>₹{t.peakLtp.toFixed(2)}</strong>
-                            </div>
-                            <div>
-                              <span style={{ color: '#94a3b8', fontSize: '10px', display: 'block' }}>GROSS 5% SL (STOCK DROP)</span>
-                              <strong style={{ color: '#cbd5e1', fontSize: '13px' }}>₹{t.grossSlPrice.toFixed(2)}</strong>
-                            </div>
-                          </div>
-
-                          <div style={{ padding: '8px 10px', background: 'rgba(30, 41, 59, 0.6)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <div>
-                                <span style={{ fontSize: '11px', fontWeight: 900, color: '#fbbf24' }}>
-                                  🎯 DYNAMIC NET 5% SL PRICE LEVEL:
-                                </span>
-                                <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                                  Gross SL (₹{t.grossSlPrice.toFixed(2)}) + Carrying Fees (₹{t.carryingCostPerShare.toFixed(2)}/sh)
-                                </div>
-                              </div>
-                              <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontSize: '16px', fontWeight: 900, color: t.ltp <= t.netSlPrice ? '#f87171' : '#38bdf8' }}>
-                                  ₹{t.netSlPrice.toFixed(2)}
-                                </div>
-                                <div style={{ fontSize: '10px', color: t.tslBuffer >= 0 ? '#34d399' : '#f87171', fontWeight: 800 }}>
-                                  {t.tslBuffer >= 0 ? '+' : ''}₹{t.tslBuffer.toFixed(2)} ({t.tslBufferPct >= 0 ? '+' : ''}{t.tslBufferPct.toFixed(2)}% buffer)
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Charges Paid / Accrued Box (Broker Tariff Rates) */}
-                        <div style={{ background: 'rgba(15, 23, 42, 0.9)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
-                          <div style={{ fontSize: '11px', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', marginBottom: '10px', letterSpacing: '0.5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>💳 Charges Accrued ({isZerodha ? 'Zerodha Kite' : 'INDmoney'})</span>
-                            <span style={{ fontSize: '10px', color: isZerodha ? '#38bdf8' : '#34d399', textTransform: 'none' }}>
-                              {intRateLabel}
-                            </span>
-                          </div>
-
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <div>
-                                <span style={{ color: '#e2e8f0', fontWeight: 700 }}>Interest ({intRateLabel})</span>
-                                <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                                  {t.buyDtStr} - {t.endDtStr} ({t.holdingDays} day{t.holdingDays === 1 ? '' : 's'} @ ₹{((t.funding * (isZerodha ? 0.146 : 0.140)) / 365).toFixed(2)}/day)
-                                </div>
-                              </div>
-                              <span style={{ fontWeight: 800, color: '#f472b6' }}>₹{t.interestCost14.toFixed(2)}</span>
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <div>
-                                <span style={{ color: '#cbd5e1' }}>Brokerage Charges ({brokRateLabel})</span>
-                                <div style={{ fontSize: '10px', color: '#94a3b8' }}>Buy: ₹{t.buyBrokerage.toFixed(2)} | Sell: ₹{t.sellBrokerage.toFixed(2)}</div>
-                              </div>
-                              <span style={{ fontWeight: 700, color: '#cbd5e1' }}>₹{t.brokerage.toFixed(2)}</span>
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <div>
-                                <span style={{ color: '#cbd5e1' }}>Pledge / Unpledge Charges</span>
-                                <div style={{ fontSize: '10px', color: '#94a3b8' }}>{pledgeLabel}</div>
-                              </div>
-                              <span style={{ fontWeight: 700, color: '#cbd5e1' }}>₹{t.pledgeCharges.toFixed(2)}</span>
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <div>
-                                <span style={{ color: '#cbd5e1' }}>Govt. & Statutory Charges</span>
-                                <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                                  STT: ₹{t.sttCost.toFixed(2)} | Stamp: ₹{t.stampDutyCost.toFixed(2)} | Txn/GST: ₹{(t.exchangeTxnFee + t.gstCost).toFixed(2)}
-                                </div>
-                              </div>
-                              <span style={{ fontWeight: 700, color: '#cbd5e1' }}>₹{t.govtOtherCharges.toFixed(2)}</span>
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', fontWeight: 900 }}>
-                              <span style={{ color: '#ffffff' }}>TOTAL MTF CARRYING CHARGES</span>
-                              <span style={{ color: '#fb7185', fontSize: '13px' }}>₹{t.totalCarryingCost.toFixed(2)}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Action Bar */}
-                        <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-                          {t.status === 'Active' ? (
-                            <button
-                              type="button"
-                              onClick={() => handleCloseMtfTx(t.id)}
-                              style={{ flex: 1, background: '#f59e0b', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', fontSize: '13px' }}
-                            >
-                              🏁 Close MTF Position (Record Exit)
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleReopenMtfTx(t.id)}
-                              style={{ flex: 1, background: 'rgba(52, 211, 153, 0.2)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.4)', padding: '10px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', fontSize: '13px' }}
-                            >
-                              🔄 Re-open MTF Position
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteMtfTx(t.id)}
-                            style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '10px 14px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', fontSize: '13px' }}
-                          >
-                            🗑️ Delete
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
           </div>
         </div>
       )}
-
-      {/* Exit Price Modal */}
-      {editingTrade && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
-          <div className="glass-panel" style={{ padding: '32px', width: '100%', maxWidth: '420px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 800 }}>Close Position: {editingTrade.symbol}</h3>
-              <button onClick={() => setEditingTrade(null)} style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer' }}><X size={20} /></button>
-            </div>
-
-            <form onSubmit={handleExitTrade} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>EXIT PRICE (₹)</label>
-                <input 
-                  type="number" 
-                  step="0.05" 
-                  placeholder="e.g. 15.50" 
-                  value={exitPriceInput} 
-                  onChange={e => setExitPriceInput(e.target.value)} 
-                  className="input-field" 
-                  required 
-                  autoFocus 
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <button type="button" onClick={() => setEditingTrade(null)} style={{ background: 'none', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#a5b4fc', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer' }}>Save Exit</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Full Edit Trade Transaction Modal */}
-      {fullEditTrade && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 99999 }}>
-          <div className="glass-panel" style={{ padding: '32px', width: '100%', maxWidth: '520px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Edit3 size={20} style={{ color: '#14b8a6' }} />
-                <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>Edit Trade Transaction</h3>
-              </div>
-              <button onClick={() => setFullEditTrade(null)} style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer' }}><X size={20} /></button>
-            </div>
-
-            <form onSubmit={handleSaveFullTradeEdit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>SYMBOL</label>
-                  <input type="text" value={editSymbol} onChange={e => setEditSymbol(e.target.value)} className="input-field" required />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>INSTRUMENT TYPE</label>
-                  <select value={editType} onChange={e => setEditType(e.target.value)} className="input-field">
-                    <option value="Intraday">Intraday Buy</option>
-                    <option value="Intraday Short">Intraday Short</option>
-                    <option value="Stock Options">Stock Options (NSE F&O)</option>
-                    <option value="Natural Gas Options">Natural Gas Options</option>
-                    <option value="Crude Oil Options">Crude Oil Options</option>
-                    <option value="Nifty Options">Nifty Options</option>
-                    <option value="Delivery">Equity Delivery</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>ENTRY PRICE (₹)</label>
-                  <input type="number" step="0.05" value={editEntryPrice} onChange={e => setEditEntryPrice(e.target.value)} className="input-field" required />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>QUANTITY</label>
-                  <input type="number" value={editQuantity} onChange={e => setEditQuantity(e.target.value)} className="input-field" required />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>STOP LOSS (₹)</label>
-                  <input type="number" step="0.05" value={editStopLoss} onChange={e => setEditStopLoss(e.target.value)} className="input-field" />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>TARGET PRICE (₹)</label>
-                  <input type="number" step="0.05" value={editTargetPrice} onChange={e => setEditTargetPrice(e.target.value)} className="input-field" />
-                </div>
-
-                <div style={{ gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '12px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '6px' }}>EXIT PRICE (₹)</label>
-                  <input type="number" step="0.05" value={editExitPrice} onChange={e => setEditExitPrice(e.target.value)} className="input-field" placeholder="Leave blank if Open" />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
-                <button type="button" onClick={() => setFullEditTrade(null)} style={{ background: 'none', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#a5b4fc', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" style={{ background: '#14b8a6', color: '#ffffff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer' }}>Save Changes</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* SIP Quick Sell Stock Modal */}
-      {sipSellModalStock && (() => {
-        const holding = pullbackStockSummary.find(s => s.ticker === sipSellModalStock.ticker) || sipSellModalStock;
-        const availableShares = holding ? holding.netShares : (sipSellModalStock.netShares || 0);
-        const avgCost = holding ? holding.avgCost : (sipSellModalStock.avgCost || 0);
-        const ltp = holding ? holding.ltp : (sipSellModalStock.ltp || 0);
-
-        const sellSharesNum = parseInt(sipSellModalShares) || 0;
-        const sellPriceNum = parseFloat(sipSellModalPrice) || ltp;
-        const sellVal = sellSharesNum * sellPriceNum;
-        const costVal = sellSharesNum * avgCost;
-        const estGrossProfit = sellVal - costVal;
-        const estProfitPct = costVal > 0 ? (estGrossProfit / costVal) * 100 : 0;
-
-        // Zerodha Sell Charges
-        const stt = sellVal * 0.001;
-        const txn = sellVal * 0.0000297;
-        const gst = txn * 0.18;
-        const dp = 15.34;
-        const estSellCharges = stt + txn + gst + dp;
-        const estNetProfit = estGrossProfit - estSellCharges;
-
-        return (
-          <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 99999 }}>
-            <div className="glass-panel" style={{ padding: '28px', width: '100%', maxWidth: '480px', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '18px', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(245, 158, 11, 0.2)', paddingBottom: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <DollarSign size={20} style={{ color: '#fbbf24' }} />
-                  <div>
-                    <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
-                      Record Stock Sale: {sipSellModalStock.cleanSym}
-                    </h3>
-                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{sipSellModalStock.name}</div>
-                  </div>
-                </div>
-                <button onClick={() => setSipSellModalStock(null)} style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer' }}><X size={20} /></button>
-              </div>
-
-              {/* Holding Info Pill */}
-              <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255,255,255,0.08)', padding: '12px 14px', borderRadius: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                <div>
-                  <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>AVAILABLE</div>
-                  <div style={{ fontSize: '15px', fontWeight: 900, color: '#34d399' }}>{availableShares} sh</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>AVG COST</div>
-                  <div style={{ fontSize: '15px', fontWeight: 900, color: '#ffffff' }}>₹{avgCost.toFixed(2)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>MARKET LTP</div>
-                  <div style={{ fontSize: '15px', fontWeight: 900, color: '#38bdf8' }}>₹{ltp.toFixed(2)}</div>
-                </div>
-              </div>
-
-              <form onSubmit={handleConfirmSellModal} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <label style={{ fontSize: '11px', color: '#fbbf24', fontWeight: 800 }}>SHARES TO SELL</label>
-                      <div style={{ display: 'flex', gap: '3px' }}>
-                        <button type="button" onClick={() => setSipSellModalShares('1')} style={{ fontSize: '9px', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#38bdf8', padding: '1px 4px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}>1</button>
-                        {availableShares > 1 && (
-                          <button type="button" onClick={() => setSipSellModalShares(String(Math.max(1, Math.floor(availableShares / 2))))} style={{ fontSize: '9px', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fbbf24', padding: '1px 4px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}>50%</button>
-                        )}
-                        <button type="button" onClick={() => setSipSellModalShares(String(availableShares))} style={{ fontSize: '9px', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#34d399', padding: '1px 4px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}>All</button>
-                      </div>
-                    </div>
-                    <input
-                      type="number"
-                      step="1"
-                      min="1"
-                      max={availableShares}
-                      value={sipSellModalShares}
-                      onChange={e => setSipSellModalShares(e.target.value)}
-                      className="input-field"
-                      style={{ borderColor: 'rgba(245, 158, 11, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
-                      required
-                      autoFocus
-                    />
-                  </div>
-
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800 }}>SELL PRICE (₹)</label>
-                      {ltp > 0 && (
-                        <button type="button" onClick={() => setSipSellModalPrice(String(ltp))} style={{ fontSize: '9px', background: 'rgba(56, 189, 248, 0.15)', border: 'none', color: '#38bdf8', padding: '1px 5px', borderRadius: '3px', cursor: 'pointer', fontWeight: 700 }}>Set LTP</button>
-                      )}
-                    </div>
-                    <input
-                      type="number"
-                      step="0.05"
-                      placeholder="e.g. 405.85"
-                      value={sipSellModalPrice}
-                      onChange={e => setSipSellModalPrice(e.target.value)}
-                      className="input-field"
-                      style={{ borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(15, 23, 42, 0.8)' }}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SELL EXECUTION DATE</label>
-                  <input
-                    type="date"
-                    value={sipSellModalDate}
-                    onChange={e => setSipSellModalDate(e.target.value)}
-                    className="input-field"
-                    required
-                  />
-                </div>
-
-                {/* Real-time P&L Preview Banner */}
-                {sellSharesNum > 0 && sellPriceNum > 0 && (
-                  <div style={{ background: estGrossProfit >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', border: `1px solid ${estGrossProfit >= 0 ? 'rgba(52, 211, 153, 0.3)' : 'rgba(248, 113, 113, 0.3)'}`, padding: '12px 14px', borderRadius: '8px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '11px', color: '#a5b4fc' }}>Gross Realized P&L:</span>
-                      <span style={{ fontSize: '13px', fontWeight: 800, color: estGrossProfit >= 0 ? '#34d399' : '#fb7185' }}>
-                        {estGrossProfit >= 0 ? '+' : ''}₹{estGrossProfit.toFixed(2)} ({estProfitPct >= 0 ? '+' : ''}{estProfitPct.toFixed(2)}%)
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '11px', color: '#94a3b8' }}>
-                      <span>Zerodha Est. Taxes & DP:</span>
-                      <span style={{ color: '#fbbf24' }}>₹{estSellCharges.toFixed(2)}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '6px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#ffffff' }}>Estimated Net Gain:</span>
-                      <span style={{ fontSize: '16px', fontWeight: 900, color: estNetProfit >= 0 ? '#34d399' : '#fb7185' }}>
-                        {estNetProfit >= 0 ? '+' : ''}₹{estNetProfit.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '6px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setSipSellModalStock(null)}
-                    style={{ background: 'none', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#a5b4fc', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    style={{ background: '#f59e0b', color: '#ffffff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <DollarSign size={15} />
-                    Confirm Sale
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* SIP Edit Stock & Transactions Modal */}
-      {sipEditModalStock && (() => {
-        // Compute live net shares and average cost from editSipTxs
-        let runningShares = 0;
-        let runningCost = 0;
-        editSipTxs.forEach(t => {
-          const sh = Number(t.shares) || 0;
-          const pr = Number(t.price) || 0;
-          if (t.type === 'BUY') {
-            runningShares += sh;
-            runningCost += sh * pr;
-          } else {
-            const avg = runningShares > 0 ? runningCost / runningShares : pr;
-            runningShares = Math.max(0, runningShares - sh);
-            runningCost = runningShares * avg;
-          }
-        });
-        const calculatedAvg = runningShares > 0 ? runningCost / runningShares : 0;
-        const currentLtp = liveLtps[sipEditModalStock.cleanSym] || liveLtps[sipEditModalStock.ticker] || 0;
-
-        return (
-          <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 99999, padding: '16px' }}>
-            <div className="glass-panel" style={{ padding: '28px', width: '100%', maxWidth: '620px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '18px', border: '1px solid rgba(99, 102, 241, 0.4)' }}>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(99, 102, 241, 0.2)', paddingBottom: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Edit3 size={20} style={{ color: '#818cf8' }} />
-                  <div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
-                      Edit Stock: {sipEditModalStock.cleanSym}
-                    </h3>
-                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{sipEditModalStock.ticker}</div>
-                  </div>
-                </div>
-                <button onClick={() => setSipEditModalStock(null)} style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer' }}><X size={20} /></button>
-              </div>
-
-              <form onSubmit={handleSaveSipEdit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                
-                {/* Stock Profile Inputs */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>COMPANY / ASSET NAME</label>
-                    <input
-                      type="text"
-                      value={editSipName}
-                      onChange={e => setEditSipName(e.target.value)}
-                      className="input-field"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>INVESTMENT CATEGORY</label>
-                    <select
-                      value={editSipCategory}
-                      onChange={e => setEditSipCategory(e.target.value)}
-                      className="input-field"
-                      style={{
-                        borderColor: editSipCategory === 'Core' ? 'rgba(52, 211, 153, 0.4)' : (editSipCategory === 'Growth' ? 'rgba(168, 85, 247, 0.4)' : 'rgba(56, 189, 248, 0.4)'),
-                        color: editSipCategory === 'Core' ? '#34d399' : (editSipCategory === 'Growth' ? '#c084fc' : '#38bdf8'),
-                        fontWeight: 800
-                      }}
-                    >
-                      <option value="Core" style={{ color: '#34d399' }}>Core (#1 High Edge Baseline)</option>
-                      <option value="Growth" style={{ color: '#c084fc' }}>Growth (#2 Momentum High Beta)</option>
-                      <option value="Park" style={{ color: '#38bdf8' }}>Park (ETF / Liquid Cash Reserve — No 5% Strategy)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: '11px', color: '#a5b4fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>LOCAL PEAK PRICE (₹)</label>
-                    <input
-                      type="number"
-                      step="0.05"
-                      placeholder="e.g. 405.85"
-                      value={editSipPeak}
-                      onChange={e => setEditSipPeak(e.target.value)}
-                      className="input-field"
-                    />
-                  </div>
-                </div>
-
-                {/* Live Holding Impact Pill */}
-                <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(255,255,255,0.08)', padding: '12px 16px', borderRadius: '10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
-                  <div>
-                    <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>NET ACTIVE SHARES</div>
-                    <div style={{ fontSize: '16px', fontWeight: 900, color: runningShares > 0 ? '#34d399' : '#94a3b8' }}>{runningShares} sh</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>CALCULATED AVG COST</div>
-                    <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff' }}>₹{calculatedAvg.toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>TOTAL INVESTED COST</div>
-                    <div style={{ fontSize: '16px', fontWeight: 900, color: '#fbbf24' }}>₹{runningCost.toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '10px', color: '#a5b4fc', fontWeight: 700 }}>MARKET LTP</div>
-                    <div style={{ fontSize: '16px', fontWeight: 900, color: '#38bdf8' }}>₹{currentLtp.toFixed(2)}</div>
-                  </div>
-                </div>
-
-                {/* Transactions Editor Table */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <label style={{ fontSize: '12px', color: '#ffffff', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <FileText size={15} style={{ color: '#6366f1' }} />
-                      Buy / Sell Transaction History ({editSipTxs.length})
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditSipTxs(prev => [
-                          ...prev,
-                          {
-                            id: Date.now(),
-                            date: new Date().toISOString().split('T')[0],
-                            shares: 1,
-                            price: currentLtp > 0 ? currentLtp : 0,
-                            type: 'BUY'
-                          }
-                        ]);
-                      }}
-                      style={{
-                        background: 'rgba(52, 211, 153, 0.15)',
-                        border: '1px solid rgba(52, 211, 153, 0.3)',
-                        color: '#34d399',
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <PlusCircle size={13} />
-                      Add Transaction
-                    </button>
-                  </div>
-
-                  {editSipTxs.length === 0 ? (
-                    <div style={{ padding: '16px', textAlign: 'center', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '8px', border: '1px dashed rgba(255,255,255,0.1)', color: '#94a3b8', fontSize: '12px' }}>
-                      No transactions recorded (Watchlist stock with 0 shares). Click "Add Transaction" to log shares.
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
-                      {editSipTxs.map((tx, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '95px 120px 85px 1fr 36px', gap: '8px', alignItems: 'center', background: 'rgba(15, 23, 42, 0.6)', border: `1px solid ${tx.type === 'BUY' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(245, 158, 11, 0.2)'}`, padding: '8px 10px', borderRadius: '6px' }}>
-                          <select
-                            value={tx.type}
-                            onChange={e => {
-                              const newType = e.target.value;
-                              setEditSipTxs(prev => prev.map((item, i) => i === idx ? { ...item, type: newType } : item));
-                            }}
-                            className="input-field"
-                            style={{ padding: '6px 8px', fontSize: '11px', fontWeight: 800, color: tx.type === 'BUY' ? '#34d399' : '#fbbf24' }}
-                          >
-                            <option value="BUY">🟢 BUY</option>
-                            <option value="SELL">🔴 SELL</option>
-                          </select>
-
-                          <input
-                            type="date"
-                            value={tx.date}
-                            onChange={e => {
-                              const newDate = e.target.value;
-                              setEditSipTxs(prev => prev.map((item, i) => i === idx ? { ...item, date: newDate } : item));
-                            }}
-                            className="input-field"
-                            style={{ padding: '6px 8px', fontSize: '11px' }}
-                            required
-                          />
-
-                          <input
-                            type="number"
-                            step="1"
-                            min="1"
-                            placeholder="Qty"
-                            value={tx.shares}
-                            onChange={e => {
-                              const newQty = e.target.value;
-                              setEditSipTxs(prev => prev.map((item, i) => i === idx ? { ...item, shares: newQty } : item));
-                            }}
-                            className="input-field"
-                            style={{ padding: '6px 8px', fontSize: '11px', fontWeight: 700 }}
-                            required
-                          />
-
-                          <div style={{ position: 'relative' }}>
-                            <input
-                              type="number"
-                              step="0.05"
-                              min="0"
-                              placeholder="Price ₹"
-                              value={tx.price}
-                              onChange={e => {
-                                const newPrice = e.target.value;
-                                setEditSipTxs(prev => prev.map((item, i) => i === idx ? { ...item, price: newPrice } : item));
-                              }}
-                              className="input-field"
-                              style={{ padding: '6px 8px', fontSize: '11px', fontWeight: 700 }}
-                              required
-                            />
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditSipTxs(prev => prev.filter((_, i) => i !== idx));
-                            }}
-                            style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            title="Delete transaction"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setSipEditModalStock(null)}
-                    style={{ background: 'none', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#a5b4fc', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    style={{ background: '#6366f1', color: '#ffffff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <Save size={15} />
-                    Save All Changes
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        );
-      })()}
-
-
-
-      {/* Bottom Navigation Bar (Mobile App Style) */}
-      <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        display: 'flex',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        background: 'rgba(15, 15, 26, 0.97)',
-        borderTop: '1px solid rgba(99, 102, 241, 0.25)',
-        backdropFilter: 'blur(12px)',
-        padding: '8px 4px calc(8px + env(safe-area-inset-bottom, 0px)) 4px',
-        zIndex: 9998
-      }}>
-        {[
-          { key: 'home', label: 'Home', icon: Activity, color: '#6366f1' },
-          { key: 'trades', label: 'Trades', icon: FileText, color: '#14b8a6' },
-          { key: 'capital', label: 'Capital', icon: DollarSign, color: '#a855f7' },
-          { key: 'sip', label: 'SIP', icon: TrendingUp, color: '#00b4d8' },
-          { key: 'settings', label: 'Settings', icon: Settings, color: '#ec4899' }
-        ].map(navItem => {
-          const NavIcon = navItem.icon;
-          const isActive = activeTab === navItem.key;
-          return (
-            <button
-              key={navItem.key}
-              onClick={() => setActiveTab(navItem.key)}
-              style={{
-                background: 'none',
-                border: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '6px 10px',
-                cursor: 'pointer',
-                flex: 1,
-                color: isActive ? navItem.color : '#6b7280'
-              }}
-            >
-              <NavIcon size={20} strokeWidth={isActive ? 2.5 : 2} />
-              <span style={{ fontSize: '11px', fontWeight: isActive ? 800 : 600 }}>
-                {navItem.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
 
     </div>
   );
