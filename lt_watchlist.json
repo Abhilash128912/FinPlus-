@@ -206,5 +206,18 @@
     "active": true,
     "added_date": "2026-08-19",
     "notes": "Wait for better entry; P/E ~67x stretched, 91pct of 52W range. Strong brand growth - Timex, Guess, Aston Martin."
+  },
+  {
+    "symbol": "SIGMA",
+    "ticker": "SIGMA.NS",
+    "type": "Private",
+    "sector": "Technology",
+    "durability_score": 75,
+    "portfolio_role": "Penny growth",
+    "gtt_mode": "auto",
+    "gtt_level": null,
+    "active": true,
+    "added_date": "2026-08-24",
+    "notes": "Sigma Solve Limited"
   }
 ]

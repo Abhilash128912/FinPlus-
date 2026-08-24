@@ -1,7 +1,7 @@
 {
   "start_date": "2026-08-19",
   "daily_accrual_rate": 100.0,
-  "extra_deposits": 0.0,
+  "extra_deposits": 189.14,
   "holdings": [
     {
       "symbol": "ASHOKLEY",
@@ -16,6 +16,13 @@
       "avg_price": 356.45,
       "buy_date": "2026-08-24",
       "last_price": 356.45
+    },
+    {
+      "symbol": "SIGMA",
+      "qty": 4,
+      "avg_price": 47.2,
+      "buy_date": "2026-08-24",
+      "last_price": 47.2
     }
   ],
   "transactions": [
@@ -61,6 +68,29 @@
         "stamp_duty": 0.05,
         "exchange_fee": 0.01,
         "gst": 0.03,
+        "dp_charges": 0.0,
+        "sebi_fee": 0.0
+      }
+    },
+    {
+      "id": "TX-BUY-1787576908",
+      "timestamp": "2026-08-24 18:38:28",
+      "type": "BUY",
+      "symbol": "SIGMA",
+      "qty": 4,
+      "price": 47.2,
+      "gross_value": 188.8,
+      "total_charges": 0.34,
+      "net_value": 189.14,
+      "charges_breakdown": {
+        "gross_value": 188.8,
+        "total_charges": 0.34,
+        "net_value": 189.14,
+        "brokerage": 0.09,
+        "stt": 0.19,
+        "stamp_duty": 0.03,
+        "exchange_fee": 0.01,
+        "gst": 0.02,
         "dp_charges": 0.0,
         "sebi_fee": 0.0
       }

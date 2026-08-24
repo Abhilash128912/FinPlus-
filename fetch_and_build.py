@@ -1107,6 +1107,24 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
     lt_summary = get_lt_portfolio_summary(screener_results)
     holding_map = {h.get("symbol", "").upper(): h for h in lt_summary.get("holdings", []) if int(h.get("qty", 0)) > 0}
 
+    # Automatically append any active portfolio holdings not present in lt_stocks
+    existing_symbols = {(s.get("symbol") or "").upper() for s in lt_stocks}
+    for h_sym in holding_map.keys():
+        if h_sym not in existing_symbols:
+            lt_stocks.append({
+                "symbol": h_sym,
+                "ticker": f"{h_sym}.NS",
+                "type": "Private",
+                "sector": "Portfolio Holding",
+                "durability_score": 75,
+                "portfolio_role": "Active Holding",
+                "gtt_mode": "auto",
+                "gtt_level": None,
+                "active": True,
+                "added_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                "notes": "Auto-added active holding"
+            })
+
     enriched = []
     buy_now_count = 0
     bought_count = 0
@@ -1374,6 +1392,30 @@ def execute_lt_buy_order(symbol: str, qty: int, price: float) -> dict:
     ledger["holdings"] = holdings
     ledger["transactions"] = transactions
     save_lt_capital_ledger(ledger)
+
+    # Ensure symbol is persisted in lt_watchlist.json so it is tracked in LT Watchlist dashboard
+    try:
+        if os.path.exists(LT_WL_FILE):
+            with open(LT_WL_FILE, "r", encoding="utf-8") as f:
+                wl_list = json.load(f)
+            if not any((item.get("symbol") or "").upper() == symbol for item in wl_list):
+                wl_list.append({
+                    "symbol": symbol,
+                    "ticker": f"{symbol}.NS",
+                    "type": "Private",
+                    "sector": "Portfolio Holding",
+                    "durability_score": 75,
+                    "portfolio_role": "Active Holding",
+                    "gtt_mode": "auto",
+                    "gtt_level": None,
+                    "active": True,
+                    "added_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                    "notes": "Auto-added upon purchase"
+                })
+                with open(LT_WL_FILE, "w", encoding="utf-8") as f:
+                    json.dump(wl_list, f, indent=2)
+    except Exception as e:
+        log(f"⚠ Could not auto-add {symbol} to lt_watchlist.json: {e}")
 
     return {
         "status": "ok",
