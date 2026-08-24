@@ -2964,6 +2964,7 @@ const COMMODITIES_DATA = __COMMODITIES_JSON__;
 const MARKET_INFO = __MARKET_INFO_JSON__;
 const FNO_DATA = __FNO_JSON__;
 const PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;
+const LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;
 
 // ── State ─────────────────────────────────────────────────────────────────
 let watchlist = [];
@@ -4128,6 +4129,7 @@ function init() {
   applyFilters();
   renderWatchlist();
   renderLtWatchlist();
+  fetchLtPortfolioStatus();
   updateWlCount();
 
   renderMarketStatusHeader();
@@ -6262,6 +6264,9 @@ document.addEventListener('keydown', e => {
 
 // ── LT Capital Accumulator & Portfolio Functions ─────────────────────────
 function fetchLtPortfolioStatus() {
+  if (typeof LT_PORTFOLIO_SUMMARY !== 'undefined' && LT_PORTFOLIO_SUMMARY) {
+    renderLtPortfolioSummary(LT_PORTFOLIO_SUMMARY);
+  }
   fetch('/api/lt-portfolio/status')
     .then(r => r.json())
     .then(res => {
@@ -6270,7 +6275,9 @@ function fetchLtPortfolioStatus() {
       }
     })
     .catch(err => {
-      console.log('Portfolio status API static/offline');
+      if (typeof LT_PORTFOLIO_SUMMARY !== 'undefined' && LT_PORTFOLIO_SUMMARY) {
+        renderLtPortfolioSummary(LT_PORTFOLIO_SUMMARY);
+      }
     });
 }
 
@@ -6593,6 +6600,8 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
     html = html.replace("__FNO_JSON__", json.dumps(fno_data or [], ensure_ascii=False, default=json_serializer))
     penny_stocks_data = compute_quality_penny_stocks(screener_results, top_n=20, monthly_sip=200.0)
     html = html.replace("__PENNY_STOCKS_JSON__", json.dumps(penny_stocks_data, ensure_ascii=False, default=json_serializer))
+    lt_summary = get_lt_portfolio_summary(screener_results)
+    html = html.replace("__LT_PORTFOLIO_SUMMARY_JSON__", json.dumps(lt_summary, ensure_ascii=False, default=json_serializer))
     return html
 
 
