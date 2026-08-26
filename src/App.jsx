@@ -133,15 +133,16 @@ export default function App() {
   const [ltPct, setLtPct] = useState(() => Number(localStorage.getItem('finplus_split_lt')) || 30);
   const [pennyPct, setPennyPct] = useState(() => Number(localStorage.getItem('finplus_split_penny')) || 10);
 
-  // Free Cash with Broker (Baseline Initial Balances)
+  // Free Cash with Broker — always start from localStorage only, never hardcode.
+  // Server load (useEffect) will set the correct values after mount.
   const [swingFreeCashInput, setSwingFreeCashInput] = useState(() => {
     const saved = localStorage.getItem('finplus_free_cash_swing_v5') || localStorage.getItem(FREE_CASH_SWING_KEY);
     if (!saved || saved === '249.40' || saved === '249.4' || saved === '1233.12' || saved === '1233.1' || saved === '1287.16') return '';
     return saved;
   });
   const [ltFreeCashInput, setLtFreeCashInput] = useState(() => {
-    const saved = localStorage.getItem(FREE_CASH_LT_KEY);
-    return saved !== null ? saved : '54.04';
+    // No hardcoded fallback — if localStorage is empty, start at '' and let the server restore it.
+    return localStorage.getItem(FREE_CASH_LT_KEY) || '';
   });
   const [pennyFreeCashInput, setPennyFreeCashInput] = useState(() => {
     return localStorage.getItem('finplus_free_cash_penny_v4') || '';
@@ -184,13 +185,8 @@ export default function App() {
     return [];
   });
 
-  // Live LTP Polling State
-  const [liveLtps, setLiveLtps] = useState({
-    'MIDHANI': 423.95,
-    'CUPID': 284.65,
-    'KIRIINDUS': 477.90,
-    'RVNL': 225.30
-  });
+  // Live LTP Polling State — start empty so no stale prices are ever shown before the API responds.
+  const [liveLtps, setLiveLtps] = useState({});
   const [lastLtpUpdate, setLastLtpUpdate] = useState(() => new Date().toLocaleTimeString());
   const [isLtpLoading, setIsLtpLoading] = useState(false);
 
