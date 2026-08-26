@@ -44,75 +44,12 @@ const LEDGER_KEY = 'finplus_capital_ledger_v5';
 const FREE_CASH_SWING_KEY = 'finplus_free_cash_swing_v5';
 const FREE_CASH_LT_KEY = 'finplus_free_cash_lt_v5';
 
-const INITIAL_POSITIONS = [
-  {
-    id: "pos_midhani_kite",
-    ticker: "MIDHANI",
-    name: "Mishra Dhatu Nigam Limited",
-    segment: "SWING",
-    shares: 3,
-    buyPrice: 433.0,
-    buyDate: "2026-08-23",
-    target1: 467.64,
-    stopLoss: 415.68,
-    notes: "Zerodha Kite Swing Position"
-  },
-  {
-    id: "pos_cupid_kite",
-    ticker: "CUPID",
-    name: "Cupid Limited",
-    segment: "SWING",
-    shares: 6,
-    buyPrice: 289.95,
-    buyDate: "2026-08-23",
-    target1: 313.15,
-    stopLoss: 278.35,
-    notes: "Zerodha Kite Swing Position"
-  },
-  {
-    id: "pos_kiriindus_kite",
-    ticker: "KIRIINDUS",
-    name: "Kiri Industries Limited",
-    segment: "SWING",
-    shares: 4,
-    buyPrice: 462.0,
-    buyDate: "2026-08-23",
-    target1: 498.96,
-    stopLoss: 443.52,
-    notes: "Zerodha Kite Swing Position"
-  },
-  {
-    id: "pos_rvnl_indmoney",
-    ticker: "RVNL",
-    name: "Rail Vikas Nigam Limited",
-    segment: "LT",
-    shares: 1,
-    buyPrice: 229.90,
-    buyDate: "2026-08-23",
-    target1: 287.38,
-    stopLoss: 0,
-    notes: "INDmoney Long-Term Core Position"
-  }
-];
+// No hardcoded fallback positions or ledger entries.
+// The app is 100% server-driven: all data comes from Render /api/backup/load on mount.
+// If the server is unreachable and localStorage is also empty, the app starts blank (correct behaviour).
+const INITIAL_POSITIONS = [];
+const INITIAL_CAPITAL_LEDGER = [];
 
-const INITIAL_CAPITAL_LEDGER = [
-  {
-    id: "cap_initial_kite",
-    date: "2026-08-23",
-    type: "INJECTION",
-    amount: 5136.10,
-    segment: "SWING",
-    notes: "Zerodha Kite Capital (Invested + Free Cash)"
-  },
-  {
-    id: "cap_initial_indmoney",
-    date: "2026-08-23",
-    type: "INJECTION",
-    amount: 283.94,
-    segment: "LT",
-    notes: "INDmoney Long-Term Capital (Invested + Free Cash)"
-  }
-];
 
 export default function App() {
   // ══════════════════════════════════════════════════════════════
@@ -133,12 +70,9 @@ export default function App() {
   const [ltPct, setLtPct] = useState(() => Number(localStorage.getItem('finplus_split_lt')) || 30);
   const [pennyPct, setPennyPct] = useState(() => Number(localStorage.getItem('finplus_split_penny')) || 10);
 
-  // Free Cash with Broker — always start from localStorage only, never hardcode.
-  // Server load (useEffect) will set the correct values after mount.
+  // Free Cash — start from localStorage only. Server load sets correct values after mount.
   const [swingFreeCashInput, setSwingFreeCashInput] = useState(() => {
-    const saved = localStorage.getItem('finplus_free_cash_swing_v5') || localStorage.getItem(FREE_CASH_SWING_KEY);
-    if (!saved || saved === '249.40' || saved === '249.4' || saved === '1233.12' || saved === '1233.1' || saved === '1287.16') return '';
-    return saved;
+    return localStorage.getItem('finplus_free_cash_swing_v5') || localStorage.getItem(FREE_CASH_SWING_KEY) || '';
   });
   const [ltFreeCashInput, setLtFreeCashInput] = useState(() => {
     // No hardcoded fallback — if localStorage is empty, start at '' and let the server restore it.
@@ -284,12 +218,7 @@ export default function App() {
         if (split.penny !== undefined) setPennyPct(split.penny);
       }
       if (freeCash) {
-        const val = String(freeCash.swing || '').trim();
-        if (val && val !== '249.40' && val !== '249.4' && val !== '1233.12' && val !== '1233.1' && val !== '1287.16') {
-          setSwingFreeCashInput(val);
-        } else {
-          setSwingFreeCashInput('');
-        }
+        if (freeCash.swing !== undefined) setSwingFreeCashInput(String(freeCash.swing));
         if (freeCash.lt !== undefined) setLtFreeCashInput(String(freeCash.lt));
         if (freeCash.penny !== undefined) setPennyFreeCashInput(String(freeCash.penny));
       }
@@ -694,12 +623,10 @@ export default function App() {
     const pennyNetPnl = pennyGrossPnl - pennyEstCharges;
     const pennyNetPct = pennyInvested > 0 ? (pennyNetPnl / pennyInvested) * 100 : 0;
 
-    // For Net Worth, use ONLY actual broker free cash entered by user (default 0 if not entered).
-    // Falling back to capitalMath.*.available would use budget-model figures, not real cash — causing wrong net worth.
-    const isStaleSwingCash = (val) => !val || val === '249.40' || val === '249.4' || val === '1233.12' || val === '1233.1' || val === '1287.16';
-    const effectiveSwingFreeCash = (!isStaleSwingCash(swingFreeCashInput)) ? (parseFloat(swingFreeCashInput) || 0) : 0;
-    const effectiveLtFreeCash = ltFreeCashInput ? (parseFloat(ltFreeCashInput) || 0) : 0;
-    const effectivePennyFreeCash = pennyFreeCashInput ? (parseFloat(pennyFreeCashInput) || 0) : 0;
+    // Use only actual user-entered free cash. Default to 0 when not entered.
+    const effectiveSwingFreeCash = parseFloat(swingFreeCashInput) || 0;
+    const effectiveLtFreeCash = parseFloat(ltFreeCashInput) || 0;
+    const effectivePennyFreeCash = parseFloat(pennyFreeCashInput) || 0;
 
     const totalFreeCash = effectiveSwingFreeCash + effectiveLtFreeCash + effectivePennyFreeCash;
     const totalAccountCapital = totalCurrentVal + totalFreeCash; // Net Worth = Live Holdings Value + Actual Broker Free Cash
