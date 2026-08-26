@@ -64,13 +64,13 @@
       "id": "pos_1787561091408_kx6l8",
       "ticker": "SIGMA",
       "name": "Sigma Solve Ltd",
-      "segment": "LT",
+      "segment": "PENNY",
       "shares": 4,
       "buyPrice": 47.2,
       "buyDate": "2026-08-24",
       "target1": 0,
       "stopLoss": 0,
-      "notes": "INDmoney Long-Term Position"
+      "notes": "Quality Penny SIP Position (LTP < Rs 75)"
     },
     {
       "id": "pos_cupid_kite",

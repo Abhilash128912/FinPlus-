@@ -1044,8 +1044,9 @@ export default function App() {
             <div style={{ fontSize: '22px', fontWeight: 900, color: '#38bdf8', marginTop: '4px' }}>
               ₹{portfolioSummary.totalAccountCapital.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px' }}>
-              Holdings (Kite + INDmoney) ₹{portfolioSummary.totalCurrentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • Free Cash (Kite + INDmoney) ₹{portfolioSummary.totalFreeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+              <div>Live Value: Holdings ₹{portfolioSummary.totalCurrentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} + Cash ₹{portfolioSummary.totalFreeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div style={{ color: '#38bdf8', fontWeight: 700 }}>Total Cost Capital: ₹{(portfolioSummary.totalBaseCapital || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             </div>
           </div>
 
