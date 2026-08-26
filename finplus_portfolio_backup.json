@@ -159,17 +159,17 @@
       "segment": "SWING",
       "shares": 46,
       "buyPrice": 33.36,
-      "sellPrice": 33.36,
+      "sellPrice": 32.97,
       "buyDate": "2026-08-25",
       "sellDate": "2026-08-26",
       "holdingDays": 1,
       "broker": "Zerodha Kite",
-      "turnover": 1534.56,
-      "grossPnl": 0,
-      "taxes": 0,
-      "netPnl": 0,
-      "returnPct": 0,
-      "notes": "Position exited / replaced by GUJALKALI \u2014 synced from Kite on 2026-08-26"
+      "turnover": 1516.62,
+      "grossPnl": -17.94,
+      "taxes": 18.73,
+      "netPnl": -36.67,
+      "returnPct": -1.169,
+      "notes": "Exited at loss, replaced by GUJALKALI on 2026-08-26"
     }
   ],
   "freeCash": {
