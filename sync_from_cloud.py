@@ -43,23 +43,15 @@ def sync():
             master_data = cloud_data
             print(" -> Loaded portfolio dataset from Render Cloud.")
     elif not master_data:
-        # Fallback dataset
+        # Fallback dataset if no local or cloud file exists
         master_data = {
-            "positions": [
-                {"id": "pos_midhani_kite", "ticker": "MIDHANI", "name": "Mishra Dhatu Nigam Limited", "segment": "SWING", "shares": 3, "buyPrice": 433.0, "buyDate": "2026-08-23", "target1": 467.64, "stopLoss": 415.68},
-                {"id": "pos_cupid_kite", "ticker": "CUPID", "name": "Cupid Limited", "segment": "SWING", "shares": 6, "buyPrice": 289.95, "buyDate": "2026-08-23", "target1": 313.15, "stopLoss": 278.35},
-                {"id": "pos_rvnl_indmoney", "ticker": "RVNL", "name": "Rail Vikas Nigam Limited", "segment": "LT", "shares": 1, "buyPrice": 229.90, "buyDate": "2026-08-23", "target1": 287.38, "stopLoss": 0}
-            ],
-            "capitalLedger": [
-                {"id": "cap_initial_kite", "date": "2026-08-23", "type": "INJECTION", "amount": 5136.10, "segment": "SWING"},
-                {"id": "cap_initial_indmoney", "date": "2026-08-23", "type": "INJECTION", "amount": 283.94, "segment": "LT"}
-            ],
-            "freeCash": {"swing": "2078.90", "lt": "54.04", "penny": "0"},
-            "soldHistory": [
-                {"id": "sold_kiriindus_1", "ticker": "KIRIINDUS", "name": "Kiri Industries Limited", "segment": "SWING", "shares": 4, "buyPrice": 462.0, "sellPrice": 462.0, "buyDate": "2026-08-23", "sellDate": "2026-08-24", "turnover": 1848.0, "grossPnl": 0.0, "taxes": 18.50, "netPnl": -18.50, "returnPct": 0.0}
-            ],
+            "positions": [],
+            "capitalLedger": [],
+            "freeCash": {"swing": "734.63", "lt": "167.58", "penny": "0"},
+            "soldHistory": [],
             "budget": "0",
-            "split": {"swing": 60, "lt": 30, "penny": 10}
+            "split": {"swing": 60, "lt": 30, "penny": 10},
+            "savedAt": 1787722180383
         }
 
     # Save to local portfolio backup file
