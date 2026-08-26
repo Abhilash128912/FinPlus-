@@ -2953,6 +2953,9 @@ details[open] summary::before {
       <input type="text" id="bseSymbolInput" placeholder="e.g. 500112.BO or IZMO.NS" style="flex:1;background:var(--card2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addCustomBseStock()">
       <button class="btn-add" onclick="addCustomBseStock()" style="padding:10px 18px;font-size:13px">Add Stock</button>
     </div>
+  </div>
+</div>
+
 <!-- LT Watchlist Add Stock Modal -->
 <div class="modal-bg" id="ltAddModalBg" style="display:none;z-index:99999" onclick="if(event.target===this)closeAddLtStockModal()">
   <div style="background:var(--card);border:1.5px solid var(--accent);border-radius:16px;padding:24px;width:90%;max-width:520px;box-shadow:0 12px 36px rgba(0,0,0,0.5)">

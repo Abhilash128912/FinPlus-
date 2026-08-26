@@ -25,3 +25,7 @@
 - **Client-Side Recalculation**: `recalcDaysActive()` in Javascript MUST iterate day-by-day and count only valid NSE market trading days so the browser UI dynamically displays the correct trading day count even when using static HTML or cached data.
 - **Dual HTTP Method Support**: The `/api/lt-portfolio/status` endpoint MUST be supported in both `do_GET` (for standard browser `fetch()`) and `do_POST` in `fetch_and_build.py`.
 
+## 5. Modal HTML Hierarchy & Un-nested Structure
+- **Top-Level Modals**: `ltAddModalBg` MUST ALWAYS be a top-level element placed directly under `<body>` (or at root modal container level). It MUST NEVER be nested inside another `<div class="modal-bg">` (such as `bseModalBg`) because parent `display:none` styles render child modals completely invisible.
+
+
