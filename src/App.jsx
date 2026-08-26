@@ -165,7 +165,11 @@ export default function App() {
   const [capEventType, setCapEventType] = useState('INJECTION');
   const [capEventAmount, setCapEventAmount] = useState('');
   const [capEventSegment, setCapEventSegment] = useState('ALL');
-  const [capEventNotes, setCapEventNotes] = useState('');
+  // Modal: Broker Cash Adjustment Form State
+  const [showCashAdjModal, setShowCashAdjModal] = useState(false);
+  const [adjSwingCash, setAdjSwingCash] = useState('');
+  const [adjLtCash, setAdjLtCash] = useState('');
+  const [adjPennyCash, setAdjPennyCash] = useState('');
 
   const showToast = (msg) => {
     setToastMsg(msg);
@@ -727,6 +731,15 @@ export default function App() {
       notes: formNotes.trim()
     };
 
+    // Deduct buy capital from the segment's broker free cash
+    if (addSegment === 'SWING') {
+      setSwingFreeCashInput(prev => Math.max(0, (parseFloat(prev || '0') || 0) - requiredCapital).toFixed(2));
+    } else if (addSegment === 'LT') {
+      setLtFreeCashInput(prev => Math.max(0, (parseFloat(prev || '0') || 0) - requiredCapital).toFixed(2));
+    } else if (addSegment === 'PENNY') {
+      setPennyFreeCashInput(prev => Math.max(0, (parseFloat(prev || '0') || 0) - requiredCapital).toFixed(2));
+    }
+
     setPositions(prev => [newPos, ...prev]);
     setShowAddModal(false);
     setFormTicker('');
@@ -736,7 +749,7 @@ export default function App() {
     setFormTarget1('');
     setFormStopLoss('');
     setFormNotes('');
-    showToast(`✅ Recorded purchase of ${shares} shares of ${ticker} in ${addSegment}!`);
+    showToast(`✅ Recorded purchase of ${shares} sh ${ticker} in ${addSegment}! ₹${requiredCapital.toFixed(2)} deducted from Free Cash.`);
   };
 
   // ── Handle Sell / Realize Trade ──
@@ -1206,9 +1219,22 @@ export default function App() {
                   <div style={{ fontSize: '13px', fontWeight: 900, color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span>💰 Free Uninvested Cash with Brokers (Match Account Balances)</span>
                   </div>
-                  <span style={{ fontSize: '11px', color: '#a5b4fc', background: 'rgba(99, 102, 241, 0.15)', padding: '2px 8px', borderRadius: '6px' }}>
-                    Total Free Cash: ₹{(swingFreeCash + ltFreeCash + pennyFreeCash).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button 
+                      onClick={() => {
+                        setAdjSwingCash(swingFreeCashInput);
+                        setAdjLtCash(ltFreeCashInput);
+                        setAdjPennyCash(pennyFreeCashInput);
+                        setShowCashAdjModal(true);
+                      }}
+                      style={{ background: 'rgba(16, 185, 129, 0.18)', border: '1px solid #10b981', color: '#10b981', padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, cursor: 'pointer' }}
+                    >
+                      ⚙️ Align / Adjust Broker Cash
+                    </button>
+                    <span style={{ fontSize: '11px', color: '#a5b4fc', background: 'rgba(99, 102, 241, 0.15)', padding: '2px 8px', borderRadius: '6px' }}>
+                      Total Free Cash: ₹{(swingFreeCash + ltFreeCash + pennyFreeCash).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
                   <div>
@@ -2389,6 +2415,83 @@ export default function App() {
                   style={{ background: 'linear-gradient(135deg, #059669, #10b981)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}
                 >
                   Log Event
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: ALIGN / ADJUST BROKER FREE CASH ── */}
+      {showCashAdjModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0f172a', border: '1.5px solid #10b981', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '440px', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>⚙️ Align Broker Free Cash</div>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>Match system free cash with your exact Zerodha / INDmoney statement balance</div>
+              </div>
+              <button onClick={() => setShowCashAdjModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              setSwingFreeCashInput(adjSwingCash);
+              setLtFreeCashInput(adjLtCash);
+              setPennyFreeCashInput(adjPennyCash);
+              setShowCashAdjModal(false);
+              showToast('✅ Broker Free Cash balances aligned and synchronized successfully!');
+            }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800, display: 'block', marginBottom: '4px' }}>⚡ SWING FREE CASH (Kite)</label>
+                <input 
+                  type="number" 
+                  step="any"
+                  value={adjSwingCash} 
+                  onChange={e => setAdjSwingCash(e.target.value)}
+                  style={{ width: '100%', background: '#090d16', border: '1px solid #38bdf8', color: '#38bdf8', fontSize: '18px', padding: '10px', borderRadius: '8px', fontWeight: 900 }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#10b981', fontWeight: 800, display: 'block', marginBottom: '4px' }}>🛡️ LONG-TERM FREE CASH (INDmoney)</label>
+                <input 
+                  type="number" 
+                  step="any"
+                  value={adjLtCash} 
+                  onChange={e => setAdjLtCash(e.target.value)}
+                  style={{ width: '100%', background: '#090d16', border: '1px solid #10b981', color: '#10b981', fontSize: '18px', padding: '10px', borderRadius: '8px', fontWeight: 900 }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#c084fc', fontWeight: 800, display: 'block', marginBottom: '4px' }}>💎 PENNY SIP FREE CASH (Kite)</label>
+                <input 
+                  type="number" 
+                  step="any"
+                  value={adjPennyCash} 
+                  onChange={e => setAdjPennyCash(e.target.value)}
+                  style={{ width: '100%', background: '#090d16', border: '1px solid #c084fc', color: '#c084fc', fontSize: '18px', padding: '10px', borderRadius: '8px', fontWeight: 900 }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowCashAdjModal(false)}
+                  style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  style={{ background: 'linear-gradient(135deg, #059669, #10b981)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}
+                >
+                  Align &amp; Save Cash
                 </button>
               </div>
 
