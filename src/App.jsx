@@ -1062,32 +1062,60 @@ export default function App() {
             </div>
           </div>
 
-          {/* Card 3: Gross Unrealized P&L (Matches Broker Display) */}
+          {/* Card 3: Unrealized Open P&L Breakdown */}
           <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: `1px solid ${(portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`, borderRadius: '12px', padding: '14px 16px' }}>
-            <div style={{ fontSize: '11px', color: (portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 800, textTransform: 'uppercase' }}>
-              {(portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? 'UNREALIZED P&L (MATCHES BROKER)' : 'UNREALIZED LOSS (MATCHES BROKER)'}
+            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+              📊 OPEN POSITIONS P&amp;L
             </div>
-            <div style={{ fontSize: '22px', fontWeight: 900, color: (portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? '#10b981' : '#f87171', marginTop: '4px' }}>
-              {(portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.grossUnrealizedPnl || 0).toFixed(2)}
-            </div>
-            <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
-              Net: {(portfolioSummary.totalUnrealizedPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.totalUnrealizedPnl || 0).toFixed(2)} (Est. Fees: -₹{(portfolioSummary.totalEstCharges || 0).toFixed(2)})
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                <span style={{ color: '#94a3b8', fontWeight: 700 }}>1. Gross P&amp;L (Broker):</span>
+                <span style={{ color: (portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 900 }}>
+                  {(portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.grossUnrealizedPnl || 0).toFixed(2)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                <span style={{ color: '#fbbf24', fontWeight: 700 }}>2. Est. Charges &amp; Taxes:</span>
+                <span style={{ color: '#fbbf24', fontWeight: 800 }}>
+                  -₹{(portfolioSummary.totalEstCharges || 0).toFixed(2)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: '2px' }}>
+                <span style={{ color: '#ffffff', fontWeight: 900 }}>3. NET P&amp;L (In Pocket):</span>
+                <span style={{ color: (portfolioSummary.totalUnrealizedPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 900, fontSize: '15px' }}>
+                  {(portfolioSummary.totalUnrealizedPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.totalUnrealizedPnl || 0).toFixed(2)}
+                </span>
+              </div>
             </div>
           </div>
 
           {/* Card 4: TOTAL COMBINED LIFETIME PROFIT (Realized + Unrealized) */}
           <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.1))', border: `1.5px solid ${(portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171'}`, borderRadius: '12px', padding: '14px 16px' }}>
-<div style={{ fontSize: '11px', color: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 900, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>⭐ TOTAL COMBINED P&amp;L</span>
+            <div style={{ fontSize: '11px', color: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 900, textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span>⭐ TOTAL LIFETIME P&amp;L</span>
               <span style={{ fontSize: '9px', padding: '1px 6px', borderRadius: '4px', background: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)' }}>
                 {(portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? 'NET GAIN' : 'NET LOSS'}
               </span>
             </div>
-            <div style={{ fontSize: '22px', fontWeight: 900, color: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', marginTop: '4px' }}>
-              {(portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.totalCombinedNetPnl || 0).toFixed(2)}
-            </div>
-            <div style={{ fontSize: '10px', fontWeight: 800, color: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', marginTop: '2px' }}>
-              Realized Booked + Live Open Gains
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                <span style={{ color: '#94a3b8', fontWeight: 700 }}>Gross Combined P&amp;L:</span>
+                <span style={{ color: (portfolioSummary.totalCombinedGrossPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 800 }}>
+                  {(portfolioSummary.totalCombinedGrossPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.totalCombinedGrossPnl || 0).toFixed(2)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                <span style={{ color: '#fbbf24', fontWeight: 700 }}>Total Charges &amp; Taxes:</span>
+                <span style={{ color: '#fbbf24', fontWeight: 800 }}>
+                  -₹{(portfolioSummary.totalCombinedTaxes || 0).toFixed(2)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: '2px' }}>
+                <span style={{ color: '#ffffff', fontWeight: 900 }}>TOTAL NET P&amp;L:</span>
+                <span style={{ color: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 900, fontSize: '16px' }}>
+                  {(portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.totalCombinedNetPnl || 0).toFixed(2)}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -1498,21 +1526,27 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '10px', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase' }}>EST. CHARGES</div>
-                  <div style={{ fontSize: '16px', fontWeight: 900, color: '#fbbf24', marginTop: '2px' }}>
+                  <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>1. GROSS P&amp;L (BROKER)</div>
+                  <div style={{ fontSize: '15px', fontWeight: 900, color: (portfolioSummary[activeTab]?.grossPnl || 0) >= 0 ? '#10b981' : '#f87171', marginTop: '2px' }}>
+                    {(portfolioSummary[activeTab]?.grossPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary[activeTab]?.grossPnl || 0).toFixed(2)}
+                    <span style={{ fontSize: '11px', marginLeft: '4px' }}>
+                      ({(portfolioSummary[activeTab]?.grossPct || 0) >= 0 ? '+' : ''}{(portfolioSummary[activeTab]?.grossPct || 0).toFixed(2)}%)
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase' }}>2. EST. CHARGES</div>
+                  <div style={{ fontSize: '15px', fontWeight: 900, color: '#fbbf24', marginTop: '2px' }}>
                     -₹{(portfolioSummary[activeTab]?.estCharges || 0).toFixed(2)}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>NET UNREALIZED P&amp;L</div>
-                  <div style={{ fontSize: '16px', fontWeight: 900, color: (portfolioSummary[activeTab]?.netPnl || 0) >= 0 ? '#10b981' : '#f87171', marginTop: '2px' }}>
+                  <div style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 800, textTransform: 'uppercase' }}>3. NET P&amp;L (IN POCKET)</div>
+                  <div style={{ fontSize: '15px', fontWeight: 900, color: (portfolioSummary[activeTab]?.netPnl || 0) >= 0 ? '#10b981' : '#f87171', marginTop: '2px' }}>
                     {(portfolioSummary[activeTab]?.netPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary[activeTab]?.netPnl || 0).toFixed(2)}
                     <span style={{ fontSize: '11px', marginLeft: '4px' }}>
                       ({(portfolioSummary[activeTab]?.netPct || 0) >= 0 ? '+' : ''}{(portfolioSummary[activeTab]?.netPct || 0).toFixed(2)}%)
                     </span>
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '1px' }}>
-                    Gross: {(portfolioSummary[activeTab]?.grossPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary[activeTab]?.grossPnl || 0).toFixed(2)} ({(portfolioSummary[activeTab]?.grossPct || 0) >= 0 ? '+' : ''}{(portfolioSummary[activeTab]?.grossPct || 0).toFixed(2)}%)
                   </div>
                 </div>
               </div>
@@ -1544,8 +1578,9 @@ export default function App() {
                       <th style={{ padding: '12px 14px' }}>INVESTED (₹)</th>
                       <th style={{ padding: '12px 14px' }}>LIVE LTP (₹)</th>
                       <th style={{ padding: '12px 14px' }}>CURRENT VAL (₹)</th>
+                      <th style={{ padding: '12px 14px' }}>GROSS P&amp;L (BROKER)</th>
                       <th style={{ padding: '12px 14px' }}>EST. CHARGES</th>
-                      <th style={{ padding: '12px 14px' }}>NET UNREALIZED P&amp;L</th>
+                      <th style={{ padding: '12px 14px' }}>NET P&amp;L (IN POCKET)</th>
                       <th style={{ padding: '12px 14px' }}>HOLDING DAYS</th>
                       {activeTab === 'swing' && <th style={{ padding: '12px 14px' }}>TARGET / SL</th>}
                       <th style={{ padding: '12px 14px', textAlign: 'right' }}>ACTIONS</th>
@@ -1564,6 +1599,14 @@ export default function App() {
                         <td style={{ padding: '12px 14px', fontWeight: 900, color: '#38bdf8' }}>₹{h.ltp.toFixed(2)}</td>
                         <td style={{ padding: '12px 14px', fontWeight: 800, color: '#ffffff' }}>₹{h.currentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td style={{ padding: '12px 14px' }}>
+                          <div style={{ fontWeight: 900, color: h.unrealizedPnl >= 0 ? '#10b981' : '#f87171', fontSize: '13px' }}>
+                            {h.unrealizedPnl >= 0 ? '+' : ''}₹{h.unrealizedPnl.toFixed(2)}
+                          </div>
+                          <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                            ({h.pnlPct >= 0 ? '+' : ''}{h.pnlPct.toFixed(2)}%)
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 14px' }}>
                           <div style={{ color: '#fbbf24', fontWeight: 800, fontSize: '12px' }}>
                             -₹{(h.estCharges?.total || 0).toFixed(2)}
                           </div>
@@ -1574,9 +1617,6 @@ export default function App() {
                         <td style={{ padding: '12px 14px' }}>
                           <div style={{ fontWeight: 900, color: (h.unrealizedPnl - (h.estCharges?.total || 0)) >= 0 ? '#10b981' : '#f87171', fontSize: '13px' }}>
                             {(h.unrealizedPnl - (h.estCharges?.total || 0)) >= 0 ? '+' : ''}₹{(h.unrealizedPnl - (h.estCharges?.total || 0)).toFixed(2)}
-                          </div>
-                          <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                            Gross: {h.unrealizedPnl >= 0 ? '+' : ''}₹{h.unrealizedPnl.toFixed(2)} ({h.pnlPct >= 0 ? '+' : ''}{h.pnlPct.toFixed(2)}%)
                           </div>
                         </td>
                         <td style={{ padding: '12px 14px' }}>
