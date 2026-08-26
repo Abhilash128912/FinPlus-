@@ -1257,7 +1257,13 @@ def get_lt_portfolio_summary(screener_results: list[dict] = None) -> dict:
     try:
         s_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
         today_date = datetime.datetime.now().date()
-        days_active = max(1, (today_date - s_date).days + 1)
+        cur_date = s_date
+        days_active = 0
+        while cur_date <= today_date:
+            if not is_non_trading_day(cur_date.strftime("%Y-%m-%d")):
+                days_active += 1
+            cur_date += datetime.timedelta(days=1)
+        days_active = max(1, days_active)
     except Exception:
         days_active = 1
 
@@ -2880,7 +2886,7 @@ details[open] summary::before {
           <span>Show Retired Stocks (<span id="ltRetiredCount">0</span>)</span>
         </label>
 
-        <button class="btn-add" style="background:linear-gradient(135deg,#6c63ff,#00d4aa);color:#fff;font-weight:700;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px" onclick="openAddLtStockModal()">
+        <button id="ltAddStockBtn" class="btn-add" style="background:linear-gradient(135deg,#6c63ff,#00d4aa);color:#fff;font-weight:700;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px" onclick="window.openAddLtStockModal && window.openAddLtStockModal()">
           ➕ Add Stock
         </button>
       </div>
@@ -4154,6 +4160,19 @@ function openAddLtStockModal(prefillSymbol = '') {
 
     alert(`✅ Successfully added ${sym} to LT Watchlist!`);
   }
+}
+
+window.openAddLtStockModal = openAddLtStockModal;
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('ltAddStockBtn');
+    if (btn) {
+      btn.onclick = (e) => {
+        if (e) e.preventDefault();
+        openAddLtStockModal();
+      };
+    }
+  });
 }
 
 function closeAddLtStockModal() {
@@ -6618,7 +6637,40 @@ function syncLtWatchlistHoldings(summary) {
 }
 
 function fetchLtPortfolioStatus() {
+  // Recalculate days_active client-side so the counter is always current,
+  // even when the baked-in LT_PORTFOLIO_SUMMARY is from a previous scan day.
+  function recalcDaysActive(summary) {
+    if (summary && summary.start_date) {
+      try {
+        const nseHolidays = ["2026-01-26","2026-03-10","2026-03-24","2026-04-02","2026-04-03","2026-04-14","2026-05-01","2026-05-28","2026-06-26","2026-08-15","2026-08-27","2026-09-16","2026-10-02","2026-10-20","2026-11-09","2026-11-10","2026-11-24","2026-12-25"];
+        const parts = summary.start_date.split('-');
+        let cur = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        cur.setHours(0, 0, 0, 0);
+        let tradingDays = 0;
+        while (cur <= today) {
+          const dayOfWeek = cur.getDay(); // 0 = Sun, 6 = Sat
+          const yyyy = cur.getFullYear();
+          const mm = String(cur.getMonth() + 1).padStart(2, '0');
+          const dd = String(cur.getDate()).padStart(2, '0');
+          const dateStr = `${yyyy}-${mm}-${dd}`;
+          if (dayOfWeek !== 0 && dayOfWeek !== 6 && !nseHolidays.includes(dateStr)) {
+            tradingDays++;
+          }
+          cur.setDate(cur.getDate() + 1);
+        }
+        summary.days_active = Math.max(1, tradingDays);
+        const dailyRate = summary.daily_accrual_rate || 100;
+        const extraDeposits = summary.extra_deposits || 0;
+        summary.total_deposited = parseFloat((summary.days_active * dailyRate + extraDeposits).toFixed(2));
+      } catch(e) {}
+    }
+    return summary;
+  }
+
   if (typeof LT_PORTFOLIO_SUMMARY !== 'undefined' && LT_PORTFOLIO_SUMMARY) {
+    recalcDaysActive(LT_PORTFOLIO_SUMMARY);
     renderLtPortfolioSummary(LT_PORTFOLIO_SUMMARY);
     syncLtWatchlistHoldings(LT_PORTFOLIO_SUMMARY);
     if (typeof renderPennyStocksTab === 'function') renderPennyStocksTab();
@@ -6627,6 +6679,7 @@ function fetchLtPortfolioStatus() {
     .then(r => r.json())
     .then(res => {
       if (res && res.status === 'ok' && res.summary) {
+        recalcDaysActive(res.summary);
         window.LT_PORTFOLIO_SUMMARY = res.summary;
         renderLtPortfolioSummary(res.summary);
         syncLtWatchlistHoldings(res.summary);
@@ -6635,12 +6688,14 @@ function fetchLtPortfolioStatus() {
     })
     .catch(err => {
       if (typeof LT_PORTFOLIO_SUMMARY !== 'undefined' && LT_PORTFOLIO_SUMMARY) {
+        recalcDaysActive(LT_PORTFOLIO_SUMMARY);
         renderLtPortfolioSummary(LT_PORTFOLIO_SUMMARY);
         syncLtWatchlistHoldings(LT_PORTFOLIO_SUMMARY);
         if (typeof renderPennyStocksTab === 'function') renderPennyStocksTab();
       }
     });
 }
+
 
 function openLtHoldingLogModal(symbol) {
   const item = (typeof ltWatchlist !== 'undefined' && Array.isArray(ltWatchlist))
@@ -6997,6 +7052,27 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
 
 
 # ─── Local HTTP Scan Server ───────────────────────────────────────────────────
+
+def sync_html_lt_watchlist():
+    try:
+        lt_wl_data = process_lt_watchlist(LATEST_SCREENER_RESULTS)
+        lt_json = json.dumps(lt_wl_data, default=json_serializer)
+        target = "const LT_WATCHLIST = "
+        for path in [OUT_HTML, OUT_WWW_HTML]:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                idx = content.find(target)
+                if idx != -1:
+                    end_idx = content.find(";", idx)
+                    if end_idx != -1:
+                        new_content = content[:idx] + "const LT_WATCHLIST = " + lt_json + content[end_idx:]
+                        with open(path, "w", encoding="utf-8") as f:
+                            f.write(new_content)
+    except Exception as e:
+        log(f"⚠ Could not sync LT_WATCHLIST in HTML: {e}")
+
+
 class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
@@ -7085,6 +7161,20 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             }
             self.wfile.write(json.dumps(res).encode('utf-8'))
             return
+        elif parsed.path == '/api/lt-portfolio/status':
+            try:
+                summary = get_lt_portfolio_summary(LATEST_SCREENER_RESULTS)
+                res = {"status": "ok", "summary": summary}
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.end_headers()
+            self.wfile.write(json.dumps(res, default=json_serializer).encode('utf-8'))
+            return
         else:
             super().do_GET()
 
@@ -7141,6 +7231,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                     lt_stocks = [s for s in lt_stocks if s.get("symbol") != sym]
                     with open(LT_WL_FILE, "w", encoding="utf-8") as f:
                         json.dump(lt_stocks, f, indent=2)
+                sync_html_lt_watchlist()
                 res = {"status": "ok", "message": f"{sym} permanently deleted from LT Watchlist"}
                 self.send_response(200)
             except Exception as e:
@@ -7190,7 +7281,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 with open(LT_WL_FILE, "w", encoding="utf-8") as f:
                     json.dump(lt_stocks, f, indent=2)
-
+                sync_html_lt_watchlist()
                 res = {"status": "ok", "message": f"{sym} saved to LT Watchlist"}
                 self.send_response(200)
             except Exception as e:
@@ -7215,6 +7306,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                             s["active"] = False
                     with open(LT_WL_FILE, "w", encoding="utf-8") as f:
                         json.dump(lt_stocks, f, indent=2)
+                sync_html_lt_watchlist()
                 res = {"status": "ok", "message": f"{sym} retired (soft-deleted)"}
                 self.send_response(200)
             except Exception as e:
@@ -7245,6 +7337,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                             s["gtt_mode"] = mode
                     with open(LT_WL_FILE, "w", encoding="utf-8") as f:
                         json.dump(lt_stocks, f, indent=2)
+                sync_html_lt_watchlist()
                 res = {"status": "ok", "message": f"GTT target updated for {sym}"}
                 self.send_response(200)
             except Exception as e:
@@ -7270,6 +7363,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                             s["active"] = active
                     with open(LT_WL_FILE, "w", encoding="utf-8") as f:
                         json.dump(lt_stocks, f, indent=2)
+                sync_html_lt_watchlist()
                 res = {"status": "ok", "message": f"{sym} active status set to {active}"}
                 self.send_response(200)
             except Exception as e:

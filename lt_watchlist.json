@@ -156,19 +156,6 @@
     "notes": ""
   },
   {
-    "symbol": "EIHAHOTELS",
-    "ticker": "EIHAHOTELS.NS",
-    "type": "Private",
-    "sector": "Hospitality",
-    "durability_score": 74,
-    "portfolio_role": "Travel",
-    "gtt_mode": "auto",
-    "gtt_level": null,
-    "active": true,
-    "added_date": "2026-08-19",
-    "notes": ""
-  },
-  {
     "symbol": "FCL",
     "ticker": "FCL.NS",
     "type": "Private",

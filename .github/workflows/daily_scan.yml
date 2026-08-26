@@ -64,8 +64,8 @@ jobs:
           print('Processing watchlist...')
           wl_data = fb.process_watchlist(results)
 
-          print('Processing daily top pick...')
-          top_pick, daily_history, mkt_info = fb.process_daily_top_pick(results)
+          print('Processing LT watchlist...')
+          lt_wl_data = fb.process_lt_watchlist(results)
 
           print('Fetching commodity signals...')
           commodity_signals = fb.fetch_commodity_signals()
@@ -73,8 +73,10 @@ jobs:
           print('Processing F&O signals...')
           fno_data = fb.process_fno_stocks(results)
 
+          mkt_info = fb.get_market_status()
+
           print('Building HTML report...')
-          html = fb.build_html(results, wl_data, top_pick, daily_history, commodity_signals, mkt_info, fno_data)
+          html = fb.build_html(results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
 
           with open(fb.OUT_HTML, 'w', encoding='utf-8') as f:
               f.write(html)

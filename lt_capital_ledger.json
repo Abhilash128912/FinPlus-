@@ -1,7 +1,7 @@
 {
   "start_date": "2026-08-19",
   "daily_accrual_rate": 100.0,
-  "extra_deposits": 189.14,
+  "extra_deposits": 1037.32,
   "holdings": [
     {
       "symbol": "ASHOKLEY",
@@ -23,6 +23,13 @@
       "avg_price": 47.2,
       "buy_date": "2026-08-24",
       "last_price": 47.2
+    },
+    {
+      "symbol": "BEL",
+      "qty": 2,
+      "avg_price": 408.8,
+      "buy_date": "2026-08-25",
+      "last_price": 408.6
     }
   ],
   "transactions": [
@@ -91,6 +98,52 @@
         "stamp_duty": 0.03,
         "exchange_fee": 0.01,
         "gst": 0.02,
+        "dp_charges": 0.0,
+        "sebi_fee": 0.0
+      }
+    },
+    {
+      "id": "TX-BUY-1787637431",
+      "timestamp": "2026-08-25 11:27:11",
+      "type": "BUY",
+      "symbol": "BEL",
+      "qty": 1,
+      "price": 409.0,
+      "gross_value": 409.0,
+      "total_charges": 0.73,
+      "net_value": 409.73,
+      "charges_breakdown": {
+        "gross_value": 409.0,
+        "total_charges": 0.73,
+        "net_value": 409.73,
+        "brokerage": 0.2,
+        "stt": 0.41,
+        "stamp_duty": 0.06,
+        "exchange_fee": 0.01,
+        "gst": 0.04,
+        "dp_charges": 0.0,
+        "sebi_fee": 0.0
+      }
+    },
+    {
+      "id": "TX-BUY-1787637455",
+      "timestamp": "2026-08-25 11:27:35",
+      "type": "BUY",
+      "symbol": "BEL",
+      "qty": 1,
+      "price": 408.6,
+      "gross_value": 408.6,
+      "total_charges": 0.73,
+      "net_value": 409.33,
+      "charges_breakdown": {
+        "gross_value": 408.6,
+        "total_charges": 0.73,
+        "net_value": 409.33,
+        "brokerage": 0.2,
+        "stt": 0.41,
+        "stamp_duty": 0.06,
+        "exchange_fee": 0.01,
+        "gst": 0.04,
         "dp_charges": 0.0,
         "sebi_fee": 0.0
       }

@@ -19,3 +19,9 @@
   - `lot_size < 500`
   - Mandatory Exception: `RELIANCE` (`symbol == "RELIANCE"`)
 - **RELIANCE Mandatory Inclusion**: `RELIANCE` MUST ALWAYS be included in the official Top 15 F&O options picks regardless of its conviction ranking.
+
+## 4. LT Segment Capital Accumulator & Day Counter Rules
+- **Trading Days Only**: The LT Segment Day Counter (`days_active`) MUST ONLY count active NSE market trading days (Mondays through Fridays, excluding Saturdays, Sundays, and official NSE holidays). Simple calendar day subtraction (`(today - start_date).days + 1`) is strictly prohibited as it incorrectly counts non-trading weekends.
+- **Client-Side Recalculation**: `recalcDaysActive()` in Javascript MUST iterate day-by-day and count only valid NSE market trading days so the browser UI dynamically displays the correct trading day count even when using static HTML or cached data.
+- **Dual HTTP Method Support**: The `/api/lt-portfolio/status` endpoint MUST be supported in both `do_GET` (for standard browser `fetch()`) and `do_POST` in `fetch_and_build.py`.
+
