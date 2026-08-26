@@ -34,7 +34,10 @@ import {
   Wallet
 } from 'lucide-react';
 
-const API_BASE_URL = typeof window !== 'undefined' && window.location.origin.includes('http') ? window.location.origin : 'http://localhost:8000';
+// Detect Capacitor/Android: window.location.origin = 'capacitor://localhost' which is NOT http.
+// On mobile always use Render as the primary cloud backend; localhost is only valid on the dev machine.
+const IS_CAPACITOR = typeof window !== 'undefined' && (window.location.origin.startsWith('capacitor://') || window.location.origin.startsWith('file://'));
+const API_BASE_URL = IS_CAPACITOR ? 'https://finplus.onrender.com' : (window.location.origin.includes('http') ? window.location.origin : 'http://localhost:8000');
 const RENDER_BACKEND_URL = 'https://finplus.onrender.com';
 const STORAGE_KEY = 'finplus_3pillar_portfolio_v5';
 const LEDGER_KEY = 'finplus_capital_ledger_v5';
@@ -264,38 +267,46 @@ export default function App() {
           .catch(() => {});
       });
 
-    // Always restore latest synced portfolio dataset from cloud/disk backup on app mount
+    // On mount: fetch from all endpoints, pick the dataset with the newest savedAt timestamp
+    // This ensures mobile & laptop always converge to the latest version regardless of order
     const endpoints = Array.from(new Set([RENDER_BACKEND_URL, API_BASE_URL].filter(Boolean)));
+    let bestSavedAt = -1;
+
+    const applyDataset = (res) => {
+      if (!res || res.status !== 'success' || !res.data) return;
+      const incomingSavedAt = Number(res.data.savedAt) || 0;
+      if (incomingSavedAt <= bestSavedAt) return; // already have a newer dataset
+      bestSavedAt = incomingSavedAt;
+      const { positions: diskPos, capitalLedger: diskLedger, soldHistory: diskSold, budget, split, freeCash } = res.data;
+      if (Array.isArray(diskPos) && diskPos.length > 0) setPositions(diskPos);
+      if (Array.isArray(diskLedger) && diskLedger.length > 0) setCapitalLedger(diskLedger);
+      if (Array.isArray(diskSold)) setSoldHistory(diskSold);
+      if (budget) setMonthlyBudgetInput(budget);
+      if (split) {
+        if (split.swing !== undefined) setSwingPct(split.swing);
+        if (split.lt !== undefined) setLtPct(split.lt);
+        if (split.penny !== undefined) setPennyPct(split.penny);
+      }
+      if (freeCash) {
+        const val = String(freeCash.swing || '').trim();
+        if (val && val !== '249.40' && val !== '249.4' && val !== '1233.12' && val !== '1233.1' && val !== '1287.16') {
+          setSwingFreeCashInput(val);
+        } else {
+          setSwingFreeCashInput('');
+        }
+        if (freeCash.lt !== undefined) setLtFreeCashInput(String(freeCash.lt));
+        if (freeCash.penny !== undefined) setPennyFreeCashInput(String(freeCash.penny));
+      }
+    };
+
     for (const ep of endpoints) {
       fetch(`${ep}/api/backup/load`)
         .then(r => r.json())
-        .then(res => {
-          if (res && res.status === 'success' && res.data) {
-            const { positions: diskPos, capitalLedger: diskLedger, soldHistory: diskSold, budget, split, freeCash } = res.data;
-            if (Array.isArray(diskPos)) setPositions(diskPos);
-            if (Array.isArray(diskLedger)) setCapitalLedger(diskLedger);
-            if (Array.isArray(diskSold)) setSoldHistory(diskSold);
-            if (budget) setMonthlyBudgetInput(budget);
-            if (split) {
-              if (split.swing !== undefined) setSwingPct(split.swing);
-              if (split.lt !== undefined) setLtPct(split.lt);
-              if (split.penny !== undefined) setPennyPct(split.penny);
-            }
-            if (freeCash) {
-              const val = String(freeCash.swing || '').trim();
-              if (val && val !== '249.40' && val !== '249.4' && val !== '1233.12' && val !== '1233.1' && val !== '1287.16') {
-                setSwingFreeCashInput(val);
-              } else {
-                setSwingFreeCashInput('');
-              }
-              if (freeCash.lt !== undefined) setLtFreeCashInput(String(freeCash.lt));
-              if (freeCash.penny !== undefined) setPennyFreeCashInput(String(freeCash.penny));
-            }
-          }
-        })
+        .then(applyDataset)
         .catch(() => {});
     }
   }, []);
+
 
   // Save State to LocalStorage & Backend Disk Backup File
   useEffect(() => {
@@ -306,11 +317,14 @@ export default function App() {
     localStorage.setItem(FREE_CASH_SWING_KEY, swingFreeCashInput);
     localStorage.setItem('finplus_free_cash_swing_v5', swingFreeCashInput);
     localStorage.setItem(FREE_CASH_LT_KEY, ltFreeCashInput);
+    localStorage.setItem('finplus_free_cash_penny_v4', pennyFreeCashInput);
     localStorage.setItem(LEDGER_KEY, JSON.stringify(capitalLedger));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
     localStorage.setItem('finplus_sold_history_v1', JSON.stringify(soldHistory));
 
-    // Auto disk backup sync to both local server & Render cloud
+    // Auto disk backup sync to both local server & Render cloud.
+    // savedAt timestamp ensures newest-wins on concurrent saves from mobile & laptop.
+    const savedAt = Date.now();
     const endpoints = Array.from(new Set([API_BASE_URL, RENDER_BACKEND_URL].filter(Boolean)));
     const backupPayload = JSON.stringify({
       positions,
@@ -318,7 +332,8 @@ export default function App() {
       soldHistory,
       freeCash: { swing: swingFreeCashInput, lt: ltFreeCashInput, penny: pennyFreeCashInput },
       budget: monthlyBudgetInput,
-      split: { swing: swingPct, lt: ltPct, penny: pennyPct }
+      split: { swing: swingPct, lt: ltPct, penny: pennyPct },
+      savedAt
     });
 
     for (const ep of endpoints) {
@@ -683,13 +698,15 @@ export default function App() {
     const pennyNetPnl = pennyGrossPnl - pennyEstCharges;
     const pennyNetPct = pennyInvested > 0 ? (pennyNetPnl / pennyInvested) * 100 : 0;
 
+    // For Net Worth, use ONLY actual broker free cash entered by user (default 0 if not entered).
+    // Falling back to capitalMath.*.available would use budget-model figures, not real cash — causing wrong net worth.
     const isStaleSwingCash = (val) => !val || val === '249.40' || val === '249.4' || val === '1233.12' || val === '1233.1' || val === '1287.16';
-    const effectiveSwingFreeCash = (!isStaleSwingCash(swingFreeCashInput)) ? (parseFloat(swingFreeCashInput) || 0) : capitalMath.swing.available;
-    const effectiveLtFreeCash = ltFreeCashInput ? (parseFloat(ltFreeCashInput) || 0) : capitalMath.lt.available;
-    const effectivePennyFreeCash = pennyFreeCashInput ? (parseFloat(pennyFreeCashInput) || 0) : capitalMath.penny.available;
+    const effectiveSwingFreeCash = (!isStaleSwingCash(swingFreeCashInput)) ? (parseFloat(swingFreeCashInput) || 0) : 0;
+    const effectiveLtFreeCash = ltFreeCashInput ? (parseFloat(ltFreeCashInput) || 0) : 0;
+    const effectivePennyFreeCash = pennyFreeCashInput ? (parseFloat(pennyFreeCashInput) || 0) : 0;
 
     const totalFreeCash = effectiveSwingFreeCash + effectiveLtFreeCash + effectivePennyFreeCash;
-    const totalAccountCapital = totalCurrentVal + totalFreeCash; // Universal Account Net Worth = Live Value of ALL Holdings (Kite + INDmoney) + Effective Free Cash
+    const totalAccountCapital = totalCurrentVal + totalFreeCash; // Net Worth = Live Holdings Value + Actual Broker Free Cash
     const totalBaseCapital = totalInvested + totalFreeCash;
 
     return {
@@ -747,7 +764,7 @@ export default function App() {
         broker: 'Zerodha Kite'
       }
     };
-  }, [holdingCards, swingFreeCash, ltFreeCash, pennyFreeCash]);
+  }, [holdingCards, swingFreeCash, ltFreeCash, pennyFreeCash, capitalMath, swingFreeCashInput, ltFreeCashInput, pennyFreeCashInput]);
 
   // ── Handle Add Position ──
   const handleAddPositionSubmit = (e) => {
@@ -916,27 +933,27 @@ export default function App() {
 
     setSoldHistory(prev => [soldRecord, ...prev]);
 
+    // Net cash actually recovered from this sale (turnover minus brokerage/taxes)
+    const netProceeds = soldRecord.turnover - charges.total;
+
     // ── AUTOMATIC FREE BROKER CASH RECYCLING ──
-    // Capital engine (capitalMath) automatically recycles freed capital and net proceeds into available cash when positions & soldHistory update.
-    // If custom free cash overrides were set, update them relative to current effective free cash, otherwise clear override to let engine compute.
+    // Always add net sale proceeds to the broker free cash for that segment.
+    // Use 0 as base when the field is blank (never clear on sell — that caused free cash to disappear).
     if (sellModalPos.segment === 'SWING') {
-      if (swingFreeCashInput && swingFreeCashInput !== '249.40' && swingFreeCashInput !== '249.4') {
-        setSwingFreeCashInput(prev => (Math.max(0, parseFloat(prev || '0') + netProceeds)).toFixed(2));
-      } else {
-        setSwingFreeCashInput('');
-      }
+      setSwingFreeCashInput(prev => {
+        const base = parseFloat(prev || '0') || 0;
+        return (Math.max(0, base + netProceeds)).toFixed(2);
+      });
     } else if (sellModalPos.segment === 'LT') {
-      if (ltFreeCashInput) {
-        setLtFreeCashInput(prev => (Math.max(0, parseFloat(prev || '0') + netProceeds)).toFixed(2));
-      } else {
-        setLtFreeCashInput('');
-      }
+      setLtFreeCashInput(prev => {
+        const base = parseFloat(prev || '0') || 0;
+        return (Math.max(0, base + netProceeds)).toFixed(2);
+      });
     } else if (sellModalPos.segment === 'PENNY') {
-      if (pennyFreeCashInput) {
-        setPennyFreeCashInput(prev => (Math.max(0, parseFloat(prev || '0') + netProceeds)).toFixed(2));
-      } else {
-        setPennyFreeCashInput('');
-      }
+      setPennyFreeCashInput(prev => {
+        const base = parseFloat(prev || '0') || 0;
+        return (Math.max(0, base + netProceeds)).toFixed(2);
+      });
     }
 
     if (isFullSell) {

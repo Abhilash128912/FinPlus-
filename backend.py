@@ -296,39 +296,42 @@ GITHUB_REPO = "Abhilash128912/FinPlus-"
 GITHUB_BRANCH = "main"
 
 def push_to_github(filepath: str, repo_path: str):
-    if not GITHUB_TOKEN:
-        print(f"[GitHub Sync] GITHUB_TOKEN not set. Local save only for {repo_path}")
-        return
-    try:
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{repo_path}?ref={GITHUB_BRANCH}"
-        headers = {
-            "Authorization": f"Bearer {GITHUB_TOKEN}",
-            "Accept": "application/vnd.github+json"
-        }
-        res = requests.get(url, headers=headers)
-        sha = None
-        if res.status_code == 200:
-            sha = res.json().get("sha")
+    """Push file to GitHub in a background thread so it never blocks the API response."""
+    def _push():
+        if not GITHUB_TOKEN:
+            print(f"[GitHub Sync] GITHUB_TOKEN not set. Local save only for {repo_path}")
+            return
+        try:
+            url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{repo_path}?ref={GITHUB_BRANCH}"
+            headers = {
+                "Authorization": f"Bearer {GITHUB_TOKEN}",
+                "Accept": "application/vnd.github+json"
+            }
+            res = requests.get(url, headers=headers, timeout=10)
+            sha = None
+            if res.status_code == 200:
+                sha = res.json().get("sha")
 
-        with open(filepath, "rb") as f:
-            content_bytes = f.read()
-        content_b64 = base64.b64encode(content_bytes).decode("utf-8")
+            with open(filepath, "rb") as f:
+                content_bytes = f.read()
+            content_b64 = base64.b64encode(content_bytes).decode("utf-8")
 
-        payload = {
-            "message": f"sync: update {repo_path} from backend",
-            "content": content_b64,
-            "branch": GITHUB_BRANCH
-        }
-        if sha:
-            payload["sha"] = sha
+            payload = {
+                "message": f"sync: update {repo_path} from backend",
+                "content": content_b64,
+                "branch": GITHUB_BRANCH
+            }
+            if sha:
+                payload["sha"] = sha
 
-        put_res = requests.put(f"https://api.github.com/repos/{GITHUB_REPO}/contents/{repo_path}", json=payload, headers=headers)
-        if put_res.status_code in [200, 201]:
-            print(f"[GitHub Sync] Successfully pushed {repo_path} to GitHub!")
-        else:
-            print(f"[GitHub Sync] Failed to push {repo_path}: {put_res.status_code} - {put_res.text}")
-    except Exception as e:
-        print(f"[GitHub Sync Error] Failed to sync {repo_path}: {e}")
+            put_res = requests.put(f"https://api.github.com/repos/{GITHUB_REPO}/contents/{repo_path}", json=payload, headers=headers, timeout=15)
+            if put_res.status_code in [200, 201]:
+                print(f"[GitHub Sync] Successfully pushed {repo_path} to GitHub!")
+            else:
+                print(f"[GitHub Sync] Failed to push {repo_path}: {put_res.status_code} - {put_res.text}")
+        except Exception as e:
+            print(f"[GitHub Sync Error] Failed to sync {repo_path}: {e}")
+    threading.Thread(target=_push, daemon=True).start()
 
 def load_from_github(filepath: str, repo_path: str) -> bool:
     raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{repo_path}"
@@ -638,19 +641,27 @@ async def save_portfolio_backup(request: Request):
     try:
         data = await request.json()
         if isinstance(data, dict):
-            incoming_pos = data.get("positions", [])
-            # Protect existing data: keep the larger/more complete dataset
+            incoming_saved_at = int(data.get("savedAt") or 0)
+
+            # Newest-wins merge: only keep existing data if it's strictly newer.
+            # This replaces the old position-count guard which silently dropped updates.
             if os.path.exists(PORTFOLIO_FILE):
                 try:
-                    with open(PORTFOLIO_FILE, "r", encoding="utf-8") as existing_f:
-                        existing = json.load(existing_f)
-                        existing_pos = existing.get("positions", [])
-                        if len(existing_pos) > len(incoming_pos):
-                            data["positions"] = existing_pos
-                        if existing.get("capitalLedger") and not data.get("capitalLedger"):
-                            data["capitalLedger"] = existing["capitalLedger"]
-                        if existing.get("freeCash") and not data.get("freeCash"):
-                            data["freeCash"] = existing["freeCash"]
+                    with file_lock:
+                        with open(PORTFOLIO_FILE, "r", encoding="utf-8") as existing_f:
+                            existing = json.load(existing_f)
+                    existing_saved_at = int(existing.get("savedAt") or 0)
+
+                    if existing_saved_at > incoming_saved_at:
+                        # Disk has a newer dataset — reject this stale incoming save
+                        print(f"[Backup] Rejecting stale save (incoming={incoming_saved_at} < disk={existing_saved_at})")
+                        return { "status": "skipped", "reason": "disk_is_newer" }
+
+                    # Preserve capitalLedger / freeCash if incoming is missing them
+                    if existing.get("capitalLedger") and not data.get("capitalLedger"):
+                        data["capitalLedger"] = existing["capitalLedger"]
+                    if existing.get("freeCash") and not data.get("freeCash"):
+                        data["freeCash"] = existing["freeCash"]
                 except Exception:
                     pass
 
@@ -675,6 +686,27 @@ def load_portfolio_backup():
                 return { "status": "success", "data": data }
         except Exception as e:
             return { "status": "error", "message": str(e) }
+
+@app.get("/api/backup/health")
+def backup_health():
+    """Debug endpoint — returns sync status without exposing full data."""
+    if not os.path.exists(PORTFOLIO_FILE):
+        return { "status": "missing", "file_exists": False }
+    try:
+        with file_lock:
+            with open(PORTFOLIO_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        return {
+            "status": "ok",
+            "file_exists": True,
+            "savedAt": data.get("savedAt"),
+            "position_count": len(data.get("positions", [])),
+            "sold_count": len(data.get("soldHistory", [])),
+            "freeCash": data.get("freeCash"),
+            "github_token_set": bool(GITHUB_TOKEN)
+        }
+    except Exception as e:
+        return { "status": "error", "message": str(e) }
 
 DIST_DIR = os.path.join(BASE_DIR, "dist")
 if os.path.exists(DIST_DIR):

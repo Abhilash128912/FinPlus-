@@ -1,16 +1,76 @@
 {
   "positions": [
     {
-      "id": "pos_midhani_kite",
-      "ticker": "MIDHANI",
-      "name": "Mishra Dhatu Nigam Limited",
+      "id": "pos_1787637387007_ilcwq",
+      "ticker": "BEL",
+      "name": "Bharat Electronics Limited",
+      "segment": "LT",
+      "shares": 1,
+      "buyPrice": 409,
+      "buyDate": "2026-08-25",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": ""
+    },
+    {
+      "id": "pos_gujalkali_kite",
+      "ticker": "GUJALKALI",
+      "name": "Gujarat Alkalies and Chemicals Limited",
       "segment": "SWING",
-      "shares": 3,
-      "buyPrice": 433,
-      "buyDate": "2026-08-23",
-      "target1": 467.64,
-      "stopLoss": 415.68,
+      "shares": 2,
+      "buyPrice": 729.67,
+      "buyDate": "2026-08-26",
+      "target1": 0,
+      "stopLoss": 0,
       "notes": "Zerodha Kite Swing Position"
+    },
+    {
+      "id": "pos_1787635969128_zaca5",
+      "ticker": "PARAGMILK",
+      "name": "Parag Milk Foods Limited",
+      "segment": "SWING",
+      "shares": 8,
+      "buyPrice": 244.48,
+      "buyDate": "2026-08-25",
+      "target1": 264.0384,
+      "stopLoss": 234.7008,
+      "notes": ""
+    },
+    {
+      "id": "pos_1787561640021_prqkv",
+      "ticker": "ASHOKLEY",
+      "name": "Ashok Leyland Ltd",
+      "segment": "LT",
+      "shares": 1,
+      "buyPrice": 171.73,
+      "buyDate": "2026-08-24",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": ""
+    },
+    {
+      "id": "pos_1787561614341_zs9o0",
+      "ticker": "FEDERALBNK",
+      "name": "Federal Bank Ltd",
+      "segment": "LT",
+      "shares": 1,
+      "buyPrice": 356.45,
+      "buyDate": "2026-08-24",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": ""
+    },
+    {
+      "id": "pos_1787561091408_kx6l8",
+      "ticker": "SIGMA",
+      "name": "Sigma Solve Ltd",
+      "segment": "PENNY",
+      "shares": 4,
+      "buyPrice": 47.2,
+      "buyDate": "2026-08-24",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": ""
     },
     {
       "id": "pos_cupid_kite",
@@ -91,11 +151,30 @@
       "returnPct": 4.084769564169997,
       "broker": "Zerodha Kite",
       "notes": "Recorded Past Closed Trade"
+    },
+    {
+      "id": "sold_lancorhol_replaced",
+      "ticker": "LANCORHOL",
+      "name": "Lancor Holdings Limited",
+      "segment": "SWING",
+      "shares": 46,
+      "buyPrice": 33.36,
+      "sellPrice": 33.36,
+      "buyDate": "2026-08-25",
+      "sellDate": "2026-08-26",
+      "holdingDays": 1,
+      "broker": "Zerodha Kite",
+      "turnover": 1534.56,
+      "grossPnl": 0,
+      "taxes": 0,
+      "netPnl": 0,
+      "returnPct": 0,
+      "notes": "Position exited / replaced by GUJALKALI \u2014 synced from Kite on 2026-08-26"
     }
   ],
   "freeCash": {
-    "swing": "",
-    "lt": "54.04",
+    "swing": "80.40",
+    "lt": "167.58",
     "penny": ""
   },
   "budget": "0",
