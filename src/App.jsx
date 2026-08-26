@@ -2201,6 +2201,46 @@ export default function App() {
                 />
               </div>
 
+              {/* ── LIVE P&L PREVIEW (auto-calculates on every keystroke) ── */}
+              {(() => {
+                const qty = Number(sellFormShares) || 0;
+                const exitP = Number(sellFormPrice) || 0;
+                if (qty <= 0 || exitP <= 0 || !sellModalPos) return null;
+                const preview = sellModalPos.segment === 'LT'
+                  ? calculateINDmoneyCharges({ entry_price: sellModalPos.buyPrice, exit_price: exitP, quantity: qty })
+                  : calculateKiteDeliveryCharges({ entry_price: sellModalPos.buyPrice, exit_price: exitP, quantity: qty });
+                const isProfit = preview.net_pnl >= 0;
+                const color = isProfit ? '#10b981' : '#f87171';
+                const currentFreeCash = sellModalPos.segment === 'SWING' ? swingFreeCash
+                  : sellModalPos.segment === 'LT' ? ltFreeCash : pennyFreeCash;
+                const newFreeCash = currentFreeCash + (exitP * qty) - preview.total;
+                return (
+                  <div style={{ background: isProfit ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${isProfit ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.35)'}`, borderRadius: '10px', padding: '14px' }}>
+                    <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 800, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      📊 Live P&amp;L Preview
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+                      <div style={{ color: '#94a3b8' }}>Invested</div>
+                      <div style={{ color: '#ffffff', fontWeight: 700, textAlign: 'right' }}>₹{(sellModalPos.buyPrice * qty).toFixed(2)}</div>
+                      <div style={{ color: '#94a3b8' }}>Sale Value</div>
+                      <div style={{ color: '#ffffff', fontWeight: 700, textAlign: 'right' }}>₹{(exitP * qty).toFixed(2)}</div>
+                      <div style={{ color: '#94a3b8' }}>Gross P&amp;L</div>
+                      <div style={{ color: preview.gross_pnl >= 0 ? '#10b981' : '#f87171', fontWeight: 700, textAlign: 'right' }}>
+                        {preview.gross_pnl >= 0 ? '+' : ''}₹{preview.gross_pnl.toFixed(2)}
+                      </div>
+                      <div style={{ color: '#94a3b8' }}>Est. Charges (STT+DP+Tax)</div>
+                      <div style={{ color: '#f87171', fontWeight: 700, textAlign: 'right' }}>-₹{preview.total.toFixed(2)}</div>
+                      <div style={{ borderTop: `1px solid ${isProfit ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, paddingTop: '8px', color: color, fontWeight: 900, fontSize: '13px' }}>NET P&amp;L</div>
+                      <div style={{ borderTop: `1px solid ${isProfit ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, paddingTop: '8px', color, fontWeight: 900, fontSize: '13px', textAlign: 'right' }}>
+                        {isProfit ? '+' : ''}₹{preview.net_pnl.toFixed(2)}
+                      </div>
+                      <div style={{ color: '#a5b4fc', fontSize: '11px', marginTop: '4px' }}>Free Cash after sale</div>
+                      <div style={{ color: '#a5b4fc', fontWeight: 700, textAlign: 'right', fontSize: '11px', marginTop: '4px' }}>₹{newFreeCash.toFixed(2)}</div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div>
                 <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SALE DATE</label>
                 <input 
@@ -2221,9 +2261,9 @@ export default function App() {
                 </button>
                 <button 
                   type="submit" 
-                  style={{ background: 'linear-gradient(135deg, #059669, #10b981)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}
+                  style={{ background: Number(sellFormPrice) > 0 && Number(sellFormPrice) < sellModalPos.buyPrice ? 'linear-gradient(135deg, #dc2626, #f87171)' : 'linear-gradient(135deg, #059669, #10b981)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}
                 >
-                  Confirm Sale &amp; Recycle Capital
+                  {Number(sellFormPrice) > 0 && Number(sellFormPrice) < sellModalPos.buyPrice ? '⚠️ Confirm Loss & Record' : 'Confirm Sale & Recycle Capital'}
                 </button>
               </div>
 
