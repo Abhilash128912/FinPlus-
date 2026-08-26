@@ -64,13 +64,13 @@
       "id": "pos_1787561091408_kx6l8",
       "ticker": "SIGMA",
       "name": "Sigma Solve Ltd",
-      "segment": "PENNY",
+      "segment": "LT",
       "shares": 4,
       "buyPrice": 47.2,
       "buyDate": "2026-08-24",
       "target1": 0,
       "stopLoss": 0,
-      "notes": ""
+      "notes": "INDmoney Long-Term Position"
     },
     {
       "id": "pos_cupid_kite",
@@ -173,9 +173,9 @@
     }
   ],
   "freeCash": {
-    "swing": "80.40",
+    "swing": "734.63",
     "lt": "167.58",
-    "penny": ""
+    "penny": "0"
   },
   "budget": "0",
   "split": {

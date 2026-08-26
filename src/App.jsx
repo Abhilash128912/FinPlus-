@@ -1062,16 +1062,16 @@ export default function App() {
             </div>
           </div>
 
-          {/* Card 3: Net Unrealized P&L (Open Positions) */}
-          <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: `1px solid ${portfolioSummary.totalUnrealizedPnl >= 0 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`, borderRadius: '12px', padding: '14px 16px' }}>
-            <div style={{ fontSize: '11px', color: portfolioSummary.totalUnrealizedPnl >= 0 ? '#10b981' : '#f87171', fontWeight: 800, textTransform: 'uppercase' }}>
-              {portfolioSummary.totalUnrealizedPnl >= 0 ? 'NET UNREALIZED PROFIT (OPEN)' : 'NET UNREALIZED LOSS (OPEN)'}
+          {/* Card 3: Gross Unrealized P&L (Matches Broker Display) */}
+          <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: `1px solid ${(portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`, borderRadius: '12px', padding: '14px 16px' }}>
+            <div style={{ fontSize: '11px', color: (portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 800, textTransform: 'uppercase' }}>
+              {(portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? 'UNREALIZED P&L (MATCHES BROKER)' : 'UNREALIZED LOSS (MATCHES BROKER)'}
             </div>
-            <div style={{ fontSize: '22px', fontWeight: 900, color: portfolioSummary.totalUnrealizedPnl >= 0 ? '#10b981' : '#f87171', marginTop: '4px' }}>
-              {portfolioSummary.totalUnrealizedPnl >= 0 ? '+' : ''}₹{portfolioSummary.totalUnrealizedPnl.toFixed(2)}
+            <div style={{ fontSize: '22px', fontWeight: 900, color: (portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? '#10b981' : '#f87171', marginTop: '4px' }}>
+              {(portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.grossUnrealizedPnl || 0).toFixed(2)}
             </div>
             <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
-              Est. Taxes: -₹{(portfolioSummary.totalEstCharges || 0).toFixed(2)}
+              Net: {(portfolioSummary.totalUnrealizedPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.totalUnrealizedPnl || 0).toFixed(2)} (Est. Fees: -₹{(portfolioSummary.totalEstCharges || 0).toFixed(2)})
             </div>
           </div>
 
