@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   loadJournalEngine, 
   saveJournalEngine, 
@@ -55,6 +55,11 @@ export default function App() {
   // ══════════════════════════════════════════════════════════════
   // ZONE 1: ALL REACT STATE HOOKS (Strictly First)
   // ══════════════════════════════════════════════════════════════
+
+  // Gate: prevents auto-saving stale localStorage data to cloud before server load completes.
+  // Without this, mobile opens with old localStorage → saves to Render → overwrites correct data.
+  const serverLoaded = useRef(false);
+
   const [activeTab, setActiveTab] = useState('capital'); // 'capital', 'swing', 'lt', 'penny', 'history', 'settings'
   const [toastMsg, setToastMsg] = useState(null);
 
@@ -222,6 +227,8 @@ export default function App() {
         if (freeCash.lt !== undefined) setLtFreeCashInput(String(freeCash.lt));
         if (freeCash.penny !== undefined) setPennyFreeCashInput(String(freeCash.penny));
       }
+      // ✔ Server data applied — now safe to allow cloud saves from this device
+      serverLoaded.current = true;
     };
 
     for (const ep of endpoints) {
@@ -235,6 +242,7 @@ export default function App() {
 
   // Save State to LocalStorage & Backend Disk Backup File
   useEffect(() => {
+    // Always save to localStorage immediately (fast, local-only).
     localStorage.setItem('finplus_monthly_income_budget', monthlyBudgetInput);
     localStorage.setItem('finplus_split_swing', String(swingPct));
     localStorage.setItem('finplus_split_lt', String(ltPct));
@@ -247,8 +255,10 @@ export default function App() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
     localStorage.setItem('finplus_sold_history_v1', JSON.stringify(soldHistory));
 
-    // Auto disk backup sync to both local server & Render cloud.
-    // savedAt timestamp ensures newest-wins on concurrent saves from mobile & laptop.
+    // Cloud save: ONLY after server data has been loaded (serverLoaded gate).
+    // This prevents mobile from overwriting correct Render data with stale localStorage on startup.
+    if (!serverLoaded.current) return;
+
     const savedAt = Date.now();
     const endpoints = Array.from(new Set([API_BASE_URL, RENDER_BACKEND_URL].filter(Boolean)));
     const backupPayload = JSON.stringify({
