@@ -807,14 +807,19 @@ export default function App() {
         estCharges = calculateKiteDeliveryCharges({ entry_price: pos.buyPrice, exit_price: ltp, quantity: pos.shares });
       }
 
+      const grossUnrealizedPnl = unrealizedPnl;
+      const netUnrealizedPnl = grossUnrealizedPnl - (estCharges.total || 0);
+      const netPnlPct = costBasis > 0 ? (netUnrealizedPnl / costBasis) * 100 : 0;
+
       return {
         ...pos,
         cleanSym,
         ltp,
         currentVal,
         costBasis,
-        unrealizedPnl,
-        pnlPct,
+        grossUnrealizedPnl,
+        unrealizedPnl: netUnrealizedPnl, // NET Unrealized P&L (after estimated charges)
+        pnlPct: netPnlPct,
         holdingDays,
         estCharges
       };
@@ -954,10 +959,13 @@ export default function App() {
         grossPnl: swingGrossPnl,
         grossPct: swingGrossPct,
         estCharges: swingEstCharges,
+        estExitCharges: swingEstCharges,
         netPnl: swingNetPnl,
+        unrealizedPnl: swingNetPnl,
         netPct: swingNetPct,
         freeCash: effectiveSwingFreeCash,
-        totalCap: swingCurrentVal + effectiveSwingFreeCash,
+        segmentNetWorth: swingCurrentVal + effectiveSwingFreeCash,
+        realizedPnl: (soldHistory || []).filter(s => s.segment === 'SWING').reduce((acc, s) => acc + (Number(s.netPnl) || 0), 0),
         broker: 'Zerodha Kite'
       },
       lt: {
@@ -966,10 +974,13 @@ export default function App() {
         grossPnl: ltGrossPnl,
         grossPct: ltGrossPct,
         estCharges: ltEstCharges,
+        estExitCharges: ltEstCharges,
         netPnl: ltNetPnl,
+        unrealizedPnl: ltNetPnl,
         netPct: ltNetPct,
         freeCash: effectiveLtFreeCash,
-        totalCap: ltCurrentVal + effectiveLtFreeCash,
+        segmentNetWorth: ltCurrentVal + effectiveLtFreeCash,
+        realizedPnl: (soldHistory || []).filter(s => s.segment === 'LT').reduce((acc, s) => acc + (Number(s.netPnl) || 0), 0),
         broker: 'INDMONEY'
       },
       penny: {
@@ -978,11 +989,14 @@ export default function App() {
         grossPnl: pennyGrossPnl,
         grossPct: pennyGrossPct,
         estCharges: pennyEstCharges,
+        estExitCharges: pennyEstCharges,
         netPnl: pennyNetPnl,
+        unrealizedPnl: pennyNetPnl,
         netPct: pennyNetPct,
         freeCash: effectivePennyFreeCash,
-        totalCap: pennyCurrentVal + effectivePennyFreeCash,
-        broker: 'Zerodha Kite'
+        segmentNetWorth: pennyCurrentVal + effectivePennyFreeCash,
+        realizedPnl: (soldHistory || []).filter(s => s.segment === 'PENNY').reduce((acc, s) => acc + (Number(s.netPnl) || 0), 0),
+        broker: 'INDMONEY'
       }
     };
   }, [holdingCards, swingFreeCash, ltFreeCash, pennyFreeCash, capitalMath, swingFreeCashInput, ltFreeCashInput, pennyFreeCashInput]);
@@ -1386,17 +1400,37 @@ export default function App() {
       <div style={{ background: '#0b1120', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '18px 24px' }}>
         <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
-          {/* Header Bar: Grand Total Net Worth & Actions */}
+          {/* Header Bar: Grand Total Net Worth & Total Unrealized P&L */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.85))', border: '1.5px solid #38bdf8', borderRadius: '14px', padding: '16px 20px', flexWrap: 'wrap', gap: '14px' }}>
-            <div>
-              <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>GRAND TOTAL ACCOUNT NET WORTH (ALL BROKER SEGMENTS)</div>
-              <div style={{ fontSize: '26px', fontWeight: 900, color: '#38bdf8', marginTop: '2px' }}>
-                ₹{segmentLedgers.grandTotalNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <div style={{ display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>GRAND TOTAL ACCOUNT NET WORTH</div>
+                <div style={{ fontSize: '26px', fontWeight: 900, color: '#ffffff', marginTop: '2px' }}>
+                  ₹{segmentLedgers.grandTotalNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
               </div>
-              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '2px' }}>
-                Reconciled Sum of Cash Ledgers + Live Holdings Valuations across all 4 Segments
+
+              {/* Dedicated Total Net Unrealized P&L Summary Box */}
+              <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1.5px solid rgba(56, 189, 248, 0.3)', borderRadius: '10px', padding: '8px 16px' }}>
+                <div style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 800, textTransform: 'uppercase' }}>TOTAL NET UNREALIZED P&amp;L (AFTER CHARGES)</div>
+                <div style={{ fontSize: '18px', fontWeight: 900, color: portfolioSummary.totalUnrealizedPnl >= 0 ? '#10b981' : '#f87171', marginTop: '2px' }}>
+                  {portfolioSummary.totalUnrealizedPnl >= 0 ? '+' : ''}₹{portfolioSummary.totalUnrealizedPnl.toFixed(2)}
+                  <span style={{ fontSize: '12px', marginLeft: '6px', fontWeight: 800 }}>({portfolioSummary.totalUnrealizedPct >= 0 ? '+' : ''}{portfolioSummary.totalUnrealizedPct.toFixed(2)}%)</span>
+                </div>
+                <div style={{ fontSize: '9px', color: '#64748b', marginTop: '1px' }}>
+                  Gross P&amp;L: ₹{portfolioSummary.grossUnrealizedPnl.toFixed(2)} | Est. Exit Charges: -₹{portfolioSummary.totalEstCharges.toFixed(2)}
+                </div>
+              </div>
+
+              {/* Total Booked Realized P&L Summary Box */}
+              <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1.5px solid rgba(16, 185, 129, 0.3)', borderRadius: '10px', padding: '8px 16px' }}>
+                <div style={{ fontSize: '10px', color: '#10b981', fontWeight: 800, textTransform: 'uppercase' }}>TOTAL REALIZED P&amp;L (BOOKED)</div>
+                <div style={{ fontSize: '18px', fontWeight: 900, color: portfolioSummary.totalRealizedNetPnl >= 0 ? '#10b981' : '#f87171', marginTop: '2px' }}>
+                  {portfolioSummary.totalRealizedNetPnl >= 0 ? '+' : ''}₹{portfolioSummary.totalRealizedNetPnl.toFixed(2)}
+                </div>
               </div>
             </div>
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <button 
                 onClick={() => setShowReconcileModal(true)}
