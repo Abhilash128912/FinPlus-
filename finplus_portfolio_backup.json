@@ -222,7 +222,7 @@
   "optionsTrades": [],
   "freeCash": {
     "swing": "128.3",
-    "lt": "367.58",
+    "lt": "164.99",
     "penny": "0"
   },
   "budget": "0",
@@ -231,5 +231,5 @@
     "lt": 30,
     "penny": 10
   },
-  "savedAt": 1787834230895
+  "savedAt": 1787836943846
 }

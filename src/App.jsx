@@ -81,9 +81,8 @@ export default function App() {
     return localStorage.getItem('finplus_free_cash_swing_v5') || localStorage.getItem(FREE_CASH_SWING_KEY) || '';
   });
   const [ltFreeCashInput, setLtFreeCashInput] = useState(() => {
-    // No hardcoded fallback — if localStorage is empty, start at '' and let the server restore it.
-    const val = localStorage.getItem(FREE_CASH_LT_KEY);
-    return (val && val !== '367.58') ? val : '164.99';
+    // 100% server and localStorage driven — no hardcoded numbers.
+    return localStorage.getItem(FREE_CASH_LT_KEY) || '';
   });
   const [pennyFreeCashInput, setPennyFreeCashInput] = useState(() => {
     return localStorage.getItem('finplus_free_cash_penny_v4') || '';
