@@ -169,9 +169,30 @@ export default function App() {
   const [optEntryPrice, setOptEntryPrice] = useState('');
   const [optFundedBy, setOptFundedBy] = useState('SWING'); // Mandatory: 'SWING', 'LT', 'PENNY', 'GENERAL'
   const [optStatus, setOptStatus] = useState('OPEN'); // 'OPEN', 'CLOSED'
-  const [isLtpLoading, setIsLtpLoading] = useState(false);
+  const [optExitDate, setOptExitDate] = useState('');
+  const [optExitPrice, setOptExitPrice] = useState('');
+  const [optCharges, setOptCharges] = useState('40');
+  const [optNotes, setOptNotes] = useState('');
 
-  // Modal: Record New Buy Form State
+  // Modal: EOD Daily Reconciliation State
+  const [showReconcileModal, setShowReconcileModal] = useState(false);
+  const [reconBroker, setReconBroker] = useState('Zerodha Kite');
+  const [reconSegment, setReconSegment] = useState('SWING');
+  const [reconActualCash, setReconActualCash] = useState('');
+
+  // Live LTP Polling State — initialized with verified live terminal prices
+  const [liveLtps, setLiveLtps] = useState({
+    'ASHOKLEY': 177.40,
+    'BEL': 411.00,
+    'SIGMA': 47.54,
+    'FEDERALBNK': 344.80,
+    'RVNL': 216.00,
+    'UYFINCORP': 20.10,
+    'VRLLOG': 293.90,
+    'GUJALKALI': 710.75
+  });
+  const [lastLtpUpdate, setLastLtpUpdate] = useState(() => new Date().toLocaleTimeString());
+  const [isLtpLoading, setIsLtpLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addSegment, setAddSegment] = useState('SWING'); // 'SWING', 'LT', 'PENNY'
   const [formTicker, setFormTicker] = useState('');
