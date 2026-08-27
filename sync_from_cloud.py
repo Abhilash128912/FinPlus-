@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import requests
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -31,19 +32,13 @@ def sync():
 
     # Determine master data priority
     if cloud_data and cloud_data.get("positions"):
-        # Cloud dataset available
         if master_data and len(master_data.get("soldHistory", [])) > len(cloud_data.get("soldHistory", [])):
-            # Local has newer sold trades, push local to cloud
-            try:
-                requests.post("https://finplus.onrender.com/api/backup/save", json=master_data, timeout=5)
-                print(" -> Synced local trades up to Render Cloud.")
-            except Exception:
-                pass
+            pass
         else:
             master_data = cloud_data
             print(" -> Loaded portfolio dataset from Render Cloud.")
-    elif not master_data:
-        # Fallback dataset if no local or cloud file exists
+
+    if not master_data:
         master_data = {
             "positions": [],
             "capitalLedger": [],
@@ -51,18 +46,34 @@ def sync():
             "soldHistory": [],
             "budget": "0",
             "split": {"swing": 60, "lt": 30, "penny": 10},
-            "savedAt": 1787826000000
+            "savedAt": int(time.time() * 1000)
         }
+
+    # CRITICAL AUDIT PURGE: Filter out any active position whose ID or ticker exists in soldHistory
+    sold_history = master_data.get("soldHistory", [])
+    sold_keys = set()
+    for s in sold_history:
+        if isinstance(s, dict):
+            if s.get("id"): sold_keys.add(s.get("id"))
+            if s.get("ticker"): sold_keys.add(s.get("ticker"))
+
+    raw_pos = master_data.get("positions", [])
+    cleaned_pos = [
+        p for p in raw_pos
+        if isinstance(p, dict) and p.get("id") not in sold_keys and p.get("ticker") not in sold_keys
+    ]
+    master_data["positions"] = cleaned_pos
+    master_data["savedAt"] = int(time.time() * 1000)
 
     # Save to local portfolio backup file
     with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
         json.dump(master_data, f, indent=2)
-    print(f" -> Local finplus_portfolio_backup.json updated ({len(master_data.get('positions', []))} active positions).")
+    print(f" -> Local finplus_portfolio_backup.json updated ({len(cleaned_pos)} active positions).")
 
     # Update Render Cloud with master dataset
     try:
         requests.post("https://finplus.onrender.com/api/backup/save", json=master_data, timeout=5)
-        print(" -> Render Cloud dataset successfully updated.")
+        print(" -> Render Cloud dataset successfully updated with cleaned positions.")
     except Exception as e:
         print(f" -> Cloud sync notice: {e}")
 

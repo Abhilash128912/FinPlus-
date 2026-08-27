@@ -651,16 +651,6 @@ async def save_portfolio_backup(request: Request):
                         with open(PORTFOLIO_FILE, "r", encoding="utf-8") as existing_f:
                             existing = json.load(existing_f)
                     
-                    # Merge positions by ID / ticker to prevent transaction loss
-                    existing_pos = existing.get("positions", [])
-                    incoming_pos = data.get("positions", [])
-                    pos_map = { (p.get("id") or f"{p.get('ticker')}_{p.get('buyDate')}"): p for p in existing_pos if isinstance(p, dict) }
-                    for p in incoming_pos:
-                        if isinstance(p, dict):
-                            key = p.get("id") or f"{p.get('ticker')}_{p.get('buyDate')}"
-                            pos_map[key] = p
-                    data["positions"] = list(pos_map.values())
-
                     # Merge soldHistory by ID to prevent lost closed trades
                     existing_sold = existing.get("soldHistory", [])
                     incoming_sold = data.get("soldHistory", [])
@@ -670,6 +660,21 @@ async def save_portfolio_backup(request: Request):
                             key = s.get("id") or f"{s.get('ticker')}_{s.get('sellDate')}"
                             sold_map[key] = s
                     data["soldHistory"] = list(sold_map.values())
+
+                    # Build set of all sold IDs and tickers to prevent resurrected sold trades
+                    sold_keys = set()
+                    for s in data["soldHistory"]:
+                        if isinstance(s, dict):
+                            if s.get("id"): sold_keys.add(s.get("id"))
+                            if s.get("ticker"): sold_keys.add(s.get("ticker"))
+
+                    # Incoming active positions payload is authoritative, filtered against sold history
+                    incoming_pos = data.get("positions", [])
+                    if isinstance(incoming_pos, list):
+                        data["positions"] = [
+                            p for p in incoming_pos
+                            if isinstance(p, dict) and p.get("id") not in sold_keys and p.get("ticker") not in sold_keys
+                        ]
 
                     # Merge brokerAdjustments by ID
                     existing_adj = existing.get("brokerAdjustments", [])

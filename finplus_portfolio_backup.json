@@ -25,18 +25,6 @@
       "notes": "Zerodha Kite Swing Position"
     },
     {
-      "id": "pos_1787635969128_zaca5",
-      "ticker": "PARAGMILK",
-      "name": "Parag Milk Foods Limited",
-      "segment": "SWING",
-      "shares": 8,
-      "buyPrice": 244.48,
-      "buyDate": "2026-08-25",
-      "target1": 264.0384,
-      "stopLoss": 234.7008,
-      "notes": ""
-    },
-    {
       "id": "pos_1787561640021_prqkv",
       "ticker": "ASHOKLEY",
       "name": "Ashok Leyland Ltd",
@@ -73,18 +61,6 @@
       "notes": "Quality Penny SIP Position (LTP < Rs 75)"
     },
     {
-      "id": "pos_cupid_kite",
-      "ticker": "CUPID",
-      "name": "Cupid Limited",
-      "segment": "SWING",
-      "shares": 6,
-      "buyPrice": 289.95,
-      "buyDate": "2026-08-23",
-      "target1": 313.15,
-      "stopLoss": 278.35,
-      "notes": "Zerodha Kite Swing Position"
-    },
-    {
       "id": "pos_rvnl_indmoney",
       "ticker": "RVNL",
       "name": "Rail Vikas Nigam Limited",
@@ -95,6 +71,30 @@
       "target1": 287.38,
       "stopLoss": 0,
       "notes": "INDmoney Long-Term Core Position"
+    },
+    {
+      "id": "pos_1787824550705_djx10",
+      "ticker": "UYFINCORP",
+      "name": "U. Y. Fincorp Limited",
+      "segment": "PENNY",
+      "shares": 10,
+      "buyPrice": 20,
+      "buyDate": "2026-08-27",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": ""
+    },
+    {
+      "id": "pos_1787824201399_knk4c",
+      "ticker": "VRLLOG",
+      "name": "VRL Logistics Limited",
+      "segment": "SWING",
+      "shares": 6,
+      "buyPrice": 293.95,
+      "buyDate": "2026-08-27",
+      "target1": 317.466,
+      "stopLoss": 282.19199999999995,
+      "notes": ""
     }
   ],
   "capitalLedger": [
@@ -170,11 +170,49 @@
       "netPnl": -36.67,
       "returnPct": -1.169,
       "notes": "Exited at loss, replaced by GUJALKALI on 2026-08-26"
+    },
+    {
+      "id": "sold_1787825028732",
+      "ticker": "PARAGMILK",
+      "name": "Parag Milk Foods Limited",
+      "segment": "SWING",
+      "shares": 8,
+      "buyPrice": 244.48,
+      "sellPrice": 240.5,
+      "buyDate": "2026-08-25",
+      "sellDate": "2026-08-27",
+      "holdingDays": 2,
+      "broker": "Zerodha Kite",
+      "turnover": 1924,
+      "grossPnl": -31.839999999999918,
+      "taxes": 19.653767083840002,
+      "netPnl": -51.49376708383992,
+      "returnPct": -1.6279450261780064
+    },
+    {
+      "id": "sold_1787824155119",
+      "ticker": "CUPID",
+      "name": "Cupid Limited",
+      "segment": "SWING",
+      "shares": 6,
+      "buyPrice": 289.95,
+      "sellPrice": 278.92,
+      "buyDate": "2026-08-23",
+      "sellDate": "2026-08-27",
+      "holdingDays": 4,
+      "broker": "Zerodha Kite",
+      "turnover": 1673.52,
+      "grossPnl": -66.17999999999984,
+      "taxes": 19.13782230772,
+      "netPnl": -85.31782230771984,
+      "returnPct": -3.804104155888937
     }
   ],
+  "brokerAdjustments": [],
+  "optionsTrades": [],
   "freeCash": {
     "swing": "734.63",
-    "lt": "167.58",
+    "lt": "367.58",
     "penny": "0"
   },
   "budget": "0",
@@ -183,7 +221,5 @@
     "lt": 30,
     "penny": 10
   },
-  "brokerAdjustments": [],
-  "optionsTrades": [],
-  "savedAt": 1787830000000
+  "savedAt": 1787832270717
 }

@@ -291,9 +291,25 @@ export default function App() {
       const incomingSavedAt = Number(res.data.savedAt) || 0;
       const { positions: diskPos, capitalLedger: diskLedger, soldHistory: diskSold, brokerAdjustments: diskAdj, optionsTrades: diskOpt, budget, split, freeCash } = res.data;
 
-      // Smart union-merge to protect user's recorded swing buys and sells from vanishing
-      setPositions(prev => unionMerge(prev, diskPos));
-      setSoldHistory(prev => unionMerge(prev, diskSold));
+      // Merge soldHistory and build a lookup set of all sold trade IDs and tickers
+      let mergedSold = [];
+      setSoldHistory(prev => {
+        mergedSold = unionMerge(prev, diskSold);
+        return mergedSold;
+      });
+
+      const soldKeys = new Set();
+      (mergedSold.length > 0 ? mergedSold : diskSold || []).forEach(s => {
+        if (s && s.id) soldKeys.add(s.id);
+        if (s && s.ticker) soldKeys.add(s.ticker);
+      });
+
+      // Filter positions to ensure no sold stock is ever added back to active positions
+      const validDiskPos = (diskPos || []).filter(p => p && !soldKeys.has(p.id) && !soldKeys.has(p.ticker));
+      setPositions(prev => {
+        const filteredPrev = (prev || []).filter(p => p && !soldKeys.has(p.id) && !soldKeys.has(p.ticker));
+        return unionMerge(filteredPrev, validDiskPos);
+      });
       if (Array.isArray(diskAdj)) setBrokerAdjustments(prev => unionMerge(prev, diskAdj));
       if (Array.isArray(diskOpt)) setOptionsTrades(prev => unionMerge(prev, diskOpt));
 
