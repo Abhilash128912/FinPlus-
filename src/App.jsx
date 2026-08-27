@@ -1377,13 +1377,7 @@ export default function App() {
             >
               ⚙️ Align Free Cash
             </button>
-            <button 
-              onClick={() => { setShowCapModal(true); }}
-              style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#10b981', padding: '8px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Wallet size={14} />
-              + Capital Event
-            </button>
+
             <button 
               onClick={() => { setShowAddModal(true); }}
               style={{ background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#090d16', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 900, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -1777,106 +1771,11 @@ export default function App() {
 
             </div>
 
-            {/* Capital Injections & Withdrawals Ledger Table */}
-            <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-                <div style={{ fontSize: '15px', fontWeight: 800, color: '#ffffff' }}>📜 Capital Event Ledger (Injections &amp; Withdrawals)</div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {capitalLedger.length > 0 && (
-                    <button 
-                      onClick={() => {
-                        if (window.confirm('Reset and clear all capital injection/withdrawal records to ₹0?')) {
-                          setCapitalLedger([]);
-                          setMonthlyBudgetInput('0');
-                          showToast('🧹 All capital records reset to ₹0!');
-                        }
-                      }}
-                      style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', padding: '6px 12px', borderRadius: '6px', fontWeight: 800, fontSize: '11px', cursor: 'pointer' }}
-                    >
-                      🗑️ Reset to ₹0
-                    </button>
-                  )}
-                  <button 
-                    onClick={() => setShowCapModal(true)}
-                    style={{ background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', color: '#38bdf8', padding: '6px 12px', borderRadius: '6px', fontWeight: 800, fontSize: '11px', cursor: 'pointer' }}
-                  >
-                    + Log Capital Event
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                  <thead>
-                    <tr style={{ background: 'rgba(255,255,255,0.03)', color: '#94a3b8', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                      <th style={{ padding: '10px 12px' }}>DATE</th>
-                      <th style={{ padding: '10px 12px' }}>EVENT TYPE</th>
-                      <th style={{ padding: '10px 12px' }}>TARGET SEGMENT</th>
-                      <th style={{ padding: '10px 12px' }}>AMOUNT (₹)</th>
-                      <th style={{ padding: '10px 12px' }}>NOTES / REASON</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'right' }}>ACTION</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {capitalLedger.map((item, idx) => {
-                      const isPositive = item.type === 'INJECTION' || item.type === 'ADJUSTMENT_GAIN';
-                      const isLoss = item.type === 'ADJUSTMENT_LOSS';
-                      const isGain = item.type === 'ADJUSTMENT_GAIN';
-                      const isWithdrawal = item.type === 'WITHDRAWAL';
-                      return (
-                        <tr key={item.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                          <td style={{ padding: '10px 12px', color: '#cbd5e1' }}>{item.date}</td>
-                          <td style={{ padding: '10px 12px' }}>
-                            <span style={{
-                              padding: '3px 8px',
-                              borderRadius: '4px',
-                              fontWeight: 800,
-                              fontSize: '10px',
-                              background: isGain ? 'rgba(56, 189, 248, 0.15)' :
-                                          isLoss ? 'rgba(245, 158, 11, 0.15)' :
-                                          isWithdrawal ? 'rgba(239, 68, 68, 0.15)' :
-                                          'rgba(16, 185, 129, 0.15)',
-                              color: isGain ? '#38bdf8' :
-                                     isLoss ? '#f59e0b' :
-                                     isWithdrawal ? '#f87171' :
-                                     '#10b981'
-                            }}>
-                              {item.type === 'INJECTION' ? '➕ INJECTION' :
-                               item.type === 'WITHDRAWAL' ? '➖ WITHDRAWAL' :
-                               item.type === 'ADJUSTMENT_LOSS' ? '📉 OTHER LOSS' :
-                               item.type === 'ADJUSTMENT_GAIN' ? '📈 OTHER GAIN' :
-                               item.type}
-                            </span>
-                          </td>
-                          <td style={{ padding: '10px 12px', color: '#a5b4fc', fontWeight: 700 }}>{item.segment}</td>
-                          <td style={{ padding: '10px 12px', fontWeight: 800, color: isPositive ? '#10b981' : isLoss ? '#f59e0b' : '#f87171' }}>
-                            {isPositive ? '+' : '-'}₹{Number(item.amount).toLocaleString('en-IN')}
-                          </td>
-                          <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{item.notes || '—'}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                          <button 
-                            onClick={() => {
-                              if (window.confirm('Delete this capital event?')) {
-                                setCapitalLedger(prev => prev.filter(c => c.id !== item.id));
-                              }
-                            }}
-                            style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px' }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
 
           </div>
         )}
 
-        {/* ── TABS 2, 3, 4: ACTIVE HOLDINGS (SWING, LT, PENNY) ── */}
+                {/* ── TABS 2, 3, 4: ACTIVE HOLDINGS (SWING, LT, PENNY) ── */}
         {(activeTab === 'swing' || activeTab === 'lt' || activeTab === 'penny') && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             
