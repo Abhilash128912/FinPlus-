@@ -1345,6 +1345,17 @@ export default function App() {
               <input type="file" accept=".json" onChange={handleImportBackup} style={{ display: 'none' }} />
             </label>
             <button 
+              onClick={() => {
+                setAdjSwingCash(swingFreeCashInput);
+                setAdjLtCash(ltFreeCashInput);
+                setAdjPennyCash(pennyFreeCashInput);
+                setShowCashAdjModal(true);
+              }}
+              style={{ background: 'rgba(56, 189, 248, 0.15)', border: '1px solid #38bdf8', color: '#38bdf8', padding: '8px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              ⚙️ Align Free Cash
+            </button>
+            <button 
               onClick={() => { setShowCapModal(true); }}
               style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', color: '#10b981', padding: '8px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
             >
