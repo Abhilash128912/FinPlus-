@@ -1272,7 +1272,7 @@ export default function App() {
     setShowCapModal(false);
     setCapEventAmount('');
     setCapEventNotes('');
-    showToast(`✅ Recorded ${defaultNote} of ₹${amt.toLocaleString('en-IN')}!`);
+    showToast(`✅ Recorded ${defaultNote} of ₹${(amt || 0).toLocaleString('en-IN')}!`);
   };
 
   const handleExportBackup = () => {
@@ -1400,7 +1400,7 @@ export default function App() {
               <div>
                 <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>GRAND TOTAL ACCOUNT NET WORTH</div>
                 <div style={{ fontSize: '26px', fontWeight: 900, color: '#ffffff', marginTop: '2px' }}>
-                  ₹{segmentLedgers.grandTotalNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ₹{(segmentLedgers.grandTotalNetWorth || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
 
@@ -1457,16 +1457,16 @@ export default function App() {
                 <span style={{ fontSize: '10px', color: '#94a3b8' }}>Zerodha Kite</span>
               </div>
               <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', margin: '4px 0 8px 0' }}>
-                ₹{segmentLedgers.swing.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₹{(segmentLedgers.swing.segmentNetWorth || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>1. Free Cash (INDmoney):</span>
-                  <span style={{ color: '#38bdf8', fontWeight: 800 }}>₹{segmentLedgers.swing.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ color: '#38bdf8', fontWeight: 800 }}>₹{(segmentLedgers.swing.freeCash || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>2. Holdings Value:</span>
-                  <span style={{ color: '#ffffff', fontWeight: 800 }}>₹{segmentLedgers.swing.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ color: '#ffffff', fontWeight: 800 }}>₹{(segmentLedgers.swing.holdingsValue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
@@ -1493,16 +1493,16 @@ export default function App() {
                 <span style={{ fontSize: '10px', color: '#94a3b8' }}>INDmoney</span>
               </div>
               <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', margin: '4px 0 8px 0' }}>
-                ₹{segmentLedgers.lt.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₹{(segmentLedgers.lt.segmentNetWorth || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>1. Free Cash (INDmoney):</span>
-                  <span style={{ color: '#10b981', fontWeight: 800 }}>₹{segmentLedgers.lt.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ color: '#10b981', fontWeight: 800 }}>₹{(segmentLedgers.lt.freeCash || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>2. Holdings Value:</span>
-                  <span style={{ color: '#ffffff', fontWeight: 800 }}>₹{segmentLedgers.lt.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ color: '#ffffff', fontWeight: 800 }}>₹{(segmentLedgers.lt.holdingsValue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
@@ -1529,16 +1529,16 @@ export default function App() {
                 <span style={{ fontSize: '10px', color: '#94a3b8' }}>INDmoney</span>
               </div>
               <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', margin: '4px 0 8px 0' }}>
-                ₹{segmentLedgers.penny.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₹{(segmentLedgers.penny.segmentNetWorth || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>1. Free Cash (INDmoney):</span>
-                  <span style={{ color: '#c084fc', fontWeight: 800 }}>₹{segmentLedgers.penny.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ color: '#c084fc', fontWeight: 800 }}>₹{(segmentLedgers.penny.freeCash || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>2. Holdings Value:</span>
-                  <span style={{ color: '#ffffff', fontWeight: 800 }}>₹{segmentLedgers.penny.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ color: '#ffffff', fontWeight: 800 }}>₹{(segmentLedgers.penny.holdingsValue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
@@ -1565,16 +1565,16 @@ export default function App() {
                 <span style={{ fontSize: '10px', color: '#94a3b8' }}>Zerodha F&amp;O</span>
               </div>
               <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', margin: '4px 0 8px 0' }}>
-                ₹{segmentLedgers.options.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₹{(segmentLedgers.options.segmentNetWorth || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>1. Capital Used (Open):</span>
-                  <span style={{ color: '#f59e0b', fontWeight: 800 }}>₹{segmentLedgers.options.costOfOpenHoldings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ color: '#f59e0b', fontWeight: 800 }}>₹{(segmentLedgers.options.costOfOpenHoldings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>2. Open Options Valuation:</span>
-                  <span style={{ color: '#ffffff', fontWeight: 800 }}>₹{segmentLedgers.options.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ color: '#ffffff', fontWeight: 800 }}>₹{(segmentLedgers.options.holdingsValue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
@@ -1600,7 +1600,7 @@ export default function App() {
         {/* Navigation Tabs */}
         <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '14px', marginBottom: '24px', overflowX: 'auto' }}>
           {[
-            { id: 'capital', label: '📊 3-Pillar Capital Engine', badge: `₹${capitalMath.totalNetCapital.toLocaleString('en-IN')}` },
+            { id: 'capital', label: '📊 3-Pillar Capital Engine', badge: `₹${(segmentLedgers?.grandTotalNetWorth || portfolioSummary?.totalAccountCapital || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` },
             { id: 'swing', label: '⚡ Swing Trading (Kite)', badge: positions.filter(p => p.segment === 'SWING').length },
             { id: 'lt', label: '🛡️ Long-Term Core (INDmoney)', badge: positions.filter(p => p.segment === 'LT').length },
             { id: 'penny', label: '💎 Quality Penny SIP (INDmoney)', badge: positions.filter(p => p.segment === 'PENNY').length },
@@ -1655,18 +1655,18 @@ export default function App() {
                   </div>
                   <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>⚡ Swing Trading Fund</div>
                   <div style={{ fontSize: '26px', fontWeight: 900, color: '#38bdf8', margin: '8px 0 14px 0' }}>
-                    ₹{segmentLedgers.swing.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ₹{(segmentLedgers.swing.segmentNetWorth || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginLeft: '6px' }}>Segment Net Worth</span>
                   </div>
                   
                   <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: '#94a3b8' }}>1. Free Cash (Kite):</span>
-                      <strong style={{ color: '#38bdf8' }}>₹{segmentLedgers.swing.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      <strong style={{ color: '#38bdf8' }}>₹{(segmentLedgers.swing.freeCash || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: '#94a3b8' }}>2. Active Holdings Value:</span>
-                      <strong style={{ color: '#ffffff' }}>₹{segmentLedgers.swing.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      <strong style={{ color: '#ffffff' }}>₹{(segmentLedgers.swing.holdingsValue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
@@ -1696,18 +1696,18 @@ export default function App() {
                   </div>
                   <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>🛡️ Long-Term Core Quality</div>
                   <div style={{ fontSize: '26px', fontWeight: 900, color: '#10b981', margin: '8px 0 14px 0' }}>
-                    ₹{segmentLedgers.lt.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ₹{(segmentLedgers.lt.segmentNetWorth || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginLeft: '6px' }}>Segment Net Worth</span>
                   </div>
                   
                   <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: '#94a3b8' }}>1. Free Cash (INDmoney):</span>
-                      <strong style={{ color: '#10b981' }}>₹{segmentLedgers.lt.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      <strong style={{ color: '#10b981' }}>₹{(segmentLedgers.lt.freeCash || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: '#94a3b8' }}>2. Active Holdings Value:</span>
-                      <strong style={{ color: '#ffffff' }}>₹{segmentLedgers.lt.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      <strong style={{ color: '#ffffff' }}>₹{(segmentLedgers.lt.holdingsValue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
@@ -1737,18 +1737,18 @@ export default function App() {
                   </div>
                   <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>💎 Quality Penny SIP</div>
                   <div style={{ fontSize: '26px', fontWeight: 900, color: '#c084fc', margin: '8px 0 14px 0' }}>
-                    ₹{segmentLedgers.penny.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ₹{(segmentLedgers.penny.segmentNetWorth || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginLeft: '6px' }}>Segment Net Worth</span>
                   </div>
                   
                   <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: '#94a3b8' }}>1. Free Cash (INDmoney):</span>
-                      <strong style={{ color: '#c084fc' }}>₹{segmentLedgers.penny.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      <strong style={{ color: '#c084fc' }}>₹{(segmentLedgers.penny.freeCash || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: '#94a3b8' }}>2. Active Holdings Value:</span>
-                      <strong style={{ color: '#ffffff' }}>₹{segmentLedgers.penny.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      <strong style={{ color: '#ffffff' }}>₹{(segmentLedgers.penny.holdingsValue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
@@ -1807,19 +1807,19 @@ export default function App() {
                 <div>
                   <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>DEPLOYED CAPITAL</div>
                   <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff', marginTop: '2px' }}>
-                    ₹{portfolioSummary[activeTab]?.invested.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                    ₹{(portfolioSummary[activeTab]?.invested || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>FREE BROKER CASH</div>
                   <div style={{ fontSize: '16px', fontWeight: 900, color: '#10b981', marginTop: '2px' }}>
-                    ₹{portfolioSummary[activeTab]?.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                    ₹{(portfolioSummary[activeTab]?.freeCash || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>TOTAL SEGMENT CAPITAL</div>
                   <div style={{ fontSize: '16px', fontWeight: 900, color: '#38bdf8', marginTop: '2px' }}>
-                    ₹{portfolioSummary[activeTab]?.totalCap.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                    ₹{(portfolioSummary[activeTab]?.totalCap || portfolioSummary[activeTab]?.segmentNetWorth || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
                 <div>
@@ -1892,9 +1892,9 @@ export default function App() {
                         </td>
                         <td style={{ padding: '12px 14px', fontWeight: 800, color: '#a5b4fc' }}>{h.shares}</td>
                         <td style={{ padding: '12px 14px', color: '#cbd5e1' }}>₹{h.buyPrice.toFixed(2)}</td>
-                        <td style={{ padding: '12px 14px', fontWeight: 700, color: '#cbd5e1' }}>₹{h.costBasis.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td style={{ padding: '12px 14px', fontWeight: 700, color: '#cbd5e1' }}>₹{(h.costBasis || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td style={{ padding: '12px 14px', fontWeight: 900, color: '#38bdf8' }}>₹{h.ltp.toFixed(2)}</td>
-                        <td style={{ padding: '12px 14px', fontWeight: 800, color: '#ffffff' }}>₹{h.currentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td style={{ padding: '12px 14px', fontWeight: 800, color: '#ffffff' }}>₹{(h.currentVal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td style={{ padding: '12px 14px' }}>
                           <div style={{ fontWeight: 900, color: h.unrealizedPnl >= 0 ? '#10b981' : '#f87171', fontSize: '13px' }}>
                             {h.unrealizedPnl >= 0 ? '+' : ''}₹{h.unrealizedPnl.toFixed(2)}
@@ -2328,9 +2328,9 @@ export default function App() {
                   onChange={e => setAddSegment(e.target.value)}
                   style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
                 >
-                  <option value="SWING">⚡ Swing Trading (Zerodha Kite) — Avail: ₹{capitalMath.swing.available.toLocaleString('en-IN')}</option>
-                  <option value="LT">🛡️ Long-Term Core (INDMONEY) — Avail: ₹{capitalMath.lt.available.toLocaleString('en-IN')}</option>
-                  <option value="PENNY">💎 Quality Penny SIP (Zerodha Kite) — Avail: ₹{capitalMath.penny.available.toLocaleString('en-IN')}</option>
+                  <option value="SWING">⚡ Swing Trading (Zerodha Kite) — Free Cash: ₹{(segmentLedgers?.swing?.freeCash || 0).toLocaleString('en-IN')}</option>
+                  <option value="LT">🛡️ Long-Term Core (INDMONEY) — Free Cash: ₹{(segmentLedgers?.lt?.freeCash || 0).toLocaleString('en-IN')}</option>
+                  <option value="PENNY">💎 Quality Penny SIP (INDmoney) — Free Cash: ₹{(segmentLedgers?.penny?.freeCash || 0).toLocaleString('en-IN')}</option>
                 </select>
               </div>
 
