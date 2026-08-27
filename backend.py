@@ -50,7 +50,8 @@ PRICE_CACHE: Dict[str, Dict[str, Any]] = {
     "MIDHANI.NS": { "ltp": 423.95, "change": 3.45, "change_percent": 0.82, "prev_close": 420.50, "high": 426.00, "low": 418.00, "timestamp": time.time() },
     "CUPID.NS": { "ltp": 284.65, "change": 2.15, "change_percent": 0.76, "prev_close": 282.50, "high": 286.00, "low": 280.00, "timestamp": time.time() },
     "KIRIINDUS.NS": { "ltp": 477.90, "change": 16.60, "change_percent": 3.60, "prev_close": 461.30, "high": 482.00, "low": 460.00, "timestamp": time.time() },
-    "RVNL.NS": { "ltp": 225.30, "change": -2.10, "change_percent": -0.92, "prev_close": 227.40, "high": 230.00, "low": 224.00, "timestamp": time.time() }
+    "RVNL.NS": { "ltp": 225.30, "change": -2.10, "change_percent": -0.92, "prev_close": 227.40, "high": 230.00, "low": 224.00, "timestamp": time.time() },
+    "SIGMA.NS": { "ltp": 47.20, "change": 0.0, "change_percent": 0.0, "prev_close": 47.20, "high": 47.20, "low": 47.20, "timestamp": time.time() }
 }
 CACHE_TTL_SECONDS = 20.0
 
@@ -641,29 +642,62 @@ async def save_portfolio_backup(request: Request):
     try:
         data = await request.json()
         if isinstance(data, dict):
-            incoming_saved_at = int(data.get("savedAt") or 0)
+            incoming_saved_at = int(data.get("savedAt") or time.time() * 1000)
+            data["savedAt"] = incoming_saved_at
 
-            # Newest-wins merge: only keep existing data if it's strictly newer.
-            # This replaces the old position-count guard which silently dropped updates.
             if os.path.exists(PORTFOLIO_FILE):
                 try:
                     with file_lock:
                         with open(PORTFOLIO_FILE, "r", encoding="utf-8") as existing_f:
                             existing = json.load(existing_f)
-                    existing_saved_at = int(existing.get("savedAt") or 0)
+                    
+                    # Merge positions by ID / ticker to prevent transaction loss
+                    existing_pos = existing.get("positions", [])
+                    incoming_pos = data.get("positions", [])
+                    pos_map = { (p.get("id") or f"{p.get('ticker')}_{p.get('buyDate')}"): p for p in existing_pos if isinstance(p, dict) }
+                    for p in incoming_pos:
+                        if isinstance(p, dict):
+                            key = p.get("id") or f"{p.get('ticker')}_{p.get('buyDate')}"
+                            pos_map[key] = p
+                    data["positions"] = list(pos_map.values())
 
-                    if existing_saved_at > incoming_saved_at:
-                        # Disk has a newer dataset — reject this stale incoming save
-                        print(f"[Backup] Rejecting stale save (incoming={incoming_saved_at} < disk={existing_saved_at})")
-                        return { "status": "skipped", "reason": "disk_is_newer" }
+                    # Merge soldHistory by ID to prevent lost closed trades
+                    existing_sold = existing.get("soldHistory", [])
+                    incoming_sold = data.get("soldHistory", [])
+                    sold_map = { (s.get("id") or f"{s.get('ticker')}_{s.get('sellDate')}"): s for s in existing_sold if isinstance(s, dict) }
+                    for s in incoming_sold:
+                        if isinstance(s, dict):
+                            key = s.get("id") or f"{s.get('ticker')}_{s.get('sellDate')}"
+                            sold_map[key] = s
+                    data["soldHistory"] = list(sold_map.values())
+
+                    # Merge brokerAdjustments by ID
+                    existing_adj = existing.get("brokerAdjustments", [])
+                    incoming_adj = data.get("brokerAdjustments", [])
+                    adj_map = { (a.get("id") or f"{a.get('date')}_{a.get('amount')}"): a for a in existing_adj if isinstance(a, dict) }
+                    for a in incoming_adj:
+                        if isinstance(a, dict):
+                            key = a.get("id") or f"{a.get('date')}_{a.get('amount')}"
+                            adj_map[key] = a
+                    data["brokerAdjustments"] = list(adj_map.values())
+
+                    # Merge optionsTrades by ID
+                    existing_opt = existing.get("optionsTrades", [])
+                    incoming_opt = data.get("optionsTrades", [])
+                    opt_map = { (o.get("id") or f"{o.get('entryDate')}_{o.get('instrument')}"): o for o in existing_opt if isinstance(o, dict) }
+                    for o in incoming_opt:
+                        if isinstance(o, dict):
+                            key = o.get("id") or f"{o.get('entryDate')}_{o.get('instrument')}"
+                            opt_map[key] = o
+                    data["optionsTrades"] = list(opt_map.values())
 
                     # Preserve capitalLedger / freeCash if incoming is missing them
                     if existing.get("capitalLedger") and not data.get("capitalLedger"):
                         data["capitalLedger"] = existing["capitalLedger"]
                     if existing.get("freeCash") and not data.get("freeCash"):
                         data["freeCash"] = existing["freeCash"]
-                except Exception:
-                    pass
+                except Exception as ex:
+                    print(f"[Backup] Merge warning: {ex}")
 
             with file_lock:
                 with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:

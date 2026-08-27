@@ -47,11 +47,11 @@ def sync():
         master_data = {
             "positions": [],
             "capitalLedger": [],
-            "freeCash": {"swing": "734.63", "lt": "167.58", "penny": "0"},
+            "freeCash": {"swing": "734.63", "lt": "367.58", "penny": "0"},
             "soldHistory": [],
             "budget": "0",
             "split": {"swing": 60, "lt": 30, "penny": 10},
-            "savedAt": 1787722180383
+            "savedAt": 1787826000000
         }
 
     # Save to local portfolio backup file

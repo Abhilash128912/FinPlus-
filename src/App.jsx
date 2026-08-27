@@ -43,6 +43,7 @@ const STORAGE_KEY = 'finplus_3pillar_portfolio_v5';
 const LEDGER_KEY = 'finplus_capital_ledger_v5';
 const FREE_CASH_SWING_KEY = 'finplus_free_cash_swing_v5';
 const FREE_CASH_LT_KEY = 'finplus_free_cash_lt_v5';
+const SAVED_AT_KEY = 'finplus_saved_at_v1';
 
 // No hardcoded fallback positions or ledger entries.
 // The app is 100% server-driven: all data comes from Render /api/backup/load on mount.
@@ -94,10 +95,10 @@ export default function App() {
   // Capital Ledger (Injections & Withdrawals)
   const [capitalLedger, setCapitalLedger] = useState(() => {
     const saved = localStorage.getItem(LEDGER_KEY);
-    if (saved) {
+    if (saved !== null) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       } catch(e) {}
     }
     return INITIAL_CAPITAL_LEDGER;
@@ -106,10 +107,10 @@ export default function App() {
   // Portfolio Positions State (Swing, Long-Term, Penny)
   const [positions, setPositions] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
+    if (saved !== null) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       } catch(e) {}
     }
     return INITIAL_POSITIONS;
@@ -118,11 +119,66 @@ export default function App() {
   // Sold History Ledger
   const [soldHistory, setSoldHistory] = useState(() => {
     const saved = localStorage.getItem('finplus_sold_history_v1');
-    if (saved) {
-      try { return JSON.parse(saved); } catch(e) {}
+    if (saved !== null) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch(e) {}
     }
     return [];
   });
+
+  // Broker Adjustments Ledger State (AMC fees, DP charges, Dividends, Interest, Corrections)
+  const [brokerAdjustments, setBrokerAdjustments] = useState(() => {
+    const saved = localStorage.getItem('finplus_broker_adjustments_v1');
+    if (saved !== null) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch(e) {}
+    }
+    return [];
+  });
+
+  // Options & F&O Trades Event Log State
+  const [optionsTrades, setOptionsTrades] = useState(() => {
+    const saved = localStorage.getItem('finplus_options_trades_v1');
+    if (saved !== null) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch(e) {}
+    }
+    return [];
+  });
+
+  // Modal: Log Broker Adjustment Form State
+  const [showLogAdjModal, setShowLogAdjModal] = useState(false);
+  const [logAdjDate, setLogAdjDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [logAdjBroker, setLogAdjBroker] = useState('Zerodha Kite'); // 'Zerodha Kite', 'INDmoney'
+  const [logAdjSegment, setLogAdjSegment] = useState('SWING'); // 'SWING', 'LT', 'PENNY', 'OPTIONS', 'ALL'
+  const [logAdjType, setLogAdjType] = useState('AMC_CHARGE'); // 'AMC_CHARGE', 'DP_CHARGE', 'INTEREST_CREDIT', 'DIVIDEND_RECEIVED', 'PLEDGE_CHARGE', 'CORRECTION', 'MANUAL_INJECTION', 'MANUAL_WITHDRAWAL', 'OTHER'
+  const [logAdjAmount, setLogAdjAmount] = useState('');
+  const [logAdjNotes, setLogAdjNotes] = useState('');
+
+  // Modal: Record Options Trade Form State
+  const [showAddOptionModal, setShowAddOptionModal] = useState(false);
+  const [optEntryDate, setOptEntryDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [optInstrument, setOptInstrument] = useState('');
+  const [optQty, setOptQty] = useState('50');
+  const [optEntryPrice, setOptEntryPrice] = useState('');
+  const [optFundedBy, setOptFundedBy] = useState('SWING'); // Mandatory: 'SWING', 'LT', 'PENNY', 'GENERAL'
+  const [optStatus, setOptStatus] = useState('OPEN'); // 'OPEN', 'CLOSED'
+  const [optExitDate, setOptExitDate] = useState('');
+  const [optExitPrice, setOptExitPrice] = useState('');
+  const [optCharges, setOptCharges] = useState('40');
+  const [optNotes, setOptNotes] = useState('');
+
+  // Modal: EOD Daily Reconciliation State
+  const [showReconcileModal, setShowReconcileModal] = useState(false);
+  const [reconBroker, setReconBroker] = useState('Zerodha Kite');
+  const [reconSegment, setReconSegment] = useState('SWING');
+  const [reconActualCash, setReconActualCash] = useState('');
 
   // Live LTP Polling State — start empty so no stale prices are ever shown before the API responds.
   const [liveLtps, setLiveLtps] = useState({});
@@ -165,6 +221,7 @@ export default function App() {
   const [capEventType, setCapEventType] = useState('INJECTION');
   const [capEventAmount, setCapEventAmount] = useState('');
   const [capEventSegment, setCapEventSegment] = useState('ALL');
+  const [capEventNotes, setCapEventNotes] = useState('');
   // Modal: Broker Cash Adjustment Form State
   const [showCashAdjModal, setShowCashAdjModal] = useState(false);
   const [adjSwingCash, setAdjSwingCash] = useState('');
@@ -206,47 +263,81 @@ export default function App() {
           .catch(() => {});
       });
 
-    // On mount: fetch from all endpoints, pick the dataset with the newest savedAt timestamp
-    // This ensures mobile & laptop always converge to the latest version regardless of order
+    // On mount: fetch from all endpoints, pick the dataset with the newest savedAt timestamp.
+    // Smart Union-Merge ensures no local or cloud trade is ever lost or wiped out on reload.
     const endpoints = Array.from(new Set([RENDER_BACKEND_URL, API_BASE_URL].filter(Boolean)));
-    let bestSavedAt = -1;
+    const localSavedAt = Number(localStorage.getItem(SAVED_AT_KEY)) || 0;
+    let bestSavedAt = localSavedAt;
+
+    const unionMerge = (localList, serverList) => {
+      const map = new Map();
+      (localList || []).forEach(item => {
+        if (item) {
+          const key = item.id || `${item.ticker}_${item.buyDate || item.sellDate}`;
+          map.set(key, item);
+        }
+      });
+      (serverList || []).forEach(item => {
+        if (item) {
+          const key = item.id || `${item.ticker}_${item.buyDate || item.sellDate}`;
+          if (!map.has(key)) map.set(key, item);
+        }
+      });
+      return Array.from(map.values());
+    };
 
     const applyDataset = (res) => {
       if (!res || res.status !== 'success' || !res.data) return;
       const incomingSavedAt = Number(res.data.savedAt) || 0;
-      if (incomingSavedAt <= bestSavedAt) return; // already have a newer dataset
-      bestSavedAt = incomingSavedAt;
-      const { positions: diskPos, capitalLedger: diskLedger, soldHistory: diskSold, budget, split, freeCash } = res.data;
-      if (Array.isArray(diskPos) && diskPos.length > 0) setPositions(diskPos);
-      if (Array.isArray(diskLedger) && diskLedger.length > 0) setCapitalLedger(diskLedger);
-      if (Array.isArray(diskSold)) setSoldHistory(diskSold);
-      if (budget) setMonthlyBudgetInput(budget);
-      if (split) {
-        if (split.swing !== undefined) setSwingPct(split.swing);
-        if (split.lt !== undefined) setLtPct(split.lt);
-        if (split.penny !== undefined) setPennyPct(split.penny);
+      const { positions: diskPos, capitalLedger: diskLedger, soldHistory: diskSold, brokerAdjustments: diskAdj, optionsTrades: diskOpt, budget, split, freeCash } = res.data;
+
+      // Smart union-merge to protect user's recorded swing buys and sells from vanishing
+      setPositions(prev => unionMerge(prev, diskPos));
+      setSoldHistory(prev => unionMerge(prev, diskSold));
+      if (Array.isArray(diskAdj)) setBrokerAdjustments(prev => unionMerge(prev, diskAdj));
+      if (Array.isArray(diskOpt)) setOptionsTrades(prev => unionMerge(prev, diskOpt));
+
+      if (incomingSavedAt > bestSavedAt) {
+        bestSavedAt = incomingSavedAt;
+        if (Array.isArray(diskLedger) && diskLedger.length > 0) setCapitalLedger(diskLedger);
+        if (budget) setMonthlyBudgetInput(budget);
+        if (split) {
+          if (split.swing !== undefined) setSwingPct(split.swing);
+          if (split.lt !== undefined) setLtPct(split.lt);
+          if (split.penny !== undefined) setPennyPct(split.penny);
+        }
+        if (freeCash) {
+          if (freeCash.swing !== undefined) setSwingFreeCashInput(String(freeCash.swing));
+          if (freeCash.lt !== undefined) setLtFreeCashInput(String(freeCash.lt));
+          if (freeCash.penny !== undefined) setPennyFreeCashInput(String(freeCash.penny));
+        }
       }
-      if (freeCash) {
-        if (freeCash.swing !== undefined) setSwingFreeCashInput(String(freeCash.swing));
-        if (freeCash.lt !== undefined) setLtFreeCashInput(String(freeCash.lt));
-        if (freeCash.penny !== undefined) setPennyFreeCashInput(String(freeCash.penny));
-      }
-      // ✔ Server data applied — now safe to allow cloud saves from this device
+
+      // Mark server loaded so background sync can save changes to cloud
       serverLoaded.current = true;
     };
+
+    // Fallback timer: ensure serverLoaded unlocks after 2.5s even if backend fetch is slow or offline
+    const fallbackTimer = setTimeout(() => {
+      serverLoaded.current = true;
+    }, 2500);
 
     for (const ep of endpoints) {
       fetch(`${ep}/api/backup/load`)
         .then(r => r.json())
         .then(applyDataset)
-        .catch(() => {});
+        .catch(() => { serverLoaded.current = true; });
     }
+
+    return () => clearTimeout(fallbackTimer);
   }, []);
 
 
   // Save State to LocalStorage & Backend Disk Backup File
   useEffect(() => {
-    // Always save to localStorage immediately (fast, local-only).
+    const savedAt = Date.now();
+    // Always save to localStorage immediately with timestamp (fast, local-only).
+    localStorage.setItem(SAVED_AT_KEY, String(savedAt));
     localStorage.setItem('finplus_monthly_income_budget', monthlyBudgetInput);
     localStorage.setItem('finplus_split_swing', String(swingPct));
     localStorage.setItem('finplus_split_lt', String(ltPct));
@@ -258,17 +349,19 @@ export default function App() {
     localStorage.setItem(LEDGER_KEY, JSON.stringify(capitalLedger));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
     localStorage.setItem('finplus_sold_history_v1', JSON.stringify(soldHistory));
+    localStorage.setItem('finplus_broker_adjustments_v1', JSON.stringify(brokerAdjustments));
+    localStorage.setItem('finplus_options_trades_v1', JSON.stringify(optionsTrades));
 
-    // Cloud save: ONLY after server data has been loaded (serverLoaded gate).
-    // This prevents mobile from overwriting correct Render data with stale localStorage on startup.
+    // Cloud save: ONLY after server data has been loaded or fallback timer unlocked (serverLoaded gate).
     if (!serverLoaded.current) return;
 
-    const savedAt = Date.now();
     const endpoints = Array.from(new Set([API_BASE_URL, RENDER_BACKEND_URL].filter(Boolean)));
     const backupPayload = JSON.stringify({
       positions,
       capitalLedger,
       soldHistory,
+      brokerAdjustments,
+      optionsTrades,
       freeCash: { swing: swingFreeCashInput, lt: ltFreeCashInput, penny: pennyFreeCashInput },
       budget: monthlyBudgetInput,
       split: { swing: swingPct, lt: ltPct, penny: pennyPct },
@@ -284,7 +377,7 @@ export default function App() {
         }).catch(() => {});
       } catch(e) {}
     }
-  }, [monthlyBudgetInput, swingPct, ltPct, pennyPct, capitalLedger, positions, soldHistory, swingFreeCash, ltFreeCash, pennyFreeCash]);
+  }, [monthlyBudgetInput, swingPct, ltPct, pennyPct, capitalLedger, positions, soldHistory, brokerAdjustments, optionsTrades, swingFreeCash, ltFreeCash, pennyFreeCash]);
 
   // Live LTP Poller (Only for Active Held Stocks)
   useEffect(() => {
@@ -383,7 +476,10 @@ export default function App() {
 
     capitalLedger.forEach(item => {
       const amt = Number(item.amount) || 0;
-      if (item.type === 'INJECTION') {
+      const isPositive = item.type === 'INJECTION' || item.type === 'ADJUSTMENT_GAIN';
+      const isNegative = item.type === 'WITHDRAWAL' || item.type === 'ADJUSTMENT_LOSS';
+
+      if (isPositive) {
         totalInjectedFromLedger += amt;
         if (item.segment === 'ALL') {
           swingInjected += Math.round(amt * (swingPct / 100));
@@ -396,7 +492,7 @@ export default function App() {
         } else if (item.segment === 'PENNY') {
           pennyInjected += amt;
         }
-      } else if (item.type === 'WITHDRAWAL') {
+      } else if (isNegative) {
         totalWithdrawn += amt;
         if (item.segment === 'ALL') {
           swingInjected -= Math.round(amt * (swingPct / 100));
@@ -507,12 +603,164 @@ export default function App() {
     };
   }, [monthlyBudgetInput, swingPct, ltPct, pennyPct, capitalLedger, positions, soldHistory, swingFreeCash, ltFreeCash, pennyFreeCash]);
 
+  // ── Universal Segment Data Engine (Section 2 & 3 Universal Segment Formulas) ──
+  const segmentLedgers = useMemo(() => {
+    const processSegment = (segmentKey, defaultBroker) => {
+      let injected = 0;
+      let withdrawn = 0;
+      capitalLedger.forEach(item => {
+        const amt = Number(item.amount) || 0;
+        const multiplier = item.segment === 'ALL' ? (segmentKey === 'SWING' ? (swingPct/100) : segmentKey === 'LT' ? (ltPct/100) : (pennyPct/100)) : 1;
+        if (item.segment === segmentKey || item.segment === 'ALL') {
+          if (item.type === 'INJECTION' || item.type === 'ADJUSTMENT_GAIN') injected += amt * multiplier;
+          else if (item.type === 'WITHDRAWAL' || item.type === 'ADJUSTMENT_LOSS') withdrawn += amt * multiplier;
+        }
+      });
+
+      const segPositions = positions.filter(p => p.segment === segmentKey);
+      let holdingsValue = 0;
+      let costOfOpenHoldings = 0;
+      let openBuySideCharges = 0;
+      let openEstExitCharges = 0;
+
+      segPositions.forEach(p => {
+        const cleanSym = p.ticker.replace('.NS', '').trim().toUpperCase();
+        let ltp = liveLtps[cleanSym] || p.buyPrice;
+        if (cleanSym === 'SIGMA' && ltp > 200 && p.buyPrice < 100) ltp = p.buyPrice;
+
+        const val = p.shares * ltp;
+        const buyCost = p.shares * p.buyPrice;
+        holdingsValue += val;
+        costOfOpenHoldings += buyCost;
+
+        const chg = defaultBroker === 'INDmoney'
+          ? calculateINDmoneyCharges({ entry_price: p.buyPrice, exit_price: ltp, quantity: p.shares })
+          : calculateKiteDeliveryCharges({ entry_price: p.buyPrice, exit_price: ltp, quantity: p.shares });
+
+        const buyTaxes = (chg.stamp_duty || 0) + ((chg.stt || 0) / 2);
+        openBuySideCharges += buyTaxes;
+        openEstExitCharges += Math.max(0, (chg.total || 0) - buyTaxes);
+      });
+
+      const segClosed = soldHistory.filter(s => s.segment === segmentKey);
+      let totalSellProceeds = 0;
+      let totalClosedBuyCost = 0;
+      let totalClosedCharges = 0;
+      let realizedPnl = 0;
+
+      segClosed.forEach(s => {
+        const proceeds = (Number(s.shares) || 0) * (Number(s.sellPrice) || 0);
+        const buyCost = (Number(s.shares) || 0) * (Number(s.buyPrice) || 0);
+        const charges = Number(s.taxes) || 0;
+        const netPnl = Number(s.netPnl) || (proceeds - buyCost - charges);
+
+        totalSellProceeds += proceeds;
+        totalClosedBuyCost += buyCost;
+        totalClosedCharges += charges;
+        realizedPnl += netPnl;
+      });
+
+      let netAdjustments = 0;
+      brokerAdjustments.forEach(a => {
+        if (a.segment === segmentKey || a.segment === 'ALL') {
+          const amt = Number(a.amount) || 0;
+          const typeUpper = (a.type || '').toUpperCase();
+          if (['INTEREST_CREDIT', 'DIVIDEND_RECEIVED', 'MANUAL_INJECTION', 'CREDIT'].includes(typeUpper)) {
+            netAdjustments += Math.abs(amt);
+          } else if (['AMC_CHARGE', 'DP_CHARGE', 'PLEDGE_CHARGE', 'MANUAL_WITHDRAWAL', 'DEBIT'].includes(typeUpper)) {
+            netAdjustments -= Math.abs(amt);
+          } else {
+            netAdjustments += amt;
+          }
+        }
+      });
+
+      const totalBuyValue = costOfOpenHoldings + totalClosedBuyCost;
+      const totalChargesPaid = openBuySideCharges + totalClosedCharges;
+      const calculatedFreeCash = (injected - withdrawn) - totalBuyValue + totalSellProceeds - totalChargesPaid + netAdjustments;
+
+      const manualInputStr = segmentKey === 'SWING' ? swingFreeCashInput : segmentKey === 'LT' ? ltFreeCashInput : pennyFreeCashInput;
+      const freeCash = manualInputStr !== '' ? (parseFloat(manualInputStr) || 0) : Math.max(0, calculatedFreeCash);
+
+      const segmentNetWorth = freeCash + holdingsValue;
+      const unrealizedPnl = holdingsValue - costOfOpenHoldings;
+      const netCapitalContributed = injected - withdrawn;
+      const totalSegmentPnl = segmentNetWorth - netCapitalContributed;
+
+      return {
+        broker: defaultBroker,
+        injected,
+        withdrawn,
+        netCapitalContributed,
+        freeCash,
+        calculatedFreeCash: Math.max(0, calculatedFreeCash),
+        holdingsValue,
+        costOfOpenHoldings,
+        realizedPnl,
+        unrealizedPnl,
+        estExitCharges: openEstExitCharges,
+        totalSegmentPnl,
+        segmentNetWorth,
+        openCount: segPositions.length,
+        closedCount: segClosed.length
+      };
+    };
+
+    const swing = processSegment('SWING', 'Zerodha Kite');
+    const lt = processSegment('LT', 'INDmoney');
+    const penny = processSegment('PENNY', 'INDmoney');
+
+    let optionsOpenValuation = 0;
+    let optionsRealizedPnl = 0;
+    let optionsCapitalUsed = 0;
+    let optionsOpenCount = 0;
+    let optionsClosedCount = 0;
+
+    optionsTrades.forEach(o => {
+      const qty = Number(o.qty) || 0;
+      const entryP = Number(o.entryPrice) || 0;
+      const exitP = Number(o.exitPrice) || 0;
+      const chg = Number(o.charges) || 0;
+      const cap = qty * entryP;
+
+      if (o.status === 'CLOSED') {
+        optionsClosedCount++;
+        const pnl = Number(o.netPnl) || ((exitP - entryP) * qty - chg);
+        optionsRealizedPnl += pnl;
+      } else {
+        optionsOpenCount++;
+        optionsCapitalUsed += cap;
+        optionsOpenValuation += exitP > 0 ? (exitP * qty) : cap;
+      }
+    });
+
+    const options = {
+      broker: 'Zerodha Kite (F&O)',
+      freeCash: 0,
+      holdingsValue: optionsOpenValuation,
+      costOfOpenHoldings: optionsCapitalUsed,
+      realizedPnl: optionsRealizedPnl,
+      unrealizedPnl: optionsOpenValuation - optionsCapitalUsed,
+      estExitCharges: optionsOpenCount * 40,
+      segmentNetWorth: optionsOpenValuation + optionsRealizedPnl,
+      openCount: optionsOpenCount,
+      closedCount: optionsClosedCount
+    };
+
+    const grandTotalNetWorth = swing.segmentNetWorth + lt.segmentNetWorth + penny.segmentNetWorth + options.segmentNetWorth;
+
+    return { swing, lt, penny, options, grandTotalNetWorth };
+  }, [capitalLedger, positions, soldHistory, brokerAdjustments, optionsTrades, liveLtps, swingPct, ltPct, pennyPct, swingFreeCashInput, ltFreeCashInput, pennyFreeCashInput]);
+
   // ── Holding Details Calculator ──
   const holdingCards = useMemo(() => {
     const today = new Date();
     return positions.map(pos => {
       const cleanSym = pos.ticker.replace('.NS', '').trim().toUpperCase();
-      const ltp = liveLtps[cleanSym] || pos.buyPrice;
+      let ltp = liveLtps[cleanSym] || pos.buyPrice;
+      if (cleanSym === 'SIGMA' && ltp > 200 && pos.buyPrice < 100) {
+        ltp = pos.buyPrice;
+      }
       const currentVal = pos.shares * ltp;
       const costBasis = pos.shares * pos.buyPrice;
       const unrealizedPnl = currentVal - costBasis;
@@ -529,7 +777,7 @@ export default function App() {
 
       // Brokerage Calculator
       let estCharges = { total: 0, stt: 0, dp_charges: 0 };
-      if (pos.segment === 'LT') {
+      if (pos.segment === 'LT' || pos.segment === 'PENNY') {
         estCharges = calculateINDmoneyCharges({ entry_price: pos.buyPrice, exit_price: ltp, quantity: pos.shares });
       } else {
         estCharges = calculateKiteDeliveryCharges({ entry_price: pos.buyPrice, exit_price: ltp, quantity: pos.shares });
@@ -637,14 +885,26 @@ export default function App() {
     const pennyNetPnl = pennyGrossPnl - pennyEstCharges;
     const pennyNetPct = pennyInvested > 0 ? (pennyNetPnl / pennyInvested) * 100 : 0;
 
-    // Use only actual user-entered free cash. Default to 0 when not entered.
+    // Uninvested Broker Cash: Use revolving available cash from capital engine when manual cash is unaligned
+    const revolvingSwingCash = capitalMath.swing.available;
+    const revolvingLtCash = capitalMath.lt.available;
+    const revolvingPennyCash = capitalMath.penny.available;
+
     const effectiveSwingFreeCash = parseFloat(swingFreeCashInput) || 0;
     const effectiveLtFreeCash = parseFloat(ltFreeCashInput) || 0;
     const effectivePennyFreeCash = parseFloat(pennyFreeCashInput) || 0;
 
     const totalFreeCash = effectiveSwingFreeCash + effectiveLtFreeCash + effectivePennyFreeCash;
-    const totalAccountCapital = totalCurrentVal + totalFreeCash; // Net Worth = Live Holdings Value + Actual Broker Free Cash
-    const totalBaseCapital = totalInvested + totalFreeCash;
+    
+    // Base Cost Capital = Capital Injected from Ledger + Net Realized Profits Booked
+    const totalInjectedLedger = capitalMath.totalInjected > 0 ? capitalMath.totalInjected : totalInvested;
+    const totalBaseCapital = totalInjectedLedger + totalRealizedNetPnl;
+    
+    // Total Account Net Worth = Total Base Capital + Net Unrealized Open PnL (Post-Tax)
+    // (Consolidated Net Worth = Live Holdings + Actual Uninvested Cash)
+    const totalAccountCapital = totalCurrentVal + totalFreeCash <= totalBaseCapital + totalUnrealizedPnl + 50
+      ? totalCurrentVal + totalFreeCash
+      : totalBaseCapital + totalUnrealizedPnl;
 
     return {
       totalInvested,
@@ -912,7 +1172,7 @@ export default function App() {
     showToast(`💰 Recorded sale of ${sellQty} sh ${sellModalPos.ticker}! Net P&L: ${charges.net_pnl >= 0 ? '+' : ''}₹${charges.net_pnl.toFixed(2)} (Recycled into ${sellModalPos.segment} Available Capital).`);
   };
 
-  // ── Handle Capital Event (Injection / Withdrawal) ──
+  // ── Handle Capital Event (Injection / Withdrawal / Other Loss or Gain Adjustments) ──
   const handleCapEventSubmit = (e) => {
     e.preventDefault();
     const amt = Number(capEventAmount);
@@ -921,20 +1181,60 @@ export default function App() {
       return;
     }
 
+    let defaultNote = 'Capital Injected';
+    if (capEventType === 'WITHDRAWAL') defaultNote = 'Capital Withdrawn';
+    else if (capEventType === 'ADJUSTMENT_LOSS') defaultNote = 'Other Loss / Adjustment (Intraday/Options/Broker Charge)';
+    else if (capEventType === 'ADJUSTMENT_GAIN') defaultNote = 'Other Gain / Adjustment (Intraday Gain/Dividends)';
+
     const newEvent = {
       id: `cap_${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
       type: capEventType,
       amount: amt,
       segment: capEventSegment,
-      notes: capEventNotes.trim() || `${capEventType === 'INJECTION' ? 'Capital Injected' : 'Capital Withdrawn'}`
+      notes: capEventNotes.trim() || defaultNote
     };
+
+    // Update free cash balance according to adjustment event
+    const isAddition = capEventType === 'INJECTION' || capEventType === 'ADJUSTMENT_GAIN';
+    if (capEventSegment === 'SWING') {
+      setSwingFreeCashInput(prev => {
+        const base = parseFloat(prev || '0') || 0;
+        return isAddition ? (base + amt).toFixed(2) : Math.max(0, base - amt).toFixed(2);
+      });
+    } else if (capEventSegment === 'LT') {
+      setLtFreeCashInput(prev => {
+        const base = parseFloat(prev || '0') || 0;
+        return isAddition ? (base + amt).toFixed(2) : Math.max(0, base - amt).toFixed(2);
+      });
+    } else if (capEventSegment === 'PENNY') {
+      setPennyFreeCashInput(prev => {
+        const base = parseFloat(prev || '0') || 0;
+        return isAddition ? (base + amt).toFixed(2) : Math.max(0, base - amt).toFixed(2);
+      });
+    } else if (capEventSegment === 'ALL') {
+      const swingShare = Math.round(amt * (swingPct / 100));
+      const ltShare = Math.round(amt * (ltPct / 100));
+      const pennyShare = Math.round(amt * (pennyPct / 100));
+      setSwingFreeCashInput(prev => {
+        const base = parseFloat(prev || '0') || 0;
+        return isAddition ? (base + swingShare).toFixed(2) : Math.max(0, base - swingShare).toFixed(2);
+      });
+      setLtFreeCashInput(prev => {
+        const base = parseFloat(prev || '0') || 0;
+        return isAddition ? (base + ltShare).toFixed(2) : Math.max(0, base - ltShare).toFixed(2);
+      });
+      setPennyFreeCashInput(prev => {
+        const base = parseFloat(prev || '0') || 0;
+        return isAddition ? (base + pennyShare).toFixed(2) : Math.max(0, base - pennyShare).toFixed(2);
+      });
+    }
 
     setCapitalLedger(prev => [newEvent, ...prev]);
     setShowCapModal(false);
     setCapEventAmount('');
     setCapEventNotes('');
-    showToast(`✅ Recorded ${capEventType} of ₹${amt.toLocaleString('en-IN')}!`);
+    showToast(`✅ Recorded ${defaultNote} of ₹${amt.toLocaleString('en-IN')}!`);
   };
 
   const handleExportBackup = () => {
@@ -1047,90 +1347,185 @@ export default function App() {
         </div>
       </header>
 
-            {/* ── GLOBAL EXECUTIVE CAPITAL & COMBINED PnL RIBBON (VISIBLE ON ALL TABS) ── */}
-      <div style={{ background: '#0b1120', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '16px 24px' }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+            {/* ── GLOBAL EXECUTIVE CAPITAL & AUDITABLE SEGMENT LEDGER RIBBON (SECTION 2e SPEC) ── */}
+      <div style={{ background: '#0b1120', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '18px 24px' }}>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
-          {/* Card 1: Total Account Net Worth */}
-          <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '12px', padding: '14px 16px' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase' }}>TOTAL ACCOUNT NET WORTH</div>
-            <div style={{ fontSize: '22px', fontWeight: 900, color: '#38bdf8', marginTop: '4px' }}>
-              ₹{portfolioSummary.totalAccountCapital.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          {/* Header Bar: Grand Total Net Worth & Actions */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.85))', border: '1.5px solid #38bdf8', borderRadius: '14px', padding: '16px 20px', flexWrap: 'wrap', gap: '14px' }}>
+            <div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>GRAND TOTAL ACCOUNT NET WORTH (ALL BROKER SEGMENTS)</div>
+              <div style={{ fontSize: '26px', fontWeight: 900, color: '#38bdf8', marginTop: '2px' }}>
+                ₹{segmentLedgers.grandTotalNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div style={{ fontSize: '11px', color: '#a5b4fc', marginTop: '2px' }}>
+                Reconciled Sum of Cash Ledgers + Live Holdings Valuations across all 4 Segments
+              </div>
             </div>
-            <div style={{ fontSize: '10px', color: '#a5b4fc', marginTop: '2px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
-              <div>Live Value: Holdings ₹{portfolioSummary.totalCurrentVal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} + Cash ₹{portfolioSummary.totalFreeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div style={{ color: '#38bdf8', fontWeight: 700 }}>Total Cost Capital: ₹{(portfolioSummary.totalBaseCapital || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <button 
+                onClick={() => setShowReconcileModal(true)}
+                style={{ background: 'rgba(16, 185, 129, 0.18)', border: '1px solid #10b981', color: '#10b981', padding: '8px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                ⚖️ EOD Daily Reconciliation
+              </button>
+              <button 
+                onClick={() => setShowLogAdjModal(true)}
+                style={{ background: 'rgba(245, 158, 11, 0.18)', border: '1px solid #f59e0b', color: '#f59e0b', padding: '8px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                📜 + Log Broker Adjustment
+              </button>
+              <button 
+                onClick={() => setShowAddOptionModal(true)}
+                style={{ background: 'rgba(192, 132, 252, 0.18)', border: '1px solid #c084fc', color: '#c084fc', padding: '8px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                ⚡ + Record Options Trade
+              </button>
             </div>
           </div>
 
-          {/* Card 2: Net Realized Profit (Closed Trades) */}
-          <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: `1px solid ${(portfolioSummary.totalRealizedNetPnl || 0) >= 0 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`, borderRadius: '12px', padding: '14px 16px' }}>
-            <div style={{ fontSize: '11px', color: (portfolioSummary.totalRealizedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 800, textTransform: 'uppercase' }}>
-              {(portfolioSummary.totalRealizedNetPnl || 0) >= 0 ? 'NET REALIZED PROFIT (BOOKED)' : 'NET REALIZED LOSS (BOOKED)'}
+          {/* Section 2e: Per-Segment Audit Breakdown Grid (Unblended 4-Line Metrics) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
+            
+            {/* 1. Swing Trading (Kite) */}
+            <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '12px', padding: '14px 16px' }}>
+              <div style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800, textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                <span>⚡ SWING TRADING</span>
+                <span style={{ fontSize: '10px', color: '#94a3b8' }}>Zerodha Kite</span>
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', margin: '4px 0 8px 0' }}>
+                ₹{segmentLedgers.swing.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>1. Free Cash (Kite):</span>
+                  <span style={{ color: '#38bdf8', fontWeight: 800 }}>₹{segmentLedgers.swing.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>2. Holdings Value:</span>
+                  <span style={{ color: '#ffffff', fontWeight: 800 }}>₹{segmentLedgers.swing.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
+                  <span style={{ color: segmentLedgers.swing.realizedPnl >= 0 ? '#10b981' : '#f87171', fontWeight: 800 }}>
+                    {segmentLedgers.swing.realizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.swing.realizedPnl.toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>4. Unrealized P&amp;L (Open):</span>
+                  <span style={{ color: segmentLedgers.swing.unrealizedPnl >= 0 ? '#10b981' : '#f87171', fontWeight: 800 }}>
+                    {segmentLedgers.swing.unrealizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.swing.unrealizedPnl.toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right', marginTop: '-2px' }}>
+                  Est. Exit Charges: -₹{segmentLedgers.swing.estExitCharges.toFixed(2)}
+                </div>
+              </div>
             </div>
-            <div style={{ fontSize: '22px', fontWeight: 900, color: (portfolioSummary.totalRealizedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', marginTop: '4px' }}>
-              {(portfolioSummary.totalRealizedNetPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.totalRealizedNetPnl || 0).toFixed(2)}
-            </div>
-            <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
-              From {soldHistory.length} Closed Trade{soldHistory.length === 1 ? '' : 's'} (Recycled)
-            </div>
-          </div>
 
-          {/* Card 3: Unrealized Open P&L Breakdown */}
-          <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: `1px solid ${(portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`, borderRadius: '12px', padding: '14px 16px' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
-              📊 OPEN POSITIONS P&amp;L
+            {/* 2. Long-Term Core (INDmoney) */}
+            <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px', padding: '14px 16px' }}>
+              <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 800, textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                <span>🛡️ LONG-TERM CORE</span>
+                <span style={{ fontSize: '10px', color: '#94a3b8' }}>INDmoney</span>
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', margin: '4px 0 8px 0' }}>
+                ₹{segmentLedgers.lt.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>1. Free Cash (INDmoney):</span>
+                  <span style={{ color: '#10b981', fontWeight: 800 }}>₹{segmentLedgers.lt.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>2. Holdings Value:</span>
+                  <span style={{ color: '#ffffff', fontWeight: 800 }}>₹{segmentLedgers.lt.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
+                  <span style={{ color: segmentLedgers.lt.realizedPnl >= 0 ? '#10b981' : '#f87171', fontWeight: 800 }}>
+                    {segmentLedgers.lt.realizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.lt.realizedPnl.toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>4. Unrealized P&amp;L (Open):</span>
+                  <span style={{ color: segmentLedgers.lt.unrealizedPnl >= 0 ? '#10b981' : '#f87171', fontWeight: 800 }}>
+                    {segmentLedgers.lt.unrealizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.lt.unrealizedPnl.toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right', marginTop: '-2px' }}>
+                  Est. Exit Charges: -₹{segmentLedgers.lt.estExitCharges.toFixed(2)}
+                </div>
+              </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                <span style={{ color: '#94a3b8', fontWeight: 700 }}>1. Gross P&amp;L (Broker):</span>
-                <span style={{ color: (portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 900 }}>
-                  {(portfolioSummary.grossUnrealizedPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.grossUnrealizedPnl || 0).toFixed(2)}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                <span style={{ color: '#fbbf24', fontWeight: 700 }}>2. Est. Charges &amp; Taxes:</span>
-                <span style={{ color: '#fbbf24', fontWeight: 800 }}>
-                  -₹{(portfolioSummary.totalEstCharges || 0).toFixed(2)}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: '2px' }}>
-                <span style={{ color: '#ffffff', fontWeight: 900 }}>3. NET P&amp;L (In Pocket):</span>
-                <span style={{ color: (portfolioSummary.totalUnrealizedPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 900, fontSize: '15px' }}>
-                  {(portfolioSummary.totalUnrealizedPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.totalUnrealizedPnl || 0).toFixed(2)}
-                </span>
-              </div>
-            </div>
-          </div>
 
-          {/* Card 4: TOTAL COMBINED LIFETIME PROFIT (Realized + Unrealized) */}
-          <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.1))', border: `1.5px solid ${(portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171'}`, borderRadius: '12px', padding: '14px 16px' }}>
-            <div style={{ fontSize: '11px', color: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 900, textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span>⭐ TOTAL LIFETIME P&amp;L</span>
-              <span style={{ fontSize: '9px', padding: '1px 6px', borderRadius: '4px', background: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)' }}>
-                {(portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? 'NET GAIN' : 'NET LOSS'}
-              </span>
+            {/* 3. Quality Penny SIP (Kite) */}
+            <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(192, 132, 252, 0.3)', borderRadius: '12px', padding: '14px 16px' }}>
+              <div style={{ fontSize: '11px', color: '#c084fc', fontWeight: 800, textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                <span>💎 QUALITY PENNY SIP</span>
+                <span style={{ fontSize: '10px', color: '#94a3b8' }}>Zerodha Kite</span>
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', margin: '4px 0 8px 0' }}>
+                ₹{segmentLedgers.penny.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>1. Free Cash (Kite):</span>
+                  <span style={{ color: '#c084fc', fontWeight: 800 }}>₹{segmentLedgers.penny.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>2. Holdings Value:</span>
+                  <span style={{ color: '#ffffff', fontWeight: 800 }}>₹{segmentLedgers.penny.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
+                  <span style={{ color: segmentLedgers.penny.realizedPnl >= 0 ? '#10b981' : '#f87171', fontWeight: 800 }}>
+                    {segmentLedgers.penny.realizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.penny.realizedPnl.toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>4. Unrealized P&amp;L (Open):</span>
+                  <span style={{ color: segmentLedgers.penny.unrealizedPnl >= 0 ? '#10b981' : '#f87171', fontWeight: 800 }}>
+                    {segmentLedgers.penny.unrealizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.penny.unrealizedPnl.toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right', marginTop: '-2px' }}>
+                  Est. Exit Charges: -₹{segmentLedgers.penny.estExitCharges.toFixed(2)}
+                </div>
+              </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                <span style={{ color: '#94a3b8', fontWeight: 700 }}>Gross Combined P&amp;L:</span>
-                <span style={{ color: (portfolioSummary.totalCombinedGrossPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 800 }}>
-                  {(portfolioSummary.totalCombinedGrossPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.totalCombinedGrossPnl || 0).toFixed(2)}
-                </span>
+
+            {/* 4. Options & F&O Trading (Section 3 Event Log) */}
+            <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '12px', padding: '14px 16px' }}>
+              <div style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 800, textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                <span>⚡ OPTIONS / F&amp;O</span>
+                <span style={{ fontSize: '10px', color: '#94a3b8' }}>Zerodha F&amp;O</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                <span style={{ color: '#fbbf24', fontWeight: 700 }}>Total Charges &amp; Taxes:</span>
-                <span style={{ color: '#fbbf24', fontWeight: 800 }}>
-                  -₹{(portfolioSummary.totalCombinedTaxes || 0).toFixed(2)}
-                </span>
+              <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', margin: '4px 0 8px 0' }}>
+                ₹{segmentLedgers.options.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: '2px' }}>
-                <span style={{ color: '#ffffff', fontWeight: 900 }}>TOTAL NET P&amp;L:</span>
-                <span style={{ color: (portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '#10b981' : '#f87171', fontWeight: 900, fontSize: '16px' }}>
-                  {(portfolioSummary.totalCombinedNetPnl || 0) >= 0 ? '+' : ''}₹{(portfolioSummary.totalCombinedNetPnl || 0).toFixed(2)}
-                </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>1. Capital Used (Open):</span>
+                  <span style={{ color: '#f59e0b', fontWeight: 800 }}>₹{segmentLedgers.options.costOfOpenHoldings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>2. Open Options Valuation:</span>
+                  <span style={{ color: '#ffffff', fontWeight: 800 }}>₹{segmentLedgers.options.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
+                  <span style={{ color: segmentLedgers.options.realizedPnl >= 0 ? '#10b981' : '#f87171', fontWeight: 800 }}>
+                    {segmentLedgers.options.realizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.options.realizedPnl.toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>4. Open Trades Count:</span>
+                  <span style={{ color: '#cbd5e1', fontWeight: 800 }}>{segmentLedgers.options.openCount} Open / {segmentLedgers.options.closedCount} Closed</span>
+                </div>
               </div>
             </div>
+
           </div>
 
         </div>
@@ -1146,6 +1541,8 @@ export default function App() {
             { id: 'swing', label: '⚡ Swing Trading (Kite)', badge: positions.filter(p => p.segment === 'SWING').length },
             { id: 'lt', label: '🛡️ Long-Term Core (INDmoney)', badge: positions.filter(p => p.segment === 'LT').length },
             { id: 'penny', label: '💎 Quality Penny SIP (Kite)', badge: positions.filter(p => p.segment === 'PENNY').length },
+            { id: 'options', label: '⚡ Options & F&O Log', badge: optionsTrades.length },
+            { id: 'adjustments', label: '📜 Broker Adjustments', badge: brokerAdjustments.length },
             { id: 'history', label: '📜 Realized P&L Ledger', badge: soldHistory.length },
             { id: 'settings', label: '⚙️ Backup & Settings' }
           ].map(t => (
@@ -1230,6 +1627,18 @@ export default function App() {
                       style={{ background: 'rgba(16, 185, 129, 0.18)', border: '1px solid #10b981', color: '#10b981', padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, cursor: 'pointer' }}
                     >
                       ⚙️ Align / Adjust Broker Cash
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setSwingFreeCashInput(String(capitalMath.swing.available));
+                        setLtFreeCashInput(String(capitalMath.lt.available));
+                        setPennyFreeCashInput(String(capitalMath.penny.available));
+                        showToast('⚡ Free Cash auto-aligned to Revolving Capital Engine!');
+                      }}
+                      title="Reset cash to exact uninvested revolving capital balance"
+                      style={{ background: 'rgba(56, 189, 248, 0.18)', border: '1px solid #38bdf8', color: '#38bdf8', padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, cursor: 'pointer' }}
+                    >
+                      ⚡ Auto-Align Cash
                     </button>
                     <span style={{ fontSize: '11px', color: '#a5b4fc', background: 'rgba(99, 102, 241, 0.15)', padding: '2px 8px', borderRadius: '6px' }}>
                       Total Free Cash: ₹{(swingFreeCash + ltFreeCash + pennyFreeCash).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1463,26 +1872,41 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {capitalLedger.map((item, idx) => (
-                      <tr key={item.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                        <td style={{ padding: '10px 12px', color: '#cbd5e1' }}>{item.date}</td>
-                        <td style={{ padding: '10px 12px' }}>
-                          <span style={{
-                            padding: '3px 8px',
-                            borderRadius: '4px',
-                            fontWeight: 800,
-                            fontSize: '10px',
-                            background: item.type === 'INJECTION' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                            color: item.type === 'INJECTION' ? '#10b981' : '#f87171'
-                          }}>
-                            {item.type}
-                          </span>
-                        </td>
-                        <td style={{ padding: '10px 12px', color: '#a5b4fc', fontWeight: 700 }}>{item.segment}</td>
-                        <td style={{ padding: '10px 12px', fontWeight: 800, color: item.type === 'INJECTION' ? '#10b981' : '#f87171' }}>
-                          {item.type === 'INJECTION' ? '+' : '-'}₹{Number(item.amount).toLocaleString('en-IN')}
-                        </td>
-                        <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{item.notes || '—'}</td>
+                    {capitalLedger.map((item, idx) => {
+                      const isPositive = item.type === 'INJECTION' || item.type === 'ADJUSTMENT_GAIN';
+                      const isLoss = item.type === 'ADJUSTMENT_LOSS';
+                      const isGain = item.type === 'ADJUSTMENT_GAIN';
+                      const isWithdrawal = item.type === 'WITHDRAWAL';
+                      return (
+                        <tr key={item.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                          <td style={{ padding: '10px 12px', color: '#cbd5e1' }}>{item.date}</td>
+                          <td style={{ padding: '10px 12px' }}>
+                            <span style={{
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              fontWeight: 800,
+                              fontSize: '10px',
+                              background: isGain ? 'rgba(56, 189, 248, 0.15)' :
+                                          isLoss ? 'rgba(245, 158, 11, 0.15)' :
+                                          isWithdrawal ? 'rgba(239, 68, 68, 0.15)' :
+                                          'rgba(16, 185, 129, 0.15)',
+                              color: isGain ? '#38bdf8' :
+                                     isLoss ? '#f59e0b' :
+                                     isWithdrawal ? '#f87171' :
+                                     '#10b981'
+                            }}>
+                              {item.type === 'INJECTION' ? '➕ INJECTION' :
+                               item.type === 'WITHDRAWAL' ? '➖ WITHDRAWAL' :
+                               item.type === 'ADJUSTMENT_LOSS' ? '📉 OTHER LOSS' :
+                               item.type === 'ADJUSTMENT_GAIN' ? '📈 OTHER GAIN' :
+                               item.type}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 12px', color: '#a5b4fc', fontWeight: 700 }}>{item.segment}</td>
+                          <td style={{ padding: '10px 12px', fontWeight: 800, color: isPositive ? '#10b981' : isLoss ? '#f59e0b' : '#f87171' }}>
+                            {isPositive ? '+' : '-'}₹{Number(item.amount).toLocaleString('en-IN')}
+                          </td>
+                          <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{item.notes || '—'}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                           <button 
                             onClick={() => {
@@ -1496,7 +1920,8 @@ export default function App() {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    );
+                  })}
                   </tbody>
                 </table>
               </div>
@@ -2361,6 +2786,8 @@ export default function App() {
                 >
                   <option value="INJECTION">➕ Capital Injection (Fresh Deposit / 25% Savings)</option>
                   <option value="WITHDRAWAL">➖ Capital Withdrawal (Cash Taken Out)</option>
+                  <option value="ADJUSTMENT_LOSS">📉 Other Loss / Adjustment (Intraday, Options, Charges)</option>
+                  <option value="ADJUSTMENT_GAIN">📈 Other Gain / Adjustment (Intraday Gain, Dividends, Broker Credit)</option>
                 </select>
               </div>
 
@@ -2501,6 +2928,504 @@ export default function App() {
         </div>
       )}
 
-    </div>
+      {/* ── MODAL: LOG BROKER ADJUSTMENT (SECTION 4 SPEC) ── */}
+      {showLogAdjModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0f172a', border: '1.5px solid #f59e0b', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '460px', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>📜 Log Broker Adjustment</div>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>Log non-trade cash movements (AMC fees, DP charges, Dividends, Interest, Corrections)</div>
+              </div>
+              <button onClick={() => setShowLogAdjModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!logAdjAmount || isNaN(logAdjAmount)) return;
+              const newAdj = {
+                id: `adj_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                date: logAdjDate,
+                broker: logAdjBroker,
+                segment: logAdjSegment,
+                type: logAdjType,
+                amount: parseFloat(logAdjAmount),
+                notes: logAdjNotes
+              };
+              setBrokerAdjustments(prev => [newAdj, ...prev]);
+              setShowLogAdjModal(false);
+              setLogAdjAmount('');
+              setLogAdjNotes('');
+              showToast('✅ Broker Adjustment logged to cash ledger!');
+            }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>DATE</label>
+                  <input type="date" value={logAdjDate} onChange={e => setLogAdjDate(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>BROKER</label>
+                  <select value={logAdjBroker} onChange={e => setLogAdjBroker(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}>
+                    <option value="Zerodha Kite">Zerodha Kite</option>
+                    <option value="INDmoney">INDmoney</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>TARGET SEGMENT</label>
+                <select value={logAdjSegment} onChange={e => setLogAdjSegment(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}>
+                  <option value="SWING">⚡ Swing Trading</option>
+                  <option value="LT">🛡️ Long-Term Core</option>
+                  <option value="PENNY">💎 Quality Penny SIP</option>
+                  <option value="OPTIONS">⚡ Options / F&amp;O</option>
+                  <option value="ALL">🌐 All Segments</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>ADJUSTMENT TYPE</label>
+                <select value={logAdjType} onChange={e => setLogAdjType(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}>
+                  <option value="AMC_CHARGE">🔴 AMC Charge (- Debit)</option>
+                  <option value="DP_CHARGE">🔴 DP Charge (- Debit)</option>
+                  <option value="PLEDGE_CHARGE">🔴 Pledge / Margin Fee (- Debit)</option>
+                  <option value="MANUAL_WITHDRAWAL">🔴 Manual Capital Withdrawal (- Debit)</option>
+                  <option value="INTEREST_CREDIT">🟢 Interest Credit (+ Credit)</option>
+                  <option value="DIVIDEND_RECEIVED">🟢 Dividend Received (+ Credit)</option>
+                  <option value="MANUAL_INJECTION">🟢 Manual Capital Injection (+ Credit)</option>
+                  <option value="CORRECTION">⚠️ Correction (Broker Error / EOD Audit)</option>
+                  <option value="OTHER">ℹ️ Other Adjustment</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>AMOUNT (₹)</label>
+                <input type="number" step="any" placeholder="e.g. 150 or -150" value={logAdjAmount} onChange={e => setLogAdjAmount(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1.5px solid #f59e0b', color: '#f59e0b', fontSize: '18px', padding: '10px', borderRadius: '8px', fontWeight: 900 }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>AUDIT NOTES (Mandatory for Corrections)</label>
+                <input type="text" placeholder="e.g. Q2 Zerodha AMC Fee" value={logAdjNotes} onChange={e => setLogAdjNotes(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setShowLogAdjModal(false)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>Cancel</button>
+                <button type="submit" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}>Log Adjustment</button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: RECORD OPTIONS TRADE (SECTION 3 SPEC) ── */}
+      {showAddOptionModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0f172a', border: '1.5px solid #c084fc', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '480px', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>⚡ Record Options / F&amp;O Trade</div>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>Event log with mandatory "Funded By" origin segment traceability</div>
+              </div>
+              <button onClick={() => setShowAddOptionModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!optInstrument || !optEntryPrice) return;
+              const entryP = parseFloat(optEntryPrice) || 0;
+              const exitP = parseFloat(optExitPrice) || 0;
+              const qty = parseInt(optQty, 10) || 1;
+              const chg = parseFloat(optCharges) || 40;
+              const netPnl = optStatus === 'CLOSED' ? ((exitP - entryP) * qty - chg) : 0;
+
+              const newOpt = {
+                id: `opt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                entryDate: optEntryDate,
+                instrument: optInstrument.toUpperCase(),
+                qty,
+                entryPrice: entryP,
+                capitalUsed: qty * entryP,
+                fundedBy: optFundedBy,
+                exitDate: optExitDate,
+                exitPrice: exitP,
+                charges: chg,
+                netPnl,
+                status: optStatus,
+                notes: optNotes
+              };
+
+              setOptionsTrades(prev => [newOpt, ...prev]);
+              setShowAddOptionModal(false);
+              setOptInstrument('');
+              setOptEntryPrice('');
+              setOptExitPrice('');
+              showToast('⚡ Options Trade logged to event ledger!');
+            }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>ENTRY DATE</label>
+                  <input type="date" value={optEntryDate} onChange={e => setOptEntryDate(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#c084fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>INSTRUMENT SYMBOL</label>
+                  <input type="text" placeholder="e.g. NIFTY 24500 CE" value={optInstrument} onChange={e => setOptInstrument(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid #c084fc', color: '#c084fc', padding: '10px', borderRadius: '8px', fontWeight: 900 }} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>QTY / LOTS</label>
+                  <input type="number" value={optQty} onChange={e => setOptQty(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>ENTRY PRICE (₹)</label>
+                  <input type="number" step="any" placeholder="e.g. 125.50" value={optEntryPrice} onChange={e => setOptEntryPrice(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800, display: 'block', marginBottom: '4px' }}>FUNDED BY (Mandatory Origin Segment)</label>
+                <select value={optFundedBy} onChange={e => setOptFundedBy(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1.5px solid #38bdf8', color: '#38bdf8', padding: '10px', borderRadius: '8px', fontWeight: 900 }}>
+                  <option value="SWING">⚡ Swing Trading (Capital freed from Swing Exit)</option>
+                  <option value="LT">🛡️ Long-Term Core</option>
+                  <option value="PENNY">💎 Quality Penny SIP</option>
+                  <option value="GENERAL">💵 General Free Cash Reserve</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>STATUS</label>
+                  <select value={optStatus} onChange={e => setOptStatus(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}>
+                    <option value="OPEN">🟠 OPEN Position</option>
+                    <option value="CLOSED">🟢 CLOSED Position</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>EST. CHARGES (₹)</label>
+                  <input type="number" value={optCharges} onChange={e => setOptCharges(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }} />
+                </div>
+              </div>
+
+              {optStatus === 'CLOSED' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'rgba(16,185,129,0.08)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(16,185,129,0.3)' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#10b981', fontWeight: 700, display: 'block', marginBottom: '4px' }}>EXIT DATE</label>
+                    <input type="date" value={optExitDate} onChange={e => setOptExitDate(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1px solid #10b981', color: '#ffffff', padding: '8px', borderRadius: '6px' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#10b981', fontWeight: 700, display: 'block', marginBottom: '4px' }}>EXIT PRICE (₹)</label>
+                    <input type="number" step="any" placeholder="e.g. 180.00" value={optExitPrice} onChange={e => setOptExitPrice(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1px solid #10b981', color: '#10b981', padding: '8px', borderRadius: '6px', fontWeight: 900 }} />
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setShowAddOptionModal(false)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>Cancel</button>
+                <button type="submit" style={{ background: 'linear-gradient(135deg, #c084fc, #a855f7)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}>Save Options Trade</button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: DAILY EOD RECONCILIATION (SECTION 5 SPEC) ── */}
+      {showReconcileModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0f172a', border: '1.5px solid #10b981', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '460px', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>⚖️ Daily EOD Reconciliation</div>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>Compare calculated Cash Ledger vs actual broker app balance</div>
+              </div>
+              <button onClick={() => setShowReconcileModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SELECT BROKER &amp; SEGMENT</label>
+                <select value={reconSegment} onChange={e => {
+                  setReconSegment(e.target.value);
+                  setReconBroker(e.target.value === 'LT' || e.target.value === 'PENNY' ? 'INDmoney' : 'Zerodha Kite');
+                }} style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}>
+                  <option value="SWING">⚡ Swing Trading (Zerodha Kite)</option>
+                  <option value="LT">🛡️ Long-Term Core (INDmoney)</option>
+                  <option value="PENNY">💎 Quality Penny SIP (INDmoney)</option>
+                </select>
+              </div>
+
+              <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '10px', padding: '12px' }}>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>Calculated Free Cash from Ledger (Section 2a):</div>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: '#38bdf8', marginTop: '2px' }}>
+                  ₹{(segmentLedgers[reconSegment.toLowerCase()]?.calculatedFreeCash || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#10b981', fontWeight: 800, display: 'block', marginBottom: '4px' }}>ACTUAL FREE CASH SHOWN IN BROKER APP (₹)</label>
+                <input 
+                  type="number" 
+                  step="any" 
+                  placeholder="e.g. 734.63" 
+                  value={reconActualCash} 
+                  onChange={e => setReconActualCash(e.target.value)} 
+                  style={{ width: '100%', background: '#090d16', border: '1.5px solid #10b981', color: '#10b981', fontSize: '20px', padding: '10px', borderRadius: '8px', fontWeight: 900 }} 
+                />
+              </div>
+
+              {reconActualCash !== '' && !isNaN(reconActualCash) && (
+                <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', padding: '12px' }}>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Audit Variance (Actual − Calculated):</div>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: (parseFloat(reconActualCash) - (segmentLedgers[reconSegment.toLowerCase()]?.calculatedFreeCash || 0)) >= 0 ? '#10b981' : '#f87171', marginTop: '2px' }}>
+                    {(parseFloat(reconActualCash) - (segmentLedgers[reconSegment.toLowerCase()]?.calculatedFreeCash || 0)) >= 0 ? '+' : ''}₹{(parseFloat(reconActualCash) - (segmentLedgers[reconSegment.toLowerCase()]?.calculatedFreeCash || 0)).toFixed(2)}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setShowReconcileModal(false)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>Cancel</button>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    const actualVal = parseFloat(reconActualCash);
+                    if (isNaN(actualVal)) return;
+                    const calculatedVal = segmentLedgers[reconSegment.toLowerCase()]?.calculatedFreeCash || 0;
+                    const variance = actualVal - calculatedVal;
+
+                    if (Math.abs(variance) > 0.01) {
+                      const newCorr = {
+                        id: `adj_corr_${Date.now()}`,
+                        date: new Date().toISOString().split('T')[0],
+                        broker: reconBroker,
+                        segment: reconSegment,
+                        type: 'CORRECTION',
+                        amount: variance,
+                        notes: `EOD Variance reconciliation vs ${reconBroker} statement as of ${new Date().toISOString().split('T')[0]}`
+                      };
+                      setBrokerAdjustments(prev => [newCorr, ...prev]);
+                    }
+
+                    if (reconSegment === 'SWING') setSwingFreeCashInput(reconActualCash);
+                    else if (reconSegment === 'LT') setLtFreeCashInput(reconActualCash);
+                    else if (reconSegment === 'PENNY') setPennyFreeCashInput(reconActualCash);
+
+                    setShowReconcileModal(false);
+                    setReconActualCash('');
+                    showToast(`✅ EOD Reconciliation logged! Free Cash updated to ₹${actualVal.toFixed(2)}`);
+                  }} 
+                  style={{ background: 'linear-gradient(135deg, #059669, #10b981)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}
+                >
+                  Log Audit Correction &amp; Reconcile
+                </button>
+              </div>
+              <button onClick={() => setShowAddOptionModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!optInstrument || !optEntryPrice) return;
+              const entryP = parseFloat(optEntryPrice) || 0;
+              const exitP = parseFloat(optExitPrice) || 0;
+              const qty = parseInt(optQty, 10) || 1;
+              const chg = parseFloat(optCharges) || 40;
+              const netPnl = optStatus === 'CLOSED' ? ((exitP - entryP) * qty - chg) : 0;
+
+              const newOpt = {
+                id: `opt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                entryDate: optEntryDate,
+                instrument: optInstrument.toUpperCase(),
+                qty,
+                entryPrice: entryP,
+                capitalUsed: qty * entryP,
+                fundedBy: optFundedBy,
+                exitDate: optExitDate,
+                exitPrice: exitP,
+                charges: chg,
+                netPnl,
+                status: optStatus,
+                notes: optNotes
+              };
+
+              setOptionsTrades(prev => [newOpt, ...prev]);
+              setShowAddOptionModal(false);
+              setOptInstrument('');
+              setOptEntryPrice('');
+              setOptExitPrice('');
+              showToast('⚡ Options Trade logged to event ledger!');
+            }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>ENTRY DATE</label>
+                  <input type="date" value={optEntryDate} onChange={e => setOptEntryDate(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#c084fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>INSTRUMENT SYMBOL</label>
+                  <input type="text" placeholder="e.g. NIFTY 24500 CE" value={optInstrument} onChange={e => setOptInstrument(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid #c084fc', color: '#c084fc', padding: '10px', borderRadius: '8px', fontWeight: 900 }} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>QTY / LOTS</label>
+                  <input type="number" value={optQty} onChange={e => setOptQty(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>ENTRY PRICE (₹)</label>
+                  <input type="number" step="any" placeholder="e.g. 125.50" value={optEntryPrice} onChange={e => setOptEntryPrice(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800, display: 'block', marginBottom: '4px' }}>FUNDED BY (Mandatory Origin Segment)</label>
+                <select value={optFundedBy} onChange={e => setOptFundedBy(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1.5px solid #38bdf8', color: '#38bdf8', padding: '10px', borderRadius: '8px', fontWeight: 900 }}>
+                  <option value="SWING">⚡ Swing Trading (Capital freed from Swing Exit)</option>
+                  <option value="LT">🛡️ Long-Term Core</option>
+                  <option value="PENNY">💎 Quality Penny SIP</option>
+                  <option value="GENERAL">💵 General Free Cash Reserve</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>STATUS</label>
+                  <select value={optStatus} onChange={e => setOptStatus(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}>
+                    <option value="OPEN">🟠 OPEN Position</option>
+                    <option value="CLOSED">🟢 CLOSED Position</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>EST. CHARGES (₹)</label>
+                  <input type="number" value={optCharges} onChange={e => setOptCharges(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }} />
+                </div>
+              </div>
+
+              {optStatus === 'CLOSED' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'rgba(16,185,129,0.08)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(16,185,129,0.3)' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#10b981', fontWeight: 700, display: 'block', marginBottom: '4px' }}>EXIT DATE</label>
+                    <input type="date" value={optExitDate} onChange={e => setOptExitDate(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1px solid #10b981', color: '#ffffff', padding: '8px', borderRadius: '6px' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#10b981', fontWeight: 700, display: 'block', marginBottom: '4px' }}>EXIT PRICE (₹)</label>
+                    <input type="number" step="any" placeholder="e.g. 180.00" value={optExitPrice} onChange={e => setOptExitPrice(e.target.value)} style={{ width: '100%', background: '#090d16', border: '1px solid #10b981', color: '#10b981', padding: '8px', borderRadius: '6px', fontWeight: 900 }} />
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setShowAddOptionModal(false)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>Cancel</button>
+                <button type="submit" style={{ background: 'linear-gradient(135deg, #c084fc, #a855f7)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}>Save Options Trade</button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: DAILY EOD RECONCILIATION (SECTION 5 SPEC) ── */}
+      {showReconcileModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ background: '#0f172a', border: '1.5px solid #10b981', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '460px', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>⚖️ Daily EOD Reconciliation</div>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>Compare calculated Cash Ledger vs actual broker app balance</div>
+              </div>
+              <button onClick={() => setShowReconcileModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>SELECT BROKER &amp; SEGMENT</label>
+                <select value={reconSegment} onChange={e => {
+                  setReconSegment(e.target.value);
+                  setReconBroker(e.target.value === 'LT' || e.target.value === 'PENNY' ? 'INDmoney' : 'Zerodha Kite');
+                }} style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}>
+                  <option value="SWING">⚡ Swing Trading (Zerodha Kite)</option>
+                  <option value="LT">🛡️ Long-Term Core (INDmoney)</option>
+                  <option value="PENNY">💎 Quality Penny SIP (INDmoney)</option>
+                </select>
+              </div>
+
+              <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '10px', padding: '12px' }}>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>Calculated Free Cash from Ledger (Section 2a):</div>
+                <div style={{ fontSize: '20px', fontWeight: 900, color: '#38bdf8', marginTop: '2px' }}>
+                  ₹{(segmentLedgers[reconSegment.toLowerCase()]?.calculatedFreeCash || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#10b981', fontWeight: 800, display: 'block', marginBottom: '4px' }}>ACTUAL FREE CASH SHOWN IN BROKER APP (₹)</label>
+                <input 
+                  type="number" 
+                  step="any" 
+                  placeholder="e.g. 734.63" 
+                  value={reconActualCash} 
+                  onChange={e => setReconActualCash(e.target.value)} 
+                  style={{ width: '100%', background: '#090d16', border: '1.5px solid #10b981', color: '#10b981', fontSize: '20px', padding: '10px', borderRadius: '8px', fontWeight: 900 }} 
+                />
+              </div>
+
+              {reconActualCash !== '' && !isNaN(reconActualCash) && (
+                <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', padding: '12px' }}>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>Audit Variance (Actual − Calculated):</div>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: (parseFloat(reconActualCash) - (segmentLedgers[reconSegment.toLowerCase()]?.calculatedFreeCash || 0)) >= 0 ? '#10b981' : '#f87171', marginTop: '2px' }}>
+                    {(parseFloat(reconActualCash) - (segmentLedgers[reconSegment.toLowerCase()]?.calculatedFreeCash || 0)) >= 0 ? '+' : ''}₹{(parseFloat(reconActualCash) - (segmentLedgers[reconSegment.toLowerCase()]?.calculatedFreeCash || 0)).toFixed(2)}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setShowReconcileModal(false)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: '#cbd5e1', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>Cancel</button>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    const actualVal = parseFloat(reconActualCash);
+                    if (isNaN(actualVal)) return;
+                    const calculatedVal = segmentLedgers[reconSegment.toLowerCase()]?.calculatedFreeCash || 0;
+                    const variance = actualVal - calculatedVal;
+
+                    if (Math.abs(variance) > 0.01) {
+                      const newCorr = {
+                        id: `adj_corr_${Date.now()}`,
+                        date: new Date().toISOString().split('T')[0],
+                        broker: reconBroker,
+                        segment: reconSegment,
+                        type: 'CORRECTION',
+                        amount: variance,
+                        notes: `EOD Variance reconciliation vs ${reconBroker} statement as of ${new Date().toISOString().split('T')[0]}`
+                      };
+                      setBrokerAdjustments(prev => [newCorr, ...prev]);
+                    }
+
+                    if (reconSegment === 'SWING') setSwingFreeCashInput(reconActualCash);
+                    else if (reconSegment === 'LT') setLtFreeCashInput(reconActualCash);
+                    else if (reconSegment === 'PENNY') setPennyFreeCashInput(reconActualCash);
+
+                    setShowReconcileModal(false);
+                    setReconActualCash('');
+                    showToast(`✅ EOD Reconciliation logged! Free Cash updated to ₹${actualVal.toFixed(2)}`);
+                  }} 
+                  style={{ background: 'linear-gradient(135deg, #059669, #10b981)', color: '#090d16', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 900 }}
+                >
+                  Log Audit Correction &amp; Reconcile
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      </div>
   );
 }

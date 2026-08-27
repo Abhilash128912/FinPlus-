@@ -183,5 +183,7 @@
     "lt": 30,
     "penny": 10
   },
-  "savedAt": 1787722353547
+  "brokerAdjustments": [],
+  "optionsTrades": [],
+  "savedAt": 1787830000000
 }
