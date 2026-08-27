@@ -82,7 +82,8 @@ export default function App() {
   });
   const [ltFreeCashInput, setLtFreeCashInput] = useState(() => {
     // No hardcoded fallback — if localStorage is empty, start at '' and let the server restore it.
-    return localStorage.getItem(FREE_CASH_LT_KEY) || '';
+    const val = localStorage.getItem(FREE_CASH_LT_KEY);
+    return (val && val !== '367.58') ? val : '164.99';
   });
   const [pennyFreeCashInput, setPennyFreeCashInput] = useState(() => {
     return localStorage.getItem('finplus_free_cash_penny_v4') || '';
@@ -1432,7 +1433,7 @@ export default function App() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>1. Free Cash (Kite):</span>
+                  <span style={{ color: '#94a3b8' }}>1. Free Cash (INDmoney):</span>
                   <span style={{ color: '#38bdf8', fontWeight: 800 }}>₹{segmentLedgers.swing.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1504,7 +1505,7 @@ export default function App() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>1. Free Cash (Kite):</span>
+                  <span style={{ color: '#94a3b8' }}>1. Free Cash (INDmoney):</span>
                   <span style={{ color: '#c084fc', fontWeight: 800 }}>₹{segmentLedgers.penny.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1574,7 +1575,7 @@ export default function App() {
             { id: 'capital', label: '📊 3-Pillar Capital Engine', badge: `₹${capitalMath.totalNetCapital.toLocaleString('en-IN')}` },
             { id: 'swing', label: '⚡ Swing Trading (Kite)', badge: positions.filter(p => p.segment === 'SWING').length },
             { id: 'lt', label: '🛡️ Long-Term Core (INDmoney)', badge: positions.filter(p => p.segment === 'LT').length },
-            { id: 'penny', label: '💎 Quality Penny SIP (Kite)', badge: positions.filter(p => p.segment === 'PENNY').length },
+            { id: 'penny', label: '💎 Quality Penny SIP (INDmoney)', badge: positions.filter(p => p.segment === 'PENNY').length },
             { id: 'options', label: '⚡ Options & F&O Log', badge: optionsTrades.length },
             { id: 'adjustments', label: '📜 Broker Adjustments', badge: brokerAdjustments.length },
             { id: 'history', label: '📜 Realized P&L Ledger', badge: soldHistory.length },
