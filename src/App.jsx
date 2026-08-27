@@ -649,7 +649,6 @@ export default function App() {
       segPositions.forEach(p => {
         const cleanSym = p.ticker.replace('.NS', '').trim().toUpperCase();
         let ltp = liveLtps[cleanSym] || p.buyPrice;
-        if (cleanSym === 'SIGMA' && ltp > 200 && p.buyPrice < 100) ltp = p.buyPrice;
 
         const val = p.shares * ltp;
         const buyCost = p.shares * p.buyPrice;
@@ -781,9 +780,6 @@ export default function App() {
     return positions.map(pos => {
       const cleanSym = pos.ticker.replace('.NS', '').trim().toUpperCase();
       let ltp = liveLtps[cleanSym] || pos.buyPrice;
-      if (cleanSym === 'SIGMA' && ltp > 200 && pos.buyPrice < 100) {
-        ltp = pos.buyPrice;
-      }
       const currentVal = pos.shares * ltp;
       const costBasis = pos.shares * pos.buyPrice;
       const unrealizedPnl = currentVal - costBasis;
