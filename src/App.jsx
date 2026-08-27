@@ -1493,11 +1493,11 @@ export default function App() {
               </div>
             </div>
 
-            {/* 3. Quality Penny SIP (Kite) */}
+            {/* 3. Quality Penny SIP (INDmoney) */}
             <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(192, 132, 252, 0.3)', borderRadius: '12px', padding: '14px 16px' }}>
               <div style={{ fontSize: '11px', color: '#c084fc', fontWeight: 800, textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
                 <span>💎 QUALITY PENNY SIP</span>
-                <span style={{ fontSize: '10px', color: '#94a3b8' }}>Zerodha Kite</span>
+                <span style={{ fontSize: '10px', color: '#94a3b8' }}>INDmoney</span>
               </div>
               <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff', margin: '4px 0 8px 0' }}>
                 ₹{segmentLedgers.penny.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
