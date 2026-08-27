@@ -1663,18 +1663,7 @@ export default function App() {
                     >
                       ⚙️ Align / Adjust Broker Cash
                     </button>
-                    <button 
-                      onClick={() => {
-                        setSwingFreeCashInput(String(capitalMath.swing.available));
-                        setLtFreeCashInput(String(capitalMath.lt.available));
-                        setPennyFreeCashInput(String(capitalMath.penny.available));
-                        showToast('⚡ Free Cash auto-aligned to Revolving Capital Engine!');
-                      }}
-                      title="Reset cash to exact uninvested revolving capital balance"
-                      style={{ background: 'rgba(56, 189, 248, 0.18)', border: '1px solid #38bdf8', color: '#38bdf8', padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, cursor: 'pointer' }}
-                    >
-                      ⚡ Auto-Align Cash
-                    </button>
+
                     <span style={{ fontSize: '11px', color: '#a5b4fc', background: 'rgba(99, 102, 241, 0.15)', padding: '2px 8px', borderRadius: '6px' }}>
                       Total Free Cash: ₹{(swingFreeCash + ltFreeCash + pennyFreeCash).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
@@ -1755,35 +1744,38 @@ export default function App() {
               </div>
             </div>
 
-            {/* 3 Pillar Summary Cards */}
+            {/* 3 Statement-Reconciled Pillar Cards (No Synthetic Capital Math) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
               
               {/* Pillar 1: Swing Trading */}
               <div style={{ background: '#0f172a', border: '1.5px solid rgba(56, 189, 248, 0.4)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>PILLAR 1 • 60% (REVOLVING)</span>
-                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>Broker: Zerodha Kite</span>
+                    <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>PILLAR 1 • SWING TRADING</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>Zerodha Kite</span>
                   </div>
                   <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>⚡ Swing Trading Fund</div>
-                  <div style={{ fontSize: '28px', fontWeight: 900, color: '#38bdf8', margin: '10px 0' }}>₹{capitalMath.swing.available.toLocaleString('en-IN')} <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>available cash</span></div>
+                  <div style={{ fontSize: '26px', fontWeight: 900, color: '#38bdf8', margin: '8px 0 14px 0' }}>
+                    ₹{segmentLedgers.swing.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginLeft: '6px' }}>Segment Net Worth</span>
+                  </div>
                   
                   <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
-                      <span>New Injected Capital:</span>
-                      <strong>₹{capitalMath.swing.injected.toLocaleString('en-IN')}</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8' }}>1. Free Cash (Kite):</span>
+                      <strong style={{ color: '#38bdf8' }}>₹{segmentLedgers.swing.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
-                      <span>Active Deployed (Revolving):</span>
-                      <strong style={{ color: '#38bdf8' }}>₹{capitalMath.swing.deployed.toLocaleString('en-IN')}</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8' }}>2. Active Holdings Value:</span>
+                      <strong style={{ color: '#ffffff' }}>₹{segmentLedgers.swing.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
-                      <span>Realized Profits:</span>
-                      <strong style={{ color: capitalMath.swing.realized >= 0 ? '#10b981' : '#f87171' }}>{capitalMath.swing.realized >= 0 ? '+' : ''}₹{capitalMath.swing.realized.toLocaleString('en-IN')}</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
+                      <strong style={{ color: segmentLedgers.swing.realizedPnl >= 0 ? '#10b981' : '#f87171' }}>{segmentLedgers.swing.realizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.swing.realizedPnl.toFixed(2)}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a5b4fc', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '6px', marginTop: '2px' }}>
-                      <span>Total Revolving Pool:</span>
-                      <strong style={{ color: '#a5b4fc' }}>₹{capitalMath.swing.totalPool.toLocaleString('en-IN')}</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8' }}>4. Unrealized P&amp;L (Open):</span>
+                      <strong style={{ color: segmentLedgers.swing.unrealizedPnl >= 0 ? '#10b981' : '#f87171' }}>{segmentLedgers.swing.unrealizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.swing.unrealizedPnl.toFixed(2)}</strong>
                     </div>
                   </div>
                 </div>
@@ -1800,24 +1792,31 @@ export default function App() {
               <div style={{ background: '#0f172a', border: '1.5px solid rgba(16, 185, 129, 0.4)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>PILLAR 2 • 30%</span>
-                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>Broker: INDMONEY</span>
+                    <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>PILLAR 2 • LONG-TERM CORE</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>INDmoney</span>
                   </div>
                   <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>🛡️ Long-Term Core Quality</div>
-                  <div style={{ fontSize: '28px', fontWeight: 900, color: '#10b981', margin: '10px 0' }}>₹{capitalMath.lt.available.toLocaleString('en-IN')} <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>available cash</span></div>
+                  <div style={{ fontSize: '26px', fontWeight: 900, color: '#10b981', margin: '8px 0 14px 0' }}>
+                    ₹{segmentLedgers.lt.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginLeft: '6px' }}>Segment Net Worth</span>
+                  </div>
                   
                   <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
-                      <span>Total Allocated:</span>
-                      <strong>₹{capitalMath.lt.injected.toLocaleString('en-IN')}</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8' }}>1. Free Cash (INDmoney):</span>
+                      <strong style={{ color: '#10b981' }}>₹{segmentLedgers.lt.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
-                      <span>Active Deployed:</span>
-                      <strong style={{ color: '#10b981' }}>₹{capitalMath.lt.deployed.toLocaleString('en-IN')}</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8' }}>2. Active Holdings Value:</span>
+                      <strong style={{ color: '#ffffff' }}>₹{segmentLedgers.lt.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
-                      <span>Realized Profits:</span>
-                      <strong style={{ color: capitalMath.lt.realized >= 0 ? '#10b981' : '#f87171' }}>{capitalMath.lt.realized >= 0 ? '+' : ''}₹{capitalMath.lt.realized.toLocaleString('en-IN')}</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
+                      <strong style={{ color: segmentLedgers.lt.realizedPnl >= 0 ? '#10b981' : '#f87171' }}>{segmentLedgers.lt.realizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.lt.realizedPnl.toFixed(2)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8' }}>4. Unrealized P&amp;L (Open):</span>
+                      <strong style={{ color: segmentLedgers.lt.unrealizedPnl >= 0 ? '#10b981' : '#f87171' }}>{segmentLedgers.lt.unrealizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.lt.unrealizedPnl.toFixed(2)}</strong>
                     </div>
                   </div>
                 </div>
@@ -1834,24 +1833,31 @@ export default function App() {
               <div style={{ background: '#0f172a', border: '1.5px solid rgba(192, 132, 252, 0.4)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <span style={{ background: 'rgba(192, 132, 252, 0.15)', color: '#c084fc', fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>PILLAR 3 • 10%</span>
-                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>Broker: Zerodha Kite</span>
+                    <span style={{ background: 'rgba(192, 132, 252, 0.15)', color: '#c084fc', fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>PILLAR 3 • QUALITY PENNY SIP</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>INDmoney</span>
                   </div>
                   <div style={{ fontSize: '18px', fontWeight: 900, color: '#ffffff' }}>💎 Quality Penny SIP</div>
-                  <div style={{ fontSize: '28px', fontWeight: 900, color: '#c084fc', margin: '10px 0' }}>₹{capitalMath.penny.available.toLocaleString('en-IN')} <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>available cash</span></div>
+                  <div style={{ fontSize: '26px', fontWeight: 900, color: '#c084fc', margin: '8px 0 14px 0' }}>
+                    ₹{segmentLedgers.penny.segmentNetWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginLeft: '6px' }}>Segment Net Worth</span>
+                  </div>
                   
                   <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
-                      <span>Total Allocated:</span>
-                      <strong>₹{capitalMath.penny.injected.toLocaleString('en-IN')}</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8' }}>1. Free Cash (INDmoney):</span>
+                      <strong style={{ color: '#c084fc' }}>₹{segmentLedgers.penny.freeCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
-                      <span>Active Deployed:</span>
-                      <strong style={{ color: '#c084fc' }}>₹{capitalMath.penny.deployed.toLocaleString('en-IN')}</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8' }}>2. Active Holdings Value:</span>
+                      <strong style={{ color: '#ffffff' }}>₹{segmentLedgers.penny.holdingsValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1' }}>
-                      <span>Realized Profits:</span>
-                      <strong style={{ color: capitalMath.penny.realized >= 0 ? '#10b981' : '#f87171' }}>{capitalMath.penny.realized >= 0 ? '+' : ''}₹{capitalMath.penny.realized.toLocaleString('en-IN')}</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8' }}>3. Realized P&amp;L (Booked):</span>
+                      <strong style={{ color: segmentLedgers.penny.realizedPnl >= 0 ? '#10b981' : '#f87171' }}>{segmentLedgers.penny.realizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.penny.realizedPnl.toFixed(2)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8' }}>4. Unrealized P&amp;L (Open):</span>
+                      <strong style={{ color: segmentLedgers.penny.unrealizedPnl >= 0 ? '#10b981' : '#f87171' }}>{segmentLedgers.penny.unrealizedPnl >= 0 ? '+' : ''}₹{segmentLedgers.penny.unrealizedPnl.toFixed(2)}</strong>
                     </div>
                   </div>
                 </div>
