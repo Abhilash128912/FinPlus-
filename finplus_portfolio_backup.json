@@ -1,6 +1,30 @@
 {
   "positions": [
     {
+      "id": "pos_1787824550705_djx10",
+      "ticker": "UYFINCORP",
+      "name": "U. Y. Fincorp Limited",
+      "segment": "PENNY",
+      "shares": 10,
+      "buyPrice": 20,
+      "buyDate": "2026-08-27",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": ""
+    },
+    {
+      "id": "pos_1787824201399_knk4c",
+      "ticker": "VRLLOG",
+      "name": "VRL Logistics Limited",
+      "segment": "SWING",
+      "shares": 6,
+      "buyPrice": 293.95,
+      "buyDate": "2026-08-27",
+      "target1": 317.466,
+      "stopLoss": 282.19199999999995,
+      "notes": ""
+    },
+    {
       "id": "pos_1787637387007_ilcwq",
       "ticker": "BEL",
       "name": "Bharat Electronics Limited",
@@ -71,30 +95,6 @@
       "target1": 287.38,
       "stopLoss": 0,
       "notes": "INDmoney Long-Term Core Position"
-    },
-    {
-      "id": "pos_1787824550705_djx10",
-      "ticker": "UYFINCORP",
-      "name": "U. Y. Fincorp Limited",
-      "segment": "PENNY",
-      "shares": 10,
-      "buyPrice": 20,
-      "buyDate": "2026-08-27",
-      "target1": 0,
-      "stopLoss": 0,
-      "notes": ""
-    },
-    {
-      "id": "pos_1787824201399_knk4c",
-      "ticker": "VRLLOG",
-      "name": "VRL Logistics Limited",
-      "segment": "SWING",
-      "shares": 6,
-      "buyPrice": 293.95,
-      "buyDate": "2026-08-27",
-      "target1": 317.466,
-      "stopLoss": 282.19199999999995,
-      "notes": ""
     }
   ],
   "capitalLedger": [
@@ -208,10 +208,20 @@
       "returnPct": -3.804104155888937
     }
   ],
-  "brokerAdjustments": [],
+  "brokerAdjustments": [
+    {
+      "id": "adj_corr_1787832920897",
+      "date": "2026-08-27",
+      "broker": "Zerodha Kite",
+      "segment": "SWING",
+      "type": "CORRECTION",
+      "amount": -1873.9411205022404,
+      "notes": "EOD Variance reconciliation vs Zerodha Kite statement as of 2026-08-27"
+    }
+  ],
   "optionsTrades": [],
   "freeCash": {
-    "swing": "734.63",
+    "swing": "128.3",
     "lt": "367.58",
     "penny": "0"
   },
@@ -221,5 +231,5 @@
     "lt": 30,
     "penny": 10
   },
-  "savedAt": 1787832270717
+  "savedAt": 1787833282362
 }

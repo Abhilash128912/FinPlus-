@@ -42,7 +42,7 @@ def sync():
         master_data = {
             "positions": [],
             "capitalLedger": [],
-            "freeCash": {"swing": "734.63", "lt": "367.58", "penny": "0"},
+            "freeCash": {"swing": "734.63", "lt": "164.99", "penny": "0"},
             "soldHistory": [],
             "budget": "0",
             "split": {"swing": 60, "lt": 30, "penny": 10},

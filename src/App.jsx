@@ -169,20 +169,6 @@ export default function App() {
   const [optEntryPrice, setOptEntryPrice] = useState('');
   const [optFundedBy, setOptFundedBy] = useState('SWING'); // Mandatory: 'SWING', 'LT', 'PENNY', 'GENERAL'
   const [optStatus, setOptStatus] = useState('OPEN'); // 'OPEN', 'CLOSED'
-  const [optExitDate, setOptExitDate] = useState('');
-  const [optExitPrice, setOptExitPrice] = useState('');
-  const [optCharges, setOptCharges] = useState('40');
-  const [optNotes, setOptNotes] = useState('');
-
-  // Modal: EOD Daily Reconciliation State
-  const [showReconcileModal, setShowReconcileModal] = useState(false);
-  const [reconBroker, setReconBroker] = useState('Zerodha Kite');
-  const [reconSegment, setReconSegment] = useState('SWING');
-  const [reconActualCash, setReconActualCash] = useState('');
-
-  // Live LTP Polling State — start empty so no stale prices are ever shown before the API responds.
-  const [liveLtps, setLiveLtps] = useState({});
-  const [lastLtpUpdate, setLastLtpUpdate] = useState(() => new Date().toLocaleTimeString());
   const [isLtpLoading, setIsLtpLoading] = useState(false);
 
   // Modal: Record New Buy Form State
