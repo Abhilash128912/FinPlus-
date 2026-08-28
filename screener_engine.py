@@ -1829,10 +1829,72 @@ def compute_fundamental_trend_score(scored: dict) -> dict:
     }
 
 
+def compute_cyclicality_and_normalization(scored: dict, sec_group: str, lt_quality_score: float, trend_score: float) -> dict:
+    """
+    Computes Cyclicality & Earnings Normalization metrics:
+    - cyclicality_flag: LOW / MODERATE / HIGH
+    - cycle_position: RECOVERY / MID_CYCLE / PEAK_RISK / DOWNTURN / STABLE_NON_CYCLICAL
+    - normalized_earnings_quality: 0-100 (through-cycle earnings durability vs peak profitability)
+    - trend_driver: STRUCTURAL / CYCLE_DRIVEN / MIXED / UNKNOWN
+    """
+    rev_growth = float(scored.get("rev_growth_pct") if scored.get("rev_growth_pct") is not None else 0.0)
+    ret_3m = float(scored.get("ret_3m") or 0.0)
+    roe = float(scored.get("roe_pct") if scored.get("roe_pct") is not None else 0.0)
+    de = float(scored.get("de_ratio") if scored.get("de_ratio") is not None else 0.0)
+
+    # 1. Cyclicality Flag
+    if sec_group in ("COMMODITY", "UTILITIES_INFRA"):
+        cyclicality_flag = "HIGH"
+    elif sec_group == "MANUFACTURING":
+        cyclicality_flag = "MODERATE"
+    else:
+        cyclicality_flag = "LOW"
+
+    # 2. Cycle Position
+    if cyclicality_flag in ("HIGH", "MODERATE"):
+        if rev_growth >= 25.0 or ret_3m >= 30.0:
+            cycle_position = "PEAK_RISK" if roe >= 25.0 else "MID_CYCLE"
+        elif rev_growth >= 10.0 or ret_3m >= 10.0:
+            cycle_position = "MID_CYCLE"
+        elif rev_growth > 0.0 or ret_3m >= -5.0:
+            cycle_position = "RECOVERY"
+        else:
+            cycle_position = "DOWNTURN"
+    else:
+        cycle_position = "STABLE_NON_CYCLICAL"
+
+    # 3. Normalized Earnings Quality (0 - 100)
+    norm_pts = lt_quality_score * 0.7
+    if de <= 0.2: norm_pts += 15.0
+    elif de <= 0.5: norm_pts += 10.0
+    if roe >= 15.0: norm_pts += 15.0
+    elif roe >= 10.0: norm_pts += 8.0
+
+    normalized_earnings_quality = round(min(100.0, max(0.0, norm_pts)), 1)
+
+    # 4. Trend Driver
+    if lt_quality_score >= 70.0 and de <= 0.3:
+        trend_driver = "STRUCTURAL"
+    elif cyclicality_flag in ("HIGH", "MODERATE") and (rev_growth >= 15.0 or ret_3m >= 20.0):
+        trend_driver = "CYCLE_DRIVEN"
+    elif lt_quality_score >= 55.0:
+        trend_driver = "MIXED"
+    else:
+        trend_driver = "UNKNOWN"
+
+    return {
+        "cyclicality_flag": cyclicality_flag,
+        "cycle_position": cycle_position,
+        "normalized_earnings_quality": normalized_earnings_quality,
+        "trend_driver": trend_driver
+    }
+
+
 def compute_sector_aware_lt_quality(scored: dict) -> dict:
     """
     Computes a 50/25/25 Sector-Aware Long-Term Business Quality Score (0-100),
-    Fundamental Trend Score (0-100), independent Valuation rating, and Risk level.
+    Fundamental Trend Score (0-100), Cyclicality Normalization metrics,
+    independent Valuation rating, and Risk level.
     """
     sector = scored.get("sector") or ""
     industry = scored.get("industry") or ""
@@ -1907,8 +1969,8 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
     lt_sustainability_score = round(min(25.0, max(0.0, s_pts)), 1)
     lt_quality_score = round(lt_business_quality + lt_growth_score + lt_sustainability_score, 1)
 
-    # Fundamental Trend Score
     trend_res = compute_fundamental_trend_score(scored)
+    cycle_res = compute_cyclicality_and_normalization(scored, sec_group, lt_quality_score, trend_res["fundamental_trend_score"])
 
     # ── 4. INDEPENDENT VALUATION SCORE & STATUS (0 - 100) ────────────────────
     v_pts = 0.0
@@ -1950,7 +2012,8 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
         "lt_valuation_score": lt_valuation_score,
         "lt_valuation_status": lt_val_status,
         "lt_risk_level": lt_risk,
-        **trend_res
+        **trend_res,
+        **cycle_res
     }
 
 
@@ -2659,35 +2722,55 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
 
 def evaluate_incumbent_status(scored_match: dict) -> dict:
     """
-    Evaluates an incumbent stock's replacement status based on Structural Quality AND Fundamental Trend.
-    Do NOT automatically classify as REPLACE CANDIDATE unless there is evidence of deteriorating fundamentals.
+    Evaluates an incumbent stock's status based on 7 Output Actions from the Final Implementation Brief:
+    - KEEP_QUALIFIED: Business quality & trend meet ownership standards.
+    - IMPROVING_MONITOR: Fundamentals improving, but durability/risk needs monitoring.
+    - CYCLICAL_OPPORTUNITY: Favorable cycle/trend & valuation in cyclical sector.
+    - FUNDAMENTAL_REVIEW: Weak/uncertain quality, but no confirmed deterioration.
+    - REPLACE_CANDIDATE: Weak Structural Quality AND deteriorating Fundamental Trend, or severe leverage.
+    - WAIT_DO_NOT_CHASE: Strong business but extended valuation.
+    - WATCHLIST: Attractive valuation but insufficient quality/trend confirmation.
     """
     q_score = scored_match["lt_quality_score"]
     t_score = scored_match.get("fundamental_trend_score", 50.0)
     sec_group = scored_match.get("sector_group", "QUALITY_GROWTH")
     val_status = scored_match.get("lt_valuation_status", "FAIRLY_VALUED")
+    cyc_flag = scored_match.get("cyclicality_flag", "LOW")
+    cyc_pos = scored_match.get("cycle_position", "STABLE_NON_CYCLICAL")
+    trend_drv = scored_match.get("trend_driver", "STRUCTURAL")
     de = float(scored_match.get("de_ratio") if scored_match.get("de_ratio") is not None else 0.0)
 
     if q_score >= 75.0 and t_score >= 45.0:
-        inc_status = "KEEP"
-        badge = "🟢 KEEP (Top Quality)"
-        badge_class = "badge-green"
-        reason = f"Top structural quality ({q_score:.0f}/100) with stable fundamentals"
-    elif q_score >= 50.0 and t_score >= 60.0:
+        if val_status == "EXTENDED":
+            inc_status = "WAIT_DO_NOT_CHASE"
+            badge = "🟠 WAIT / DO NOT CHASE"
+            badge_class = "badge-orange"
+            reason = f"Top quality business ({q_score:.0f}/100) — extended valuation ({val_status}); wait for dip"
+        else:
+            inc_status = "KEEP_QUALIFIED"
+            badge = "🟢 KEEP / QUALIFIED"
+            badge_class = "badge-green"
+            reason = f"Maintains top structural quality ({q_score:.0f}/100) & stable trend ({t_score:.0f}/100)"
+    elif q_score >= 50.0 and t_score >= 65.0:
         inc_status = "IMPROVING_MONITOR"
         badge = "🟢 IMPROVING / MONITOR"
         badge_class = "badge-green"
         reason = f"Improving fundamental trend ({t_score:.0f}/100) with moderate quality ({q_score:.0f}/100)"
-    elif sec_group in ("COMMODITY", "MANUFACTURING", "UTILITIES_INFRA") and t_score >= 50.0 and val_status in ("UNDERVALUED", "FAIRLY_VALUED"):
+    elif cyc_flag in ("HIGH", "MODERATE") and t_score >= 50.0 and val_status in ("UNDERVALUED", "FAIRLY_VALUED"):
         inc_status = "CYCLICAL_OPPORTUNITY"
         badge = "🟡 CYCLICAL OPPORTUNITY"
         badge_class = "badge-yellow"
-        reason = f"Cyclical sector opportunity ({sec_group}) — favorable valuation ({val_status}) & positive trend ({t_score:.0f}/100)"
+        reason = f"Cyclical opportunity ({sec_group}, {cyc_pos}) — trend: {t_score:.0f}/100 ({trend_drv}), valuation: {val_status}"
     elif (q_score < 55.0 and t_score < 45.0) or (sec_group != "BFSI" and de > 1.8):
         inc_status = "REPLACE_CANDIDATE"
         badge = "🔴 REPLACE CANDIDATE"
         badge_class = "badge-red"
         reason = f"Deteriorating fundamentals (Trend: {t_score:.0f}/100, Quality: {q_score:.0f}/100) — material weakness confirmed"
+    elif val_status == "UNDERVALUED" and q_score < 50.0:
+        inc_status = "WATCHLIST"
+        badge = "⚪ WATCHLIST"
+        badge_class = "badge-gray"
+        reason = f"Attractive valuation ({val_status}) but insufficient quality confirmation ({q_score:.0f}/100)"
     else:
         inc_status = "FUNDAMENTAL_REVIEW"
         badge = "🟡 FUNDAMENTAL REVIEW"
@@ -2721,7 +2804,7 @@ def run_lt_universe_discovery_pipeline(screener_results: list[dict], watchlist_i
 
     all_eval.sort(key=lambda x: x["lt_quality_score"], reverse=True)
 
-    # Incumbent Audit & Classification using 5-status rules
+    # Incumbent Audit & Classification using 7-status output actions from Final Brief
     incumbents_audit = []
     for w in (watchlist_items or []):
         sym = w["symbol"]
