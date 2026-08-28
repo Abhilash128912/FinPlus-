@@ -20,6 +20,21 @@ PORTFOLIO_FUNDAMENTAL_FALLBACKS = {
     "BORANA": {"returnOnEquity": 0.350, "debtToEquity": 25.0, "profitMargins": 0.166, "trailingPE": 13.33}
 }
 
+def classify_incumbent(info: dict) -> str:
+    """
+    Classifies stock into 5 status buckets based on fundamental trends:
+    'GROWTH_CULT', 'MATURE_VALUE', 'TURNAROUND', 'DISTRESSED', 'STAGNANT'
+    """
+    roe = to_float(info.get("returnOnEquity")) or 0
+    npm = to_float(info.get("profitMargins")) or 0
+    growth = to_float(info.get("revenueGrowth")) or 0
+    
+    if growth > 0.15 and roe > 0.15: return "GROWTH_CULT"
+    if roe > 0.15 and growth <= 0.15: return "MATURE_VALUE"
+    if growth > 0 and roe <= 0: return "TURNAROUND"
+    if growth < 0 and roe < 0.05: return "DISTRESSED"
+    return "STAGNANT"
+
 def score_strength(info: dict) -> tuple[float, dict]:
     """
     Strength Score (0-100): Is the business fundamentally healthy?
@@ -1765,10 +1780,59 @@ def classify_stock_sector_group(sector: str, industry: str) -> str:
         return "QUALITY_GROWTH"
 
 
+def compute_fundamental_trend_score(scored: dict) -> dict:
+    """
+    Computes a Fundamental Trend Score (0-100) evaluating underlying operational trajectory:
+    revenue trend, profit margin trend, ROE trend, cash flow trend, and balance sheet leverage trend.
+    Excludes share-price momentum so momentum does not inflate fundamental trend.
+    """
+    roe = float(scored.get("roe_pct") if scored.get("roe_pct") is not None else 0.0)
+    de = float(scored.get("de_ratio") if scored.get("de_ratio") is not None else 0.0)
+    npm = float(scored.get("npm_pct") if scored.get("npm_pct") is not None else 0.0)
+    rev_growth = float(scored.get("rev_growth_pct") if scored.get("rev_growth_pct") is not None else 0.0)
+    cmf = float(scored.get("cmf") or 0.0)
+    clv = float(scored.get("clv") or 0.5)
+
+    trend_pts = 0.0
+    # 1. Revenue Growth & Acceleration (max 25)
+    if rev_growth >= 20.0: trend_pts += 25.0
+    elif rev_growth >= 10.0: trend_pts += 18.0
+    elif rev_growth > 0.0: trend_pts += 10.0
+    else: trend_pts += 2.0
+
+    # 2. Profit Margin Trend (max 25)
+    if npm >= 12.0: trend_pts += 25.0
+    elif npm >= 6.0: trend_pts += 18.0
+    elif npm > 0.0: trend_pts += 10.0
+
+    # 3. ROE Return Trend (max 25)
+    if roe >= 18.0: trend_pts += 25.0
+    elif roe >= 12.0: trend_pts += 18.0
+    elif roe >= 6.0: trend_pts += 10.0
+
+    # 4. FCF & Cash Accumulation Trend (max 15)
+    if cmf >= 0.05 and clv >= 0.50: trend_pts += 15.0
+    elif cmf >= 0.0: trend_pts += 8.0
+
+    # 5. Debt / De-leveraging Trend (max 10)
+    if de <= 0.3: trend_pts += 10.0
+    elif de <= 0.8: trend_pts += 5.0
+
+    fundamental_trend_score = round(min(100.0, max(0.0, trend_pts)), 1)
+    if fundamental_trend_score >= 70: trend_rating = "STRONG_IMPROVING"
+    elif fundamental_trend_score >= 45: trend_rating = "STABLE_NEUTRAL"
+    else: trend_rating = "DETERIORATING"
+
+    return {
+        "fundamental_trend_score": fundamental_trend_score,
+        "fundamental_trend_rating": trend_rating
+    }
+
+
 def compute_sector_aware_lt_quality(scored: dict) -> dict:
     """
     Computes a 50/25/25 Sector-Aware Long-Term Business Quality Score (0-100),
-    independent Valuation rating, and Risk level.
+    Fundamental Trend Score (0-100), independent Valuation rating, and Risk level.
     """
     sector = scored.get("sector") or ""
     industry = scored.get("industry") or ""
@@ -1797,15 +1861,17 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
     elif sec_group == "COMMODITY":
         if roe >= 15.0: bq_pts += 18.0
         elif roe >= 10.0: bq_pts += 12.0
+        elif roe >= 5.0: bq_pts += 8.0
         if de <= 0.15: bq_pts += 20.0
-        elif de <= 0.35: bq_pts += 12.0
-        elif de > 0.60: bq_pts -= 8.0  # Commodity debt trap penalty
+        elif de <= 0.40: bq_pts += 14.0
+        elif de <= 0.80: bq_pts += 8.0
         if npm >= 10.0: bq_pts += 12.0
+        elif npm > 0: bq_pts += 6.0
     elif sec_group == "UTILITIES_INFRA":
         if de <= 0.8: bq_pts += 18.0
-        elif de <= 1.5: bq_pts += 10.0
+        elif de <= 1.5: bq_pts += 12.0
         if roe >= 12.0: bq_pts += 18.0
-        elif roe >= 8.0: bq_pts += 10.0
+        elif roe >= 8.0: bq_pts += 12.0
         bq_pts += min(14.0, (strength / 100.0) * 14.0)
     else:  # MANUFACTURING & QUALITY_GROWTH
         if roe >= 20.0: bq_pts += 20.0
@@ -1819,18 +1885,14 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
 
     lt_business_quality = round(min(50.0, max(0.0, bq_pts)), 1)
 
-    # ── 2. GROWTH (25% max = 25 pts) ──────────────────────────────────────────
+    # ── 2. GROWTH (25% max = 25 pts) — PURE FUNDAMENTAL (No Price Momentum) ──
     g_pts = 0.0
-    if rev_growth >= 20.0: g_pts += 12.0
-    elif rev_growth >= 10.0: g_pts += 8.0
-    elif rev_growth > 0.0: g_pts += 4.0
+    if rev_growth >= 20.0: g_pts += 15.0
+    elif rev_growth >= 10.0: g_pts += 10.0
+    elif rev_growth > 0.0: g_pts += 5.0
 
-    ret_1m = float(scored.get("ret_1m") or 0.0)
-    ret_3m = float(scored.get("ret_3m") or 0.0)
-    if ret_1m >= 15.0 or ret_3m >= 25.0: g_pts += 8.0
-    elif ret_1m >= 5.0 or ret_3m >= 10.0: g_pts += 5.0
-
-    if trend in ("Uptrend", "Accumulation", "Strong Uptrend"): g_pts += 5.0
+    if trend in ("Uptrend", "Accumulation", "Strong Uptrend"): g_pts += 10.0
+    elif trend == "Consolidation": g_pts += 5.0
 
     lt_growth_score = round(min(25.0, max(0.0, g_pts)), 1)
 
@@ -1843,8 +1905,10 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
     elif cmf >= 0.0 or clv >= 0.45: s_pts += 5.0
 
     lt_sustainability_score = round(min(25.0, max(0.0, s_pts)), 1)
-
     lt_quality_score = round(lt_business_quality + lt_growth_score + lt_sustainability_score, 1)
+
+    # Fundamental Trend Score
+    trend_res = compute_fundamental_trend_score(scored)
 
     # ── 4. INDEPENDENT VALUATION SCORE & STATUS (0 - 100) ────────────────────
     v_pts = 0.0
@@ -1885,7 +1949,8 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
         "lt_sustainability_score": lt_sustainability_score,
         "lt_valuation_score": lt_valuation_score,
         "lt_valuation_status": lt_val_status,
-        "lt_risk_level": lt_risk
+        "lt_risk_level": lt_risk,
+        **trend_res
     }
 
 
@@ -2592,6 +2657,51 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
     return qualified[:top_n]
 
 
+def evaluate_incumbent_status(scored_match: dict) -> dict:
+    """
+    Evaluates an incumbent stock's replacement status based on Structural Quality AND Fundamental Trend.
+    Do NOT automatically classify as REPLACE CANDIDATE unless there is evidence of deteriorating fundamentals.
+    """
+    q_score = scored_match["lt_quality_score"]
+    t_score = scored_match.get("fundamental_trend_score", 50.0)
+    sec_group = scored_match.get("sector_group", "QUALITY_GROWTH")
+    val_status = scored_match.get("lt_valuation_status", "FAIRLY_VALUED")
+    de = float(scored_match.get("de_ratio") if scored_match.get("de_ratio") is not None else 0.0)
+
+    if q_score >= 75.0 and t_score >= 45.0:
+        inc_status = "KEEP"
+        badge = "🟢 KEEP (Top Quality)"
+        badge_class = "badge-green"
+        reason = f"Top structural quality ({q_score:.0f}/100) with stable fundamentals"
+    elif q_score >= 50.0 and t_score >= 60.0:
+        inc_status = "IMPROVING_MONITOR"
+        badge = "🟢 IMPROVING / MONITOR"
+        badge_class = "badge-green"
+        reason = f"Improving fundamental trend ({t_score:.0f}/100) with moderate quality ({q_score:.0f}/100)"
+    elif sec_group in ("COMMODITY", "MANUFACTURING", "UTILITIES_INFRA") and t_score >= 50.0 and val_status in ("UNDERVALUED", "FAIRLY_VALUED"):
+        inc_status = "CYCLICAL_OPPORTUNITY"
+        badge = "🟡 CYCLICAL OPPORTUNITY"
+        badge_class = "badge-yellow"
+        reason = f"Cyclical sector opportunity ({sec_group}) — favorable valuation ({val_status}) & positive trend ({t_score:.0f}/100)"
+    elif (q_score < 55.0 and t_score < 45.0) or (sec_group != "BFSI" and de > 1.8):
+        inc_status = "REPLACE_CANDIDATE"
+        badge = "🔴 REPLACE CANDIDATE"
+        badge_class = "badge-red"
+        reason = f"Deteriorating fundamentals (Trend: {t_score:.0f}/100, Quality: {q_score:.0f}/100) — material weakness confirmed"
+    else:
+        inc_status = "FUNDAMENTAL_REVIEW"
+        badge = "🟡 FUNDAMENTAL REVIEW"
+        badge_class = "badge-yellow"
+        reason = f"Structural quality ({q_score:.0f}/100) — fundamental trend stable ({t_score:.0f}/100); hold for review"
+
+    return {
+        "incumbent_status": inc_status,
+        "incumbent_badge": badge,
+        "incumbent_badge_class": badge_class,
+        "incumbent_reason": reason
+    }
+
+
 def run_lt_universe_discovery_pipeline(screener_results: list[dict], watchlist_items: list[dict]) -> dict:
     """
     Executes the 4-Stage LT Discovery & Incumbent Audit Pipeline across all 2,414 NSE stocks.
@@ -2611,36 +2721,18 @@ def run_lt_universe_discovery_pipeline(screener_results: list[dict], watchlist_i
 
     all_eval.sort(key=lambda x: x["lt_quality_score"], reverse=True)
 
-    # Incumbent Audit & Classification
+    # Incumbent Audit & Classification using 5-status rules
     incumbents_audit = []
     for w in (watchlist_items or []):
         sym = w["symbol"]
         scored_match = next((x for x in all_eval if x["symbol"] == sym), None)
         if scored_match:
             rank = all_eval.index(scored_match) + 1
-            q_score = scored_match["lt_quality_score"]
-            if q_score >= 75.0:
-                inc_status = "KEEP"
-                badge = "🟢 KEEP (Top Quality)"
-                badge_class = "badge-green"
-                reason = f"Maintains top-tier sector quality ({q_score:.0f}/100) — Rank #{rank} in universe"
-            elif q_score >= 60.0:
-                inc_status = "REVIEW"
-                badge = "🟡 REVIEW (Borderline)"
-                badge_class = "badge-yellow"
-                reason = f"Borderline quality score ({q_score:.0f}/100) — Rank #{rank}; monitor fundamentals"
-            else:
-                inc_status = "REPLACE_CANDIDATE"
-                badge = "🔴 REPLACE CANDIDATE"
-                badge_class = "badge-red"
-                reason = f"Weak fundamental quality ({q_score:.0f}/100) — outscored by universe candidates"
+            audit_res = evaluate_incumbent_status(scored_match)
 
             item = dict(w)
             item.update(scored_match)
-            item["incumbent_status"] = inc_status
-            item["incumbent_badge"] = badge
-            item["incumbent_badge_class"] = badge_class
-            item["incumbent_reason"] = reason
+            item.update(audit_res)
             item["universe_rank"] = rank
             incumbents_audit.append(item)
 
