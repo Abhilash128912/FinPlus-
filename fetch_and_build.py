@@ -932,6 +932,7 @@ def process_fno_stocks(screener_results: list[dict]) -> list[dict]:
     result_map = {r["symbol"]: r for r in screener_results}
     fno_data = []
 
+    excluded_count = 0
     for sym, fno_item in fno_master_dict.items():
         ticker = fno_item["ticker"]
         scored = result_map.get(sym)
@@ -961,9 +962,10 @@ def process_fno_stocks(screener_results: list[dict]) -> list[dict]:
                 if sym == "RELIANCE" or ltp_val >= 1000 or lot_val < 500:
                     fno_data.append(signal)
                 else:
-                    log(f"  ℹ F&O Excluded: {sym} (LTP ₹{ltp_val}, Lot Size {lot_val} fails LTP>=1000 or lot_size<500)")
-        else:
-            log(f"  ⚠ F&O: could not fetch data for {sym}")
+                    excluded_count += 1
+
+    if excluded_count > 0:
+        log(f"  Filtered out {excluded_count} F&O instruments failing options criteria (LTP >= 1000 or Lot Size < 500).")
 
     # Rank and select the top 15 stocks dynamically
     # Sort key: conviction (descending), then total_score (descending)
