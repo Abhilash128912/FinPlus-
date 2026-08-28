@@ -1189,7 +1189,7 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
 
         # Check for 1h/Daily Support Reversal Candle (A/E Breakout)
         is_reversal_up = (day_chg > -0.35 or (rsi > 42 and rsi < 70))
-        gate = get_lt_watchlist_status(trend, rsi, ltp, effective_gtt, day_chg=day_chg, is_reversal_up=is_reversal_up, holding=holding)
+        gate = get_lt_watchlist_status(trend, rsi, ltp, effective_gtt, day_chg=day_chg, is_reversal_up=is_reversal_up, holding=holding, scored=scored)
         status = gate["status"]
         if status == "BUY_NOW" and active:
             buy_now_count += 1

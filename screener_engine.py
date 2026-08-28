@@ -1758,19 +1758,18 @@ def get_lt_watchlist_status(
     gtt_level: float = None,
     day_chg: float = 0.0,
     is_reversal_up: bool = True,
-    holding: dict = None
+    holding: dict = None,
+    scored: dict = None
 ) -> dict:
     """
-    LT Watchlist Dynamic Status Gate — 4 states with A/E Support Reversal Expansion.
-
-    BOUGHT   : Stock is currently held in LT Portfolio (cooling off / holding active)
-    BUY_NOW  : Trend confirmed + Price in Support Zone (≤ GTT * 1.008) + Moving UP from Support (A/E Breakout) + RSI < 70
-    WAIT     : Trend confirmed but price hasn't reached support or is still falling (coiling at support)
-    WATCHLIST: Consolidation / Distribution / Downtrend — monitoring only
+    Decoupled LT Watchlist Engine:
+    Separates Business Quality (fundamental conviction) from Entry Timing (GTT / MA support proximity).
     """
+    scored = scored or {}
     UPTREND_STATES = ("Uptrend", "Accumulation", "Strong Uptrend")
     COOLING_OFF_DAYS = 10
 
+    # If holding active, manage BOUGHT status & cooling off
     if holding and int(holding.get("qty", 0)) > 0:
         qty = int(holding.get("qty", 1))
         avg_price = float(holding.get("avg_price", ltp or 0))
@@ -1790,7 +1789,6 @@ def get_lt_watchlist_status(
                 days_held = None
 
         is_cooling_off = (days_held is not None and days_held < COOLING_OFF_DAYS)
-
         if is_cooling_off:
             day_num = max(1, days_held + 1)
             return {
@@ -1800,61 +1798,102 @@ def get_lt_watchlist_status(
                 "reason": f"Purchased{date_str}: {qty} share(s) @ ₹{avg_price:.2f} · Cooling Off Active (Day {day_num} of {COOLING_OFF_DAYS}) {pnl_str}".strip()
             }
 
-        # Cooling off completed (> 10 days) — check if fresh pyramiding / add buy signal triggers
-        if trend in UPTREND_STATES and gtt_level is not None and ltp is not None:
-            in_support_zone = (ltp <= gtt_level * 1.008)
-            rsi_ok = (rsi is None or rsi < 70)
-            if in_support_zone and rsi_ok and (is_reversal_up or day_chg >= -0.3):
-                return {
-                    "status": "BUY_NOW",
-                    "badge": f"🟢 BUY NOW (ADD)",
-                    "badge_class": "badge-green",
-                    "reason": f"Pyramiding / Add Opportunity: Price ₹{ltp:.2f} bouncing UP from Support GTT ₹{gtt_level:.2f} post {COOLING_OFF_DAYS}-day cooling off ({days_held} days held)"
-                }
+    # ── 1. LT QUALITY SCORE (0 - 100) ──────────────────────────────────────────
+    lt_q_pts = 0.0
+    roe = float(scored.get("roe_pct") or 0.0)
+    de = float(scored.get("de_ratio") if scored.get("de_ratio") is not None else 1.0)
+    npm = float(scored.get("npm_pct") or 0.0)
+    rev_growth = float(scored.get("rev_growth_pct") or 0.0)
 
-        held_str = f" · Cooling off completed ({days_held} days held)" if days_held is not None else ""
+    if roe >= 20.0: lt_q_pts += 25.0
+    elif roe >= 15.0: lt_q_pts += 18.0
+    elif roe >= 10.0: lt_q_pts += 10.0
+
+    if de <= 0.15: lt_q_pts += 25.0
+    elif de <= 0.50: lt_q_pts += 18.0
+    elif de <= 1.0: lt_q_pts += 10.0
+
+    if npm >= 15.0: lt_q_pts += 15.0
+    elif npm >= 8.0: lt_q_pts += 10.0
+    elif npm > 0: lt_q_pts += 5.0
+
+    if rev_growth >= 15.0: lt_q_pts += 15.0
+    elif rev_growth >= 8.0: lt_q_pts += 10.0
+
+    if trend in UPTREND_STATES: lt_q_pts += 20.0
+    elif trend == "Consolidation": lt_q_pts += 10.0
+
+    lt_quality_score = round(min(100.0, max(0.0, lt_q_pts)), 1)
+
+    # ── 2. LT ENTRY SCORE (0 - 100) ────────────────────────────────────────────
+    lt_e_pts = 0.0
+    if gtt_level and gtt_level > 0 and ltp > 0:
+        dist_gtt_pct = ((ltp - gtt_level) / gtt_level) * 100.0
+        if dist_gtt_pct <= 1.0: lt_e_pts += 35.0
+        elif dist_gtt_pct <= 5.0: lt_e_pts += 25.0
+        elif dist_gtt_pct <= 10.0: lt_e_pts += 15.0
+        else: lt_e_pts += 5.0
+    else:
+        lt_e_pts += 15.0
+
+    ma50 = float(scored.get("ma50") or 0)
+    if ma50 > 0 and ltp > 0:
+        dist_ma50 = abs((ltp - ma50) / ma50) * 100.0
+        if dist_ma50 <= 5.0: lt_e_pts += 25.0
+        elif dist_ma50 <= 12.0: lt_e_pts += 15.0
+        else: lt_e_pts += 5.0
+    else:
+        lt_e_pts += 15.0
+
+    if rsi is not None:
+        if 40 <= rsi <= 62: lt_e_pts += 25.0
+        elif 62 < rsi <= 72: lt_e_pts += 15.0
+        else: lt_e_pts += 5.0
+
+    if is_reversal_up or day_chg >= -0.3: lt_e_pts += 15.0
+
+    lt_entry_score = round(min(100.0, max(0.0, lt_e_pts)), 1)
+
+    # ── 3. ACTION MAPPING ──────────────────────────────────────────────────────
+    if holding and int(holding.get("qty", 0)) > 0:
         return {
             "status": "BOUGHT",
-            "badge": f"🟢 BOUGHT ({qty})",
+            "badge": f"🟢 BOUGHT ({holding.get('qty')})",
             "badge_class": "badge-green",
-            "reason": f"Purchased{date_str}: {qty} share(s) @ ₹{avg_price:.2f}{held_str} {pnl_str}".strip()
+            "reason": f"Holding active ({holding.get('qty')} sh @ ₹{holding.get('avg_price', 0):.2f}) · Quality: {lt_quality_score:.0f}/100",
+            "lt_quality_score": lt_quality_score,
+            "lt_entry_score": lt_entry_score
         }
 
-
-    if trend in UPTREND_STATES:
-        if gtt_level is not None and ltp is not None:
-            # Price in support zone (at or below GTT + 0.8% buffer)
-            in_support_zone = (ltp <= gtt_level * 1.008)
-            rsi_ok = (rsi is None or rsi < 70)
-            
-            if in_support_zone and rsi_ok:
-                if is_reversal_up or day_chg >= -0.3:
-                    return {
-                        "status": "BUY_NOW",
-                        "badge": "🟢 BUY NOW",
-                        "badge_class": "badge-green",
-                        "reason": f"A/E Breakout: Price ₹{ltp:.2f} bouncing UP from Support GTT ₹{gtt_level:.2f} · Trend: {trend}"
-                    }
-                else:
-                    return {
-                        "status": "WAIT",
-                        "badge": "🔵 WAIT",
-                        "badge_class": "badge-purple",
-                        "reason": f"At Support GTT ₹{gtt_level:.2f} — Coiling (Awaiting 1h/Daily Green Reversal Expansion Candle)"
-                    }
-
-        return {
-            "status": "WAIT",
-            "badge": "🔵 WAIT",
-            "badge_class": "badge-purple",
-            "reason": f"Trend confirmed ({trend}) — waiting for pullback to Support GTT" + (f" ₹{gtt_level:.2f}" if gtt_level else " (GTT not set)")
-        }
+    if lt_quality_score >= 70:
+        if lt_entry_score >= 65:
+            status = "BUY_NOW"
+            badge = "🟢 BUY NOW (ACCUMULATE)"
+            badge_class = "badge-green"
+            reason = f"High conviction compounder ({lt_quality_score:.0f}/100) in prime accumulation zone ({lt_entry_score:.0f}/100 entry)"
+        else:
+            status = "ACCUMULATE_ON_DIP"
+            badge = "🟢 ACCUMULATE ON DIP"
+            badge_class = "badge-green"
+            reason = f"Top quality business ({lt_quality_score:.0f}/100) — extended entry ({lt_entry_score:.0f}/100); set GTT near ₹{gtt_level:.2f}" if gtt_level else f"Top quality business ({lt_quality_score:.0f}/100) — set GTT near support"
+    elif lt_quality_score >= 45:
+        status = "WAIT"
+        badge = "🔵 HOLD / MONITOR"
+        badge_class = "badge-purple"
+        reason = f"Moderate quality ({lt_quality_score:.0f}/100) — monitor for improved valuation/trend"
+    else:
+        status = "WATCHLIST"
+        badge = "⚪ DE-PRIORITIZE"
+        badge_class = "badge-gray"
+        reason = f"Low fundamental quality score ({lt_quality_score:.0f}/100)"
 
     return {
-        "status": "WATCHLIST",
-        "badge": "⬜ WATCHING",
-        "badge_class": "badge-gray",
-        "reason": f"Trend not confirmed ({trend}) — monitoring only, no action expected"
+        "status": status,
+        "badge": badge,
+        "badge_class": badge_class,
+        "reason": reason,
+        "lt_quality_score": lt_quality_score,
+        "lt_entry_score": lt_entry_score
     }
 
 
@@ -2302,15 +2341,9 @@ def calc_indmoney_charges(trade_value: float, trade_type: str = "BUY") -> dict:
 
 def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, monthly_sip: float = 200.0) -> list[dict]:
     """
-    Filters and ranks the Top 20 Quality Penny / Micro-Cap wealth-builder stocks from the universe.
-    
-    Quality Penny Gates (Strict 6-Point Filter):
-    1. Price: ₹5.0 <= LTP <= ₹75.0 (affordable micro-caps for ₹200/mo SIP)
-    2. Solvency: D/E <= 1.0 (Low debt / no bankruptcy trap)
-    3. Profitability: ROE >= 6.0% and Net Profit Margin > 0%
-    4. Liquidity: 10d Avg Volume >= 20,000 shares/day (no lower circuit trap)
-    5. Valuation & Quality: Total Score >= 45.0
-    6. Market Cap: >= ₹50 Cr
+    Decoupled Quality Penny / Micro-Cap Engine:
+    Separates Wealth-Builder Durability (Debt-free status, ROE, Margin) 
+    from SIP Entry Timing (Distance from GTT / EMA20 support).
     """
     if not screener_results:
         return []
@@ -2319,120 +2352,128 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
     for s in screener_results:
         ltp = float(s.get("ltp") or 0.0)
         mc = float(s.get("market_cap") or 0.0)
-        roe = s.get("roe_pct")
-        npm = s.get("npm_pct")
-        de = s.get("de_ratio")
+        roe = float(s.get("roe_pct") if s.get("roe_pct") is not None else 0.0)
+        npm = float(s.get("npm_pct") if s.get("npm_pct") is not None else 0.0)
+        de = float(s.get("de_ratio") if s.get("de_ratio") is not None else 1.0)
         vol = float(s.get("avg_volume_10d") or s.get("today_volume") or 0.0)
         total_score = float(s.get("total_score") or 0.0)
-        rs_rating = float(s.get("rs_rating") or 50.0)
-        strength = float(s.get("strength") or 0.0)
 
         # Gate 1: Price Range (₹5 to ₹75)
-        if not (5.0 <= ltp <= 75.0):
-            continue
-
-        # Gate 2: Market Cap Floor (≥ ₹50 Cr)
-        if mc > 0 and mc < 500000000:
-            continue
-
+        if not (5.0 <= ltp <= 75.0): continue
+        # Gate 2: Market Cap Floor (>= ₹50 Cr)
+        if mc > 0 and mc < 500000000: continue
         # Gate 3: Solvency (D/E <= 1.0)
-        if de is not None and de > 1.0:
-            continue
-
+        if de > 1.0: continue
         # Gate 4: Profitability (ROE >= 6% and Margin > 0%)
-        if roe is not None and roe < 6.0:
-            continue
-        if npm is not None and npm <= 0.0:
-            continue
-
+        if roe < 6.0 or npm <= 0.0: continue
         # Gate 5: Liquidity (Avg Volume >= 20,000)
-        if vol > 0 and vol < 20000:
-            continue
+        if vol > 0 and vol < 20000: continue
+        # Gate 6: Minimum Quality Score (>= 45)
+        if total_score < 45.0: continue
 
-        # Gate 6: Minimum Quality Score (≥ 45)
-        if total_score < 45.0:
-            continue
+        # ── 1. PENNY QUALITY SCORE (0 - 100) ────────────────────────────────────
+        q_pts = 0.0
+        if de <= 0.15: q_pts += 25.0
+        elif de <= 0.50: q_pts += 18.0
+        elif de <= 1.0: q_pts += 10.0
 
-        # Compute Penny Ranking Score
-        # Composite of Total Score (40%) + Strength/Fundamentals (30%) + RS Rating (30%) + Bonuses
-        penny_rank_score = round(
-            (total_score * 0.40) +
-            (strength * 0.30) +
-            (rs_rating * 0.30) +
-            (10.0 if (de is not None and de <= 0.20) else 0.0) +
-            (10.0 if (roe is not None and roe >= 20.0) else 0.0),
-            1
-        )
+        if roe >= 20.0: q_pts += 25.0
+        elif roe >= 12.0: q_pts += 18.0
+        elif roe >= 6.0: q_pts += 10.0
 
-        # Calculate ₹200 Monthly SIP Accumulation Qty
-        sip_qty = max(1, int(monthly_sip / ltp)) if ltp > 0 else 1
-        sip_cost = round(sip_qty * ltp, 2)
+        if npm >= 10.0: q_pts += 20.0
+        elif npm > 0.0: q_pts += 10.0
 
-        # Durability Tag
-        if de is not None and de <= 0.15:
-            durability_tag = "💎 Virtually Debt-Free"
-            durability_class = "badge-green"
-        elif roe is not None and roe >= 20.0:
-            durability_tag = "🔥 High ROE Compounder"
-            durability_class = "badge-purple"
-        elif total_score >= 60.0:
-            durability_tag = "⚡ Quality Growth Penny"
-            durability_class = "badge-green"
-        else:
-            durability_tag = "📈 Undervalued Micro-Cap"
-            durability_class = "badge-yellow"
+        q_pts += min(20.0, (total_score / 100.0) * 20.0)
+        if vol >= 50000: q_pts += 10.0
+        else: q_pts += 5.0
 
-        # Calculate dynamic auto-trailing Support GTT
+        penny_quality_score = round(min(100.0, max(0.0, q_pts)), 1)
+
+        # ── 2. PENNY ENTRY SCORE (0 - 100) ──────────────────────────────────────
+        e_pts = 0.0
         ema20 = float(s.get("ema20") or 0)
         sr_sup = float(s.get("sup_level") or 0)
         low20 = float(s.get("low20") or 0)
         ma50 = float(s.get("ma50") or 0)
 
-        auto_gtt = None
-        if ema20 > 0 and ema20 < ltp:
-            auto_gtt = round(ema20, 2)
-        elif sr_sup > 0 and sr_sup < ltp:
-            auto_gtt = round(sr_sup, 2)
-        elif low20 > 0 and low20 < ltp:
-            auto_gtt = round(low20, 2)
-        elif ma50 > 0 and ma50 < ltp:
-            auto_gtt = round(ma50, 2)
-        elif low20 > 0:
-            auto_gtt = round(low20, 2)
-        elif ema20 > 0:
-            auto_gtt = round(ema20, 2)
-        elif sr_sup > 0:
-            auto_gtt = round(sr_sup, 2)
-        elif ltp > 0:
-            auto_gtt = round(ltp, 2)
+        auto_gtt = ema20 if (0 < ema20 < ltp) else sr_sup if (0 < sr_sup < ltp) else low20 if (0 < low20 < ltp) else ma50 if (0 < ma50 < ltp) else ltp
+
+        if auto_gtt > 0 and ltp > 0:
+            dist_gtt_pct = ((ltp - auto_gtt) / auto_gtt) * 100.0
+            if dist_gtt_pct <= 3.0: e_pts += 35.0
+            elif dist_gtt_pct <= 8.0: e_pts += 22.0
+            elif dist_gtt_pct <= 15.0: e_pts += 12.0
+            else: e_pts += 5.0
+        else:
+            e_pts += 15.0
+
+        if ema20 > 0 and ltp > 0:
+            dist_ema = abs((ltp - ema20) / ema20) * 100.0
+            if dist_ema <= 4.0: e_pts += 30.0
+            elif dist_ema <= 10.0: e_pts += 18.0
+            else: e_pts += 8.0
+        else:
+            e_pts += 15.0
 
         rsi = float(s.get("rsi") or 50.0)
-        trend = s.get("trend") or "Consolidation"
+        if 40 <= rsi <= 60: e_pts += 25.0
+        elif 60 < rsi <= 70: e_pts += 15.0
+        else: e_pts += 5.0
+
         day_chg = float(s.get("day_chg_pct") or 0.0)
-        is_reversal_up = (day_chg > -0.35 or (rsi > 42 and rsi < 70))
+        if day_chg >= -0.35: e_pts += 10.0
 
-        gate = get_lt_watchlist_status(trend, rsi, ltp, auto_gtt, day_chg=day_chg, is_reversal_up=is_reversal_up)
+        penny_entry_score = round(min(100.0, max(0.0, e_pts)), 1)
 
-        dist_from_gtt_pct = None
-        if auto_gtt and auto_gtt > 0 and ltp > 0:
-            dist_from_gtt_pct = round(((ltp - auto_gtt) / auto_gtt) * 100, 1)
+        # ── 3. COMBINED PENNY RANK SCORE & ACTION ──────────────────────────────
+        penny_rank_score = round((penny_quality_score * 0.65) + (penny_entry_score * 0.35), 1)
+
+        if penny_quality_score >= 70:
+            if penny_entry_score >= 60:
+                status_badge = "🟢 START SIP NOW"
+                status_badge_class = "badge-green"
+                status_reason = f"High durability wealth-builder ({penny_quality_score:.0f}/100) at ideal SIP entry ({penny_entry_score:.0f}/100 entry)"
+            else:
+                status_badge = "🟢 SIP ON DIP / RETEST"
+                status_badge_class = "badge-green"
+                status_reason = f"Top quality micro-cap ({penny_quality_score:.0f}/100) — start initial tranche & accumulate on dips to GTT ₹{auto_gtt:.2f}"
+        elif penny_quality_score >= 50:
+            status_badge = "🟡 WATCHLIST"
+            status_badge_class = "badge-yellow"
+            status_reason = f"Developing micro-cap ({penny_quality_score:.0f}/100) — monitor earnings growth"
+        else:
+            status_badge = "🔴 REJECT"
+            status_badge_class = "badge-gray"
+            status_reason = "Fails micro-cap durability requirements"
+
+        # SIP qty
+        sip_qty = max(1, int(monthly_sip / ltp)) if ltp > 0 else 1
+        sip_cost = round(sip_qty * ltp, 2)
+
+        if de <= 0.15: durability_tag = "💎 Virtually Debt-Free"
+        elif roe >= 20.0: durability_tag = "🔥 High ROE Compounder"
+        elif total_score >= 60.0: durability_tag = "⚡ Quality Growth Penny"
+        else: durability_tag = "📈 Undervalued Micro-Cap"
+
+        dist_from_gtt_pct = round(((ltp - auto_gtt) / auto_gtt) * 100, 1) if auto_gtt > 0 else 0.0
 
         item = dict(s)
+        item["penny_quality_score"] = penny_quality_score
+        item["penny_entry_score"] = penny_entry_score
         item["penny_rank_score"] = penny_rank_score
         item["monthly_sip_qty"] = sip_qty
         item["monthly_sip_cost"] = sip_cost
         item["durability_tag"] = durability_tag
-        item["durability_class"] = durability_class
-        item["status"] = gate["status"]
-        item["status_badge"] = gate["badge"]
-        item["status_badge_class"] = gate["badge_class"]
-        item["status_reason"] = gate["reason"]
+        item["durability_class"] = "badge-green" if penny_quality_score >= 70 else "badge-yellow"
+        item["status_badge"] = status_badge
+        item["status_badge_class"] = status_badge_class
+        item["status_reason"] = status_reason
         item["auto_gtt"] = auto_gtt
         item["dist_from_gtt_pct"] = dist_from_gtt_pct
         qualified.append(item)
 
-    # Sort descending by penny ranking score
-    qualified.sort(key=lambda x: x.get("penny_rank_score", 0), reverse=True)
+    qualified.sort(key=lambda x: x["penny_quality_score"], reverse=True)
     return qualified[:top_n]
 
 
