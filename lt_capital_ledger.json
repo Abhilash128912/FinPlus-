@@ -1,7 +1,7 @@
 {
   "start_date": "2026-08-19",
   "daily_accrual_rate": 100.0,
-  "extra_deposits": 1037.32,
+  "extra_deposits": 1037.68,
   "holdings": [
     {
       "symbol": "ASHOKLEY",
@@ -30,6 +30,13 @@
       "avg_price": 408.8,
       "buy_date": "2026-08-25",
       "last_price": 408.6
+    },
+    {
+      "symbol": "UYFINCORP",
+      "qty": 10,
+      "avg_price": 20.0,
+      "buy_date": "2026-08-27",
+      "last_price": 20.0
     }
   ],
   "transactions": [
@@ -144,6 +151,29 @@
         "stamp_duty": 0.06,
         "exchange_fee": 0.01,
         "gst": 0.04,
+        "dp_charges": 0.0,
+        "sebi_fee": 0.0
+      }
+    },
+    {
+      "id": "TX-BUY-1787809801",
+      "timestamp": "2026-08-27 11:20:01",
+      "type": "BUY",
+      "symbol": "UYFINCORP",
+      "qty": 10,
+      "price": 20.0,
+      "gross_value": 200.0,
+      "total_charges": 0.36,
+      "net_value": 200.36,
+      "charges_breakdown": {
+        "gross_value": 200.0,
+        "total_charges": 0.36,
+        "net_value": 200.36,
+        "brokerage": 0.1,
+        "stt": 0.2,
+        "stamp_duty": 0.03,
+        "exchange_fee": 0.01,
+        "gst": 0.02,
         "dp_charges": 0.0,
         "sebi_fee": 0.0
       }

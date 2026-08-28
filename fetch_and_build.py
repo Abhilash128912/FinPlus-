@@ -29,7 +29,7 @@ import threading
 import pandas as pd
 import yfinance as yf
 
-from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, calc_indmoney_charges, compute_quality_penny_stocks
+from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, calc_indmoney_charges, compute_quality_penny_stocks, find_best_swing_candidate
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -749,6 +749,7 @@ def run_scan(tickers: list[str]) -> list[dict]:
         scored = score_stock(info, history)
         scored["symbol"] = clean
         scored["ticker"] = ticker
+        scored = apply_1h_sr_overlay(scored, ticker)
         qualified = (
             scored["total_score"] >= MIN_TOTAL and
             scored["strength"] >= MIN_STRENGTH
@@ -944,6 +945,7 @@ def process_fno_stocks(screener_results: list[dict]) -> list[dict]:
                 scored  = score_stock(info, history)
                 scored["symbol"] = sym
                 scored["ticker"] = ticker
+                scored  = apply_1h_sr_overlay(scored, ticker)
                 trend_info = compute_trend_classification(scored)
                 scored["trend"]       = trend_info["trend"]
                 scored["tech_rating"] = trend_info["badge"]
@@ -1013,6 +1015,7 @@ def process_watchlist(screener_results: list[dict]) -> list[dict]:
                 scored = score_stock(info, history)
                 scored["symbol"] = sym
                 scored["ticker"] = item["ticker"]
+                scored = apply_1h_sr_overlay(scored, item["ticker"])
                 
                 # Fetch news on-the-fly if missing
                 if "news" not in data or data["news"] is None:
@@ -1253,6 +1256,8 @@ def get_lt_portfolio_summary(screener_results: list[dict] = None) -> dict:
     start_date_str = ledger.get("start_date", "2026-08-19")
     daily_rate = float(ledger.get("daily_accrual_rate", 100.0))
     extra_deposits = float(ledger.get("extra_deposits", 0.0))
+    withdrawals = float(ledger.get("withdrawals", 0.0))
+    broker_adjustment = float(ledger.get("broker_adjustment", 0.0))
     
     try:
         s_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
@@ -1267,7 +1272,7 @@ def get_lt_portfolio_summary(screener_results: list[dict] = None) -> dict:
     except Exception:
         days_active = 1
 
-    total_deposited = round((days_active * daily_rate) + extra_deposits, 2)
+    total_deposited = round((days_active * daily_rate) + extra_deposits + broker_adjustment - withdrawals, 2)
     
     holdings = ledger.get("holdings", [])
     transactions = ledger.get("transactions", [])
@@ -1327,6 +1332,8 @@ def get_lt_portfolio_summary(screener_results: list[dict] = None) -> dict:
         "days_active": days_active,
         "daily_accrual_rate": daily_rate,
         "extra_deposits": extra_deposits,
+        "withdrawals": withdrawals,
+        "broker_adjustment": broker_adjustment,
         "total_deposited": total_deposited,
         "available_cash": available_cash,
         "invested_capital": round(invested_capital, 2),
@@ -1893,8 +1900,8 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
         risk = round(base_entry * 0.04, 2)
         sl_price = round(base_entry - risk, 2)
 
-    target1 = round(base_entry + (2.0 * risk), 2)
-    target2 = round(base_entry + (3.0 * risk), 2)
+    target1 = round(base_entry + (1.5 * risk), 2)
+    target2 = round(base_entry + (2.5 * risk), 2)
     sl_pct = round(((sl_price - base_entry) / base_entry) * 100, 1) if base_entry > 0 else 0
     t1_pct = round(((target1 - base_entry) / base_entry) * 100, 1) if base_entry > 0 else 0
     t2_pct = round(((target2 - base_entry) / base_entry) * 100, 1) if base_entry > 0 else 0
@@ -2749,8 +2756,8 @@ details[open] summary::before {
   <div id="tab-watchlist" style="display:none">
 
     <!-- 📅 Systematic Daily Capital Accumulator & INDmoney Portfolio Dashboard Card -->
-    <div id="ltCapitalDashboard" style="background:linear-gradient(135deg, #0e1726, #162438);border:1.5px solid rgba(52,211,153,0.35);border-radius:14px;padding:18px 22px;margin-bottom:20px;box-shadow:0 8px 30px rgba(0,0,0,0.35)">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:16px">
+    <div id="ltCapitalDashboard" style="background:linear-gradient(135deg, #0e1726, #162438);border:1.5px solid rgba(52,211,153,0.35);border-radius:14px;padding:14px 22px;margin-bottom:20px;box-shadow:0 8px 30px rgba(0,0,0,0.35)">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">
         <div style="display:flex;align-items:center;gap:12px">
           <div style="background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px">📅</div>
           <div>
@@ -2762,42 +2769,7 @@ details[open] summary::before {
           </div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button onclick="openLtBuyModal('', 0)" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:700;font-size:12px;padding:8px 14px;border-radius:8px;border:none;cursor:pointer">🛒 Record Buy</button>
-          <button onclick="promptLtDeposit()" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.4);color:#34d399;font-weight:700;font-size:12px;padding:8px 14px;border-radius:8px;cursor:pointer">➕ Top-Up Capital</button>
           <button onclick="toggleLtHoldingsDrawer()" style="background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.4);color:#a5b4fc;font-weight:700;font-size:12px;padding:8px 14px;border-radius:8px;cursor:pointer">💼 View Holdings</button>
-        </div>
-      </div>
-
-      <!-- Metric Grid -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Daily Accrual Rate</div>
-          <div style="font-size:20px;font-weight:800;color:#34d399;margin-top:2px">+₹100.00 <span style="font-size:10px;color:var(--muted)">/ day</span></div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Auto-credits EOD</div>
-        </div>
-
-        <div style="background:rgba(52,211,153,0.1);border:1.5px solid rgba(52,211,153,0.35);border-radius:10px;padding:12px 14px">
-          <div style="font-size:10px;color:#34d399;text-transform:uppercase;letter-spacing:.05em;font-weight:700">Available Cash</div>
-          <div id="ltAvailableCashVal" style="font-size:22px;font-weight:800;color:#34d399;margin-top:2px">₹100.00</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Ready for 🟢 BUY NOW</div>
-        </div>
-
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Total Deposited</div>
-          <div id="ltTotalDepositedVal" style="font-size:20px;font-weight:800;color:#fff;margin-top:2px">₹100.00</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">Cumulative Capital</div>
-        </div>
-
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Invested Capital</div>
-          <div id="ltInvestedCapitalVal" style="font-size:20px;font-weight:800;color:#e2e8f0;margin-top:2px">₹0.00</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">In Active Holdings</div>
-        </div>
-
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Portfolio Value</div>
-          <div id="ltPortfolioValueVal" style="font-size:20px;font-weight:800;color:#fff;margin-top:2px">₹0.00</div>
-          <div id="ltTotalPnlVal" style="font-size:10px;font-weight:700;color:var(--muted);margin-top:2px">P&L: ₹0.00 (0.0%)</div>
         </div>
       </div>
     </div>
@@ -3070,15 +3042,15 @@ details[open] summary::before {
 
 <script>
 // ── DATA (injected by Python) ─────────────────────────────────────────────
-const SCREENER_DATA = __SCREENER_JSON__;
-const WATCHLIST_SEED = __WATCHLIST_JSON__;
-const LT_WATCHLIST = __LT_WATCHLIST_JSON__;
-const CONFIG = __CONFIG_JSON__;
-const COMMODITIES_DATA = __COMMODITIES_JSON__;
-const MARKET_INFO = __MARKET_INFO_JSON__;
-const FNO_DATA = __FNO_JSON__;
-const PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;
-const LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;
+let SCREENER_DATA = __SCREENER_JSON__;
+let WATCHLIST_SEED = __WATCHLIST_JSON__;
+let LT_WATCHLIST = __LT_WATCHLIST_JSON__;
+let CONFIG = __CONFIG_JSON__;
+let COMMODITIES_DATA = __COMMODITIES_JSON__;
+let MARKET_INFO = __MARKET_INFO_JSON__;
+let FNO_DATA = __FNO_JSON__;
+let PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;
+let LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;
 
 // ── State ─────────────────────────────────────────────────────────────────
 let watchlist = [];
@@ -3334,17 +3306,17 @@ function getSwingData() {
 function applySwingPreset(data) {
   switch (swingPreset) {
     case 'rs':
-      return data.filter(s => (s.rs_rating || 0) >= 80 && (!s.rsi || s.rsi <= 72));
+      return data.filter(s => (s.rs_rating || 0) >= 80 && (s.setup_score >= 65 || s.swing_score >= 65));
     case 'blast':
-      return data.filter(s => (s.is_blast || (s.volume_spike >= 2.0 && s.momentum >= 60)) && (!s.rsi || s.rsi <= 72));
+      return data.filter(s => s.is_blast || (s.volume_spike >= 1.8 && (s.setup_score >= 70 || s.swing_score >= 70)));
     case 'inflow':
-      return data.filter(s => s.is_order_flow_bull || (s.cmf >= 0.08 && s.clv >= 0.55 && (!s.rsi || s.rsi <= 72)));
+      return data.filter(s => s.is_order_flow_bull || (s.cmf >= 0.08 && s.clv >= 0.55 && (s.setup_score >= 65 || s.swing_score >= 65)));
     case 'momentum':
-      return data.filter(s => (s.is_momentum_surge || s.momentum >= 75) && (!s.rsi || s.rsi <= 72));
+      return data.filter(s => s.is_momentum_surge || (s.momentum >= 70 && (s.setup_score >= 70 || s.swing_score >= 70)));
     case 'pullback':
-      return data.filter(s => s.is_pullback || (s.rsi >= 38 && s.rsi <= 53));
+      return data.filter(s => s.is_pullback || (s.entry_score >= 60 && s.setup_score >= 60));
     case 'quality':
-      return data.filter(s => s.total_score >= 55 && s.momentum >= 60 && (!s.rsi || s.rsi <= 72));
+      return data.filter(s => s.setup_score >= 70 && s.entry_score >= 50);
     default:
       return data;
   }
@@ -3365,7 +3337,7 @@ function sortSwingTable(col) {
 }
 
 function getSwingCardClass(s) {
-  if (s.is_overbought || (s.rsi && s.rsi > 72)) return 'swing-card-overbought';
+  if (s.swing_action === "EXTENDED — DON'T CHASE") return 'swing-card-extended';
   if (s.is_blast) return 'swing-card-blast';
   if (s.is_order_flow_bull) return 'swing-card-inflow';
   if (s.is_momentum_surge) return 'swing-card-momentum';
@@ -3374,7 +3346,9 @@ function getSwingCardClass(s) {
 }
 
 function getSwingRingColor(s) {
-  if (s.is_overbought || (s.rsi && s.rsi > 72)) return '#ef4444';
+  if (s.swing_action === "EXTENDED — DON'T CHASE") return '#f97316';
+  if (s.swing_action === "BUY NOW") return '#10b981';
+  if (s.swing_action === "BUY ON RETEST") return '#3b82f6';
   if (s.is_blast) return '#10b981';
   if (s.is_order_flow_bull) return '#6366f1';
   if (s.is_momentum_surge) return '#f59e0b';
@@ -3468,11 +3442,11 @@ function renderSwingRadar() {
               <div class="swing-sl">${slStr}<span style="font-size:9px;color:var(--muted)"> ${slPct}</span></div>
             </div>
             <div style="text-align:center">
-              <div style="color:#10b981;font-size:10px">T1 (1:2)</div>
+              <div style="color:#10b981;font-size:10px">T1 (1:1.5)</div>
               <div class="swing-t1">${t1Str}<span style="font-size:9px;color:var(--muted)"> ${t1Pct}</span></div>
             </div>
             <div style="text-align:center">
-              <div style="color:#00d4aa;font-size:10px">T2 (1:3)</div>
+              <div style="color:#00d4aa;font-size:10px">T2 (1:2.5)</div>
               <div class="swing-t2">${t2Str}</div>
             </div>
           </div>
@@ -4337,8 +4311,26 @@ function init() {
   localStorage.removeItem('quality_watchlist_v6');
   localStorage.removeItem('quality_watchlist_v7');
 
+  // Client-side fallback if SCREENER_DATA is empty
+  if (typeof SCREENER_DATA === 'undefined' || !SCREENER_DATA || !Array.isArray(SCREENER_DATA) || SCREENER_DATA.length === 0) {
+    console.warn('SCREENER_DATA is empty. Attempting dynamic fetch of /screener_data.json...');
+    fetch('/screener_data.json')
+      .then(r => r.json())
+      .then(data => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          SCREENER_DATA = data;
+          populateSectorFilter();
+          applyFilters();
+          renderWatchlist();
+          renderLtWatchlist();
+          updateWlCount();
+        }
+      })
+      .catch(err => console.warn('Client fallback fetch error:', err));
+  }
+
   // Always initialize Watchlist directly from fresh server scan
-  const freshServerWatchlist = JSON.parse(JSON.stringify(WATCHLIST_SEED));
+  const freshServerWatchlist = JSON.parse(JSON.stringify(WATCHLIST_SEED || []));
   
   // Preserve any custom user-added stocks from localStorage
   const stored = localStorage.getItem('quality_watchlist_custom_items');
@@ -4357,7 +4349,7 @@ function init() {
 
   // Update live data and dynamic signals for all watchlist items from current scan
   watchlist.forEach(item => {
-    const live = SCREENER_DATA.find(s => s.symbol === item.symbol);
+    const live = (SCREENER_DATA || []).find(s => s.symbol === item.symbol);
     updateWatchlistSignalsAndAlerts(item, live);
   });
 
@@ -5068,20 +5060,52 @@ function renderPennyStocksTab() {
     }
   });
 
-  const buyNowCount = pennyList.filter(s => s.status === 'BUY_NOW' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0)).length;
-  const boughtCount = pennyList.filter(s => hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0).length;
-  const waitCount = pennyList.filter(s => s.status === 'WAIT' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0)).length;
-  const watchingCount = pennyList.filter(s => s.status === 'WATCHLIST' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0)).length;
+  const buyNowCount = pennyList.filter(s => {
+    const sym = (s.symbol || '').toUpperCase();
+    const isB = hMap[sym] && hMap[sym].qty > 0;
+    return !isB && s.status === 'BUY_NOW';
+  }).length;
+  const boughtCount = pennyList.filter(s => {
+    const sym = (s.symbol || '').toUpperCase();
+    const isB = hMap[sym] && hMap[sym].qty > 0;
+    return isB || s.status === 'BOUGHT';
+  }).length;
+  const waitCount = pennyList.filter(s => {
+    const sym = (s.symbol || '').toUpperCase();
+    const isB = hMap[sym] && hMap[sym].qty > 0;
+    return !isB && s.status === 'WAIT';
+  }).length;
+  const watchingCount = pennyList.filter(s => {
+    const sym = (s.symbol || '').toUpperCase();
+    const isB = hMap[sym] && hMap[sym].qty > 0;
+    return !isB && (s.status === 'WATCHLIST' || s.status === 'WATCHING');
+  }).length;
 
   let filtered = [...pennyList];
   if (pennyFilterCategory === 'buy_now') {
-    filtered = filtered.filter(s => s.status === 'BUY_NOW' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0));
+    filtered = filtered.filter(s => {
+      const sym = (s.symbol || '').toUpperCase();
+      const isB = hMap[sym] && hMap[sym].qty > 0;
+      return !isB && s.status === 'BUY_NOW';
+    });
   } else if (pennyFilterCategory === 'bought') {
-    filtered = filtered.filter(s => hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0);
+    filtered = filtered.filter(s => {
+      const sym = (s.symbol || '').toUpperCase();
+      const isB = hMap[sym] && hMap[sym].qty > 0;
+      return isB || s.status === 'BOUGHT';
+    });
   } else if (pennyFilterCategory === 'wait') {
-    filtered = filtered.filter(s => s.status === 'WAIT' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0));
+    filtered = filtered.filter(s => {
+      const sym = (s.symbol || '').toUpperCase();
+      const isB = hMap[sym] && hMap[sym].qty > 0;
+      return !isB && s.status === 'WAIT';
+    });
   } else if (pennyFilterCategory === 'watching') {
-    filtered = filtered.filter(s => s.status === 'WATCHLIST' && !(hMap[(s.symbol || '').toUpperCase()] && hMap[(s.symbol || '').toUpperCase()].qty > 0));
+    filtered = filtered.filter(s => {
+      const sym = (s.symbol || '').toUpperCase();
+      const isB = hMap[sym] && hMap[sym].qty > 0;
+      return !isB && (s.status === 'WATCHLIST' || s.status === 'WATCHING');
+    });
   } else if (pennyFilterCategory === 'debt_free') {
     filtered = filtered.filter(s => s.de_ratio != null && s.de_ratio <= 0.15);
   } else if (pennyFilterCategory === 'high_roe') {
@@ -5105,17 +5129,17 @@ function renderPennyStocksTab() {
     const volVal = s.avg_volume_10d ? (s.avg_volume_10d / 1000).toFixed(0) + 'k' : '—';
 
     const holding = hMap[sym];
-    const isBought = holding && holding.qty > 0 && s.status !== 'BUY_NOW';
-    const gateStatus = (s.status === 'BUY_NOW') ? 'BUY_NOW' : (isBought ? 'BOUGHT' : (s.status || 'WATCHLIST'));
+    const isBought = !!(holding && holding.qty > 0);
+    const gateStatus = isBought ? 'BOUGHT' : ((s.status === 'BUY_NOW') ? 'BUY_NOW' : (s.status || 'WATCHLIST'));
 
 
     // Status Badge
     let statusBadgeHtml = '';
-    if (s.status_badge) {
-      const cls = s.status_badge_class || (gateStatus === 'BUY_NOW' ? 'badge-green' : isBought ? 'badge-green' : gateStatus === 'WAIT' ? 'badge-purple' : 'badge-gray');
+    if (isBought) {
+      statusBadgeHtml = `<span class="badge badge-green" style="font-size:10px;font-weight:700" title="Purchased on ${holding.buy_date || ''} (${holding.qty} shares @ ₹${parseFloat(holding.avg_price || 0).toFixed(2)})">🟢 BOUGHT (${holding.qty})</span>`;
+    } else if (s.status_badge) {
+      const cls = s.status_badge_class || (gateStatus === 'BUY_NOW' ? 'badge-green' : gateStatus === 'WAIT' ? 'badge-purple' : 'badge-gray');
       statusBadgeHtml = `<span class="badge ${cls}" style="font-size:10px;font-weight:700" title="${s.status_reason || ''}">${s.status_badge}</span>`;
-    } else if (isBought) {
-      statusBadgeHtml = `<span class="badge badge-green" style="font-size:10px;font-weight:700" title="Purchased on ${holding.buy_date || ''} (${holding.qty} shares @ ₹${holding.avg_price.toFixed(2)})">🟢 BOUGHT (${holding.qty})</span>`;
     } else if (gateStatus === 'BUY_NOW') {
       statusBadgeHtml = `<span class="badge badge-green" style="font-size:10px;font-weight:700" title="${s.status_reason || ''}">🟢 BUY NOW</span>`;
     } else if (gateStatus === 'WAIT') {
@@ -5585,12 +5609,12 @@ function renderTopPick() {
                 <div style="font-size:10px;color:var(--danger);margin-top:2px">${TOP_PICK.stop_loss_pct || 0}% Below Entry</div>
               </div>
               <div style="background:var(--card);border:1px solid var(--green);padding:10px;border-radius:10px">
-                <div style="font-size:10px;color:var(--green);text-transform:uppercase;font-weight:700">Target 1 (1:2 R:R)</div>
+                <div style="font-size:10px;color:var(--green);text-transform:uppercase;font-weight:700">Target 1 (1:1.5 R:R)</div>
                 <div style="font-size:17px;font-weight:800;color:var(--green);margin-top:2px">₹${TOP_PICK.target1 != null ? TOP_PICK.target1.toFixed(2) : '—'}</div>
                 <div style="font-size:10px;color:var(--green);margin-top:2px">+${TOP_PICK.target1_pct || 0}% Upside</div>
               </div>
               <div style="background:var(--card);border:1px solid var(--purple);padding:10px;border-radius:10px">
-                <div style="font-size:10px;color:var(--purple);text-transform:uppercase;font-weight:700">Target 2 (1:3 R:R)</div>
+                <div style="font-size:10px;color:var(--purple);text-transform:uppercase;font-weight:700">Target 2 (1:2.5 R:R)</div>
                 <div style="font-size:17px;font-weight:800;color:var(--purple);margin-top:2px">₹${TOP_PICK.target2 != null ? TOP_PICK.target2.toFixed(2) : '—'}</div>
                 <div style="font-size:10px;color:var(--purple);margin-top:2px">+${TOP_PICK.target2_pct || 0}% Upside</div>
               </div>
@@ -6800,6 +6824,52 @@ function promptLtDeposit() {
   }).catch(err => alert('Error connecting to backend server.'));
 }
 
+function promptLtWithdrawal() {
+  const amtStr = prompt('Enter Capital Withdrawal Amount (₹) to deduct from LT available cash:');
+  if (!amtStr) return;
+  const amt = parseFloat(amtStr);
+  if (isNaN(amt) || amt <= 0) {
+    alert('Please enter a valid positive withdrawal amount.');
+    return;
+  }
+
+  fetch('/api/lt-portfolio/withdraw', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount: amt })
+  }).then(r => r.json()).then(res => {
+    if (res.status === 'ok') {
+      alert(`✅ Successfully recorded ₹${amt.toFixed(2)} capital withdrawal!`);
+      if (res.summary) renderLtPortfolioSummary(res.summary);
+    } else {
+      alert(`❌ Withdrawal failed: ${res.message}`);
+    }
+  }).catch(err => alert('Error connecting to backend server.'));
+}
+
+function promptLtAdjustment() {
+  const amtStr = prompt('Enter Broker Adjustment Amount (₹)\n\n(Use POSITIVE number for interest/credit, or NEGATIVE number for DP charges/fees):');
+  if (!amtStr) return;
+  const amt = parseFloat(amtStr);
+  if (isNaN(amt)) {
+    alert('Please enter a valid number.');
+    return;
+  }
+
+  fetch('/api/lt-portfolio/adjustment', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount: amt })
+  }).then(r => r.json()).then(res => {
+    if (res.status === 'ok') {
+      alert(`✅ Successfully recorded ₹${amt.toFixed(2)} broker adjustment!`);
+      if (res.summary) renderLtPortfolioSummary(res.summary);
+    } else {
+      alert(`❌ Adjustment failed: ${res.message}`);
+    }
+  }).catch(err => alert('Error connecting to backend server.'));
+}
+
 function openLtBuyModal(symbol, ltp) {
   let sym = symbol ? symbol.trim().toUpperCase() : '';
   if (!sym) {
@@ -6932,6 +7002,104 @@ def fetch_15m_history_cffi(ticker: str) -> pd.DataFrame:
                 return pd.DataFrame(data).set_index("Date")
     except Exception:
         pass
+    return pd.DataFrame()
+
+
+def fetch_1h_history_cffi(ticker: str, days: int = 60) -> pd.DataFrame:
+    """
+    Fetches 1-hour candle data for an NSE stock (up to 60 days).
+    Used exclusively for S/R breakout detection on the correct timeframe.
+    Yahoo Finance supports 1h interval for up to 730 days.
+    """
+    try:
+        from curl_cffi import requests
+        url = (f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}"
+               f"?interval=1h&range={days}d")
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        r = requests.get(url, impersonate="chrome120", headers=headers, timeout=10)
+        if r.status_code == 200:
+            res = r.json().get("chart", {}).get("result", [{}])[0]
+            timestamps = res.get("timestamp", [])
+            quote = res.get("indicators", {}).get("quote", [{}])[0]
+            opens  = quote.get("open", [])
+            highs  = quote.get("high", [])
+            lows   = quote.get("low", [])
+            closes = quote.get("close", [])
+            vols   = quote.get("volume", [])
+            data = []
+            if timestamps and closes:
+                for idx, (ts, c) in enumerate(zip(timestamps, closes)):
+                    if c is None:
+                        continue
+                    o_val = opens[idx]  if idx < len(opens)  and opens[idx]  is not None else c
+                    h_val = highs[idx]  if idx < len(highs)  and highs[idx]  is not None else c
+                    l_val = lows[idx]   if idx < len(lows)   and lows[idx]   is not None else c
+                    v_val = vols[idx]   if idx < len(vols)   and vols[idx]   is not None else 1
+                    data.append({
+                        "Date":   pd.to_datetime(ts, unit="s", utc=True).tz_convert("Asia/Kolkata"),
+                        "Open":   float(o_val),
+                        "High":   float(h_val),
+                        "Low":    float(l_val),
+                        "Close":  float(c),
+                        "Volume": float(v_val)
+                    })
+            if data:
+                df = pd.DataFrame(data).set_index("Date")
+                # Filter only NSE trading hours: 09:15 – 15:30 IST
+                df = df.between_time("09:15", "15:30")
+                return df
+    except Exception:
+        pass
+    # Fallback: yfinance
+    try:
+        t = yf.Ticker(ticker)
+        df_yf = t.history(period=f"{days}d", interval="1h")
+        if not df_yf.empty:
+            try:
+                if df_yf.index.tz is None:
+                    df_yf.index = df_yf.index.tz_localize("Asia/Kolkata")
+                else:
+                    df_yf.index = df_yf.index.tz_convert("Asia/Kolkata")
+                df_yf = df_yf.between_time("09:15", "15:30")
+            except Exception:
+                pass
+            return df_yf
+    except Exception:
+        pass
+    return pd.DataFrame()
+
+
+def apply_1h_sr_overlay(scored: dict, ticker: str) -> dict:
+    """
+    Overlays 1-Hour S/R Breakout detection onto a scored stock dict.
+    Fetches 1h candles, updates S/R fields in place, and re-computes swing setup.
+    """
+    try:
+        df_1h = fetch_1h_history_cffi(ticker, days=60)
+        if not df_1h.empty and len(df_1h) >= 30:
+            from screener_engine import detect_sr_breaks_and_retests, compute_swing_setup
+            sr_1h = detect_sr_breaks_and_retests(
+                history=None,
+                ltp=scored.get("ltp"),
+                rs_rating=scored.get("rs_rating", 50),
+                rsi=scored.get("rsi"),
+                vol_spike=scored.get("volume_spike", 1.0),
+                cmf=scored.get("cmf", 0.0),
+                df_1h=df_1h
+            )
+            scored.update(sr_1h)
+            scored["sr_1h_available"] = True
+            
+            # Refresh Swing Setup so 1H breakout bonus is credited
+            swing_info = compute_swing_setup(scored)
+            scored.update(swing_info)
+        else:
+            scored["sr_1h_available"] = False
+    except Exception:
+        scored["sr_1h_available"] = False
+    return scored
+
+
 def fetch_nifty_history() -> tuple[pd.DataFrame, dict]:
     """Fetches NIFTY 50 (^NSEI) historical data and calculates Market Regime."""
     log("Fetching NIFTY 50 benchmark data (^NSEI)...")
@@ -7024,18 +7192,6 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
             return bool(o)
         return str(o)
 
-    html = HTML_TEMPLATE
-    html = html.replace("__PHASE_LABEL__",   cfg["phase_label"])
-    html = html.replace("__PHASE_BUDGET__",  f"{cfg['phase_budget_per_stock']:,}")
-    html = html.replace("__MAX_STOCKS__",    str(cfg["max_stocks"]))
-    html = html.replace("__TOTAL_BUDGET__",  f"{cfg['total_budget']:,}")
-    html = html.replace("__RUN_TIME__",      run_time)
-    html = html.replace("__SCREENER_JSON__", json.dumps(screener_results, ensure_ascii=False, default=json_serializer))
-    html = html.replace("__WATCHLIST_JSON__", json.dumps(watchlist, ensure_ascii=False, default=json_serializer))
-    html = html.replace("__LT_WATCHLIST_JSON__", json.dumps(lt_watchlist, ensure_ascii=False, default=json_serializer))
-    html = html.replace("__CONFIG_JSON__",   json.dumps(cfg, ensure_ascii=False, default=json_serializer))
-    html = html.replace("__COMMODITIES_JSON__", json.dumps(commodity_signals, ensure_ascii=False, default=json_serializer))
-    html = html.replace("__MARKET_INFO_JSON__", json.dumps(mkt_info, ensure_ascii=False, default=json_serializer))
     backtest_data = {}
     backtest_file = os.path.join(BASE_DIR, "cache", "backtest_results.json")
     if os.path.exists(backtest_file):
@@ -7045,13 +7201,30 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         except Exception:
             pass
 
-    html = html.replace("__BACKTEST_RESULTS_JSON__", json.dumps(backtest_data, ensure_ascii=False, default=json_serializer))
-    html = html.replace("__FNO_JSON__", json.dumps(fno_data or [], ensure_ascii=False, default=json_serializer))
     penny_stocks_data = compute_quality_penny_stocks(screener_results, top_n=20, monthly_sip=200.0)
-    html = html.replace("__PENNY_STOCKS_JSON__", json.dumps(penny_stocks_data, ensure_ascii=False, default=json_serializer))
     lt_summary = get_lt_portfolio_summary(screener_results)
-    html = html.replace("__LT_PORTFOLIO_SUMMARY_JSON__", json.dumps(lt_summary, ensure_ascii=False, default=json_serializer))
-    return html
+
+    replacements = {
+        "__PHASE_LABEL__": cfg["phase_label"],
+        "__PHASE_BUDGET__": f"{cfg['phase_budget_per_stock']:,}",
+        "__MAX_STOCKS__": str(cfg["max_stocks"]),
+        "__TOTAL_BUDGET__": f"{cfg['total_budget']:,}",
+        "__RUN_TIME__": run_time,
+        "__SCREENER_JSON__": json.dumps(screener_results, ensure_ascii=False, default=json_serializer),
+        "__WATCHLIST_JSON__": json.dumps(watchlist, ensure_ascii=False, default=json_serializer),
+        "__LT_WATCHLIST_JSON__": json.dumps(lt_watchlist, ensure_ascii=False, default=json_serializer),
+        "__CONFIG_JSON__": json.dumps(cfg, ensure_ascii=False, default=json_serializer),
+        "__COMMODITIES_JSON__": json.dumps(commodity_signals, ensure_ascii=False, default=json_serializer),
+        "__MARKET_INFO_JSON__": json.dumps(mkt_info, ensure_ascii=False, default=json_serializer),
+        "__BACKTEST_RESULTS_JSON__": json.dumps(backtest_data, ensure_ascii=False, default=json_serializer),
+        "__FNO_JSON__": json.dumps(fno_data or [], ensure_ascii=False, default=json_serializer),
+        "__PENNY_STOCKS_JSON__": json.dumps(penny_stocks_data, ensure_ascii=False, default=json_serializer),
+        "__LT_PORTFOLIO_SUMMARY_JSON__": json.dumps(lt_summary, ensure_ascii=False, default=json_serializer),
+    }
+
+    import re
+    pattern = re.compile("|".join(re.escape(k) for k in replacements.keys()))
+    return pattern.sub(lambda m: replacements[m.group(0)], HTML_TEMPLATE)
 
 
 # ─── Local HTTP Scan Server ───────────────────────────────────────────────────
@@ -7182,6 +7355,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             super().do_GET()
 
     def do_POST(self):
+        global LATEST_SCREENER_RESULTS
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == '/api/scan':
             log("\n⚡ [API Request] Received Scan Now trigger from web app...")
@@ -7191,11 +7365,26 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 tickers = read_stock_list()
                 screener_results = run_scan(tickers)
-                global LATEST_SCREENER_RESULTS
+                if not screener_results or len(screener_results) < 10:
+                    log("⚠️ WARNING: API scan returned less than 10 stocks. Preserving existing database.")
+                    if LATEST_SCREENER_RESULTS and len(LATEST_SCREENER_RESULTS) >= 10:
+                        screener_results = LATEST_SCREENER_RESULTS
+                    elif os.path.exists(OUT_JSON_FILE):
+                        try:
+                            with open(OUT_JSON_FILE, encoding="utf-8") as f:
+                                cached = json.load(f)
+                                if cached and len(cached) >= 10:
+                                    screener_results = cached
+                        except Exception:
+                            pass
+
                 LATEST_SCREENER_RESULTS = screener_results
 
                 log("Computing Mansfield Relative Strength (RS Rating 1-99) vs Nifty...")
-                screener_results = compute_relative_strength_ratings(screener_results, nifty_df)
+                screener_results = compute_relative_strength_ratings(
+                    screener_results, nifty_df,
+                    nifty_regime_status=nifty_regime.get("status", "NEUTRAL")
+                )
 
                 log("Processing LT Watchlist stocks...")
                 lt_wl_data = process_lt_watchlist(screener_results)
@@ -7450,6 +7639,73 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(res).encode('utf-8'))
             return
 
+        elif parsed.path == '/api/lt-portfolio/withdraw':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                amount = float(body.get("amount", 0.0))
+                if amount <= 0:
+                    raise ValueError("Withdrawal amount must be positive")
+                ledger = load_lt_capital_ledger()
+                ledger["withdrawals"] = round(float(ledger.get("withdrawals", 0.0)) + amount, 2)
+                save_lt_capital_ledger(ledger)
+                summary = get_lt_portfolio_summary()
+                res = {"status": "ok", "message": f"Successfully withdrew ₹{amount:.2f}", "summary": summary}
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
+
+        elif parsed.path == '/api/lt-portfolio/adjustment':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                amount = float(body.get("amount", 0.0))
+                ledger = load_lt_capital_ledger()
+                ledger["broker_adjustment"] = round(float(ledger.get("broker_adjustment", 0.0)) + amount, 2)
+                save_lt_capital_ledger(ledger)
+                summary = get_lt_portfolio_summary()
+                res = {"status": "ok", "message": f"Successfully updated broker adjustment by ₹{amount:.2f}", "summary": summary}
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
+
+        elif parsed.path == '/api/settings':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                settings_file = os.path.join(BASE_DIR, "finplus_settings.json")
+                cur_settings = {}
+                if os.path.exists(settings_file):
+                    try:
+                        with open(settings_file, "r", encoding="utf-8") as f:
+                            cur_settings = json.load(f)
+                    except Exception: pass
+                cur_settings.update(body)
+                with open(settings_file, "w", encoding="utf-8") as f:
+                    json.dump(cur_settings, f, indent=2)
+                res = {"status": "ok", "message": "Settings updated successfully"}
+                self.send_response(200)
+            except Exception as e:
+                res = {"status": "error", "message": str(e)}
+                self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(res).encode('utf-8'))
+            return
+
     def log_message(self, format, *args):
         pass
 
@@ -7516,7 +7772,7 @@ def run_server(port=None):
 
 
 def background_initial_scan():
-    global IS_INITIAL_SCANNING
+    global IS_INITIAL_SCANNING, LATEST_SCREENER_RESULTS
     IS_INITIAL_SCANNING = True
     try:
         log("Checking for Nifty stock list updates from NSE...")
@@ -7532,7 +7788,19 @@ def background_initial_scan():
 
         tickers = read_stock_list()
         screener_results = run_scan(tickers)
-        global LATEST_SCREENER_RESULTS
+        if not screener_results or len(screener_results) < 10:
+            log("⚠️ WARNING: Background scan returned less than 10 stocks (rate-limit or fetch error). Preserving existing database to prevent blank page.")
+            if LATEST_SCREENER_RESULTS and len(LATEST_SCREENER_RESULTS) >= 10:
+                screener_results = LATEST_SCREENER_RESULTS
+            elif os.path.exists(OUT_JSON_FILE):
+                try:
+                    with open(OUT_JSON_FILE, encoding="utf-8") as f:
+                        cached = json.load(f)
+                        if cached and len(cached) >= 10:
+                            screener_results = cached
+                except Exception:
+                    pass
+
         LATEST_SCREENER_RESULTS = screener_results
         try:
             with open(OUT_JSON_FILE, "w", encoding="utf-8") as f:
@@ -7541,7 +7809,10 @@ def background_initial_scan():
             log(f"  ⚠ Could not save screener_data.json: {e}")
 
         log("Computing Mansfield Relative Strength (RS Rating 1-99) vs Nifty...")
-        screener_results = compute_relative_strength_ratings(screener_results, nifty_df)
+        screener_results = compute_relative_strength_ratings(
+            screener_results, nifty_df,
+            nifty_regime_status=nifty_regime.get("status", "NEUTRAL")
+        )
 
         log("Processing LT Watchlist stocks...")
         lt_wl_data = process_lt_watchlist(screener_results)
@@ -7568,10 +7839,31 @@ def background_initial_scan():
             log(f"  ⚠ Could not copy report to www/index.html: {e}")
 
         log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
-    except Exception as e:
-        log(f"⚠ Background scan error: {e}")
     finally:
         IS_INITIAL_SCANNING = False
+
+
+def automated_hourly_market_scheduler():
+    """
+    Automated background loop that runs during NSE market hours (Mon-Fri 09:15-15:30 IST).
+    Triggers a fresh scan every hour so 1-hour candle breakout changes are caught live.
+    """
+    while True:
+        try:
+            time.sleep(300)  # Check clock every 5 minutes
+            now = datetime.datetime.now()
+            # Mon = 0, Fri = 4
+            if now.weekday() < 5:
+                start_time = now.replace(hour=9, minute=15, second=0, microsecond=0)
+                end_time = now.replace(hour=15, minute=30, second=0, microsecond=0)
+                if start_time <= now <= end_time:
+                    global IS_INITIAL_SCANNING
+                    if not IS_INITIAL_SCANNING:
+                        log("⏰ [Market Hours Scheduler] Triggering hourly scan for 1H candle breakouts...")
+                        background_initial_scan()
+                        time.sleep(3300)  # Sleep ~55 mins after triggering
+        except Exception as e:
+            log(f"⚠ Market scheduler error: {e}")
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -7582,13 +7874,46 @@ if __name__ == "__main__":
     log("  Source: Nifty 500 | Scoring: Strength + Value + Momentum")
     log("=" * 60)
 
+    # Immediate HTML report build at startup if cached database exists
+    if LATEST_SCREENER_RESULTS and len(LATEST_SCREENER_RESULTS) >= 10:
+        log(f"⚡ Building immediate index.html report from cached database ({len(LATEST_SCREENER_RESULTS)} stocks)...")
+        try:
+            wl_data = process_watchlist(LATEST_SCREENER_RESULTS)
+            lt_wl_data = process_lt_watchlist(LATEST_SCREENER_RESULTS)
+            mkt_info = get_market_status()
+            commodity_signals = fetch_commodity_signals()
+            fno_data = process_fno_stocks(LATEST_SCREENER_RESULTS)
+            html = build_html(LATEST_SCREENER_RESULTS, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
+            with open(OUT_HTML, "w", encoding="utf-8") as f:
+                f.write(html)
+            try:
+                os.makedirs(os.path.dirname(OUT_WWW_HTML), exist_ok=True)
+                with open(OUT_WWW_HTML, "w", encoding="utf-8") as f:
+                    f.write(html)
+            except Exception:
+                pass
+            apk_path = 'android/app/src/main/assets/public/index.html'
+            try:
+                os.makedirs(os.path.dirname(apk_path), exist_ok=True)
+                with open(apk_path, 'w', encoding='utf-8') as f:
+                    f.write(html)
+            except Exception:
+                pass
+        except Exception as e:
+            log(f"  ⚠ Startup HTML build skipped: {e}")
+
     # Launch background scan thread so server starts instantly on port 5000
     log("⚡ Launching scan of 2413 stocks in background thread...")
     scan_t = threading.Thread(target=background_initial_scan, daemon=True)
     scan_t.start()
 
+    # Launch automated hourly market scheduler daemon thread
+    sched_t = threading.Thread(target=automated_hourly_market_scheduler, daemon=True)
+    sched_t.start()
+
     # Run the HTTP server immediately in main thread
     run_server(port)
+
 
 
 

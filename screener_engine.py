@@ -6,7 +6,7 @@ No mock data — if a metric is missing, it is skipped and score is partial.
 """
 
 import pandas as pd
-
+import numpy as np
 
 PORTFOLIO_FUNDAMENTAL_FALLBACKS = {
     "ITC": {"returnOnEquity": 0.338, "debtToEquity": 0.0, "profitMargins": 0.285, "trailingPE": 15.2},
@@ -288,16 +288,25 @@ def score_momentum(info: dict, history: pd.DataFrame) -> tuple[float, dict]:
     score += wk52_pts
     breakdown["wk52_pts"] = wk52_pts
 
-    # 4. RSI (14-day) between 40–70 → up to 15 pts
+    # 4. RSI (14-day) — Wilder's EMA method → up to 15 pts
     rsi_pts = 0
     rsi_val = None
     if len(history) >= 15:
         delta = history["Close"].diff()
-        gain = delta.clip(lower=0).tail(14).mean()
-        loss = (-delta.clip(upper=0)).tail(14).mean()
-        if loss and loss > 0:
-            rs = gain / loss
-            rsi_val = round(100 - (100 / (1 + rs)), 1)
+        gain = delta.clip(lower=0)
+        loss = (-delta.clip(upper=0))
+        # Wilder's smoothed moving average (alpha = 1/14) — matches TradingView / Zerodha
+        avg_gain = gain.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+        last_gain = float(avg_gain.iloc[-1])
+        last_loss = float(avg_loss.iloc[-1])
+        if last_loss > 0:
+            rsi_val = round(100 - (100 / (1 + last_gain / last_loss)), 1)
+        elif last_gain > 0:
+            rsi_val = 100.0
+        else:
+            rsi_val = 50.0
+        if rsi_val is not None:
             if 50 <= rsi_val <= 65:   rsi_pts = 15
             elif 45 <= rsi_val <= 70: rsi_pts = 12
             elif 40 <= rsi_val <= 75: rsi_pts = 6
@@ -308,29 +317,33 @@ def score_momentum(info: dict, history: pd.DataFrame) -> tuple[float, dict]:
     breakdown["rsi_pts"] = rsi_pts
 
     # 5. Volume Spike Ratio → up to 15 pts
+    # Use 20-day average (industry standard) — 10-day is too short and self-contaminating
     vol = info.get("volume") or info.get("regularMarketVolume") or 0
-    avg_vol_10d = info.get("averageVolume10days") or info.get("averageDailyVolume10Day") or 0
+    avg_vol_20d = info.get("averageVolume") or 0   # yfinance 'averageVolume' is ~3-month avg
 
-    if (not vol or not avg_vol_10d) and len(history) >= 10 and "Volume" in history.columns:
+    if (not vol or not avg_vol_20d) and len(history) >= 20 and "Volume" in history.columns:
         vol = float(history["Volume"].iloc[-1])
-        avg_vol_10d = float(history["Volume"].tail(10).mean())
+        avg_vol_20d = float(history["Volume"].tail(20).mean())
+    elif not avg_vol_20d and len(history) >= 10 and "Volume" in history.columns:
+        vol = float(history["Volume"].iloc[-1])
+        avg_vol_20d = float(history["Volume"].tail(10).mean())
 
     vol_spike = 0.0
     vol_pts = 0
 
-    if vol > 0 and avg_vol_10d > 0:
-        vol_spike = round(vol / avg_vol_10d, 2)
+    if vol > 0 and avg_vol_20d > 0:
+        vol_spike = round(vol / avg_vol_20d, 2)
         if vol_spike >= 2.5:   vol_pts = 15
         elif vol_spike >= 1.8: vol_pts = 12
         elif vol_spike >= 1.2: vol_pts = 8
         elif vol_spike >= 0.9: vol_pts = 4
         else:                  vol_pts = 0
-    
+
     score += vol_pts
     breakdown["volume_spike"] = vol_spike
     breakdown["volume_pts"] = vol_pts
     breakdown["today_volume"] = vol
-    breakdown["avg_volume_10d"] = avg_vol_10d
+    breakdown["avg_volume_10d"] = avg_vol_20d   # key kept for backward compat
 
     # 20-day EMA calculation
     if len(history) >= 10 and "Close" in history.columns:
@@ -681,18 +694,19 @@ def compute_nifty_market_regime(nifty_df: pd.DataFrame = None) -> dict:
     lookback_5d = min(5, len(close) - 1)
     ret_5d = round(((ltp - float(close.iloc[-lookback_5d - 1])) / float(close.iloc[-lookback_5d - 1])) * 100, 2)
 
-    # 14-day RSI
+    # 14-day RSI — Wilder's EMA method (matches TradingView / Zerodha)
     rsi = 50.0
     if len(close) >= 15:
         delta = close.diff()
         gain = delta.clip(lower=0)
-        loss = -delta.clip(upper=0)
-        avg_gain = gain.rolling(window=14).mean().iloc[-1]
-        avg_loss = loss.rolling(window=14).mean().iloc[-1]
-        if avg_loss != 0:
-            rs = avg_gain / avg_loss
-            rsi = round(100.0 - (100.0 / (1.0 + rs)), 1)
-        elif avg_gain != 0:
+        loss = (-delta.clip(upper=0))
+        avg_gain = gain.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+        last_gain = float(avg_gain.iloc[-1])
+        last_loss = float(avg_loss.iloc[-1])
+        if last_loss > 0:
+            rsi = round(100.0 - (100.0 / (1.0 + last_gain / last_loss)), 1)
+        elif last_gain > 0:
             rsi = 100.0
 
     is_above_ema20 = ltp >= ema20
@@ -733,11 +747,12 @@ def compute_nifty_market_regime(nifty_df: pd.DataFrame = None) -> dict:
     }
 
 
-def compute_relative_strength_ratings(screener_results: list[dict], nifty_history: pd.DataFrame = None) -> list[dict]:
+def compute_relative_strength_ratings(screener_results: list[dict], nifty_history: pd.DataFrame = None, nifty_regime_status: str = "NEUTRAL") -> list[dict]:
     """
     Computes Mansfield Relative Strength (RS Rating: 1 to 99) for all stocks against NIFTY 50.
     Weighted: 40% 1-Month Excess Return + 60% 3-Month Excess Return.
     Percentile ranks all stocks across the universe.
+    Also stamps each stock dict with nifty_regime_status so compute_swing_setup() can gate signals.
     """
     if not screener_results:
         return screener_results
@@ -769,6 +784,8 @@ def compute_relative_strength_ratings(screener_results: list[dict], nifty_histor
         rs_rating = int(round((rank_idx / max(1, n)) * 99))
         rs_rating = max(1, min(99, rs_rating))
         s["rs_rating"] = rs_rating
+        # Stamp regime so compute_swing_setup can gate signals correctly
+        s["nifty_regime_status"] = nifty_regime_status
 
         if rs_rating >= 80:
             s["rs_badge"] = f"🔥 RS {rs_rating} (Leader)"
@@ -787,7 +804,7 @@ def compute_relative_strength_ratings(screener_results: list[dict], nifty_histor
             s["rs_class"] = "badge-red"
             s["is_rs_leader"] = False
 
-        # Re-compute swing setup with accurate RS rating
+        # Re-compute swing setup with accurate RS rating and regime status
         swing_info = compute_swing_setup(s)
         s.update(swing_info)
 
@@ -808,158 +825,185 @@ def compute_relative_strength_ratings(screener_results: list[dict], nifty_histor
 
 def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
     """
-    Computes a dedicated Swing Trade & Institutional Order Flow Setup Score (0-100)
-    for 3-7 day swing trades with Relative Strength, Overbought penalty, and Pullback protection.
+    Decoupled Swing Trade Engine:
+    Separates SETUP QUALITY (is this a high-conviction swing candidate?) 
+    from ENTRY QUALITY (is now a low-risk entry point?).
+
+    Returns:
+      - setup_score : 0.0 - 100.0 (Structure, Breakout, Momentum, RS)
+      - entry_score : 0.0 - 100.0 (EMA20 proximity, Breakout proximity, Extension, R:R)
+      - swing_score : 0.0 - 100.0 (Weighted blend: 65% setup + 35% entry)
+      - swing_action: Action Label ("BUY NOW" | "BUY ON RETEST" | "EXTENDED — DON'T CHASE" | "WATCH / WAIT" | "REJECT")
+      - swing_badge : UI Badge string with status icon
+      - swing_class : CSS badge class ("badge-green" | "badge-orange" | "badge-yellow" | "badge-gray")
+      - swing_reason: Detailed rationale text
     """
-    vol_spike = scored.get("volume_spike") or 0.0
-    cmf = scored.get("cmf") or 0.0
-    clv = scored.get("clv") or 0.5
-    momentum = scored.get("momentum") or 0.0
+    vol_spike = float(scored.get("volume_spike") or 0.0)
+    cmf = float(scored.get("cmf") or 0.0)
+    clv = float(scored.get("clv") or 0.5)
+    momentum = float(scored.get("momentum") or 0.0)
     rsi = scored.get("rsi")
-    ltp = scored.get("ltp") or 0.0
+    ltp = float(scored.get("ltp") or 0.0)
     ma50 = scored.get("ma50")
     ma200 = scored.get("ma200")
+    ema20 = scored.get("ema20")
     market_structure = scored.get("market_structure") or "Neutral"
     pa_pattern = scored.get("pa_pattern") or "None"
-    rs_rating = scored.get("rs_rating") or 50
+    rs_rating = float(scored.get("rs_rating") or 50)
+    ret_1m = float(scored.get("ret_1m") or 0.0)
+    ret_3m = float(scored.get("ret_3m") or 0.0)
 
-    dist_ma50_pct = round(((ltp - ma50) / ma50) * 100, 1) if (ma50 and ltp) else None
+    # 1H S/R Breakout & Retest signals
+    sr_type = scored.get("sr_type") or "NONE"
+    is_break_res = scored.get("is_break_res", False) or (sr_type == "BREAK_RES")
+    is_retest_buy = scored.get("is_retest_buy", False) or (sr_type == "RETEST_BUY")
+    dist_from_res_pct = scored.get("dist_from_res_pct")
 
-    score = 0.0
+    dist_ma50_pct = round(((ltp - ma50) / ma50) * 100, 1) if (ma50 and ltp and ma50 > 0) else None
+    dist_ema20_pct = round(((ltp - ema20) / ema20) * 100, 1) if (ema20 and ltp and ema20 > 0) else None
 
-    # 1. Volume Explosion (up to 25 pts)
-    if vol_spike >= 3.0:
-        vol_pts = 25
-    elif vol_spike >= 2.0:
-        vol_pts = 20
-    elif vol_spike >= 1.5:
-        vol_pts = 15
-    elif vol_spike >= 1.2:
-        vol_pts = 10
-    elif vol_spike >= 0.9:
-        vol_pts = 5
-    else:
-        vol_pts = 0
-    score += vol_pts
+    # ── 1. SETUP QUALITY SCORE (Max 70 raw points → 0-100 scale) ──────────────
+    setup_pts = 0.0
 
-    # 2. Institutional Order Flow & CMF (up to 25 pts)
-    of_pts = 0
+    # A. Breakout & Structure (up to 40 pts)
+    if is_break_res:
+        setup_pts += 15.0  # +15 for active 1H/Daily resistance breakout
+    elif is_retest_buy:
+        setup_pts += 12.0  # +12 for retest buy pattern
+
+    if market_structure == "HH / HL Uptrend":
+        setup_pts += 10.0
+    elif market_structure == "Consolidation Range":
+        setup_pts += 5.0
+
+    if ma50 and ltp >= ma50:
+        setup_pts += 4.0
+    if ma200 and ltp >= ma200:
+        setup_pts += 4.0
+
+    # Order flow & Base quality
     if cmf >= 0.15:
-        of_pts += 14
+        setup_pts += 7.0
     elif cmf >= 0.05:
-        of_pts += 10
-    elif cmf >= -0.05:
-        of_pts += 5
-    else:
-        of_pts += 0
+        setup_pts += 5.0
 
     if clv >= 0.65:
-        of_pts += 11
+        setup_pts += 6.0
     elif clv >= 0.50:
-        of_pts += 7
-    elif clv >= 0.35:
-        of_pts += 3
-    else:
-        of_pts += 0
-    score += of_pts
+        setup_pts += 4.0
 
-    # 3. Momentum & RSI Zone with Overbought Penalty (up to 25 pts)
-    mom_pts = round((momentum / 100.0) * 10, 1)
-    rsi_pts = 0
+    if pa_pattern in ["Bullish FVG", "Bullish Engulfing", "Double Bottom", "Cup & Handle", "VCP Base"]:
+        setup_pts += 5.0
+
+    if scored.get("sup_holds") or scored.get("has_buy_diamond"):
+        setup_pts += 5.0
+
+    # B. Momentum & Relative Strength Acceleration (up to 30 pts)
+    # Short-term return acceleration (1M / 3M returns)
+    if ret_1m >= 30.0:
+        setup_pts += 10.0
+    elif ret_1m >= 15.0:
+        setup_pts += 7.0
+    elif ret_1m >= 5.0:
+        setup_pts += 4.0
+
+    if ret_3m >= 40.0:
+        setup_pts += 6.0
+    elif ret_3m >= 20.0:
+        setup_pts += 4.0
+    elif ret_3m >= 10.0:
+        setup_pts += 2.0
+
+    # RS Rating points
+    if rs_rating >= 85:
+        setup_pts += 10.0
+    elif rs_rating >= 75:
+        setup_pts += 8.0
+    elif rs_rating >= 60:
+        setup_pts += 5.0
+    elif rs_rating >= 45:
+        setup_pts += 2.0
+    elif rs_rating < 35:
+        setup_pts -= 6.0
+
+    # Context-aware RSI scoring
+    has_breakout_context = is_break_res or is_retest_buy or ret_1m >= 20.0
     if rsi is not None:
         if 52 <= rsi <= 68:
-            rsi_pts = 15   # Prime breakout velocity zone (safe room to run)
+            setup_pts += 10.0
         elif 42 <= rsi < 52:
-            rsi_pts = 13   # Pullback & accumulation base zone
+            setup_pts += 8.0
         elif 38 <= rsi < 42:
-            rsi_pts = 8    # Early dip support
-        elif 68 < rsi <= 72:
-            rsi_pts = 4    # Late momentum, approaching resistance
-        elif 72 < rsi <= 78:
-            rsi_pts = -8   # Overextended warning — high mean reversion risk
+            setup_pts += 5.0
+        elif 68 < rsi <= 76:
+            if has_breakout_context:
+                setup_pts += 8.0  # Strong breakout velocity zone (not penalized!)
+            else:
+                setup_pts += 3.0  # Late momentum without structural breakout
         elif rsi > 78:
-            rsi_pts = -18  # Severe overbought exhaustion trap
+            setup_pts -= 6.0
         else:
-            rsi_pts = -5   # Weak/oversold breakdown
+            setup_pts -= 4.0
+
+    # Volume confirmation
+    if vol_spike >= 2.0:
+        setup_pts += 8.0
+    elif vol_spike >= 1.3:
+        setup_pts += 5.0
+    elif vol_spike >= 0.9:
+        setup_pts += 2.0
+
+    # Normalize Setup Quality Score (0 to 100)
+    setup_score = round(min(100.0, max(0.0, (setup_pts / 60.0) * 100.0)), 1)
+
+
+    # ── 2. ENTRY QUALITY SCORE (Max 100 raw points → 0-100 scale) ──────────────
+    entry_pts = 0.0
+
+    # A. EMA20 Proximity (up to 25 pts)
+    if dist_ema20_pct is not None:
+        if 0.0 <= dist_ema20_pct <= 3.5:
+            entry_pts += 25.0  # Prime low-risk entry near EMA20
+        elif 3.5 < dist_ema20_pct <= 7.0:
+            entry_pts += 18.0
+        elif 7.0 < dist_ema20_pct <= 12.0:
+            entry_pts += 10.0
+        elif dist_ema20_pct > 12.0:
+            entry_pts += 3.0
     else:
-        rsi_pts = 5
-    score += (mom_pts + rsi_pts)
+        entry_pts += 15.0
 
-    # 4. Relative Strength vs Nifty 50 (up to 15 pts)
-    rs_pts = 0
-    if rs_rating >= 85:
-        rs_pts = 15   # Top tier RS leader
-    elif rs_rating >= 75:
-        rs_pts = 11
-    elif rs_rating >= 60:
-        rs_pts = 7
-    elif rs_rating >= 45:
-        rs_pts = 3
-    elif rs_rating < 35:
-        rs_pts = -10  # Lagging market anchor
-    score += rs_pts
+    # B. Breakout Level / Support Proximity (up to 25 pts)
+    if dist_from_res_pct is not None:
+        if -2.0 <= dist_from_res_pct <= 2.5:
+            entry_pts += 25.0  # Fresh breakout or retest zone
+        elif 2.5 < dist_from_res_pct <= 6.0:
+            entry_pts += 18.0
+        elif 6.0 < dist_from_res_pct <= 12.0:
+            entry_pts += 10.0
+        else:
+            entry_pts += 4.0
+    elif is_retest_buy:
+        entry_pts += 25.0
+    else:
+        entry_pts += 15.0
 
-    # 5. Trend & Moving Average Structure + Pullback Bonus (up to 15 pts)
-    ma_pts = 0
-    if ma50 and ltp >= ma50:
-        ma_pts += 4
-    if ma200 and ltp >= ma200:
-        ma_pts += 4
-    if market_structure == "HH / HL Uptrend":
-        ma_pts += 4
-    elif market_structure == "Consolidation Range":
-        ma_pts += 2
-
-    # Pullback bonus vs Overextended penalty
+    # C. Graduated 50-DMA Extension (up to 25 pts)
     if dist_ma50_pct is not None:
-        if -3.0 <= dist_ma50_pct <= 6.0 and (rsi is not None and 40 <= rsi <= 62):
-            ma_pts += 3   # Near strong MA support, high risk-reward
-        elif dist_ma50_pct > 18.0:
-            ma_pts -= 10  # Extended too far above 50-DMA, liable to snap back
-
-    score += ma_pts
-
-    swing_score = round(max(0.0, min(100.0, score)), 1)
-
-    # Setup Classifications (with Overbought & RS filtering)
-    is_overbought = (rsi is not None and rsi > 72)
-    is_rs_leader = (rs_rating >= 80)
-    is_pullback = (rsi is not None and 38 <= rsi <= 53 and dist_ma50_pct is not None and -4.0 <= dist_ma50_pct <= 5.0 and (ma200 is None or ltp >= ma200 * 0.97))
-    is_blast = (vol_spike >= 2.0 and momentum >= 60 and (rsi is not None and rsi <= 72) and (dist_ma50_pct is None or dist_ma50_pct <= 15.0))
-    is_order_flow_bull = (cmf >= 0.08 and clv >= 0.55 and (rsi is None or rsi <= 72))
-    is_momentum_surge = (momentum >= 75 and (rsi is not None and rsi <= 72))
-
-    # Badge and Reason assignment
-    if is_overbought:
-        swing_badge = "⚠️ OVERBOUGHT / WAIT"
-        swing_class = "badge-red"
-        swing_reason = f"RSI {rsi:.0f} extended — wait for pullback to avoid top trap"
-    elif is_pullback:
-        swing_badge = "🔄 PULLBACK BUY"
-        swing_class = "badge-green"
-        swing_reason = f"Prime dip entry (RSI {rsi:.0f}, RS {rs_rating}) retesting 50-DMA support"
-    elif is_blast:
-        swing_badge = "🚀 BLAST ALERT"
-        swing_class = "badge-green"
-        swing_reason = f"Explosive {vol_spike:.1f}x volume spike (RS {rs_rating}, RSI {rsi:.0f})"
-    elif is_order_flow_bull:
-        swing_badge = "🏛️ INSTITUTIONAL INFLOW"
-        swing_class = "badge-purple"
-        swing_reason = f"Heavy accumulation (CMF +{cmf:+.2f}, RS {rs_rating})"
-    elif is_momentum_surge:
-        swing_badge = "🔥 MOMENTUM SURGE"
-        swing_class = "badge-yellow"
-        swing_reason = f"High velocity momentum (RS {rs_rating}) above moving averages"
-    elif swing_score >= 55:
-        swing_badge = "🟢 BULLISH SWING"
-        swing_class = "badge-green"
-        swing_reason = f"Balanced swing setup (RS {rs_rating}) with positive order flow"
+        if dist_ma50_pct <= 8.0:
+            entry_pts += 25.0
+        elif 8.0 < dist_ma50_pct <= 15.0:
+            entry_pts += 20.0
+        elif 15.0 < dist_ma50_pct <= 22.0:
+            entry_pts += 14.0
+        elif 22.0 < dist_ma50_pct <= 30.0:
+            entry_pts += 8.0   # Graduated (e.g. +24.2% gets 8 pts, not flat rejection!)
+        else:
+            entry_pts += 2.0
     else:
-        swing_badge = "⚪ NEUTRAL SETUP"
-        swing_class = "badge-gray"
-        swing_reason = "Consolidating or insufficient momentum for breakout"
+        entry_pts += 15.0
 
-    # Stop-Loss (approx 3-4%) and Target calculations (1:2 and 1:3 RR)
+    # D. Stop-Loss & Risk-Reward Ratio (up to 25 pts)
     if ltp > 0:
         if ma50 and (ltp * 0.94 <= ma50 <= ltp * 0.99):
             sl = round(ma50 * 0.985, 2)
@@ -974,17 +1018,96 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
             risk = round(ltp * 0.05, 2)
             sl = round(ltp - risk, 2)
 
-        target1 = round(ltp + (2.0 * risk), 2)
-        target2 = round(ltp + (3.0 * risk), 2)
+        target1 = round(ltp + (1.5 * risk), 2)
+        target2 = round(ltp + (2.5 * risk), 2)
         sl_pct = round(((sl - ltp) / ltp) * 100, 1)
         t1_pct = round(((target1 - ltp) / ltp) * 100, 1)
         t2_pct = round(((target2 - ltp) / ltp) * 100, 1)
+        
+        # SL distance score
+        abs_sl_pct = abs(sl_pct)
+        if abs_sl_pct <= 4.5:
+            entry_pts += 13.0
+        elif abs_sl_pct <= 6.5:
+            entry_pts += 8.0
+        else:
+            entry_pts += 4.0
+
+        # R:R ratio score
+        rr_ratio = round((target1 - ltp) / max(0.1, (ltp - sl)), 2)
+        if rr_ratio >= 2.0:
+            entry_pts += 12.0
+        elif rr_ratio >= 1.5:
+            entry_pts += 8.0
+        else:
+            entry_pts += 4.0
     else:
         sl = target1 = target2 = None
         sl_pct = t1_pct = t2_pct = 0.0
+        entry_pts += 10.0
+
+    entry_score = round(min(100.0, max(0.0, entry_pts)), 1)
+
+
+    # ── 3. COMBINED SWING SCORE & MARKET REGIME GATE ──────────────────────────
+    combined_score = (setup_score * 0.65) + (entry_score * 0.35)
+
+    nifty_regime = scored.get("nifty_regime_status", "NEUTRAL")
+    if nifty_regime == "CORRECTION":
+        if setup_score < 80:
+            combined_score = max(0.0, combined_score - 15.0)
+    elif nifty_regime == "CHOPPY":
+        combined_score = max(0.0, combined_score - 5.0)
+
+    if ltp > 0 and ltp < 50.0:
+        combined_score = max(0.0, combined_score - 25.0)
+
+    swing_score = round(min(100.0, max(0.0, combined_score)), 1)
+
+
+    # ── 4. ACTION LABEL & BADGE ASSIGNMENT ─────────────────────────────────────
+    if nifty_regime == "CORRECTION" and setup_score < 60:
+        swing_action = "AVOID — MARKET CORRECTION"
+        swing_badge = "⛔ AVOID — MARKET CORRECTION"
+        swing_class = "badge-red"
+        swing_reason = "Market in correction regime — hold cash until trend stabilizes"
+    elif setup_score >= 70:
+        if entry_score >= 70:
+            swing_action = "BUY NOW"
+            swing_badge = "🟢 BUY NOW"
+            swing_class = "badge-green"
+            swing_reason = f"High conviction setup ({setup_score:.0f}/100) with ideal entry timing ({entry_score:.0f}/100)"
+        elif entry_score >= 45:
+            swing_action = "BUY ON RETEST"
+            swing_badge = "🟢 BUY ON RETEST"
+            swing_class = "badge-green"
+            swing_reason = f"Strong setup ({setup_score:.0f}/100) — enter near retest/EMA20 support ({entry_score:.0f}/100 entry)"
+        else:
+            swing_action = "EXTENDED — DON'T CHASE"
+            swing_badge = "🟠 EXTENDED — DON'T CHASE"
+            swing_class = "badge-orange"
+            swing_reason = f"Strong setup ({setup_score:.0f}/100) but price is extended ({entry_score:.0f}/100 entry) — wait for dip/retest"
+    elif setup_score >= 50:
+        swing_action = "WATCH / WAIT"
+        swing_badge = "🟡 WATCH / WAIT"
+        swing_class = "badge-yellow"
+        swing_reason = f"Developing setup ({setup_score:.0f}/100) — monitor for breakout confirmation"
+    else:
+        swing_action = "REJECT"
+        swing_badge = "⚪ NEUTRAL SETUP"
+        swing_class = "badge-gray"
+        swing_reason = f"Weak structure/momentum ({setup_score:.0f}/100 setup)"
+
+    is_blast = (vol_spike >= 2.0 and momentum >= 60 and setup_score >= 75)
+    is_order_flow_bull = (cmf >= 0.08 and clv >= 0.55 and setup_score >= 65)
+    is_momentum_surge = (momentum >= 75 and setup_score >= 70)
+    is_pullback = (rsi is not None and 38 <= rsi <= 57 and entry_score >= 70 and setup_score >= 65)
 
     return {
+        "setup_score": setup_score,
+        "entry_score": entry_score,
         "swing_score": swing_score,
+        "swing_action": swing_action,
         "swing_badge": swing_badge,
         "swing_class": swing_class,
         "swing_reason": swing_reason,
@@ -998,7 +1121,7 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
         "swing_t1_pct": t1_pct,
         "swing_t2": target2,
         "swing_t2_pct": t2_pct,
-        "risk_reward": "1 : 2.0 / 1 : 3.0"
+        "risk_reward": "1 : 1.5 / 1 : 2.5"
     }
 
 
@@ -1118,17 +1241,28 @@ def detect_sr_breaks_and_retests(
     rsi: float = None,
     vol_spike: float = 1.0,
     cmf: float = 0.0,
-    cached_sr: dict = None
+    cached_sr: dict = None,
+    df_1h: pd.DataFrame = None
 ) -> dict:
     """
-    Mathematical Support & Resistance Breaks and Retests Indicator (ChartPrime SR Model 20 2 1).
-    Detects 20-period swing pivot levels, 'Break Res' (Resistance Breakout),
-    'Retest Buy' (Support Polarity Bounce), and pre-breakout coiling setups with automated R/R levels.
+    S&R Breakout Detector — runs on 1-HOUR candles (df_1h) when available.
+    Falls back to daily candles (history) only if no 1h data is provided.
+
+    1H mode (preferred, designed for your backtested strategy):
+      - Pivot window : 8 bars left/right on 1h highs/lows
+      - Resistance   : most-tested pivot cluster within 0.5% (not single-bar spike)
+      - Breakout     : close > res_zone AND volume >= 1.3x avg AND bullish body >= 50% range
+      - Freshness    : <= 4 hours (4 bars) for BREAK_RES
+      - Retest       : price returns to +-0.8% of broken resistance within 20 bars
+      - SL           : low of breakout candle (not a % floor)
+      - T1 / T2      : 1.5x / 2.5x risk (realistic intraday/next-day targets)
+
+    Daily fallback: freshness = 1 day, pivot window = 5 bars, same cluster logic.
     """
     default_res = {
         "has_sr_setup": False,
         "sr_type": "NONE",
-        "sr_badge": "⚪ No S/R Setup",
+        "sr_badge": "\u26aa No S/R Setup",
         "sr_badge_class": "badge-gray",
         "res_level": None,
         "sup_level": None,
@@ -1144,186 +1278,245 @@ def detect_sr_breaks_and_retests(
         "breakout_bars_ago": None,
         "is_break_res": False,
         "is_retest_buy": False,
-        "is_approaching_breakout": False
+        "is_approaching_breakout": False,
+        "sr_timeframe": "N/A"
     }
 
-    # If cached S/R values exist and we're just updating the score with new RS:
-    if history is None and cached_sr is not None and cached_sr.get("res_level"):
-        res_level = cached_sr["res_level"]
-        sup_level = cached_sr.get("sup_level")
-        dist_from_res_pct = cached_sr.get("dist_from_res_pct", 0.0)
+    # ── RS/Score update pass (when called from compute_relative_strength_ratings) ──
+    # Only score is updated; geometry stays from the initial 1h detection pass.
+    if df_1h is None and history is None and cached_sr is not None and cached_sr.get("res_level"):
         sr_type = cached_sr.get("sr_type", "NONE")
         if sr_type == "NONE":
             return default_res
-
         base_score = 50.0 if sr_type == "BREAK_RES" else 55.0 if sr_type == "RETEST_BUY" else 35.0
-        if rs_rating >= 80:
-            base_score += 22.0
-        elif rs_rating >= 60:
-            base_score += 14.0
-        elif rs_rating < 40:
-            base_score -= 12.0
-
-        if vol_spike >= 2.0:
-            base_score += 15.0
-        elif vol_spike >= 1.3:
-            base_score += 10.0
-
+        if rs_rating >= 80:   base_score += 22.0
+        elif rs_rating >= 60: base_score += 14.0
+        elif rs_rating < 40:  base_score -= 12.0
+        if vol_spike >= 2.0:   base_score += 15.0
+        elif vol_spike >= 1.3: base_score += 10.0
         if rsi is not None:
-            if 52 <= rsi <= 68:
-                base_score += 12.0
-            elif rsi > 76:
-                base_score -= 15.0
-
-        if cmf >= 0.10:
-            base_score += 10.0
-
-        sr_score = round(max(10.0, min(100.0, base_score)), 1)
+            if 52 <= rsi <= 68:  base_score += 12.0
+            elif rsi > 76:       base_score -= 15.0
+        if cmf >= 0.10: base_score += 10.0
         res_dict = dict(cached_sr)
-        res_dict["sr_score"] = sr_score
+        res_dict["sr_score"] = round(max(10.0, min(100.0, base_score)), 1)
         return res_dict
 
-    if history is None or history.empty or len(history) < 20:
+    # ── Choose data source: 1h preferred, daily fallback ──────────────────────
+    use_1h = (df_1h is not None and not df_1h.empty and len(df_1h) >= 30)
+
+    if use_1h:
+        df_raw = df_1h.copy()
+        pivot_w = 8         # 8-bar left/right for 1h pivots
+        freshness_bars = 4  # fresh breakout = within 4 hours
+        retest_window = 20  # retest must occur within 20 hours
+        lookback_bars = 120 # scan last 120h (~3 weeks) for resistance cluster
+        timeframe_label = "1H"
+    elif history is not None and not history.empty and len(history) >= 20:
+        df_raw = history.copy()
+        pivot_w = 5
+        freshness_bars = 1
+        retest_window = 10
+        lookback_bars = 40
+        timeframe_label = "Daily"
+    else:
         return default_res
 
-    df = history.copy()
-    # Standardize column names (handle lowercase 'close', 'high', 'low' from yfinance cache)
-    df = df.rename(columns={c: str(c).capitalize() for c in df.columns})
+    # Normalise column names
+    df_raw = df_raw.rename(columns={c: str(c).capitalize() for c in df_raw.columns})
     for col in ["Open", "High", "Low", "Close", "Volume"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-    df = df.dropna(subset=["Close", "High", "Low"])
-    if len(df) < 20:
+        if col in df_raw.columns:
+            df_raw[col] = pd.to_numeric(df_raw[col], errors="coerce")
+    df_raw = df_raw.dropna(subset=["Close", "High", "Low"])
+    if len(df_raw) < 20:
         return default_res
 
-    closes = df["Close"].values
-    highs = df["High"].values
-    lows = df["Low"].values
-    opens = df["Open"].values if "Open" in df.columns else closes
+    closes = df_raw["Close"].values.astype(float)
+    highs  = df_raw["High"].values.astype(float)
+    lows   = df_raw["Low"].values.astype(float)
+    opens  = df_raw["Open"].values.astype(float) if "Open" in df_raw.columns else closes.copy()
+    volumes = df_raw["Volume"].values.astype(float) if "Volume" in df_raw.columns else np.ones(len(closes))
 
     curr_ltp = float(ltp) if (ltp is not None and ltp > 0) else float(closes[-1])
     n = len(closes)
+    lb = min(lookback_bars, n - pivot_w - 1)
 
-    # 1. Pivot High & Low detection (Lookback = 20, window w = 2)
-    pivot_highs = []
-    pivot_lows = []
-    w = 2
-    for i in range(w, n - w):
-        if highs[i] == max(highs[i - w : i + w + 1]):
+    # Average volume for breakout confirmation (20-bar rolling)
+    vol_avg_arr = pd.Series(volumes).rolling(window=min(20, len(volumes)), min_periods=5).mean().values
+    curr_vol_avg = float(vol_avg_arr[-1]) if vol_avg_arr[-1] > 0 else 1.0
+
+    # ── 1. Pivot High/Low detection ────────────────────────────────────────────
+    pivot_highs = []  # (bar_index, price)
+    pivot_lows  = []
+    for i in range(pivot_w, n - pivot_w):
+        if highs[i] == max(highs[i - pivot_w: i + pivot_w + 1]):
             pivot_highs.append((i, float(highs[i])))
-        if lows[i] == min(lows[i - w : i + w + 1]):
+        if lows[i] == min(lows[i - pivot_w: i + pivot_w + 1]):
             pivot_lows.append((i, float(lows[i])))
 
+    # Fallback: use recent high/low if no pivots found
     if not pivot_highs:
-        recent_high = float(np.max(highs[-25:-2])) if len(highs) >= 25 else float(np.max(highs[:-1]))
-        recent_low = float(np.min(lows[-25:])) if len(lows) >= 25 else float(np.min(lows))
-        pivot_highs.append((n - 8, recent_high))
-        pivot_lows.append((n - 8, recent_low))
+        pivot_highs.append((n - pivot_w - 2, float(np.max(highs[max(0, n-lb-pivot_w):-pivot_w]))))
+    if not pivot_lows:
+        pivot_lows.append((n - pivot_w - 2, float(np.min(lows[max(0, n-lb-pivot_w):]))))
 
-    # Identify primary 20-bar resistance line
-    candidate_res = [p for p in pivot_highs if p[0] <= n - 2 and p[0] >= max(0, n - 35)]
-    if not candidate_res:
-        candidate_res = pivot_highs[-3:]
+    # ── 2. Clustered Resistance Level ─────────────────────────────────────────
+    # Use pivot highs within lookback. Cluster those within 0.5% of each other.
+    # Most-tested cluster wins (not simple max — avoids spike contamination).
+    recent_ph = [p for p in pivot_highs if p[0] >= max(0, n - lb - pivot_w) and p[0] <= n - pivot_w - 1]
+    if not recent_ph:
+        recent_ph = pivot_highs[-min(5, len(pivot_highs)):]
 
-    res_level = round(float(max(p[1] for p in candidate_res)), 2)
+    # Build clusters
+    recent_ph_sorted = sorted(recent_ph, key=lambda x: x[1])
+    clusters = []
+    for idx, price in recent_ph_sorted:
+        placed = False
+        for cl in clusters:
+            ref = cl["prices"][0]
+            if abs(price - ref) / ref <= 0.005:  # within 0.5%
+                cl["prices"].append(price)
+                cl["indices"].append(idx)
+                placed = True
+                break
+        if not placed:
+            clusters.append({"prices": [price], "indices": [idx]})
 
-    candidate_sup = [p for p in pivot_lows if p[0] <= n - 1 and p[0] >= max(0, n - 35)]
-    if candidate_sup:
-        sup_level = round(float(candidate_sup[-1][1]), 2)
+    # Pick the best cluster: most tests first, then highest price (stronger resistance)
+    best_cluster = max(clusters, key=lambda c: (len(c["prices"]), np.mean(c["prices"])))
+    res_level = round(float(np.mean(best_cluster["prices"])), 2)
+    res_test_count = len(best_cluster["prices"])
+
+    # Support level: most recent significant pivot low in lookback
+    recent_pl = [p for p in pivot_lows if p[0] >= max(0, n - lb) and p[0] <= n - 1]
+    if recent_pl:
+        sup_level = round(float(recent_pl[-1][1]), 2)
     else:
-        sup_level = round(float(min(lows[-20:])), 2)
+        sup_level = round(float(np.min(lows[-min(20, n):])), 2)
 
     dist_from_res_pct = round(((curr_ltp - res_level) / res_level) * 100, 2)
 
-    # 2. Check for Breakout bar in the last 8 candles
+    # ── 3. Breakout Detection ──────────────────────────────────────────────────
     is_break_res = False
     is_retest_buy = False
     is_approaching = False
     breakout_bars_ago = None
     breakout_idx = None
+    breakout_candle_low = None
     sr_type = "NONE"
     sr_reason = ""
     base_score = 0.0
 
-    for b in range(1, min(10, n)):
+    for b in range(1, min(freshness_bars + 5, n)):
         idx = n - b
         bar_close = closes[idx]
         prev_close = closes[idx - 1] if idx > 0 else bar_close
-        if bar_close >= res_level and prev_close <= res_level * 1.008:
-            breakout_idx = idx
-            breakout_bars_ago = b - 1
-            break
+        bar_open  = opens[idx]
+        bar_low   = lows[idx]
+        bar_high  = highs[idx]
 
-    # Trigger A: FRESH BREAKOUT (Break Res 🔥)
-    if breakout_idx is not None and breakout_bars_ago <= 2 and -0.5 <= dist_from_res_pct <= 5.5:
+        if bar_close >= res_level and prev_close <= res_level * 1.01:
+            # ── Volume confirmation: breakout bar must have meaningful volume ──
+            bar_vol = volumes[idx]
+            avg_vol_at_bar = float(vol_avg_arr[max(0, idx - 1)])
+            vol_ok = (avg_vol_at_bar <= 0) or (bar_vol >= avg_vol_at_bar * 1.3)
+
+            # ── Body confirmation: bullish candle body >= 50% of candle range ──
+            candle_range = bar_high - bar_low
+            body = bar_close - bar_open
+            body_ok = (candle_range <= 0) or (body >= 0 and body >= 0.5 * candle_range)
+
+            if vol_ok and body_ok:
+                breakout_idx = idx
+                breakout_bars_ago = b - 1
+                breakout_candle_low = bar_low
+                break
+
+    # Trigger A: FRESH BREAKOUT (1h: within 4 bars | daily: within 1 bar)
+    if (breakout_idx is not None and breakout_bars_ago <= freshness_bars
+            and -0.5 <= dist_from_res_pct <= 6.0):
         is_break_res = True
         sr_type = "BREAK_RES"
-        sr_badge = "🔥 Break Res (Breakout)"
+        tf_label = "1H" if use_1h else "Daily"
+        sr_badge = f"\ud83d\udd25 Break Res [{tf_label}]"
         sr_badge_class = "badge-green"
-        sr_reason = f"Decisive candle close above ₹{res_level:.2f} swing resistance ({dist_from_res_pct:+.1f}%)"
-        base_score = 50.0
+        tested_str = f", tested {res_test_count}x" if res_test_count >= 2 else ""
+        sr_reason = (f"{'1H' if use_1h else 'Daily'} candle close above "
+                     f"\u20b9{res_level:.2f} resistance{tested_str} "
+                     f"({dist_from_res_pct:+.1f}%) with volume & body confirmation")
+        base_score = 55.0 if res_test_count >= 2 else 45.0  # bonus for multi-tested level
 
-    # Trigger B: RETEST BUY (Support Bounce 🔄)
-    elif (breakout_idx is not None and 2 <= breakout_bars_ago <= 15 and -1.5 <= dist_from_res_pct <= 4.5) or \
-         (sup_level and 0.5 <= ((curr_ltp - sup_level) / sup_level) * 100 <= 3.5 and (closes[-1] >= opens[-1] or closes[-1] >= closes[-2])):
+    # Trigger B: RETEST BUY — requires a prior confirmed breakout, then price returning
+    # to +-0.8% of the broken resistance level (now acting as support)
+    elif (breakout_idx is not None
+          and freshness_bars < breakout_bars_ago <= retest_window
+          and -0.8 <= dist_from_res_pct <= 3.0
+          and (closes[-1] >= opens[-1] or closes[-1] >= closes[-2])):   # must be a green candle
         is_retest_buy = True
         sr_type = "RETEST_BUY"
-        sr_badge = "🔄 Retest Buy (Support Bounce)"
+        tf_label = "1H" if use_1h else "Daily"
+        sr_badge = f"\ud83d\udd04 Retest Buy [{tf_label}]"
         sr_badge_class = "badge-purple"
-        sr_reason = f"Retest bounce: former ₹{res_level:.2f} resistance or ₹{sup_level:.2f} support confirmed"
-        base_score = 55.0
+        sr_reason = (f"{'1H' if use_1h else 'Daily'} retest: former \u20b9{res_level:.2f} "
+                     f"resistance now confirmed as support ({breakout_bars_ago} bars ago)")
+        base_score = 58.0
 
-    # Trigger C: APPROACHING RESISTANCE (Coiling ⚡)
-    elif -3.0 <= dist_from_res_pct <= -0.1 and (rsi is None or 45 <= rsi <= 70):
+    # Trigger C: APPROACHING RESISTANCE (Coiling)
+    elif -2.5 <= dist_from_res_pct <= -0.1 and (rsi is None or 45 <= rsi <= 70):
         is_approaching = True
         sr_type = "APPROACHING_RES"
-        sr_badge = "⚡ Approaching Breakout"
+        tf_label = "1H" if use_1h else "Daily"
+        sr_badge = f"\u26a1 Approaching [{tf_label}]"
         sr_badge_class = "badge-yellow"
-        sr_reason = f"Coiling tightly at ₹{res_level:.2f} resistance ({dist_from_res_pct:.1f}% below)"
+        tested_str = f" (tested {res_test_count}x)" if res_test_count >= 2 else ""
+        sr_reason = (f"Coiling at \u20b9{res_level:.2f}{tested_str} resistance "
+                     f"({dist_from_res_pct:.1f}% below) — breakout imminent")
         base_score = 35.0
 
     if sr_type == "NONE":
-        return default_res
+        return {**default_res, "sr_timeframe": timeframe_label}
 
-    # 3. Quality & Confluence Scoring (0 - 100)
-    if rs_rating >= 80:
-        base_score += 22.0
-    elif rs_rating >= 60:
-        base_score += 14.0
-    elif rs_rating < 40:
-        base_score -= 12.0
+    # ── 4. Confluence Scoring ──────────────────────────────────────────────────
+    if rs_rating >= 80:   base_score += 22.0
+    elif rs_rating >= 60: base_score += 14.0
+    elif rs_rating < 40:  base_score -= 12.0
 
-    if vol_spike >= 2.0:
-        base_score += 15.0
-    elif vol_spike >= 1.3:
-        base_score += 10.0
+    if vol_spike >= 2.0:   base_score += 15.0
+    elif vol_spike >= 1.3: base_score += 10.0
 
     if rsi is not None:
-        if 52 <= rsi <= 68:
-            base_score += 12.0
-        elif 45 <= rsi < 52:
-            base_score += 8.0
-        elif rsi > 76:
-            base_score -= 15.0
+        if 52 <= rsi <= 68:  base_score += 12.0
+        elif 45 <= rsi < 52: base_score += 8.0
+        elif rsi > 76:       base_score -= 15.0
 
-    if cmf >= 0.10:
-        base_score += 10.0
-    elif cmf >= 0.03:
-        base_score += 6.0
+    if cmf >= 0.10: base_score += 10.0
+    elif cmf >= 0.03: base_score += 6.0
+
+    # Bonus: multi-tested resistance is a stronger signal
+    if res_test_count >= 3:  base_score += 8.0
+    elif res_test_count >= 2: base_score += 4.0
 
     sr_score = round(max(10.0, min(100.0, base_score)), 1)
 
-    # 4. Stop Loss & Target Calculation
-    raw_sl = min(res_level * 0.965, curr_ltp * 0.96)
-    if sup_level and sup_level < curr_ltp and sup_level >= curr_ltp * 0.92:
-        raw_sl = min(raw_sl, sup_level * 0.985)
+    # ── 5. Stop-Loss & Targets ────────────────────────────────────────────────
+    # SL = low of breakout candle (when available) — not an arbitrary % floor
+    if breakout_candle_low is not None and breakout_candle_low > 0:
+        sr_sl = round(breakout_candle_low * 0.998, 2)  # 0.2% below candle low
+    elif sup_level and sup_level < curr_ltp and sup_level >= curr_ltp * 0.90:
+        sr_sl = round(sup_level * 0.985, 2)
+    else:
+        sr_sl = round(curr_ltp * 0.965, 2)
 
-    sr_sl = round(raw_sl, 2)
-    risk_amt = round(max(curr_ltp * 0.025, curr_ltp - sr_sl), 2)
-    sr_sl = round(curr_ltp - risk_amt, 2)
+    risk_amt = round(curr_ltp - sr_sl, 2)
+    if risk_amt <= 0 or (risk_amt / curr_ltp) < 0.015:
+        risk_amt = round(curr_ltp * 0.025, 2)
+        sr_sl = round(curr_ltp - risk_amt, 2)
+    elif (risk_amt / curr_ltp) > 0.08:
+        risk_amt = round(curr_ltp * 0.05, 2)
+        sr_sl = round(curr_ltp - risk_amt, 2)
 
-    sr_t1 = round(curr_ltp + (2.0 * risk_amt), 2)
-    sr_t2 = round(curr_ltp + (3.0 * risk_amt), 2)
+    sr_t1 = round(curr_ltp + (1.5 * risk_amt), 2)   # Realistic target (was 2.0x)
+    sr_t2 = round(curr_ltp + (2.5 * risk_amt), 2)   # Runner target  (was 3.0x)
 
     sr_sl_pct = round(((sr_sl - curr_ltp) / curr_ltp) * 100, 1)
     sr_t1_pct = round(((sr_t1 - curr_ltp) / curr_ltp) * 100, 1)
@@ -1335,6 +1528,7 @@ def detect_sr_breaks_and_retests(
         "sr_badge": sr_badge,
         "sr_badge_class": sr_badge_class,
         "res_level": res_level,
+        "res_test_count": res_test_count,
         "sup_level": sup_level,
         "dist_from_res_pct": dist_from_res_pct,
         "sr_sl": sr_sl,
@@ -1348,8 +1542,12 @@ def detect_sr_breaks_and_retests(
         "breakout_bars_ago": breakout_bars_ago,
         "is_break_res": is_break_res,
         "is_retest_buy": is_retest_buy,
-        "is_approaching_breakout": is_approaching
+        "is_approaching_breakout": is_approaching,
+        "sr_timeframe": timeframe_label
     }
+
+
+
 
 
 
@@ -1740,22 +1938,15 @@ def calculate_ema_crossover_15m(df_15m: pd.DataFrame) -> dict:
 
 def find_best_swing_candidate(screener_results: list[dict]) -> dict:
     """
-    Selects the optimal 7-day swing trade candidate based on:
-    - Fundamental Quality (Score >= 55, qualified == True)
-    - RSI Sweet Spot (45 - 65)
-    - Volume Spike (>= 1.0)
-    - Relative Strength Beta (0.8 - 1.8)
-    - Moving Average Support (within 8% of 50 MA)
-    Calculates automated Stop-Loss (SL), Target 1 (1:2 R:R), Target 2 (1:3 R:R).
+    Selects the optimal swing trade candidate based on swing_score (technical setup quality),
+    not total_score (which is fundamentals-heavy). Filters by RSI zone, MA proximity, and regime.
+    Uses MA-anchored SL logic consistent with compute_swing_setup().
     """
     if not screener_results:
         return {}
 
     candidates = []
     for s in screener_results:
-        if not s.get("qualified") and s.get("total_score", 0) < 55:
-            continue
-
         ltp = s.get("ltp", 0)
         rsi = s.get("rsi") or 50
         vol_spike = s.get("volume_spike") or 1.0
@@ -1765,27 +1956,31 @@ def find_best_swing_candidate(screener_results: list[dict]) -> dict:
         dist_ma50_pct = ((ltp - ma50) / ma50) * 100 if ma50 > 0 else 0
 
         # Filter out overextended or extreme overbought stocks
-        if rsi > 72 or rsi < 40:
+        if rsi > 72 or rsi < 38:
             continue
         if dist_ma50_pct > 15 or dist_ma50_pct < -10:
             continue
+        # Skip stocks already in market-correction avoid mode
+        if s.get("nifty_regime_status") == "CORRECTION" and s.get("rs_rating", 50) < 75:
+            continue
 
-        # Swing Scoring Bonus
-        swing_score = s.get("total_score", 0)
+        # Rank by swing_score (technical setup) — not total_score (fundamentals)
+        base = s.get("swing_score", s.get("total_score", 0))
+        # Small tiebreaker bonuses
         if 50 <= rsi <= 63:
-            swing_score += 10
-        if vol_spike >= 1.2:
-            swing_score += 10
+            base += 5
+        if vol_spike >= 1.5:
+            base += 5
         if 1.0 <= beta <= 1.6:
-            swing_score += 8
+            base += 3
 
-        candidates.append((swing_score, s))
+        candidates.append((base, s))
 
     if not candidates:
-        # Fallback to highest total score if strict criteria matches none
-        candidates = [(s.get("total_score", 0), s) for s in screener_results if s.get("qualified")]
+        # Fallback: best swing_score across all qualified
+        candidates = [(s.get("swing_score", s.get("total_score", 0)), s) for s in screener_results if s.get("qualified")]
         if not candidates:
-            candidates = [(s.get("total_score", 0), s) for s in screener_results]
+            candidates = [(s.get("swing_score", s.get("total_score", 0)), s) for s in screener_results]
 
     candidates.sort(key=lambda x: x[0], reverse=True)
     best = candidates[0][1]
@@ -1793,24 +1988,34 @@ def find_best_swing_candidate(screener_results: list[dict]) -> dict:
     ltp = best.get("ltp", 0)
     ma50 = best.get("ma50") or (ltp * 0.96)
 
-    # Stop Loss calculation: 4% below LTP or 2% below 50 MA (whichever is closer/safer)
-    sl_price = round(max(ltp * 0.96, ma50 * 0.98), 2)
+    # Stop Loss: MA-anchored (consistent with compute_swing_setup)
+    if ma50 and (ltp * 0.94 <= ma50 <= ltp * 0.99):
+        sl_price = round(ma50 * 0.985, 2)
+    else:
+        sl_price = round(ltp * 0.965, 2)
+
     risk = round(ltp - sl_price, 2)
-    if risk <= 0:
-        risk = round(ltp * 0.04, 2)
+    if risk <= 0 or (risk / ltp) < 0.02:
+        risk = round(ltp * 0.035, 2)
+        sl_price = round(ltp - risk, 2)
+    elif (risk / ltp) > 0.07:
+        risk = round(ltp * 0.05, 2)
         sl_price = round(ltp - risk, 2)
 
-    target1 = round(ltp + (2.0 * risk), 2)
-    target2 = round(ltp + (3.0 * risk), 2)
+    target1 = round(ltp + (1.5 * risk), 2)   # Realistic 3-7d exit
+    target2 = round(ltp + (2.5 * risk), 2)   # Runner target
     target1_pct = round(((target1 - ltp) / ltp) * 100, 1)
     target2_pct = round(((target2 - ltp) / ltp) * 100, 1)
     sl_pct = round(((sl_price - ltp) / ltp) * 100, 1)
+
+    swing_score = best.get("swing_score", best.get("total_score", 0))
 
     return {
         "symbol": best.get("symbol"),
         "ticker": best.get("ticker"),
         "name": best.get("name"),
         "sector": best.get("sector"),
+        "swing_score": swing_score,
         "total_score": best.get("total_score"),
         "strength": best.get("strength"),
         "value": best.get("value"),
@@ -1821,6 +2026,8 @@ def find_best_swing_candidate(screener_results: list[dict]) -> dict:
         "beta": best.get("beta"),
         "ma50": best.get("ma50"),
         "ma200": best.get("ma200"),
+        "swing_badge": best.get("swing_badge", ""),
+        "swing_reason": best.get("swing_reason", ""),
         "tech_rating": best.get("tech_rating", "🟡 Consolidation"),
         "stop_loss": sl_price,
         "stop_loss_pct": sl_pct,
@@ -1829,9 +2036,9 @@ def find_best_swing_candidate(screener_results: list[dict]) -> dict:
         "target2": target2,
         "target2_pct": target2_pct,
         "risk_amount": risk,
-        "risk_reward_ratio": "1 : 2.0 (T1) / 1 : 3.0 (T2)",
+        "risk_reward_ratio": "1 : 1.5 (T1) / 1 : 2.5 (T2)",
         "timeframe": "3 to 7 Trading Days",
-        "rationale": f"High quality ({best.get('total_score')}/100) with RSI {best.get('rsi')} in momentum accumulation zone, volume spike {best.get('volume_spike')}x, and Beta {best.get('beta')} relative strength."
+        "rationale": f"Swing score {swing_score}/100 — RSI {best.get('rsi')} in momentum zone, {best.get('volume_spike')}x volume, RS {best.get('rs_rating')}."
     }
 
 

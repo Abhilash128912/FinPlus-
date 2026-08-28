@@ -2,8 +2,12 @@ name: Daily Stock Screener Scan
 
 on:
   schedule:
-    # Run every weekday at 03:45 UTC = 9:15 AM IST (before NSE market opens at 9:30 AM IST)
+    # 1) Pre-market scan at 09:15 AM IST (03:45 UTC)
     - cron: '45 3 * * 1-5'
+    # 2) Hourly scans 5 mins after each 1H candle close (10:20, 11:20, 12:20, 13:20, 14:20, 15:20 IST = 04:50, 05:50, 06:50, 07:50, 08:50, 09:50 UTC)
+    - cron: '50 4-9 * * 1-5'
+    # 3) Market close final scan at 03:35 PM IST (10:05 UTC)
+    - cron: '5 10 * * 1-5'
   workflow_dispatch:
     # Allow manual trigger from GitHub Actions UI anytime
 
