@@ -1751,6 +1751,144 @@ def compute_trend_classification(scored: dict) -> dict:
     return {"trend": "Consolidation", "badge": "🟡 Consolidation Phase", "class": "badge-yellow"}
 
 
+def classify_stock_sector_group(sector: str, industry: str) -> str:
+    sec_str = f"{sector or ''} {industry or ''}".lower()
+    if any(k in sec_str for k in ["bank", "financial", "insurance", "capital markets", "nbfc", "credit"]):
+        return "BFSI"
+    elif any(k in sec_str for k in ["metal", "steel", "mining", "aluminum", "copper", "oil", "gas", "petroleum", "chemical"]):
+        return "COMMODITY"
+    elif any(k in sec_str for k in ["utility", "power", "electric", "infrastructure", "construction", "real estate"]):
+        return "UTILITIES_INFRA"
+    elif any(k in sec_str for k in ["industrial", "manufacturing", "capital goods", "machinery", "auto"]):
+        return "MANUFACTURING"
+    else:
+        return "QUALITY_GROWTH"
+
+
+def compute_sector_aware_lt_quality(scored: dict) -> dict:
+    """
+    Computes a 50/25/25 Sector-Aware Long-Term Business Quality Score (0-100),
+    independent Valuation rating, and Risk level.
+    """
+    sector = scored.get("sector") or ""
+    industry = scored.get("industry") or ""
+    sec_group = classify_stock_sector_group(sector, industry)
+
+    roe = float(scored.get("roe_pct") if scored.get("roe_pct") is not None else 0.0)
+    de = float(scored.get("de_ratio") if scored.get("de_ratio") is not None else 0.0)
+    npm = float(scored.get("npm_pct") if scored.get("npm_pct") is not None else 0.0)
+    rev_growth = float(scored.get("rev_growth_pct") if scored.get("rev_growth_pct") is not None else 0.0)
+    total_score = float(scored.get("total_score") or 50.0)
+    strength = float(scored.get("strength") or 50.0)
+    pe = scored.get("pe")
+    pb = scored.get("pb")
+    trend = scored.get("trend") or "Consolidation"
+
+    # ── 1. BUSINESS QUALITY & GOVERNANCE (50% max = 50 pts) ─────────────────
+    bq_pts = 0.0
+    if sec_group == "BFSI":
+        if roe >= 18.0: bq_pts += 20.0
+        elif roe >= 14.0: bq_pts += 15.0
+        elif roe >= 10.0: bq_pts += 10.0
+        bq_pts += min(15.0, (strength / 100.0) * 15.0)
+        if npm >= 15.0: bq_pts += 15.0
+        elif npm >= 10.0: bq_pts += 10.0
+        else: bq_pts += 5.0
+    elif sec_group == "COMMODITY":
+        if roe >= 15.0: bq_pts += 18.0
+        elif roe >= 10.0: bq_pts += 12.0
+        if de <= 0.15: bq_pts += 20.0
+        elif de <= 0.35: bq_pts += 12.0
+        elif de > 0.60: bq_pts -= 8.0  # Commodity debt trap penalty
+        if npm >= 10.0: bq_pts += 12.0
+    elif sec_group == "UTILITIES_INFRA":
+        if de <= 0.8: bq_pts += 18.0
+        elif de <= 1.5: bq_pts += 10.0
+        if roe >= 12.0: bq_pts += 18.0
+        elif roe >= 8.0: bq_pts += 10.0
+        bq_pts += min(14.0, (strength / 100.0) * 14.0)
+    else:  # MANUFACTURING & QUALITY_GROWTH
+        if roe >= 20.0: bq_pts += 20.0
+        elif roe >= 14.0: bq_pts += 14.0
+        elif roe >= 8.0: bq_pts += 8.0
+        if de <= 0.15: bq_pts += 18.0
+        elif de <= 0.40: bq_pts += 12.0
+        elif de <= 1.0: bq_pts += 6.0
+        if npm >= 12.0: bq_pts += 12.0
+        elif npm >= 6.0: bq_pts += 8.0
+
+    lt_business_quality = round(min(50.0, max(0.0, bq_pts)), 1)
+
+    # ── 2. GROWTH (25% max = 25 pts) ──────────────────────────────────────────
+    g_pts = 0.0
+    if rev_growth >= 20.0: g_pts += 12.0
+    elif rev_growth >= 10.0: g_pts += 8.0
+    elif rev_growth > 0.0: g_pts += 4.0
+
+    ret_1m = float(scored.get("ret_1m") or 0.0)
+    ret_3m = float(scored.get("ret_3m") or 0.0)
+    if ret_1m >= 15.0 or ret_3m >= 25.0: g_pts += 8.0
+    elif ret_1m >= 5.0 or ret_3m >= 10.0: g_pts += 5.0
+
+    if trend in ("Uptrend", "Accumulation", "Strong Uptrend"): g_pts += 5.0
+
+    lt_growth_score = round(min(25.0, max(0.0, g_pts)), 1)
+
+    # ── 3. PROFITABILITY & SUSTAINABILITY (25% max = 25 pts) ────────────────
+    s_pts = 0.0
+    s_pts += min(15.0, (total_score / 100.0) * 15.0)
+    cmf = float(scored.get("cmf") or 0.0)
+    clv = float(scored.get("clv") or 0.5)
+    if cmf >= 0.05 and clv >= 0.55: s_pts += 10.0
+    elif cmf >= 0.0 or clv >= 0.45: s_pts += 5.0
+
+    lt_sustainability_score = round(min(25.0, max(0.0, s_pts)), 1)
+
+    lt_quality_score = round(lt_business_quality + lt_growth_score + lt_sustainability_score, 1)
+
+    # ── 4. INDEPENDENT VALUATION SCORE & STATUS (0 - 100) ────────────────────
+    v_pts = 0.0
+    if pe is not None and pe > 0:
+        if pe <= 18.0: v_pts += 40.0
+        elif pe <= 30.0: v_pts += 28.0
+        elif pe <= 45.0: v_pts += 15.0
+        else: v_pts += 5.0
+    else:
+        v_pts += 20.0
+
+    if pb is not None and pb > 0:
+        if pb <= 2.5: v_pts += 35.0
+        elif pb <= 5.0: v_pts += 22.0
+        else: v_pts += 8.0
+    else:
+        v_pts += 20.0
+
+    div_yield = float(scored.get("div_yield_pct") or 0.0)
+    if div_yield >= 1.5: v_pts += 25.0
+    elif div_yield >= 0.5: v_pts += 15.0
+    else: v_pts += 5.0
+
+    lt_valuation_score = round(min(100.0, max(0.0, v_pts)), 1)
+    if lt_valuation_score >= 70: lt_val_status = "UNDERVALUED"
+    elif lt_valuation_score >= 45: lt_val_status = "FAIRLY_VALUED"
+    else: lt_val_status = "EXTENDED"
+
+    if de <= 0.3 and roe >= 14.0: lt_risk = "LOW"
+    elif de <= 0.8: lt_risk = "MODERATE"
+    else: lt_risk = "HIGH"
+
+    return {
+        "sector_group": sec_group,
+        "lt_quality_score": lt_quality_score,
+        "lt_business_quality": lt_business_quality,
+        "lt_growth_score": lt_growth_score,
+        "lt_sustainability_score": lt_sustainability_score,
+        "lt_valuation_score": lt_valuation_score,
+        "lt_valuation_status": lt_val_status,
+        "lt_risk_level": lt_risk
+    }
+
+
 def get_lt_watchlist_status(
     trend: str,
     rsi: float,
@@ -1798,34 +1936,11 @@ def get_lt_watchlist_status(
                 "reason": f"Purchased{date_str}: {qty} share(s) @ ₹{avg_price:.2f} · Cooling Off Active (Day {day_num} of {COOLING_OFF_DAYS}) {pnl_str}".strip()
             }
 
-    # ── 1. LT QUALITY SCORE (0 - 100) ──────────────────────────────────────────
-    lt_q_pts = 0.0
-    roe = float(scored.get("roe_pct") or 0.0)
-    de = float(scored.get("de_ratio") if scored.get("de_ratio") is not None else 1.0)
-    npm = float(scored.get("npm_pct") or 0.0)
-    rev_growth = float(scored.get("rev_growth_pct") or 0.0)
+    # Calculate sector-aware fundamental quality metrics
+    eval_res = compute_sector_aware_lt_quality(scored)
+    lt_quality_score = eval_res["lt_quality_score"]
 
-    if roe >= 20.0: lt_q_pts += 25.0
-    elif roe >= 15.0: lt_q_pts += 18.0
-    elif roe >= 10.0: lt_q_pts += 10.0
-
-    if de <= 0.15: lt_q_pts += 25.0
-    elif de <= 0.50: lt_q_pts += 18.0
-    elif de <= 1.0: lt_q_pts += 10.0
-
-    if npm >= 15.0: lt_q_pts += 15.0
-    elif npm >= 8.0: lt_q_pts += 10.0
-    elif npm > 0: lt_q_pts += 5.0
-
-    if rev_growth >= 15.0: lt_q_pts += 15.0
-    elif rev_growth >= 8.0: lt_q_pts += 10.0
-
-    if trend in UPTREND_STATES: lt_q_pts += 20.0
-    elif trend == "Consolidation": lt_q_pts += 10.0
-
-    lt_quality_score = round(min(100.0, max(0.0, lt_q_pts)), 1)
-
-    # ── 2. LT ENTRY SCORE (0 - 100) ────────────────────────────────────────────
+    # ── LT ENTRY SCORE (0 - 100) ────────────────────────────────────────────
     lt_e_pts = 0.0
     if gtt_level and gtt_level > 0 and ltp > 0:
         dist_gtt_pct = ((ltp - gtt_level) / gtt_level) * 100.0
@@ -1854,7 +1969,7 @@ def get_lt_watchlist_status(
 
     lt_entry_score = round(min(100.0, max(0.0, lt_e_pts)), 1)
 
-    # ── 3. ACTION MAPPING ──────────────────────────────────────────────────────
+    # ── ACTION MAPPING ──────────────────────────────────────────────────────
     if holding and int(holding.get("qty", 0)) > 0:
         return {
             "status": "BOUGHT",
@@ -2475,5 +2590,79 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
 
     qualified.sort(key=lambda x: x["penny_quality_score"], reverse=True)
     return qualified[:top_n]
+
+
+def run_lt_universe_discovery_pipeline(screener_results: list[dict], watchlist_items: list[dict]) -> dict:
+    """
+    Executes the 4-Stage LT Discovery & Incumbent Audit Pipeline across all 2,414 NSE stocks.
+    Incumbents compete side-by-side on the exact same objective, sector-aware criteria as new candidates.
+    """
+    if not screener_results:
+        return {"incumbents_audit": [], "top_challengers": []}
+
+    incumbent_symbols = {w["symbol"] for w in watchlist_items} if watchlist_items else set()
+
+    all_eval = []
+    for s in screener_results:
+        eval_res = compute_sector_aware_lt_quality(s)
+        item = dict(s)
+        item.update(eval_res)
+        all_eval.append(item)
+
+    all_eval.sort(key=lambda x: x["lt_quality_score"], reverse=True)
+
+    # Incumbent Audit & Classification
+    incumbents_audit = []
+    for w in (watchlist_items or []):
+        sym = w["symbol"]
+        scored_match = next((x for x in all_eval if x["symbol"] == sym), None)
+        if scored_match:
+            rank = all_eval.index(scored_match) + 1
+            q_score = scored_match["lt_quality_score"]
+            if q_score >= 75.0:
+                inc_status = "KEEP"
+                badge = "🟢 KEEP (Top Quality)"
+                badge_class = "badge-green"
+                reason = f"Maintains top-tier sector quality ({q_score:.0f}/100) — Rank #{rank} in universe"
+            elif q_score >= 60.0:
+                inc_status = "REVIEW"
+                badge = "🟡 REVIEW (Borderline)"
+                badge_class = "badge-yellow"
+                reason = f"Borderline quality score ({q_score:.0f}/100) — Rank #{rank}; monitor fundamentals"
+            else:
+                inc_status = "REPLACE_CANDIDATE"
+                badge = "🔴 REPLACE CANDIDATE"
+                badge_class = "badge-red"
+                reason = f"Weak fundamental quality ({q_score:.0f}/100) — outscored by universe candidates"
+
+            item = dict(w)
+            item.update(scored_match)
+            item["incumbent_status"] = inc_status
+            item["incumbent_badge"] = badge
+            item["incumbent_badge_class"] = badge_class
+            item["incumbent_reason"] = reason
+            item["universe_rank"] = rank
+            incumbents_audit.append(item)
+
+    # Top New Universe Challengers (Non-incumbents)
+    top_challengers = []
+    for x in all_eval:
+        if x["symbol"] not in incumbent_symbols and x["lt_quality_score"] >= 75.0:
+            rank = all_eval.index(x) + 1
+            item = dict(x)
+            item["incumbent_status"] = "NEW_DISCOVERY"
+            item["incumbent_badge"] = "⚡ NEW QUALITY DISCOVERY"
+            item["incumbent_badge_class"] = "badge-purple"
+            item["incumbent_reason"] = f"Discovered from 2,414 NSE universe — Rank #{rank} (Quality: {x['lt_quality_score']:.0f}/100)"
+            item["universe_rank"] = rank
+            top_challengers.append(item)
+            if len(top_challengers) >= 15:
+                break
+
+    return {
+        "incumbents_audit": incumbents_audit,
+        "top_challengers": top_challengers,
+        "all_ranked_count": len(all_eval)
+    }
 
 

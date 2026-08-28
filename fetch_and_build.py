@@ -29,7 +29,7 @@ import threading
 import pandas as pd
 import yfinance as yf
 
-from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, calc_indmoney_charges, compute_quality_penny_stocks, find_best_swing_candidate
+from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, calc_indmoney_charges, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -1201,6 +1201,8 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
         if effective_gtt and effective_gtt > 0 and ltp > 0:
             dist_from_gtt_pct = round(((ltp - effective_gtt) / effective_gtt) * 100, 1)
 
+        sector_eval = compute_sector_aware_lt_quality(scored)
+
         enriched.append({
             **entry,
             "symbol":            sym,
@@ -1223,12 +1225,24 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
             "status_reason":     gate["reason"],
             "holding":           holding,
             "live_data_found":   live is not None,
+            **sector_eval
         })
 
     if buy_now_count > 0:
         log(f"  🔔 LT Watchlist: {buy_now_count} stock(s) are BUY_NOW — GTT level reached!")
     log(f"  LT Watchlist: {sum(1 for e in enriched if e.get('active'))} active / {len(enriched)} total · "
         f"{buy_now_count} BUY_NOW · {sum(1 for e in enriched if e.get('status')=='WAIT' and e.get('active'))} WAIT · {bought_count} BOUGHT")
+
+    # Run 4-Stage Universe Discovery & Incumbent Audit Pipeline across 2,414 NSE Stocks
+    discovery_res = run_lt_universe_discovery_pipeline(screener_results, enriched)
+    discovery_file = os.path.join(BASE_DIR, "lt_discovery_pipeline.json")
+    try:
+        with open(discovery_file, "w", encoding="utf-8") as f:
+            json.dump(discovery_res, f, indent=2)
+        log(f"  ⚡ LT Discovery Pipeline: Audited {len(enriched)} incumbents & discovered top {len(discovery_res.get('top_challengers', []))} universe candidates across {discovery_res.get('all_ranked_count', 0)} stocks.")
+    except Exception as e:
+        log(f"  ⚠ Failed to save lt_discovery_pipeline.json: {e}")
+
     return enriched
 
 

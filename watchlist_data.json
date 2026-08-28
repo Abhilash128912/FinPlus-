@@ -16,17 +16,17 @@
     "npm_at_entry": 6.02,
     "current_score": 35.9,
     "current_strength": 39.0,
-    "current_value": 351.4,
+    "current_value": 351.44,
     "current_momentum": 60.0,
-    "ltp": 175.7,
+    "ltp": 175.72,
     "sector": "Industrials",
     "pe": 29.17,
     "roe_pct": 21.64,
     "de_ratio": 3.45,
     "npm_pct": 6.02,
-    "rsi": 60.1,
+    "rsi": 60.2,
     "ma200": 170.02,
-    "wk52_return_pct": 34.11,
+    "wk52_return_pct": 34.13,
     "volume_spike": 0.21,
     "today_volume": 4065955.0,
     "avg_volume_10d": 19818597.4,
@@ -46,8 +46,8 @@
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Quality score collapsed to 35.9 (<40)",
-    "unrealised_pnl": 30.34,
-    "unrealised_pct": 9.45
+    "unrealised_pnl": 30.38,
+    "unrealised_pct": 9.46
   },
   {
     "symbol": "BEL",
@@ -66,17 +66,17 @@
     "npm_at_entry": 21.4,
     "current_score": 42.8,
     "current_strength": 77.0,
-    "current_value": 1229.1,
+    "current_value": 1228.65,
     "current_momentum": 41.0,
-    "ltp": 409.7,
+    "ltp": 409.55,
     "sector": "Industrials",
     "pe": 48.65,
     "roe_pct": 25.6,
     "de_ratio": 0.0,
     "npm_pct": 21.4,
-    "rsi": 54.3,
+    "rsi": 54.1,
     "ma200": 419.65,
-    "wk52_return_pct": 10.12,
+    "wk52_return_pct": 10.08,
     "volume_spike": 0.21,
     "today_volume": 2811051.0,
     "avg_volume_10d": 13174121.5,
@@ -85,14 +85,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9409.7 fell below 200-day MA \u20b9419.65"
+        "message": "Trend Broken \u2014 Price \u20b9409.55 fell below 200-day MA \u20b9419.65"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Price below 200-day MA (\u20b9419.65) & score <50",
-    "unrealised_pnl": 18.54,
-    "unrealised_pct": 1.53
+    "unrealised_pnl": 18.09,
+    "unrealised_pct": 1.49
   },
   {
     "symbol": "BORANA",
@@ -111,17 +111,17 @@
     "npm_at_entry": 16.87,
     "current_score": 56.1,
     "current_strength": 77.0,
-    "current_value": 310.0,
+    "current_value": 311.35,
     "current_momentum": 30.0,
-    "ltp": 310.0,
+    "ltp": 311.35,
     "sector": "Consumer Cyclical",
     "pe": 11.7,
     "roe_pct": 35.01,
     "de_ratio": 0.25,
     "npm_pct": 16.87,
-    "rsi": 41.9,
-    "ma200": 325.57,
-    "wk52_return_pct": 43.37,
+    "rsi": 43.0,
+    "ma200": 325.58,
+    "wk52_return_pct": 43.99,
     "volume_spike": 0.2,
     "today_volume": 7167.0,
     "avg_volume_10d": 36095.55,
@@ -130,14 +130,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9310.0 fell below 200-day MA \u20b9325.57"
+        "message": "Trend Broken \u2014 Price \u20b9311.35 fell below 200-day MA \u20b9325.58"
       }
     ],
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": -32.0,
-    "unrealised_pct": -9.36
+    "unrealised_pnl": -30.65,
+    "unrealised_pct": -8.96
   },
   {
     "symbol": "FEDERALBNK",
@@ -156,9 +156,9 @@
     "npm_at_entry": 30.72,
     "current_score": 46.4,
     "current_strength": 45.0,
-    "current_value": 688.2,
+    "current_value": 688.1,
     "current_momentum": 52.0,
-    "ltp": 344.1,
+    "ltp": 344.05,
     "sector": "Financial Services",
     "pe": 19.12,
     "roe_pct": 11.51,
@@ -166,7 +166,7 @@
     "npm_pct": 30.72,
     "rsi": 44.1,
     "ma200": 292.62,
-    "wk52_return_pct": 76.45,
+    "wk52_return_pct": 76.43,
     "volume_spike": 0.32,
     "today_volume": 1303393.0,
     "avg_volume_10d": 4037858.4,
@@ -175,8 +175,8 @@
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": -24.0,
-    "unrealised_pct": -3.37
+    "unrealised_pnl": -24.1,
+    "unrealised_pct": -3.38
   },
   {
     "symbol": "ITC",
@@ -195,17 +195,17 @@
     "npm_at_entry": 25.94,
     "current_score": 42.6,
     "current_strength": 65.0,
-    "current_value": 266.95,
+    "current_value": 266.75,
     "current_momentum": 2.0,
-    "ltp": 266.95,
+    "ltp": 266.75,
     "sector": "Consumer Defensive",
     "pe": 16.9,
     "roe_pct": 33.8,
     "de_ratio": 0.03,
     "npm_pct": 25.94,
-    "rsi": 32.9,
+    "rsi": 32.7,
     "ma200": 321.16,
-    "wk52_return_pct": -33.15,
+    "wk52_return_pct": -33.2,
     "volume_spike": 0.2,
     "today_volume": 2846454.0,
     "avg_volume_10d": 14586929.9,
@@ -219,14 +219,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9266.95 fell below 200-day MA \u20b9321.16"
+        "message": "Trend Broken \u2014 Price \u20b9266.75 fell below 200-day MA \u20b9321.16"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Price below 200-day MA (\u20b9321.16) & score <50",
-    "unrealised_pnl": -8.5,
-    "unrealised_pct": -3.09
+    "unrealised_pnl": -8.7,
+    "unrealised_pct": -3.16
   },
   {
     "symbol": "NMDC",
@@ -245,17 +245,17 @@
     "npm_at_entry": 23.22,
     "current_score": 55.0,
     "current_strength": 63.0,
-    "current_value": 518.52,
+    "current_value": 518.82,
     "current_momentum": 48.0,
-    "ltp": 86.42,
+    "ltp": 86.47,
     "sector": "Basic Materials",
     "pe": 10.08,
     "roe_pct": 23.36,
     "de_ratio": 0.19,
     "npm_pct": 23.22,
-    "rsi": 56.8,
+    "rsi": 57.0,
     "ma200": 83.17,
-    "wk52_return_pct": 22.27,
+    "wk52_return_pct": 22.34,
     "volume_spike": 0.56,
     "today_volume": 10230324.0,
     "avg_volume_10d": 18428379.75,
@@ -264,8 +264,8 @@
     "signal": "BUY",
     "signal_badge": "\ud83d\udfe2 BUY",
     "signal_reason": "Strong quality score (55.0) & solid fundamentals",
-    "unrealised_pnl": 7.26,
-    "unrealised_pct": 1.42
+    "unrealised_pnl": 7.56,
+    "unrealised_pct": 1.48
   },
   {
     "symbol": "TATAPOWER",
@@ -284,17 +284,17 @@
     "npm_at_entry": 6.09,
     "current_score": 16.4,
     "current_strength": 21.0,
-    "current_value": 352.0,
+    "current_value": 351.2,
     "current_momentum": 4.0,
-    "ltp": 352.0,
+    "ltp": 351.2,
     "sector": "Utilities",
     "pe": 31.09,
     "roe_pct": 9.75,
     "de_ratio": 1.68,
     "npm_pct": 6.09,
-    "rsi": 23.3,
+    "rsi": 22.9,
     "ma200": 389.72,
-    "wk52_return_pct": -8.15,
+    "wk52_return_pct": -8.36,
     "volume_spike": 0.6,
     "today_volume": 2234333.0,
     "avg_volume_10d": 3726720.5,
@@ -313,14 +313,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9352.0 fell below 200-day MA \u20b9389.72"
+        "message": "Trend Broken \u2014 Price \u20b9351.2 fell below 200-day MA \u20b9389.72"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Quality score collapsed to 16.4 (<40)",
-    "unrealised_pnl": -30.25,
-    "unrealised_pct": -7.91
+    "unrealised_pnl": -31.05,
+    "unrealised_pct": -8.12
   },
   {
     "symbol": "TATASTEEL",
@@ -339,17 +339,17 @@
     "npm_at_entry": 4.6,
     "current_score": 32.5,
     "current_strength": 34.0,
-    "current_value": 184.83,
+    "current_value": 184.74,
     "current_momentum": 25.0,
-    "ltp": 184.83,
+    "ltp": 184.74,
     "sector": "Basic Materials",
     "pe": 20.88,
     "roe_pct": 10.8,
     "de_ratio": 0.89,
     "npm_pct": 4.6,
-    "rsi": 44.9,
+    "rsi": 44.7,
     "ma200": 192.43,
-    "wk52_return_pct": 15.79,
+    "wk52_return_pct": 15.73,
     "volume_spike": 0.76,
     "today_volume": 16403235.0,
     "avg_volume_10d": 21489832.0,
@@ -363,14 +363,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9184.83 fell below 200-day MA \u20b9192.43"
+        "message": "Trend Broken \u2014 Price \u20b9184.74 fell below 200-day MA \u20b9192.43"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Quality score collapsed to 32.5 (<40)",
-    "unrealised_pnl": 2.01,
-    "unrealised_pct": 1.1
+    "unrealised_pnl": 1.92,
+    "unrealised_pct": 1.05
   },
   {
     "symbol": "UYFINCORP",
@@ -389,17 +389,17 @@
     "npm_at_entry": 29.06,
     "current_score": 67.5,
     "current_strength": 65.0,
-    "current_value": 240.0,
+    "current_value": 239.28,
     "current_momentum": 68.0,
-    "ltp": 20.0,
+    "ltp": 19.94,
     "sector": "Financial Services",
     "pe": 6.26,
     "roe_pct": 13.44,
     "de_ratio": 0.01,
     "npm_pct": 29.06,
-    "rsi": 56.5,
+    "rsi": 55.9,
     "ma200": 14.97,
-    "wk52_return_pct": 39.08,
+    "wk52_return_pct": 38.66,
     "volume_spike": 0.03,
     "today_volume": 18456.0,
     "avg_volume_10d": 565838.6,
@@ -408,7 +408,7 @@
     "signal": "BUY",
     "signal_badge": "\ud83d\udfe2 BUY",
     "signal_reason": "Strong quality score (67.5) & solid fundamentals",
-    "unrealised_pnl": 8.04,
-    "unrealised_pct": 3.47
+    "unrealised_pnl": 7.32,
+    "unrealised_pct": 3.16
   }
 ]
