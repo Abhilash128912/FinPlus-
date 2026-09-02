@@ -637,7 +637,17 @@ def fetch_via_curl_cffi(ticker: str) -> dict | None:
                 info = {
                     "regularMarketPrice": price,
                     "currentPrice": price,
-                    "previousClose": meta.get("previousClose"),
+                    # Yahoo's chart API meta has NO "previousClose" key at all (that
+                    # always silently returned None) — "chartPreviousClose" exists but
+                    # is the close at the START of the requested `range` (here 1y), not
+                    # yesterday's close, so using it would trade one bug for a worse one
+                    # (a ~1-year "day change" instead of a 1-day one). The reliable value
+                    # Yahoo actually provides is regularMarketChangePercent (their own
+                    # authoritative day-over-day %), so previousClose is derived from that.
+                    "previousClose": (
+                        round(price / (1 + meta["regularMarketChangePercent"] / 100), 2)
+                        if meta.get("regularMarketChangePercent") not in (None, -100) else None
+                    ),
                     "fiftyTwoWeekHigh": meta.get("fiftyTwoWeekHigh"),
                     "fiftyTwoWeekLow": meta.get("fiftyTwoWeekLow"),
                     "shortName": meta.get("shortName") or ticker.replace(".NS", ""),
@@ -691,7 +701,17 @@ def fetch_via_curl_cffi(ticker: str) -> dict | None:
                 info = {
                     "regularMarketPrice": price,
                     "currentPrice": price,
-                    "previousClose": meta.get("previousClose"),
+                    # Yahoo's chart API meta has NO "previousClose" key at all (that
+                    # always silently returned None) — "chartPreviousClose" exists but
+                    # is the close at the START of the requested `range` (here 1y), not
+                    # yesterday's close, so using it would trade one bug for a worse one
+                    # (a ~1-year "day change" instead of a 1-day one). The reliable value
+                    # Yahoo actually provides is regularMarketChangePercent (their own
+                    # authoritative day-over-day %), so previousClose is derived from that.
+                    "previousClose": (
+                        round(price / (1 + meta["regularMarketChangePercent"] / 100), 2)
+                        if meta.get("regularMarketChangePercent") not in (None, -100) else None
+                    ),
                     "fiftyTwoWeekHigh": meta.get("fiftyTwoWeekHigh"),
                     "fiftyTwoWeekLow": meta.get("fiftyTwoWeekLow"),
                     "shortName": meta.get("shortName") or ticker.replace(".NS", ""),
