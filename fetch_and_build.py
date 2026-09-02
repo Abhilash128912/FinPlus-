@@ -38,7 +38,7 @@ import logging
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
-from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline, compute_intraday_picks, select_monthly_lt_picks
+from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline, compute_intraday_picks, select_monthly_lt_watchlist_additions
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -1548,6 +1548,12 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
     runs the 3-state status gate (BUY_NOW / WAIT / WATCHLIST), and
     returns an enriched list ready for the UI dashboard.
     """
+    # Keep the locked monthly auto-picked cohort in sync before reading the file
+    # (no-ops almost instantly if still locked — just a date check against
+    # LT_MONTHLY_PICKS_FILE — so this is cheap on the frequent read-only call
+    # sites too, not just the full-scan ones).
+    sync_monthly_lt_watchlist_additions(screener_results)
+
     # Load seed file, create if missing
     if not os.path.exists(LT_WL_FILE):
         log(f"⚠ lt_watchlist.json not found at {LT_WL_FILE} — creating empty file")
@@ -4135,6 +4141,7 @@ let ltSortCol = 'durability_score';
 let ltSortDir = -1;
 
 function calculateClientStatus(item) {
+  // BOUGHT always takes priority — user has an active position
   if (item.holding && (item.holding.qty > 0 || parseInt(item.holding.qty, 10) > 0)) {
     const qty = parseInt(item.holding.qty, 10) || 1;
     const avgPrice = parseFloat(item.holding.avg_price) || item.ltp || 0;
@@ -4148,6 +4155,11 @@ function calculateClientStatus(item) {
     item.status_reason = `Purchased${buyDate ? ' on ' + buyDate : ''}: ${qty} share(s) @ ₹${avgPrice.toFixed(2)} · Cooling off / Holding active ${pnlStr}`.trim();
     return;
   }
+  // Status priority: BUY_NOW > WAIT > WATCHLIST. Client can only UPGRADE, never downgrade.
+  const statusRank = { 'BUY_NOW': 3, 'WAIT': 2, 'WATCHLIST': 1 };
+  const serverStatus = item.status || 'WATCHLIST';
+  const serverRank = statusRank[serverStatus] || 0;
+
   const uptrendStates = ["Uptrend", "Accumulation", "Strong Uptrend"];
   const trend = item.trend || "Consolidation";
   const rsi = item.rsi || 50;
@@ -4159,30 +4171,26 @@ function calculateClientStatus(item) {
   if (uptrendStates.includes(trend)) {
     if (gtt !== null && gtt !== undefined && gtt !== "" && ltp > 0 && ltp <= (gtt * 1.008) && rsi < 70) {
       if (dayChg >= -0.35 || (rsi > 42 && rsi < 70)) {
-        item.status = "BUY_NOW";
-        item.status_badge = "🟢 BUY NOW";
-        item.status_badge_class = "badge-green";
-        item.status_reason = `A/E Breakout: Price ₹${ltp.toFixed(2)} bouncing UP from Support GTT ₹${parseFloat(gtt).toFixed(2)}`;
-        return;
-      } else {
-        item.status = "WAIT";
-        item.status_badge = "🔵 WAIT";
-        item.status_badge_class = "badge-purple";
-        item.status_reason = `At Support GTT ₹${parseFloat(gtt).toFixed(2)} — Coiling (Awaiting 1h/Daily Green Reversal Expansion Candle)`;
+        if (statusRank['BUY_NOW'] > serverRank) {
+          item.status = "BUY_NOW";
+          item.status_badge = "🟢 BUY NOW";
+          item.status_badge_class = "badge-green";
+          item.status_reason = `A/E Breakout: Price ₹${ltp.toFixed(2)} at Support GTT ₹${parseFloat(gtt).toFixed(2)}`;
+        }
         return;
       }
     }
-    item.status = "WAIT";
-    item.status_badge = "🔵 WAIT";
-    item.status_badge_class = "badge-purple";
-    item.status_reason = `Trend confirmed (${trend}) — waiting for pullback to Support GTT` + (gtt ? ` ₹${parseFloat(gtt).toFixed(2)}` : ' (GTT not set)');
+    if (statusRank['WAIT'] > serverRank) {
+      item.status = "WAIT";
+      item.status_badge = "🔵 WAIT";
+      item.status_badge_class = "badge-purple";
+      item.status_reason = `Trend confirmed (${trend}) — waiting for pullback to GTT` + (gtt ? ` ₹${parseFloat(gtt).toFixed(2)}` : '');
+    }
     return;
   }
-  item.status = "WATCHLIST";
-  item.status_badge = "⬜ WATCHING";
-  item.status_badge_class = "badge-gray";
-  item.status_reason = `Trend not confirmed (${trend}) — monitoring only, no action expected`;
+  // Not in uptrend — keep server status unchanged (never downgrade to WATCHLIST)
 }
+
 
 function filterLtStatus(status) {
   ltFilterStatus = status;
@@ -4675,6 +4683,16 @@ function init() {
   });
 
   saveWatchlist();
+
+  // ltWatchlist's own top-level `let ltWatchlist = ...LT_WATCHLIST...` (near the top
+  // of this file) runs at app.js PARSE time, before the small per-scan bootstrap
+  // script (loaded after app.js) ever sets LT_WATCHLIST to its real value — so that
+  // initial assignment always captured the empty default and was never revisited,
+  // leaving the LT Screen tab permanently empty on every fresh page load until a
+  // user action (add/remove stock) happened to call fetchLtWatchlistApi(). Rebuild
+  // it here from the now-populated LT_WATCHLIST, exactly like watchlist above.
+  ltWatchlist = JSON.parse(JSON.stringify(LT_WATCHLIST || []));
+
   renderStats();
   populateSectorFilter();
   applyFilters();
@@ -5587,91 +5605,53 @@ function renderIntradayTab() {
   `;
 }
 
-// ── This Month's Locked LT Discovery Picks (regenerated once every 30 days) ──
+// ── This Month's Locked LT Discovery Picks (lock-state banner only) ──
 function renderLtMonthlyPicks() {
   const container = document.getElementById('ltMonthlyPicksSection');
   if (!container) return;
 
-  const data = (typeof LT_MONTHLY_PICKS !== 'undefined' && LT_MONTHLY_PICKS) ? LT_MONTHLY_PICKS : { picks: [] };
-  const picks = data.picks || [];
+  // Auto-picks now live as real LT Watchlist entries (tagged lt_monthly_batch:true).
+  // LT_MONTHLY_PICKS now carries only lock-state metadata, not full stock objects.
+  const data = (typeof LT_MONTHLY_PICKS !== 'undefined' && LT_MONTHLY_PICKS) ? LT_MONTHLY_PICKS : {};
+  const batchSymbols = Array.isArray(data.batch_symbols) ? data.batch_symbols : [];
+  const batchSize = data.batch_size || batchSymbols.length || 0;
+  const lockedUntil = data.locked_until || null;
+  const generatedOn = data.generated_on || null;
 
-  if (!picks.length) {
+  // Hide entirely if no batch info yet (first run before scan)
+  if (!lockedUntil && batchSize === 0) {
     container.innerHTML = '';
     return;
   }
 
-  function fmt(n) { return (n || n === 0) ? '₹' + Number(n).toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2}) : '-'; }
-  function valColor(status) {
-    if (status === 'UNDERVALUED') return '#4ade80';
-    if (status === 'FAIRLY_VALUED') return '#fbbf24';
-    return '#f87171';
-  }
-  function riskColor(risk) {
-    if (risk === 'LOW') return '#4ade80';
-    if (risk === 'MODERATE') return '#fbbf24';
-    return '#f87171';
-  }
+  const fmtDate = iso => iso
+    ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '\u2014';
+  const daysLeft = lockedUntil ? Math.max(0, Math.ceil((new Date(lockedUntil) - new Date()) / 86400000)) : 0;
 
-  const cards = picks.map(p => {
-    const vColor = valColor(p.lt_valuation_status);
-    const rColor = riskColor(p.lt_risk_level);
-    const valLabel = (p.lt_valuation_status || '').replace(/_/g, ' ');
-    return `
-    <div class="fno-card">
-      <div class="fno-card-header">
-        <div>
-          <div class="fno-card-sym">#${p.monthly_rank || ''} ${p.symbol}</div>
-          <div class="fno-card-name">${p.name || ''} &bull; ${p.sector_group || ''}</div>
-        </div>
-        <div class="fno-card-price">
-          <div class="fno-card-ltp">${fmt(p.ltp)}</div>
-        </div>
-      </div>
-      <div class="fno-section-title">LT Quality Breakdown</div>
-      <div class="fno-rr-grid">
-        <div class="fno-rr-cell">
-          <div class="fno-rr-label">Quality Score</div>
-          <div class="fno-rr-val pos">${(p.lt_quality_score||0).toFixed(0)}/100</div>
-        </div>
-        <div class="fno-rr-cell">
-          <div class="fno-rr-label">Valuation</div>
-          <div class="fno-rr-val" style="color:${vColor}">${valLabel}</div>
-        </div>
-        <div class="fno-rr-cell">
-          <div class="fno-rr-label">Risk</div>
-          <div class="fno-rr-val" style="color:${rColor}">${p.lt_risk_level || '-'}</div>
-        </div>
-      </div>
-      <div class="fno-tech-row">
-        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">ROE ${(p.roe_pct||0).toFixed(1)}%</span>
-        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">D/E ${(p.de_ratio||0).toFixed(2)}</span>
-        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">Rev Growth ${(p.rev_growth_pct||0).toFixed(1)}%</span>
-      </div>
-      <div class="fno-lot-info" style="padding:10px 18px 16px">
-        <span style="color:var(--muted);font-size:11.5px">${p.rationale || ''}</span>
-      </div>
-    </div>`;
-  }).join('');
+  const pillsHtml = batchSymbols.map(sym => {
+    const inWl = (typeof ltWatchlist !== 'undefined') &&
+      ltWatchlist.some(s => (s.symbol||'').toUpperCase() === sym.toUpperCase() && s.lt_monthly_batch);
+    return '<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;' +
+      'background:' + (inWl ? 'rgba(16,185,129,0.15)' : 'rgba(100,116,139,0.15)') + ';' +
+      'color:' + (inWl ? '#34d399' : '#94a3b8') + ';' +
+      'border:1px solid ' + (inWl ? 'rgba(16,185,129,0.4)' : 'rgba(100,116,139,0.3)') + ';">' + sym + '</span>';
+  }).join(' ');
 
-  const lockedUntilStr = data.locked_until
-    ? new Date(data.locked_until).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    : '';
-  const generatedStr = data.generated_on
-    ? new Date(data.generated_on).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    : '';
-
-  container.innerHTML = `
-    <div class="fno-header" style="margin-bottom:14px">
-      <div class="fno-header-left">
-        <span style="font-size:28px">🔒</span>
-        <div>
-          <div class="fno-header-title">This Month's Locked LT Discovery Picks</div>
-          <div class="fno-header-sub">Generated ${generatedStr} &bull; Locked until ${lockedUntilStr} (won't reshuffle until then) &bull; Excludes stocks already in your watchlist &bull; Not investment advice</div>
-        </div>
-      </div>
-    </div>
-    <div class="fno-grid">${cards}</div>
-  `;
+  container.innerHTML =
+    '<div style="background:linear-gradient(135deg,rgba(99,102,241,0.10),rgba(139,92,246,0.08));' +
+    'border:1px solid rgba(99,102,241,0.30);border-radius:12px;padding:14px 20px;margin-bottom:18px;' +
+    'display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">' +
+    '<div style="font-size:22px;margin-top:2px">\uD83D\uDD12</div>' +
+    '<div style="flex:1;min-width:200px">' +
+    '<div style="font-size:13px;font-weight:700;color:#c4b5fd;margin-bottom:4px">' +
+    '\uD83D\uDD12 Monthly Auto-Picks Locked \u2014 ' + batchSize + ' stock' + (batchSize !== 1 ? 's' : '') + ' added to your LT Watchlist below</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">' +
+    'Generated ' + fmtDate(generatedOn) + ' &bull; Locked until <strong style="color:#a5b4fc">' + fmtDate(lockedUntil) + '</strong>' +
+    ' &bull; <strong style="color:' + (daysLeft > 7 ? '#34d399' : '#fbbf24') + '">' + daysLeft + ' day' + (daysLeft !== 1 ? 's' : '') + ' remaining</strong>' +
+    ' &bull; LTP &lt; \u20b9600 &bull; Quality \u2265 70/100 &bull; See their BUY\u200bNOW/WAIT/WATCHING status in the watchlist table below</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:5px">' + pillsHtml + '</div>' +
+    '</div></div>';
 }
 
 // ── Quality Penny Stocks Tab (Top 20 Micro-Cap Wealth Builder) ─────────
@@ -7758,58 +7738,136 @@ def fetch_commodity_signals() -> dict:
     return results
 
 
-def get_or_refresh_monthly_lt_picks(screener_results: list[dict], lt_watchlist: list[dict]) -> dict:
+LT_MONTHLY_BATCH_KEY = "lt_monthly_batch"  # marks auto-added entries so next month's
+                                            # refresh can replace just this cohort,
+                                            # never anything the user added themselves.
+
+
+def sync_monthly_lt_watchlist_additions(screener_results: list[dict]) -> None:
     """
-    Returns this month's locked LT pick list, regenerating the SELECTION only
-    once every 30 days (persisted in LT_MONTHLY_PICKS_FILE) — every scan in
-    between just refreshes live fields (ltp, rsi, score) on the SAME 15 symbols,
-    so the list a user is looking at doesn't reshuffle underneath them scan to
-    scan, hour to hour.
+    Ensures lt_watchlist.json holds a locked monthly cohort of auto-selected
+    stocks (quality + momentum, LTP < 600 — see select_monthly_lt_watchlist_
+    additions), refreshed only once every 30 days (state tracked in
+    LT_MONTHLY_PICKS_FILE). These become real watchlist entries and are
+    enriched by process_lt_watchlist() exactly like every manually-added
+    stock — same auto-trailing GTT, same BUY_NOW/ACCUMULATE_ON_DIP/WAIT/
+    WATCHLIST gate. This function only decides membership; it writes
+    lt_watchlist.json and returns nothing, letting the normal
+    process_lt_watchlist() read path pick the changes up.
+
+    Never touches entries the user added themselves — only replaces the
+    previous auto-added cohort (identified by the LT_MONTHLY_BATCH_KEY tag)
+    once its 30-day lock has expired.
     """
+    if not screener_results:
+        return
+
     ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
     today = datetime.datetime.now(ist_offset).date()
 
-    existing = None
+    state = None
     if os.path.exists(LT_MONTHLY_PICKS_FILE):
         try:
             with open(LT_MONTHLY_PICKS_FILE, encoding="utf-8") as f:
-                existing = json.load(f)
+                state = json.load(f)
         except Exception:
-            existing = None
+            state = None
 
-    if existing and existing.get("locked_until") and existing.get("picks"):
+    if state and state.get("locked_until"):
         try:
-            locked_until = datetime.date.fromisoformat(existing["locked_until"])
+            locked_until = datetime.date.fromisoformat(state["locked_until"])
+            if today < locked_until:
+                return  # still locked — leave lt_watchlist.json untouched this scan
         except Exception:
-            locked_until = today  # malformed date -> treat as expired, regenerate below
+            pass  # malformed date -> treat as expired, regenerate below
 
-        if today < locked_until:
-            live_by_symbol = {s.get("symbol"): s for s in screener_results if isinstance(s, dict) and s.get("symbol")}
-            refreshed = []
-            for p in existing["picks"]:
-                live = live_by_symbol.get(p.get("symbol"))
-                if live:
-                    p = dict(p)
-                    for k in ("ltp", "rsi", "total_score", "volume_spike"):
-                        if live.get(k) is not None:
-                            p[k] = live[k]
-                refreshed.append(p)
-            return {"picks": refreshed, "locked_until": existing["locked_until"], "generated_on": existing.get("generated_on")}
+    try:
+        with open(LT_WL_FILE, encoding="utf-8") as f:
+            lt_stocks = json.load(f)
+    except Exception:
+        lt_stocks = []
+    if not isinstance(lt_stocks, list):
+        lt_stocks = []
 
-    # Lock expired (or no picks yet) — generate a fresh selection for the new month.
-    picks = select_monthly_lt_picks(screener_results, lt_watchlist, top_n=15)
-    result = {
-        "picks": picks,
+    # Drop only the PREVIOUS auto-added cohort — everything else (manual entries,
+    # holdings) is left exactly as-is.
+    prev_batch = set(state.get("batch_symbols", [])) if state else set()
+    lt_stocks = [e for e in lt_stocks
+                 if not (isinstance(e, dict) and e.get(LT_MONTHLY_BATCH_KEY) and e.get("symbol") in prev_batch)]
+
+    existing_symbols = {e.get("symbol") for e in lt_stocks if isinstance(e, dict) and e.get("symbol")}
+    picks = select_monthly_lt_watchlist_additions(screener_results, existing_symbols, top_n=15, max_price=600.0)
+
+    new_entries = []
+    for p in picks:
+        new_entries.append({
+            "symbol": p["symbol"],
+            "ticker": p.get("ticker") or f"{p['symbol']}.NS",
+            "type": "Auto",
+            "sector": p.get("sector") or "",
+            "durability_score": round(p.get("lt_quality_score", 0)),
+            "portfolio_role": "Monthly Quality+Momentum Pick",
+            "gtt_mode": "auto",
+            "gtt_level": None,
+            "active": True,
+            "added_date": today.isoformat(),
+            "notes": (f"Auto-selected {today.isoformat()} — Quality "
+                      f"{p.get('lt_quality_score', 0):.0f}/100, Momentum {p.get('momentum', 0):.0f}/100, "
+                      f"LTP ₹{p.get('ltp', 0):.2f} (< ₹600 cap)."),
+            LT_MONTHLY_BATCH_KEY: True,
+        })
+
+    lt_stocks.extend(new_entries)
+    try:
+        with open(LT_WL_FILE, "w", encoding="utf-8") as f:
+            json.dump(lt_stocks, f, indent=2)
+    except Exception as e:
+        log(f"  ⚠ Could not update lt_watchlist.json with monthly picks: {e}")
+        return
+
+    new_state = {
+        "batch_symbols": [e["symbol"] for e in new_entries],
         "locked_until": (today + datetime.timedelta(days=30)).isoformat(),
         "generated_on": today.isoformat(),
     }
     try:
         with open(LT_MONTHLY_PICKS_FILE, "w", encoding="utf-8") as f:
-            json.dump(result, f, default=json_serializer)
-        log(f"  🔒 Generated new monthly LT pick list ({len(picks)} stocks, locked until {result['locked_until']})")
+            json.dump(new_state, f)
+        log(f"  🔒 Refreshed monthly LT watchlist cohort: {len(new_entries)} stock(s) added "
+            f"(locked until {new_state['locked_until']})")
     except Exception as e:
-        log(f"  ⚠ Could not save lt_monthly_picks.json: {e}")
-    return result
+        log(f"  ⚠ Could not save lt_monthly_picks.json state: {e}")
+
+
+def get_or_refresh_monthly_lt_picks(screener_results: list[dict], lt_watchlist: list[dict]) -> dict:
+    """
+    Returns the current monthly lock-state metadata so the HTML can show
+    the locked-until date, batch size, and generated-on date.
+    The actual auto-picks are now real lt_watchlist.json entries (tagged with
+    LT_MONTHLY_BATCH_KEY=True) and rendered by the existing LT Watchlist
+    dashboard — no separate showcase needed.
+
+    Returns a dict: { picks: [], locked_until: str|None, generated_on: str|None, batch_size: int }
+    """
+    state = {}
+    if os.path.exists(LT_MONTHLY_PICKS_FILE):
+        try:
+            with open(LT_MONTHLY_PICKS_FILE, encoding="utf-8") as f:
+                raw = json.load(f)
+            # New format: { locked_until, generated_on, batch_symbols }
+            if isinstance(raw, dict) and "locked_until" in raw:
+                state = raw
+        except Exception:
+            pass
+
+    batch_symbols = state.get("batch_symbols", [])
+    return {
+        "picks": [],          # picks now live in lt_watchlist.json, not here
+        "locked_until":  state.get("locked_until"),
+        "generated_on":  state.get("generated_on"),
+        "batch_size":    len(batch_symbols),
+        "batch_symbols": batch_symbols,
+    }
 
 
 def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist: list[dict], commodity_signals: dict, mkt_info: dict, fno_data: list[dict] | None = None) -> str:
@@ -7943,6 +8001,14 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         f"var LT_PORTFOLIO_SUMMARY = {replacements['__LT_PORTFOLIO_SUMMARY_JSON__']};\n"
         "var SCREENER_DATA = [];\n"
     )
+    # app.js MUST load first — it declares WATCHLIST_SEED/LT_WATCHLIST/CONFIG/etc as
+    # empty `var` defaults. If a separate inline <script> sets them to real data BEFORE
+    # app.js runs, app.js's own default declarations execute afterward and silently
+    # overwrite the real data back to empty (var redeclaration always takes the LAST
+    # assignment) — this exact ordering bug was why the LT Watchlist (and everything
+    # else fed through this same small-data-blob mechanism) kept rendering empty
+    # despite screener_data.json / the page source both having real data. Real values
+    # must be assigned in ONE inline script that runs strictly after app.js.
     bootstrap_script = (
         f'<script src="/static/app.js?v={js_ver}"></script>\n'
         "<script>\n"
@@ -8766,6 +8832,12 @@ def background_initial_scan():
             log(f"  ⚠ Could not save screener_data.json: {e}")
 
         log("Processing LT Watchlist stocks...")
+        # Sync monthly auto-picks into lt_watchlist.json BEFORE process_lt_watchlist
+        # reads it — this ensures the locked cohort (quality+momentum, LTP < ₹600,
+        # 30-day lock) flows through the same BUY_NOW/WAIT/WATCHING gate as every
+        # manually-added stock. sync_monthly_lt_watchlist_additions is a no-op when
+        # the lock is still active (within 30 days of last selection).
+        sync_monthly_lt_watchlist_additions(screener_results)
         lt_wl_data = process_lt_watchlist(screener_results)
         wl_data = process_watchlist(screener_results)
 

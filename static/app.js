@@ -836,6 +836,7 @@ let ltSortCol = 'durability_score';
 let ltSortDir = -1;
 
 function calculateClientStatus(item) {
+  // BOUGHT always takes priority — user has an active position
   if (item.holding && (item.holding.qty > 0 || parseInt(item.holding.qty, 10) > 0)) {
     const qty = parseInt(item.holding.qty, 10) || 1;
     const avgPrice = parseFloat(item.holding.avg_price) || item.ltp || 0;
@@ -849,6 +850,11 @@ function calculateClientStatus(item) {
     item.status_reason = `Purchased${buyDate ? ' on ' + buyDate : ''}: ${qty} share(s) @ ₹${avgPrice.toFixed(2)} · Cooling off / Holding active ${pnlStr}`.trim();
     return;
   }
+  // Status priority: BUY_NOW > WAIT > WATCHLIST. Client can only UPGRADE, never downgrade.
+  const statusRank = { 'BUY_NOW': 3, 'WAIT': 2, 'WATCHLIST': 1 };
+  const serverStatus = item.status || 'WATCHLIST';
+  const serverRank = statusRank[serverStatus] || 0;
+
   const uptrendStates = ["Uptrend", "Accumulation", "Strong Uptrend"];
   const trend = item.trend || "Consolidation";
   const rsi = item.rsi || 50;
@@ -860,30 +866,26 @@ function calculateClientStatus(item) {
   if (uptrendStates.includes(trend)) {
     if (gtt !== null && gtt !== undefined && gtt !== "" && ltp > 0 && ltp <= (gtt * 1.008) && rsi < 70) {
       if (dayChg >= -0.35 || (rsi > 42 && rsi < 70)) {
-        item.status = "BUY_NOW";
-        item.status_badge = "🟢 BUY NOW";
-        item.status_badge_class = "badge-green";
-        item.status_reason = `A/E Breakout: Price ₹${ltp.toFixed(2)} bouncing UP from Support GTT ₹${parseFloat(gtt).toFixed(2)}`;
-        return;
-      } else {
-        item.status = "WAIT";
-        item.status_badge = "🔵 WAIT";
-        item.status_badge_class = "badge-purple";
-        item.status_reason = `At Support GTT ₹${parseFloat(gtt).toFixed(2)} — Coiling (Awaiting 1h/Daily Green Reversal Expansion Candle)`;
+        if (statusRank['BUY_NOW'] > serverRank) {
+          item.status = "BUY_NOW";
+          item.status_badge = "🟢 BUY NOW";
+          item.status_badge_class = "badge-green";
+          item.status_reason = `A/E Breakout: Price ₹${ltp.toFixed(2)} at Support GTT ₹${parseFloat(gtt).toFixed(2)}`;
+        }
         return;
       }
     }
-    item.status = "WAIT";
-    item.status_badge = "🔵 WAIT";
-    item.status_badge_class = "badge-purple";
-    item.status_reason = `Trend confirmed (${trend}) — waiting for pullback to Support GTT` + (gtt ? ` ₹${parseFloat(gtt).toFixed(2)}` : ' (GTT not set)');
+    if (statusRank['WAIT'] > serverRank) {
+      item.status = "WAIT";
+      item.status_badge = "🔵 WAIT";
+      item.status_badge_class = "badge-purple";
+      item.status_reason = `Trend confirmed (${trend}) — waiting for pullback to GTT` + (gtt ? ` ₹${parseFloat(gtt).toFixed(2)}` : '');
+    }
     return;
   }
-  item.status = "WATCHLIST";
-  item.status_badge = "⬜ WATCHING";
-  item.status_badge_class = "badge-gray";
-  item.status_reason = `Trend not confirmed (${trend}) — monitoring only, no action expected`;
+  // Not in uptrend — keep server status unchanged (never downgrade to WATCHLIST)
 }
+
 
 function filterLtStatus(status) {
   ltFilterStatus = status;
@@ -1376,6 +1378,16 @@ function init() {
   });
 
   saveWatchlist();
+
+  // ltWatchlist's own top-level `let ltWatchlist = ...LT_WATCHLIST...` (near the top
+  // of this file) runs at app.js PARSE time, before the small per-scan bootstrap
+  // script (loaded after app.js) ever sets LT_WATCHLIST to its real value — so that
+  // initial assignment always captured the empty default and was never revisited,
+  // leaving the LT Screen tab permanently empty on every fresh page load until a
+  // user action (add/remove stock) happened to call fetchLtWatchlistApi(). Rebuild
+  // it here from the now-populated LT_WATCHLIST, exactly like watchlist above.
+  ltWatchlist = JSON.parse(JSON.stringify(LT_WATCHLIST || []));
+
   renderStats();
   populateSectorFilter();
   applyFilters();
@@ -2288,91 +2300,53 @@ function renderIntradayTab() {
   `;
 }
 
-// ── This Month's Locked LT Discovery Picks (regenerated once every 30 days) ──
+// ── This Month's Locked LT Discovery Picks (lock-state banner only) ──
 function renderLtMonthlyPicks() {
   const container = document.getElementById('ltMonthlyPicksSection');
   if (!container) return;
 
-  const data = (typeof LT_MONTHLY_PICKS !== 'undefined' && LT_MONTHLY_PICKS) ? LT_MONTHLY_PICKS : { picks: [] };
-  const picks = data.picks || [];
+  // Auto-picks now live as real LT Watchlist entries (tagged lt_monthly_batch:true).
+  // LT_MONTHLY_PICKS now carries only lock-state metadata, not full stock objects.
+  const data = (typeof LT_MONTHLY_PICKS !== 'undefined' && LT_MONTHLY_PICKS) ? LT_MONTHLY_PICKS : {};
+  const batchSymbols = Array.isArray(data.batch_symbols) ? data.batch_symbols : [];
+  const batchSize = data.batch_size || batchSymbols.length || 0;
+  const lockedUntil = data.locked_until || null;
+  const generatedOn = data.generated_on || null;
 
-  if (!picks.length) {
+  // Hide entirely if no batch info yet (first run before scan)
+  if (!lockedUntil && batchSize === 0) {
     container.innerHTML = '';
     return;
   }
 
-  function fmt(n) { return (n || n === 0) ? '₹' + Number(n).toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2}) : '-'; }
-  function valColor(status) {
-    if (status === 'UNDERVALUED') return '#4ade80';
-    if (status === 'FAIRLY_VALUED') return '#fbbf24';
-    return '#f87171';
-  }
-  function riskColor(risk) {
-    if (risk === 'LOW') return '#4ade80';
-    if (risk === 'MODERATE') return '#fbbf24';
-    return '#f87171';
-  }
+  const fmtDate = iso => iso
+    ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '\u2014';
+  const daysLeft = lockedUntil ? Math.max(0, Math.ceil((new Date(lockedUntil) - new Date()) / 86400000)) : 0;
 
-  const cards = picks.map(p => {
-    const vColor = valColor(p.lt_valuation_status);
-    const rColor = riskColor(p.lt_risk_level);
-    const valLabel = (p.lt_valuation_status || '').replace(/_/g, ' ');
-    return `
-    <div class="fno-card">
-      <div class="fno-card-header">
-        <div>
-          <div class="fno-card-sym">#${p.monthly_rank || ''} ${p.symbol}</div>
-          <div class="fno-card-name">${p.name || ''} &bull; ${p.sector_group || ''}</div>
-        </div>
-        <div class="fno-card-price">
-          <div class="fno-card-ltp">${fmt(p.ltp)}</div>
-        </div>
-      </div>
-      <div class="fno-section-title">LT Quality Breakdown</div>
-      <div class="fno-rr-grid">
-        <div class="fno-rr-cell">
-          <div class="fno-rr-label">Quality Score</div>
-          <div class="fno-rr-val pos">${(p.lt_quality_score||0).toFixed(0)}/100</div>
-        </div>
-        <div class="fno-rr-cell">
-          <div class="fno-rr-label">Valuation</div>
-          <div class="fno-rr-val" style="color:${vColor}">${valLabel}</div>
-        </div>
-        <div class="fno-rr-cell">
-          <div class="fno-rr-label">Risk</div>
-          <div class="fno-rr-val" style="color:${rColor}">${p.lt_risk_level || '-'}</div>
-        </div>
-      </div>
-      <div class="fno-tech-row">
-        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">ROE ${(p.roe_pct||0).toFixed(1)}%</span>
-        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">D/E ${(p.de_ratio||0).toFixed(2)}</span>
-        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">Rev Growth ${(p.rev_growth_pct||0).toFixed(1)}%</span>
-      </div>
-      <div class="fno-lot-info" style="padding:10px 18px 16px">
-        <span style="color:var(--muted);font-size:11.5px">${p.rationale || ''}</span>
-      </div>
-    </div>`;
-  }).join('');
+  const pillsHtml = batchSymbols.map(sym => {
+    const inWl = (typeof ltWatchlist !== 'undefined') &&
+      ltWatchlist.some(s => (s.symbol||'').toUpperCase() === sym.toUpperCase() && s.lt_monthly_batch);
+    return '<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;' +
+      'background:' + (inWl ? 'rgba(16,185,129,0.15)' : 'rgba(100,116,139,0.15)') + ';' +
+      'color:' + (inWl ? '#34d399' : '#94a3b8') + ';' +
+      'border:1px solid ' + (inWl ? 'rgba(16,185,129,0.4)' : 'rgba(100,116,139,0.3)') + ';">' + sym + '</span>';
+  }).join(' ');
 
-  const lockedUntilStr = data.locked_until
-    ? new Date(data.locked_until).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    : '';
-  const generatedStr = data.generated_on
-    ? new Date(data.generated_on).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    : '';
-
-  container.innerHTML = `
-    <div class="fno-header" style="margin-bottom:14px">
-      <div class="fno-header-left">
-        <span style="font-size:28px">🔒</span>
-        <div>
-          <div class="fno-header-title">This Month's Locked LT Discovery Picks</div>
-          <div class="fno-header-sub">Generated ${generatedStr} &bull; Locked until ${lockedUntilStr} (won't reshuffle until then) &bull; Excludes stocks already in your watchlist &bull; Not investment advice</div>
-        </div>
-      </div>
-    </div>
-    <div class="fno-grid">${cards}</div>
-  `;
+  container.innerHTML =
+    '<div style="background:linear-gradient(135deg,rgba(99,102,241,0.10),rgba(139,92,246,0.08));' +
+    'border:1px solid rgba(99,102,241,0.30);border-radius:12px;padding:14px 20px;margin-bottom:18px;' +
+    'display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">' +
+    '<div style="font-size:22px;margin-top:2px">\uD83D\uDD12</div>' +
+    '<div style="flex:1;min-width:200px">' +
+    '<div style="font-size:13px;font-weight:700;color:#c4b5fd;margin-bottom:4px">' +
+    '\uD83D\uDD12 Monthly Auto-Picks Locked \u2014 ' + batchSize + ' stock' + (batchSize !== 1 ? 's' : '') + ' added to your LT Watchlist below</div>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">' +
+    'Generated ' + fmtDate(generatedOn) + ' &bull; Locked until <strong style="color:#a5b4fc">' + fmtDate(lockedUntil) + '</strong>' +
+    ' &bull; <strong style="color:' + (daysLeft > 7 ? '#34d399' : '#fbbf24') + '">' + daysLeft + ' day' + (daysLeft !== 1 ? 's' : '') + ' remaining</strong>' +
+    ' &bull; LTP &lt; \u20b9600 &bull; Quality \u2265 70/100 &bull; See their BUY\u200bNOW/WAIT/WATCHING status in the watchlist table below</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:5px">' + pillsHtml + '</div>' +
+    '</div></div>';
 }
 
 // ── Quality Penny Stocks Tab (Top 20 Micro-Cap Wealth Builder) ─────────

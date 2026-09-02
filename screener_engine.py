@@ -3165,25 +3165,27 @@ def run_lt_universe_discovery_pipeline(screener_results: list[dict], watchlist_i
     }
 
 
-def select_monthly_lt_picks(screener_results: list[dict], watchlist_items: list[dict] | None = None,
-                             top_n: int = 15) -> list[dict]:
+def select_monthly_lt_watchlist_additions(screener_results: list[dict], existing_symbols: set,
+                                           top_n: int = 15, max_price: float = 600.0) -> list[dict]:
     """
-    Selects top_n stocks for a LOCKED, month-long long-term buy list, using the
-    exact same sector-aware LT quality scoring as the LT Watchlist / Discovery
-    Pipeline (compute_sector_aware_lt_quality) — same "buying logic", just a
-    separate, persisted selection. Distinct from run_lt_universe_discovery_
-    pipeline()'s top_challengers, which is recomputed fresh every single scan:
-    the caller (fetch_and_build.py) is expected to persist THIS list and not
-    regenerate it until a full month has passed, so it functions as a stable
-    monthly pick list rather than something that reshuffles hourly.
+    Selects top_n stocks to be ADDED as real LT watchlist entries for a locked
+    monthly cohort — these become actual lt_watchlist.json entries and flow
+    through the exact same get_lt_watchlist_status() BUY_NOW / ACCUMULATE_ON_DIP
+    / WAIT / WATCHLIST gate as every other tracked stock (auto GTT trailing,
+    entry-timing score, the works). This function only decides WHICH stocks
+    join the watchlist, not how they're subsequently classified — that's
+    already handled by the existing gate logic, unchanged.
 
-    Adds a liquidity + price floor on top of the discovery pipeline's bare
-    quality-score gate — a high lt_quality_score can come from a thinly-traded
-    microcap with sparse, noisy fundamentals (a handful of data points can
-    swing ROE/D/E dramatically for a tiny company), which isn't a sound
-    long-term-hold recommendation regardless of the score. Also excludes
-    symbols already in the caller's LT watchlist, since the point is fresh
-    ideas, not re-suggesting what's already being tracked.
+    Ranks by a 70/30 blend of fundamental quality (compute_sector_aware_lt_
+    quality's lt_quality_score) and momentum (score_stock's existing momentum
+    sub-score) — quality leads since this is a long-term hold, momentum breaks
+    ties and favors names already showing price strength. Requires
+    lt_quality_score >= 70, matching the same threshold get_lt_watchlist_status
+    itself uses to grant BUY_NOW/ACCUMULATE_ON_DIP eligibility, so nothing gets
+    added that wouldn't already qualify once it's in the watchlist. Adds a
+    liquidity floor (a high score on a thinly-traded microcap reflects noisy,
+    sparse fundamentals, not real quality) and an LTP ceiling (max_price).
+    Excludes symbols already tracked, since the point is fresh ideas.
     """
     if not screener_results:
         return []
@@ -3192,7 +3194,6 @@ def select_monthly_lt_picks(screener_results: list[dict], watchlist_items: list[
                               # doesn't need same-day exit liquidity, just enough
                               # to not be a delisting/manipulation risk.
     MIN_PRICE = 20.0
-    existing_symbols = {w.get("symbol") for w in (watchlist_items or []) if isinstance(w, dict) and w.get("symbol")}
 
     candidates = []
     for s in screener_results:
@@ -3202,33 +3203,24 @@ def select_monthly_lt_picks(screener_results: list[dict], watchlist_items: list[
         if not sym or sym in existing_symbols:
             continue
         ltp = s.get("ltp") or 0
-        if ltp < MIN_PRICE:
+        if ltp < MIN_PRICE or ltp > max_price:
             continue
         liquidity = s.get("avg_volume_10d") or s.get("today_volume") or 0
         if liquidity < MIN_LIQUIDITY:
             continue
 
         eval_res = compute_sector_aware_lt_quality(s)
-        if eval_res.get("lt_quality_score", 0) < 75.0:
+        quality = eval_res.get("lt_quality_score", 0)
+        if quality < 70.0:
             continue
 
+        momentum = float(s.get("momentum") or 0)
         item = dict(s)
         item.update(eval_res)
+        item["combined_rank_score"] = round(quality * 0.7 + momentum * 0.3, 2)
         candidates.append(item)
 
-    candidates.sort(key=lambda x: x.get("lt_quality_score", 0), reverse=True)
-    top = candidates[:top_n]
-
-    for rank, c in enumerate(top, 1):
-        c["monthly_rank"] = rank
-        val_label = str(c.get("lt_valuation_status", "")).replace("_", " ").title()
-        risk_label = str(c.get("lt_risk_level", "")).title()
-        c["rationale"] = (
-            f"Quality {c.get('lt_quality_score', 0):.0f}/100 ({c.get('sector_group', '')}) — "
-            f"{val_label}, {risk_label} risk. "
-            f"ROE {float(c.get('roe_pct') or 0):.1f}%, D/E {float(c.get('de_ratio') or 0):.2f}, "
-            f"Rev growth {float(c.get('rev_growth_pct') or 0):.1f}%."
-        )
-    return top
+    candidates.sort(key=lambda x: x["combined_rank_score"], reverse=True)
+    return candidates[:top_n]
 
 
