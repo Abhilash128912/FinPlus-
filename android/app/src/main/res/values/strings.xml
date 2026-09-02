@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">finplus_journal</string>
-    <string name="title_activity_main">finplus_journal</string>
-    <string name="package_name">com.finplus.pnljournal</string>
-    <string name="custom_url_scheme">com.finplus.pnljournal</string>
+    <string name="app_name">Stock Screener</string>
+    <string name="title_activity_main">Stock Screener</string>
+    <string name="package_name">com.stockscreener.app</string>
+    <string name="custom_url_scheme">com.stockscreener.app</string>
 </resources>

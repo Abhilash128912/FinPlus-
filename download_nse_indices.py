@@ -3,18 +3,28 @@ import io
 import json
 import sys
 import pandas as pd
-from curl_cffi import requests
+import urllib.request
+
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 # Load config
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
-if not os.path.exists(CONFIG_FILE):
-    print(f"[ERROR] Config file not found at {CONFIG_FILE}")
-    sys.exit(1)
-
-with open(CONFIG_FILE) as f:
-    cfg = json.load(f)
+cfg = {}
+if os.path.exists(CONFIG_FILE):
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            cfg = json.load(f)
+    except Exception:
+        pass
 
 EXCEL_PATH = cfg.get("excel_path", r"D:\Nifty 500 stocks.xlsx")
 
@@ -30,44 +40,39 @@ INDICES = {
 def download_index_csv(url: str, index_name: str) -> pd.DataFrame | None:
     print(f"\nDownloading {index_name} constituent list...")
     headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": "https://www.niftyindices.com/",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9"
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
     }
     try:
-        # Use curl_cffi requests impersonating Chrome to bypass Akamai bot protection
-        r = requests.get(url, impersonate="chrome120", headers=headers, timeout=20)
-        
-        if r.status_code == 200:
-            # Parse CSV
-            df = pd.read_csv(io.StringIO(r.text))
-            df.columns = [c.strip() for c in df.columns]
-            print(f"  -> Successfully downloaded {len(df)} rows.")
-            return df
-        elif r.status_code == 403:
-            print("  [WARNING] Access Denied (403).")
-            print("  This is normal in cloud/datacenter environments (like Google/AWS IP ranges).")
-            print("  Akamai blocks hosting provider IPs. Running this on a local PC will succeed.")
-        else:
-            print(f"  [WARNING] Failed to download. HTTP Status: {r.status_code}")
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status == 200:
+                text = resp.read().decode("utf-8", errors="ignore")
+                df = pd.read_csv(io.StringIO(text))
+                df.columns = [c.strip() for c in df.columns]
+                print(f"  -> Successfully downloaded {len(df)} rows.")
+                return df
     except Exception as e:
-        print(f"  [ERROR] Error fetching data: {e}")
+        print(f"  [ERROR] Error fetching {index_name}: {e}")
     return None
 
 def download_nse_equity_master() -> pd.DataFrame | None:
     print("\nDownloading Full NSE Listed Equities Master List (2,390+ stocks)...")
     headers = {
-        "Referer": "https://www.nseindia.com/",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://www.nseindia.com/"
     }
     url = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
     try:
-        r = requests.get(url, impersonate="chrome120", headers=headers, timeout=20)
-        if r.status_code == 200:
-            df = pd.read_csv(io.StringIO(r.text))
-            df.columns = [c.strip() for c in df.columns]
-            print(f"  -> Successfully downloaded Full NSE Master List ({len(df)} stocks).")
-            return df
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status == 200:
+                text = resp.read().decode("utf-8", errors="ignore")
+                df = pd.read_csv(io.StringIO(text))
+                df.columns = [c.strip() for c in df.columns]
+                print(f"  -> Successfully downloaded Full NSE Master List ({len(df)} stocks).")
+                return df
     except Exception as e:
         print(f"  [ERROR] Error fetching NSE Master List: {e}")
     return None
@@ -188,6 +193,41 @@ def main():
     if sym_col_idx in df_existing.columns:
         existing_symbols = {str(s).strip().upper() for s in df_existing[sym_col_idx].dropna()}
         
+    # 2. Download Full NSE Equity Master List for comprehensive active ticker set
+    master_df = download_nse_equity_master()
+    active_master_symbols = set()
+    if master_df is not None:
+        sym_col_m = None
+        for col in master_df.columns:
+            if col.lower() in ["symbol", "ticker"]:
+                sym_col_m = col
+                break
+        if not sym_col_m and len(master_df.columns) > 0:
+            sym_col_m = master_df.columns[0]
+        if sym_col_m:
+            for s in master_df[sym_col_m].dropna():
+                clean_s = str(s).strip().upper()
+                if clean_s and clean_s != "SYMBOL":
+                    active_master_symbols.add(clean_s)
+
+    downloaded_symbols = {s['symbol'].upper() for s in all_new_stocks}
+    valid_active_symbols = downloaded_symbols | active_master_symbols
+
+    # Reconcile existing symbols against fresh downloaded active symbol universe
+    # Safety Gate: Only prune if fresh active set is non-trivial and >= 80% of existing stock count (or >= 400 stocks)
+    # to prevent partial/blocked downloads from wiping out valid active stocks.
+    delisted_symbols = set()
+    min_safe_threshold = max(400, int(len(existing_symbols) * 0.8)) if existing_symbols else 0
+    if existing_symbols and len(valid_active_symbols) >= min_safe_threshold:
+        delisted_symbols = existing_symbols - valid_active_symbols
+        if delisted_symbols:
+            print(f"\n[RECONCILIATION] Identified {len(delisted_symbols)} delisted/inactive symbols to prune: {sorted(list(delisted_symbols))[:10]}...")
+            df_existing = df_existing[~df_existing[sym_col_idx].astype(str).str.strip().str.upper().isin(delisted_symbols)]
+            existing_symbols = existing_symbols - delisted_symbols
+    elif existing_symbols and valid_active_symbols:
+        print(f"\n[SAFETY GATE] Fresh symbol universe is unusually small ({len(valid_active_symbols)} < threshold {min_safe_threshold}).")
+        print("              Skipping delisting prune step to prevent accidental data loss from partial network fetch.")
+
     new_rows = []
     skipped = 0
     added = 0
@@ -204,10 +244,33 @@ def main():
         new_rows.append(new_row)
         existing_symbols.add(sym)
         added += 1
+
+    # Merge remaining active equity shares from full NSE Master List (EQUITY_L.csv)
+    if master_df is not None and sym_col_m in master_df.columns:
+        series_col = next((c for c in master_df.columns if c.lower() in ["series", "srs"]), None)
+        name_col_m = next((c for c in master_df.columns if col.lower() in ["name of company", "company name", "name"]), None)
+        for _, row in master_df.iterrows():
+            sym = str(row[sym_col_m]).strip().upper()
+            if not sym or sym in ["SYMBOL", "NAN"]:
+                continue
+            if series_col:
+                s_val = str(row[series_col]).strip().upper()
+                if s_val not in ["EQ", "BE", "BZ", "SM"]:
+                    continue
+            if sym in existing_symbols:
+                continue
+            
+            comp_name = str(row[name_col_m]).strip() if name_col_m and name_col_m in row else sym
+            new_row = {col: None for col in df_existing.columns}
+            new_row[sym_col_idx] = sym
+            new_row[name_col_idx] = comp_name
+            new_rows.append(new_row)
+            existing_symbols.add(sym)
+            added += 1
         
-    if new_rows:
-        df_new = pd.DataFrame(new_rows)
-        df_updated = pd.concat([df_existing, df_new], ignore_index=True)
+    if new_rows or delisted_symbols:
+        df_new = pd.DataFrame(new_rows) if new_rows else pd.DataFrame()
+        df_updated = pd.concat([df_existing, df_new], ignore_index=True) if not df_new.empty else df_existing.copy()
         
         # Ensure Sr. sequential column exists
         if "Sr." in df_updated.columns:
@@ -218,9 +281,11 @@ def main():
         saved = False
         try:
             df_updated.to_excel(EXCEL_PATH, index=False)
-            print(f"[SUCCESS] Successfully saved {len(df_updated)} stocks to main Excel: {EXCEL_PATH}")
+            print(f"[SUCCESS] Successfully saved {len(df_updated)} active stocks to main Excel: {EXCEL_PATH}")
             if added > 0:
                 print(f"   Added {added} new stocks. Skipped {skipped} duplicates.")
+            if delisted_symbols:
+                print(f"   Pruned {len(delisted_symbols)} delisted symbols.")
             saved = True
         except PermissionError:
             print(f"[WARNING] Main Excel file is locked (open in Microsoft Excel): {EXCEL_PATH}")
@@ -244,7 +309,7 @@ def main():
         except Exception as e:
             pass
     else:
-        print("[SUCCESS] No new stocks to add. All downloaded stocks are already in the list.")
+        print("[SUCCESS] Stock list is fully synchronized and reconciled. No changes needed.")
 
 if __name__ == "__main__":
     main()

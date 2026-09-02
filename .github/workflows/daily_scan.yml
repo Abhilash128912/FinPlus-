@@ -44,7 +44,7 @@ jobs:
           echo "Starting full Nifty 500 scan at $(date '+%Y-%m-%d %H:%M:%S IST')"
           # Run in scan-only mode (no web server, no blocking join)
           python -c "
-          import os, sys
+          import json, os, sys
           sys.path.insert(0, '.')
           import fetch_and_build as fb
           import download_nse_indices
@@ -59,11 +59,20 @@ jobs:
           tickers = fb.read_stock_list()
           print(f'  Loaded {len(tickers)} tickers')
 
+          print('Fetching NIFTY 50 benchmark & analyzing Market Regime...')
+          nifty_df, nifty_regime = fb.fetch_nifty_history()
+
           print('Running scan (this takes 10-12 minutes)...')
           results = fb.run_scan(tickers)
           if not results or len(results) < 10:
               print('❌ Error: Scan yielded less than 10 results. It is likely that the request was rate-limited or blocked. Aborting to prevent overwriting the report with empty data.')
               sys.exit(1)
+
+          print('Computing Mansfield Relative Strength (RS Rating 1-99) vs Nifty...')
+          results = fb.compute_relative_strength_ratings(
+              results, nifty_df,
+              nifty_regime_status=nifty_regime.get('status', 'NEUTRAL')
+          )
 
           print('Processing watchlist...')
           wl_data = fb.process_watchlist(results)
@@ -78,8 +87,9 @@ jobs:
           fno_data = fb.process_fno_stocks(results)
 
           mkt_info = fb.get_market_status()
+          mkt_info['nifty'] = nifty_regime
 
-          print('Building HTML report...')
+          print('Building HTML report (also writes static/app.css, static/app.js)...')
           html = fb.build_html(results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
 
           with open(fb.OUT_HTML, 'w', encoding='utf-8') as f:
@@ -88,24 +98,24 @@ jobs:
           with open(fb.OUT_WWW_HTML, 'w', encoding='utf-8') as f:
               f.write(html)
 
-          apk_path = 'android/app/src/main/assets/public/index.html'
-          os.makedirs(os.path.dirname(apk_path), exist_ok=True)
-          with open(apk_path, 'w', encoding='utf-8') as f:
-              f.write(html)
+          # screener.html now fetches its data from screener_data.json instead of
+          # inlining it, so this file must be committed alongside screener.html for
+          # the same reason index.html always was: it's what a freshly-restarted
+          # Heroku dyno serves instantly while its own background rescan is still
+          # running (see fetch_and_build.py's startup_bg_tasks / background_initial_scan).
+          clean_results = fb.sanitize_for_strict_json(results)
+          with open(fb.OUT_JSON_FILE, 'w', encoding='utf-8') as f:
+              json.dump(clean_results, f, default=fb.json_serializer)
 
-          print(f'Scan complete! index.html updated ({len(html):,} bytes)')
+          print(f'Scan complete! screener.html ({len(html):,} bytes), screener_data.json, static/app.css & static/app.js updated')
           "
-
-      - name: Apply mobile-safe URL fix to generated HTML
-        run: python fix_scan_url.py
-        continue-on-error: true
 
       - name: Commit and push updated report
         run: |
           git config --global user.name  "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
 
-          git add index.html www/index.html android/app/src/main/assets/public/index.html daily_picks_history.json watchlist_data.json || true
+          git add screener.html screener_data.json static/app.css static/app.js daily_picks_history.json watchlist_data.json || true
 
           if git diff --cached --quiet; then
             echo "No changes to commit (data unchanged since last scan)"

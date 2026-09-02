@@ -21,15 +21,24 @@ import os
 import sys
 import time
 import datetime
+import random
+import socket
+import hashlib
+import concurrent.futures
+import urllib.request
+import urllib.parse
 import webbrowser
 import http.server
 import socketserver
-import urllib.parse
 import threading
 import pandas as pd
 import yfinance as yf
+import logging
 
-from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, calc_indmoney_charges, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+logging.getLogger("urllib3").setLevel(logging.CRITICAL)
+
+from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -38,11 +47,25 @@ CACHE_DIR  = os.path.join(BASE_DIR, "cache")
 WL_SEED    = os.path.join(BASE_DIR, "watchlist_seed.json")
 WL_FILE    = os.path.join(BASE_DIR, "watchlist_data.json")
 LT_WL_FILE = os.path.join(BASE_DIR, "lt_watchlist.json")
-LT_CAPITAL_LEDGER_FILE = os.path.join(BASE_DIR, "lt_capital_ledger.json")
-OUT_HTML   = os.path.join(BASE_DIR, "index.html")
-OUT_WWW_HTML = os.path.join(BASE_DIR, "www", "index.html")
+OUT_HTML   = os.path.join(BASE_DIR, "screener.html")
+OUT_WWW_HTML = os.path.join(BASE_DIR, "www", "screener.html")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+APP_CSS_FILE = os.path.join(STATIC_DIR, "app.css")
+APP_JS_FILE = os.path.join(STATIC_DIR, "app.js")
+# The Capacitor Android WebView serves everything straight out of www/ as a bundled,
+# offline-capable local site (webDir in capacitor.config.json) — it never talks to
+# the Python HTTP server. So the split-out CSS/JS/data files also need copies under
+# www/ with the same relative layout (www/static/app.css etc), or the packaged app
+# would load an HTML shell that references /static/app.js and /screener_data.json
+# with nothing there to serve them, and show a blank page.
+WWW_STATIC_DIR = os.path.join(BASE_DIR, "www", "static")
+WWW_APP_CSS_FILE = os.path.join(WWW_STATIC_DIR, "app.css")
+WWW_APP_JS_FILE = os.path.join(WWW_STATIC_DIR, "app.js")
+WWW_JSON_FILE = os.path.join(BASE_DIR, "www", "screener_data.json")
 
 os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(STATIC_DIR, exist_ok=True)
+os.makedirs(WWW_STATIC_DIR, exist_ok=True)
 IS_INITIAL_SCANNING = False
 LATEST_SCREENER_RESULTS = []
 OUT_JSON_FILE = os.path.join(BASE_DIR, "screener_data.json")
@@ -53,6 +76,26 @@ if os.path.exists(OUT_JSON_FILE):
     except Exception:
         LATEST_SCREENER_RESULTS = []
 
+GLOBAL_LTP_CACHE = {}
+GLOBAL_LTP_CACHE_LOCK = threading.Lock()
+
+def atomic_write_file(filepath: str, content: str):
+    """Atomically write content to file using temporary file swap to prevent blank/truncated files."""
+    try:
+        dir_name = os.path.dirname(filepath)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+        tmp_path = filepath + f".tmp_{os.getpid()}_{random.randint(1000, 9999)}"
+        with open(tmp_path, "w", encoding="utf-8", errors="replace") as f:
+            f.write(content)
+        os.replace(tmp_path, filepath)
+    except Exception as e:
+        try:
+            with open(filepath, "w", encoding="utf-8", errors="replace") as f:
+                f.write(content)
+        except Exception as ex:
+            log(f"⚠ Warning: atomic write failed for {filepath}: {ex}")
+
 def json_serializer(o):
     if hasattr(o, 'item'):
         return o.item()
@@ -61,6 +104,25 @@ def json_serializer(o):
     if isinstance(o, (bool, type(True))):
         return bool(o)
     return str(o)
+
+
+def sanitize_for_strict_json(obj):
+    """Recursively replace non-finite floats (inf/-inf/NaN) with None.
+
+    Python's json module happily emits the bare tokens Infinity/-Infinity/NaN for
+    those values (valid JavaScript, NOT valid JSON per spec). That was harmless
+    while screener_data.json's content was inlined straight into HTML as executable
+    JS source, but now that the browser fetches this file and parses it with
+    JSON.parse (strict), any such value (e.g. pe_ttm on a loss-making stock) makes
+    the whole parse fail with "Unexpected token" and the page shows zero data.
+    """
+    if isinstance(obj, float):
+        return obj if obj == obj and obj not in (float('inf'), float('-inf')) else None
+    if isinstance(obj, dict):
+        return {k: sanitize_for_strict_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [sanitize_for_strict_json(v) for v in obj]
+    return obj
 
 # ─── Load config ──────────────────────────────────────────────────────────────
 with open(CONFIG_FILE) as f:
@@ -160,15 +222,26 @@ def is_price_stale(cached_at_str: str) -> bool:
     return cached_dt < last_market_close
 
 
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def log(msg):
     ts = datetime.datetime.now().strftime("%H:%M:%S")
     try:
         print(f"[{ts}] {msg}", flush=True)
-    except UnicodeEncodeError:
-        enc = sys.stdout.encoding or 'ascii'
-        safe_msg = str(msg).encode(enc, errors='replace').decode(enc)
-        print(f"[{ts}] {safe_msg}", flush=True)
+    except Exception:
+        try:
+            cleaned = str(msg).encode("ascii", errors="ignore").decode("ascii")
+            print(f"[{ts}] {cleaned}", flush=True)
+        except Exception:
+            pass
 
 
 def open_in_browser(target: str) -> bool:
@@ -208,7 +281,11 @@ def load_cache(ticker):
             data = json.load(f)
         info = data.get("info", {})
         cached_at = datetime.datetime.fromisoformat(data.get("cached_at", "2000-01-01"))
-        age_hrs = (datetime.datetime.now() - cached_at).total_seconds() / 3600
+        ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+        if cached_at.tzinfo is None:
+            cached_at = cached_at.replace(tzinfo=ist_offset)
+        now_ist = datetime.datetime.now(ist_offset)
+        age_hrs = (now_ist - cached_at).total_seconds() / 3600
         # If cache is valid (< 24h old) and has fundamentals, use it
         has_fund = any(info.get(k) is not None for k in ["returnOnEquity", "debtToEquity", "trailingPE", "profitMargins"])
         if age_hrs < CACHE_TTL_HRS and has_fund:
@@ -236,7 +313,8 @@ def save_cache(ticker, data):
         except Exception:
             pass
 
-    data["cached_at"] = datetime.datetime.now().isoformat()
+    ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    data["cached_at"] = datetime.datetime.now(ist_offset).isoformat()
     try:
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
@@ -356,16 +434,132 @@ def _read_stock_list_raw() -> list[str]:
 
 
 # ─── Step 2: Fetch yfinance data (with cache) ─────────────────────────────────
-def fetch_news_for_ticker(ticker: str) -> list[dict]:
+_CORP_ACTIONS_CACHE = None
+_CORP_ACTIONS_LOCK = threading.Lock()
+
+def fetch_nse_corporate_actions() -> dict:
+    """Fetch central bulk NSE Corporate Actions feed (cached in-memory & file cache). Zero per-stock network overhead."""
+    global _CORP_ACTIONS_CACHE
+    with _CORP_ACTIONS_LOCK:
+        if _CORP_ACTIONS_CACHE is not None:
+            return _CORP_ACTIONS_CACHE
+        
+        ca_file = os.path.join(CACHE_DIR, "nse_corporate_actions_bulk.json")
+        if os.path.exists(ca_file):
+            try:
+                mtime = os.path.getmtime(ca_file)
+                if (time.time() - mtime) < 43200:  # 12 hours cache
+                    with open(ca_file, "r", encoding="utf-8") as f:
+                        _CORP_ACTIONS_CACHE = json.load(f)
+                        return _CORP_ACTIONS_CACHE
+            except Exception:
+                pass
+        
+        actions_map = {}
+        try:
+            from curl_cffi import requests as cffi_requests
+            url = "https://www.nseindia.com/api/corporates-corporateActions?index=equities"
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/json",
+                "Referer": "https://www.nseindia.com/companies-listing/corporate-filings-actions"
+            }
+            session = cffi_requests.Session(impersonate="chrome120")
+            session.get("https://www.nseindia.com", headers=headers, timeout=5)
+            res = session.get(url, headers=headers, timeout=5)
+            if res.status_code == 200:
+                data = res.json()
+                for item in data:
+                    sym = item.get("symbol", "").upper().strip()
+                    if not sym:
+                        continue
+                    subject = item.get("subject", item.get("purpose", ""))
+                    ex_date = item.get("exDate", item.get("ex_date", ""))
+                    rec_date = item.get("recDate", item.get("record_date", ""))
+                    
+                    sub_lower = subject.lower()
+                    act_type = "OTHER"
+                    if "bonus" in sub_lower:
+                        act_type = "BONUS"
+                    elif "dividend" in sub_lower or "div" in sub_lower:
+                        act_type = "DIVIDEND"
+                    elif "split" in sub_lower:
+                        act_type = "SPLIT"
+                    elif "rights" in sub_lower:
+                        act_type = "RIGHTS"
+                    elif "buyback" in sub_lower:
+                        act_type = "BUYBACK"
+                    
+                    act = {
+                        "subject": subject,
+                        "ex_date": ex_date,
+                        "record_date": rec_date,
+                        "type": act_type
+                    }
+                    if sym not in actions_map:
+                        actions_map[sym] = []
+                    actions_map[sym].append(act)
+                
+                try:
+                    with open(ca_file, "w", encoding="utf-8") as f:
+                        json.dump(actions_map, f, indent=2)
+                except Exception:
+                    pass
+        except Exception as e:
+            log(f"Warning: Could not fetch central NSE Corporate Actions feed: {e}")
+        
+        _CORP_ACTIONS_CACHE = actions_map
+        return actions_map
+
+
+def fetch_news_for_ticker(ticker: str, company_name: str = "") -> list[dict]:
+    """Fetch live news via Google News RSS for qualified/watchlist stock."""
     news_list = []
     try:
-        from curl_cffi import requests
-        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1d"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        r = requests.get(url, impersonate="chrome120", headers=headers, timeout=5)
+        import urllib.request
+        import xml.etree.ElementTree as ET
+        import urllib.parse
+        
+        clean_sym = ticker.replace(".NS", "").replace(".BO", "").strip()
+        query_term = f"{clean_sym} stock news NSE"
+        if company_name and len(company_name) > 2 and company_name.upper() != clean_sym:
+            query_term = f"{company_name} {clean_sym} stock news"
+        encoded_query = urllib.parse.quote(query_term)
+        rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-IN&gl=IN&ceid=IN:en"
+        
+        req = urllib.request.Request(
+            rss_url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        )
+        with urllib.request.urlopen(req, timeout=3.5) as response:
+            xml_data = response.read()
+            
+        root = ET.fromstring(xml_data)
+        for item in root.findall(".//item")[:5]:
+            title = item.findtext("title", "")
+            link = item.findtext("link", "")
+            pubDate = item.findtext("pubDate", "")
+            source = item.findtext("source", "")
+            
+            clean_title = title
+            if " - " in title:
+                parts = title.rsplit(" - ", 1)
+                clean_title = parts[0].strip()
+                if not source and len(parts) > 1:
+                    source = parts[1].strip()
+                    
+            if clean_title and link:
+                news_list.append({
+                    "title": clean_title,
+                    "url": link,
+                    "pubDate": pubDate,
+                    "provider": source or "Google News",
+                    "summary": f"Published: {pubDate}" if pubDate else ""
+                })
     except Exception:
         pass
     return news_list
+
 
 
 _CRUMB_SESSION = None
@@ -393,153 +587,238 @@ def get_yahoo_crumb_session():
         return None, None
 
 
+CFFI_LOCK = threading.Lock()
+
 def fetch_via_curl_cffi(ticker: str) -> dict | None:
+    # 1. Try ultra-fast, thread-safe urllib first
     try:
-        from curl_cffi import requests
-        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1y"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        r = requests.get(url, impersonate="chrome120", headers=headers, timeout=8)
-        if r.status_code == 200:
-            data_json = r.json()
-            res_list = data_json.get("chart", {}).get("result")
-            if not res_list:
-                return None
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1y"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data_json = json.loads(resp.read().decode('utf-8'))
+        res_list = data_json.get("chart", {}).get("result")
+        if res_list:
             res = res_list[0]
             meta = res.get("meta", {})
             price = meta.get("regularMarketPrice") or meta.get("chartPreviousClose") or 0
-            if price == 0:
-                return None
-            timestamps = res.get("timestamp", [])
-            quote = res.get("indicators", {}).get("quote", [{}])[0]
-            opens = quote.get("open", [])
-            highs = quote.get("high", [])
-            lows = quote.get("low", [])
-            closes = quote.get("close", [])
-            volumes = quote.get("volume", [])
-            hist_records = []
-            if timestamps and closes:
-                for idx, (t, c) in enumerate(zip(timestamps, closes)):
-                    if c is not None:
-                        o_val = opens[idx] if idx < len(opens) and opens[idx] is not None else c
-                        h_val = highs[idx] if idx < len(highs) and highs[idx] is not None else c
-                        l_val = lows[idx] if idx < len(lows) and lows[idx] is not None else c
-                        v_val = volumes[idx] if idx < len(volumes) and volumes[idx] is not None else 1
-                        hist_records.append({"date": str(t), "open": float(o_val), "high": float(h_val), "low": float(l_val), "close": float(c), "volume": float(v_val)})
-            
-            info = {
-                "regularMarketPrice": price,
-                "currentPrice": price,
-                "previousClose": meta.get("previousClose"),
-                "fiftyTwoWeekHigh": meta.get("fiftyTwoWeekHigh"),
-                "fiftyTwoWeekLow": meta.get("fiftyTwoWeekLow"),
-                "shortName": meta.get("shortName") or ticker.replace(".NS", ""),
-                "longName": meta.get("longName") or ticker.replace(".NS", ""),
-                "currency": meta.get("currency", "INR"),
-                "exchange": meta.get("exchangeName", "NSE")
-            }
+            if price > 0:
+                timestamps = res.get("timestamp", [])
+                quote = res.get("indicators", {}).get("quote", [{}])[0]
+                opens = quote.get("open", [])
+                highs = quote.get("high", [])
+                lows = quote.get("low", [])
+                closes = quote.get("close", [])
+                volumes = quote.get("volume", [])
+                hist_records = []
+                if timestamps and closes:
+                    for idx, (t, c) in enumerate(zip(timestamps, closes)):
+                        if c is not None:
+                            o_val = opens[idx] if idx < len(opens) and opens[idx] is not None else c
+                            h_val = highs[idx] if idx < len(highs) and highs[idx] is not None else c
+                            l_val = lows[idx] if idx < len(lows) and lows[idx] is not None else c
+                            v_val = volumes[idx] if idx < len(volumes) and volumes[idx] is not None else 1
+                            hist_records.append({"date": str(t), "open": float(o_val), "high": float(h_val), "low": float(l_val), "close": float(c), "volume": float(v_val)})
+                
+                info = {
+                    "regularMarketPrice": price,
+                    "currentPrice": price,
+                    "previousClose": meta.get("previousClose"),
+                    "fiftyTwoWeekHigh": meta.get("fiftyTwoWeekHigh"),
+                    "fiftyTwoWeekLow": meta.get("fiftyTwoWeekLow"),
+                    "shortName": meta.get("shortName") or ticker.replace(".NS", ""),
+                    "longName": meta.get("longName") or ticker.replace(".NS", ""),
+                    "currency": meta.get("currency", "INR"),
+                    "exchange": meta.get("exchangeName", "NSE")
+                }
+                return {
+                    "ticker": ticker,
+                    "info": info,
+                    "history_close": hist_records,
+                    "news": []
+                }
+    except Exception:
+        pass
 
-            # Fetch genuine fundamental ratios via Yahoo Finance quoteSummary
-            sess, crumb = get_yahoo_crumb_session()
-            if sess and crumb:
-                try:
-                    summary_url = (f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}"
-                                   f"?modules=financialData,defaultKeyStatistics,summaryDetail,assetProfile&crumb={crumb}")
-                    r_sum = sess.get(summary_url, headers=headers, timeout=6)
-                    if r_sum.status_code == 200:
-                        res_sum = (r_sum.json().get("quoteSummary", {}).get("result") or [{}])[0]
-                        fd = res_sum.get("financialData", {})
-                        ks = res_sum.get("defaultKeyStatistics", {})
-                        sd = res_sum.get("summaryDetail", {})
-                        ap = res_sum.get("assetProfile", {})
+    # 2. Guard curl_cffi with CFFI_LOCK to prevent C-extension multithread segfaults
+    with CFFI_LOCK:
+        try:
+            from curl_cffi import requests
+            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1y"
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            r = requests.get(url, impersonate="chrome120", headers=headers, timeout=6)
+            if r.status_code == 200:
+                data_json = r.json()
+                res_list = data_json.get("chart", {}).get("result")
+                if not res_list:
+                    return None
+                res = res_list[0]
+                meta = res.get("meta", {})
+                price = meta.get("regularMarketPrice") or meta.get("chartPreviousClose") or 0
+                if price == 0:
+                    return None
+                timestamps = res.get("timestamp", [])
+                quote = res.get("indicators", {}).get("quote", [{}])[0]
+                opens = quote.get("open", [])
+                highs = quote.get("high", [])
+                lows = quote.get("low", [])
+                closes = quote.get("close", [])
+                volumes = quote.get("volume", [])
+                hist_records = []
+                if timestamps and closes:
+                    for idx, (t, c) in enumerate(zip(timestamps, closes)):
+                        if c is not None:
+                            o_val = opens[idx] if idx < len(opens) and opens[idx] is not None else c
+                            h_val = highs[idx] if idx < len(highs) and highs[idx] is not None else c
+                            l_val = lows[idx] if idx < len(lows) and lows[idx] is not None else c
+                            v_val = volumes[idx] if idx < len(volumes) and volumes[idx] is not None else 1
+                            hist_records.append({"date": str(t), "open": float(o_val), "high": float(h_val), "low": float(l_val), "close": float(c), "volume": float(v_val)})
+                
+                info = {
+                    "regularMarketPrice": price,
+                    "currentPrice": price,
+                    "previousClose": meta.get("previousClose"),
+                    "fiftyTwoWeekHigh": meta.get("fiftyTwoWeekHigh"),
+                    "fiftyTwoWeekLow": meta.get("fiftyTwoWeekLow"),
+                    "shortName": meta.get("shortName") or ticker.replace(".NS", ""),
+                    "longName": meta.get("longName") or ticker.replace(".NS", ""),
+                    "currency": meta.get("currency", "INR"),
+                    "exchange": meta.get("exchangeName", "NSE")
+                }
 
-                        def extract_val(d, key):
-                            item = d.get(key)
-                            if isinstance(item, dict):
-                                return item.get("raw")
-                            return item
-
-                        info["returnOnEquity"] = extract_val(fd, "returnOnEquity") or extract_val(ks, "returnOnEquity")
-                        info["ebit"] = extract_val(fd, "ebitda") or extract_val(fd, "operatingCashflow") or extract_val(ks, "ebitda")
-                        info["totalAssets"] = extract_val(fd, "totalAssets") or extract_val(ks, "totalAssets") or extract_val(sd, "totalAssets")
-                        info["totalCurrentLiabilities"] = extract_val(fd, "totalCurrentLiabilities") or extract_val(ks, "totalCurrentLiabilities")
-                        info["debtToEquity"] = extract_val(fd, "debtToEquity") or extract_val(ks, "debtToEquity")
-                        info["profitMargins"] = extract_val(fd, "profitMargins") or extract_val(ks, "profitMargins")
-                        info["revenueGrowth"] = extract_val(fd, "revenueGrowth") or extract_val(ks, "revenueGrowth")
-                        info["trailingPE"] = extract_val(sd, "trailingPE") or extract_val(ks, "trailingPE") or extract_val(fd, "trailingPE")
-                        info["pegRatio"] = extract_val(ks, "pegRatio") or extract_val(fd, "pegRatio")
-                        info["priceToBook"] = extract_val(ks, "priceToBook") or extract_val(sd, "priceToBook") or extract_val(fd, "priceToBook")
-                        info["dividendYield"] = extract_val(sd, "dividendYield") or extract_val(ks, "dividendYield")
-                        info["sector"] = ap.get("sector") or info.get("sector") or ""
-                        info["industry"] = ap.get("industry") or info.get("industry") or ""
-                        info["marketCap"] = extract_val(sd, "marketCap") or extract_val(ks, "marketCap") or info.get("marketCap", 0)
-                except Exception:
-                    pass
-
-            # Fallback: if essential fundamentals are missing, use yfinance Ticker info
-            has_fund = any(info.get(k) is not None for k in ["returnOnEquity", "debtToEquity", "trailingPE", "profitMargins"])
-            if not has_fund:
-                try:
-                    t_fallback = yf.Ticker(ticker)
-                    yf_inf = t_fallback.info
-                    if yf_inf and isinstance(yf_inf, dict):
-                        for k in ["returnOnEquity", "debtToEquity", "profitMargins", "revenueGrowth",
-                                  "trailingPE", "pegRatio", "priceToBook", "dividendYield", "sector",
-                                  "industry", "marketCap", "ebit", "totalAssets", "totalCurrentLiabilities"]:
-                            if info.get(k) is None and yf_inf.get(k) is not None:
-                                info[k] = yf_inf.get(k)
-                except Exception:
-                    pass
-
-            # Fallback 2: If fundamentals are still missing, merge with last known valid cached fundamentals on disk
-            has_fund = any(info.get(k) is not None for k in ["returnOnEquity", "debtToEquity", "trailingPE", "profitMargins"])
-            if not has_fund:
-                path = cache_path(ticker)
-                if os.path.exists(path):
+                # Fetch genuine fundamental ratios via Yahoo Finance quoteSummary
+                sess, crumb = get_yahoo_crumb_session()
+                if sess and crumb:
                     try:
-                        with open(path) as f:
-                            old_cache = json.load(f).get("info", {})
-                        for k in ["returnOnEquity", "debtToEquity", "profitMargins", "revenueGrowth",
-                                  "trailingPE", "pegRatio", "priceToBook", "dividendYield", "sector",
-                                  "industry", "marketCap", "ebit", "totalAssets", "totalCurrentLiabilities"]:
-                            if info.get(k) is None and old_cache.get(k) is not None:
-                                info[k] = old_cache.get(k)
+                        summary_url = (f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}"
+                                       f"?modules=financialData,defaultKeyStatistics,summaryDetail,assetProfile&crumb={crumb}")
+                        r_sum = sess.get(summary_url, headers=headers, timeout=6)
+                        if r_sum.status_code == 200:
+                            res_sum = (r_sum.json().get("quoteSummary", {}).get("result") or [{}])[0]
+                            fd = res_sum.get("financialData", {})
+                            ks = res_sum.get("defaultKeyStatistics", {})
+                            sd = res_sum.get("summaryDetail", {})
+                            ap = res_sum.get("assetProfile", {})
+
+                            def extract_val(d, key):
+                                item = d.get(key)
+                                if isinstance(item, dict):
+                                    return item.get("raw")
+                                return item
+
+                            info["returnOnEquity"] = extract_val(fd, "returnOnEquity") or extract_val(ks, "returnOnEquity")
+                            info["ebit"] = extract_val(fd, "ebitda") or extract_val(fd, "operatingCashflow") or extract_val(ks, "ebitda")
+                            info["totalAssets"] = extract_val(fd, "totalAssets") or extract_val(ks, "totalAssets") or extract_val(sd, "totalAssets")
+                            info["totalCurrentLiabilities"] = extract_val(fd, "totalCurrentLiabilities") or extract_val(ks, "totalCurrentLiabilities")
+                            info["debtToEquity"] = extract_val(fd, "debtToEquity") or extract_val(ks, "debtToEquity")
+                            info["profitMargins"] = extract_val(fd, "profitMargins") or extract_val(ks, "profitMargins")
+                            info["revenueGrowth"] = extract_val(fd, "revenueGrowth") or extract_val(ks, "revenueGrowth")
+                            info["trailingPE"] = extract_val(sd, "trailingPE") or extract_val(ks, "trailingPE") or extract_val(fd, "trailingPE")
+                            info["pegRatio"] = extract_val(ks, "pegRatio") or extract_val(fd, "pegRatio")
+                            info["priceToBook"] = extract_val(ks, "priceToBook") or extract_val(sd, "priceToBook") or extract_val(fd, "priceToBook")
+                            info["dividendYield"] = extract_val(sd, "dividendYield") or extract_val(ks, "dividendYield")
+                            info["sector"] = ap.get("sector") or info.get("sector") or ""
+                            info["industry"] = ap.get("industry") or info.get("industry") or ""
+                            info["marketCap"] = extract_val(sd, "marketCap") or extract_val(ks, "marketCap") or info.get("marketCap", 0)
                     except Exception:
                         pass
 
-            data = {
-                "ticker": ticker,
-                "info": info,
-                "history_close": hist_records,
-                "news": []
-            }
-            save_cache(ticker, data)
-            return data
-    except Exception:
-        pass
+                # Fallback: if essential fundamentals are missing, use yfinance Ticker info
+                has_fund = any(info.get(k) is not None for k in ["returnOnEquity", "debtToEquity", "trailingPE", "profitMargins"])
+                if not has_fund:
+                    try:
+                        t_fallback = yf.Ticker(ticker)
+                        yf_inf = t_fallback.info
+                        if yf_inf and isinstance(yf_inf, dict):
+                            for k in ["returnOnEquity", "debtToEquity", "profitMargins", "revenueGrowth",
+                                      "trailingPE", "pegRatio", "priceToBook", "dividendYield", "sector",
+                                      "industry", "marketCap", "ebit", "totalAssets", "totalCurrentLiabilities"]:
+                                if info.get(k) is None and yf_inf.get(k) is not None:
+                                    info[k] = yf_inf.get(k)
+                    except Exception:
+                        pass
+
+                # Fallback 2: If fundamentals are still missing, merge with last known valid cached fundamentals on disk
+                has_fund = any(info.get(k) is not None for k in ["returnOnEquity", "debtToEquity", "trailingPE", "profitMargins"])
+                if not has_fund:
+                    path = cache_path(ticker)
+                    if os.path.exists(path):
+                        try:
+                            with open(path) as f:
+                                old_cache = json.load(f).get("info", {})
+                            for k in ["returnOnEquity", "debtToEquity", "profitMargins", "revenueGrowth",
+                                      "trailingPE", "pegRatio", "priceToBook", "dividendYield", "sector",
+                                      "industry", "marketCap", "ebit", "totalAssets", "totalCurrentLiabilities"]:
+                                if info.get(k) is None and old_cache.get(k) is not None:
+                                    info[k] = old_cache.get(k)
+                        except Exception:
+                            pass
+
+                data = {
+                    "ticker": ticker,
+                    "info": info,
+                    "history_close": hist_records,
+                    "news": []
+                }
+                save_cache(ticker, data)
+                return data
+        except Exception:
+            pass
     return None
 
 
 def fetch_live_price_only(ticker: str) -> float | None:
     """Fetch *only* the current market price for a ticker using the Yahoo
-    Finance chart API (1-minute interval, intraday).  Returns None on failure.
-
-    This is intentionally lightweight — it never touches the cache and is
-    only called during live equity sessions to patch a stale cached LTP.
+    Finance chart API (1-minute interval, intraday).
+    TTL: 10s during market hours (live prices change), 120s when closed.
+    Returns None on failure.
     """
-    try:
-        from curl_cffi import requests as cffi_req
-        url = (f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}"
-               f"?interval=1m&range=1d")
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                  "AppleWebKit/537.36"}
-        r = cffi_req.get(url, impersonate="chrome120", headers=headers, timeout=6)
-        if r.status_code == 200:
-            meta = (r.json().get("chart", {}).get("result") or [{}])[0].get("meta", {})
-            price = meta.get("regularMarketPrice") or meta.get("chartPreviousClose")
-            if price and float(price) > 0:
-                return float(price)
-    except Exception:
-        pass
+    now = time.time()
+    ttl = 10.0 if is_equity_market_open() else 120.0
+    with GLOBAL_LTP_CACHE_LOCK:
+        cached_entry = GLOBAL_LTP_CACHE.get(ticker)
+        if cached_entry and (now - cached_entry[1] < ttl):
+            return cached_entry[0]
+
+    for host in ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]:
+        try:
+            import urllib.request
+            import json
+            url = f"https://{host}/v8/finance/chart/{ticker}?interval=1m&range=1d"
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            )
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    meta = (data.get("chart", {}).get("result") or [{}])[0].get("meta", {})
+                    price = meta.get("regularMarketPrice") or meta.get("chartPreviousClose")
+                    if price and float(price) > 0:
+                        val = float(price)
+                        with GLOBAL_LTP_CACHE_LOCK:
+                            GLOBAL_LTP_CACHE[ticker] = (val, time.time())
+                        return val
+        except Exception as e:
+            print(f"[LTP] {host} fetch failed for {ticker}: {e}")
+
+    # Fallback to curl_cffi if urllib fails
+    with CFFI_LOCK:
+        try:
+            from curl_cffi import requests as cffi_req
+            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            r = cffi_req.get(url, impersonate="chrome120", headers=headers, timeout=2.5)
+            if r.status_code == 200:
+                meta = (r.json().get("chart", {}).get("result") or [{}])[0].get("meta", {})
+                price = meta.get("regularMarketPrice") or meta.get("chartPreviousClose")
+                if price and float(price) > 0:
+                    val = float(price)
+                    with GLOBAL_LTP_CACHE_LOCK:
+                        GLOBAL_LTP_CACHE[ticker] = (val, time.time())
+                    return val
+        except Exception as e:
+            print(f"[LTP] curl_cffi fetch failed for {ticker}: {e}")
+
     return None
 
 
@@ -714,16 +993,19 @@ def run_scan(tickers: list[str]) -> list[dict]:
         try:
             with open(WL_FILE) as f:
                 wl = json.load(f)
-                watchlist_symbols = {w["symbol"] for w in wl}
+                watchlist_symbols = {w.get("symbol") for w in wl if isinstance(w, dict) and w.get("symbol")}
         except Exception:
             pass
     if not watchlist_symbols and os.path.exists(WL_SEED):
         try:
             with open(WL_SEED) as f:
                 wl = json.load(f)
-                watchlist_symbols = {w["symbol"] for w in wl}
+                watchlist_symbols = {w.get("symbol") for w in wl if isinstance(w, dict) and w.get("symbol")}
         except Exception:
             pass
+
+    # Fetch central NSE Corporate Actions feed ONCE per scan (0.00ms per stock)
+    corp_actions_map = fetch_nse_corporate_actions()
 
     # Symbols exempt from the ₹5000 price cap (F&O stocks traded as options)
     try:
@@ -731,56 +1013,70 @@ def run_scan(tickers: list[str]) -> list[dict]:
         fno_symbols = set(fno_master_dict.keys())
     except Exception as e:
         log(f"Error initializing dynamic fno_symbols: {e}")
-        fno_symbols = {s["symbol"] for s in cfg.get("fno_stocks", [])}
+        fno_symbols = {s.get("symbol") for s in cfg.get("fno_stocks", []) if isinstance(s, dict) and s.get("symbol")}
 
     def process_single_ticker(args):
-        i, ticker = args
-        clean = ticker.replace(".NS", "").replace(".BO", "")
-        data = fetch_ticker_data(ticker)
-        if data is None:
+        try:
+            i, ticker = args
+            clean = ticker.replace(".NS", "").replace(".BO", "")
+            data = fetch_ticker_data(ticker)
+            if data is None:
+                return None, "nodata"
+            info = data.get("info", {})
+            history = history_from_records(data.get("history_close", []))
+            price = (info.get("currentPrice") or info.get("regularMarketPrice")
+                     or info.get("previousClose") or 0)
+            # Bypass price cap for designated F&O stocks
+            if price >= MAX_PRICE and clean not in fno_symbols:
+                return None, "price"
+            scored = score_stock(info, history)
+            scored["symbol"] = clean
+            scored["ticker"] = ticker
+            if scored.get("total_score", 0) >= 45 or clean in watchlist_symbols or clean in fno_symbols:
+                scored = apply_1h_sr_overlay(scored, ticker)
+            else:
+                scored["sr_1h_available"] = False
+            qualified = (
+                scored["total_score"] >= MIN_TOTAL and
+                scored["strength"] >= MIN_STRENGTH
+            )
+            scored["qualified"] = qualified
+            trend_info = compute_trend_classification(scored)
+            scored["trend"] = trend_info["trend"]
+            scored["tech_rating"] = trend_info["badge"]
+            scored["tech_class"] = trend_info["class"]
+            is_wl = clean in watchlist_symbols
+            
+            # Attach Corporate Actions (in-memory lookup)
+            scored["corporate_actions"] = corp_actions_map.get(clean, [])
+            
+            # Fetch news for qualified or watchlist stocks
+            if ("news" not in data or not data["news"]) and (qualified or is_wl):
+                comp_name = info.get("shortName") or info.get("longName") or clean
+                news_list = fetch_news_for_ticker(ticker, company_name=comp_name)
+                data["news"] = news_list
+                save_cache(ticker, data)
+            scored["news"] = data.get("news") or []
+            return scored, "ok"
+        except Exception:
             return None, "nodata"
-        info = data.get("info", {})
-        history = history_from_records(data.get("history_close", []))
-        price = (info.get("currentPrice") or info.get("regularMarketPrice")
-                 or info.get("previousClose") or 0)
-        # Bypass price cap for designated F&O stocks
-        if price >= MAX_PRICE and clean not in fno_symbols:
-            return None, "price"
-        scored = score_stock(info, history)
-        scored["symbol"] = clean
-        scored["ticker"] = ticker
-        scored = apply_1h_sr_overlay(scored, ticker)
-        qualified = (
-            scored["total_score"] >= MIN_TOTAL and
-            scored["strength"] >= MIN_STRENGTH
-        )
-        scored["qualified"] = qualified
-        trend_info = compute_trend_classification(scored)
-        scored["trend"] = trend_info["trend"]
-        scored["tech_rating"] = trend_info["badge"]
-        scored["tech_class"] = trend_info["class"]
-        is_wl = clean in watchlist_symbols
-        if ("news" not in data or data["news"] is None) and (qualified or is_wl):
-            news_list = fetch_news_for_ticker(ticker)
-            data["news"] = news_list
-            save_cache(ticker, data)
-        scored["news"] = data.get("news") or []
-        time.sleep(0.04)
-        return scored, "ok"
 
-    log(f"\nMultithreaded scanning {total} stocks (6 parallel workers, rate-limit safe)...")
+    log(f"\nMultithreaded scanning {total} stocks (16 parallel workers, ultra-fast cache processing)...")
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=6) as executor:
+    with ThreadPoolExecutor(max_workers=16) as executor:
         scan_items = list(enumerate(tickers, 1))
         futures = [executor.submit(process_single_ticker, item) for item in scan_items]
         for f in futures:
-            res, status = f.result()
-            if status == "nodata":
+            try:
+                res, status = f.result()
+                if status == "nodata":
+                    skipped_nodata += 1
+                elif status == "price":
+                    skipped_price += 1
+                elif res:
+                    results.append(res)
+            except Exception:
                 skipped_nodata += 1
-            elif status == "price":
-                skipped_price += 1
-            elif res:
-                results.append(res)
 
     for r in results:
         sym = r.get("symbol", "").upper()
@@ -810,7 +1106,8 @@ def run_scan(tickers: list[str]) -> list[dict]:
         # Tag MTF eligibility (Zerodha quality approved equity)
         r["is_mtf"] = (sym in MTF_SYMBOLS)
 
-    results.sort(key=lambda x: x["total_score"], reverse=True)
+    # Multi-level deterministic tie-breaker sort
+    results.sort(key=lambda x: (x.get("total_score", 0), x.get("swing_score", 0), x.get("symbol", "")), reverse=True)
     log(f"\nScan complete: {len(results)} priced < ₹{MAX_PRICE}, "
         f"{sum(1 for r in results if r['qualified'])} qualified, "
         f"{skipped_price} excluded by price, {skipped_nodata} no-data\n")
@@ -929,28 +1226,41 @@ def process_fno_stocks(screener_results: list[dict]) -> list[dict]:
             } for fc in fno_cfgs
         }
 
-    result_map = {r["symbol"]: r for r in screener_results}
+    result_map = {r["symbol"]: r for r in screener_results if isinstance(r, dict) and r.get("symbol")}
     fno_data = []
+
+    missing_fno = [item for sym, item in fno_master_dict.items() if sym not in result_map]
+    if missing_fno:
+        log(f"  Parallelizing fetch for {len(missing_fno)} missing F&O instruments...")
+        def _fetch_fno_worker(fno_item):
+            sym = fno_item["symbol"]
+            ticker = fno_item["ticker"]
+            try:
+                data = fetch_ticker_data(ticker)
+                if data:
+                    info = data.get("info", {})
+                    history = history_from_records(data.get("history_close", []))
+                    scored = score_stock(info, history)
+                    scored["symbol"] = sym
+                    scored["ticker"] = ticker
+                    scored = apply_1h_sr_overlay(scored, ticker)
+                    trend_info = compute_trend_classification(scored)
+                    scored["trend"] = trend_info["trend"]
+                    scored["tech_rating"] = trend_info["badge"]
+                    scored["tech_class"] = trend_info["class"]
+                    return sym, scored
+            except Exception:
+                pass
+            return sym, None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+            for sym, scored in executor.map(_fetch_fno_worker, missing_fno):
+                if scored:
+                    result_map[sym] = scored
 
     excluded_count = 0
     for sym, fno_item in fno_master_dict.items():
-        ticker = fno_item["ticker"]
         scored = result_map.get(sym)
-
-        if scored is None:
-            # Not found in the main scan results — fetch individually
-            data = fetch_ticker_data(ticker)
-            if data:
-                info    = data.get("info", {})
-                history = history_from_records(data.get("history_close", []))
-                scored  = score_stock(info, history)
-                scored["symbol"] = sym
-                scored["ticker"] = ticker
-                scored  = apply_1h_sr_overlay(scored, ticker)
-                trend_info = compute_trend_classification(scored)
-                scored["trend"]       = trend_info["trend"]
-                scored["tech_rating"] = trend_info["badge"]
-                scored["tech_class"]  = trend_info["class"]
 
         if scored:
             signal = compute_fno_signal(scored, fno_item)
@@ -1001,32 +1311,48 @@ def process_watchlist(screener_results: list[dict]) -> list[dict]:
     else:
         watchlist = []
 
-    result_map = {r["symbol"]: r for r in screener_results}
+    result_map = {r["symbol"]: r for r in screener_results if isinstance(r, dict) and r.get("symbol")}
+
+    missing_wl = [item for item in watchlist if isinstance(item, dict) and item.get("symbol") and item.get("symbol") not in result_map]
+    if missing_wl:
+        log(f"  Parallelizing fetch for {len(missing_wl)} missing watchlist stocks...")
+        def _fetch_wl_worker(item):
+            sym = item.get("symbol")
+            ticker = item.get("ticker", f"{sym}.NS")
+            try:
+                data = fetch_ticker_data(ticker)
+                if data:
+                    info = data.get("info", {})
+                    history = history_from_records(data.get("history_close", []))
+                    scored = score_stock(info, history)
+                    scored["symbol"] = sym
+                    scored["ticker"] = ticker
+                    scored = apply_1h_sr_overlay(scored, ticker)
+                    if "news" not in data or not data["news"]:
+                        comp_name = info.get("shortName") or info.get("longName") or sym
+                        news_list = fetch_news_for_ticker(ticker, company_name=comp_name)
+                        data["news"] = news_list
+                        save_cache(ticker, data)
+                    scored["news"] = data.get("news") or []
+                    ca_map = fetch_nse_corporate_actions()
+                    scored["corporate_actions"] = ca_map.get(sym, [])
+                    return sym, scored
+            except Exception:
+                pass
+            return sym, None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+            for sym, scored in executor.map(_fetch_wl_worker, missing_wl):
+                if scored:
+                    result_map[sym] = scored
 
     for item in watchlist:
-        sym = item["symbol"]
+        if not isinstance(item, dict):
+            continue
+        sym = item.get("symbol")
+        if not sym:
+            continue
         scored = result_map.get(sym)
-
-        if scored is None:
-            # Not in screener results — fetch individually
-            log(f"  Fetching watchlist stock individually: {sym}")
-            data = fetch_ticker_data(item["ticker"])
-            if data:
-                info = data.get("info", {})
-                history = history_from_records(data.get("history_close", []))
-                scored = score_stock(info, history)
-                scored["symbol"] = sym
-                scored["ticker"] = item["ticker"]
-                scored = apply_1h_sr_overlay(scored, item["ticker"])
-                
-                # Fetch news on-the-fly if missing
-                if "news" not in data or data["news"] is None:
-                    log(f"  Fetching news on-the-fly for watchlist stock individually: {sym}")
-                    news_list = fetch_news_for_ticker(item["ticker"])
-                    data["news"] = news_list
-                    save_cache(item["ticker"], data)
-                
-                scored["news"] = data.get("news") or []
 
         if scored:
             # Fill entry metrics on first run (when null)
@@ -1057,6 +1383,7 @@ def process_watchlist(screener_results: list[dict]) -> list[dict]:
             item["today_volume"]     = scored.get("today_volume", 0)
             item["avg_volume_10d"]   = scored.get("avg_volume_10d", 0)
             item["news"]             = scored.get("news", [])
+            item["corporate_actions"]= scored.get("corporate_actions", [])
 
             # Generate quality alerts & recommendation signal
             item["alerts"] = check_quality_alerts(scored, item)
@@ -1108,38 +1435,17 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
     # Build fast lookup map from screener results
     result_map = {r.get("symbol", "").upper(): r for r in screener_results}
 
-    # Load capital ledger holdings to identify active positions
-    lt_summary = get_lt_portfolio_summary(screener_results)
-    holding_map = {h.get("symbol", "").upper(): h for h in lt_summary.get("holdings", []) if int(h.get("qty", 0)) > 0}
-
-    # Automatically append any active non-penny portfolio holdings not present in lt_stocks
-    existing_symbols = {(s.get("symbol") or "").upper() for s in lt_stocks}
-    for h_sym, h in holding_map.items():
-        price = float(h.get("live_price") or h.get("last_price") or h.get("avg_price") or 0.0)
-        if price > 75.0 and h_sym not in existing_symbols:
-            lt_stocks.append({
-                "symbol": h_sym,
-                "ticker": f"{h_sym}.NS",
-                "type": "Private",
-                "sector": "Portfolio Holding",
-                "durability_score": 75,
-                "portfolio_role": "Active Holding",
-                "gtt_mode": "auto",
-                "gtt_level": None,
-                "active": True,
-                "added_date": datetime.datetime.now().strftime("%Y-%m-%d"),
-                "notes": "Auto-added active holding"
-            })
-
+    holding_map = {}
     enriched = []
     buy_now_count = 0
     bought_count = 0
     for entry in lt_stocks:
         sym = (entry.get("symbol") or "").upper()
         active = entry.get("active", True)
-        holding = holding_map.get(sym)
+        holding = None
 
         live = result_map.get(sym)
+        scored = live or {}
 
         ltp        = float(live.get("ltp") or 0) if live else 0.0
         rsi        = float(live.get("rsi") or 50) if live else 50.0
@@ -1246,35 +1552,9 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
     return enriched
 
 
-def load_lt_capital_ledger() -> dict:
-    if os.path.exists(LT_CAPITAL_LEDGER_FILE):
-        try:
-            with open(LT_CAPITAL_LEDGER_FILE, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {
-        "start_date": "2026-08-19",
-        "daily_accrual_rate": 100.0,
-        "extra_deposits": 0.0,
-        "holdings": [],
-        "transactions": []
-    }
-
-
-def save_lt_capital_ledger(ledger: dict):
-    with open(LT_CAPITAL_LEDGER_FILE, "w", encoding="utf-8") as f:
-        json.dump(ledger, f, indent=2)
-
-
 def get_lt_portfolio_summary(screener_results: list[dict] = None) -> dict:
-    ledger = load_lt_capital_ledger()
-    start_date_str = ledger.get("start_date", "2026-08-19")
-    daily_rate = float(ledger.get("daily_accrual_rate", 100.0))
-    extra_deposits = float(ledger.get("extra_deposits", 0.0))
-    withdrawals = float(ledger.get("withdrawals", 0.0))
-    broker_adjustment = float(ledger.get("broker_adjustment", 0.0))
-    
+    """Returns LT portfolio trading day status complying with Rule 4."""
+    start_date_str = "2026-08-19"
     try:
         s_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
         today_date = datetime.datetime.now().date()
@@ -1288,229 +1568,11 @@ def get_lt_portfolio_summary(screener_results: list[dict] = None) -> dict:
     except Exception:
         days_active = 1
 
-    total_deposited = round((days_active * daily_rate) + extra_deposits + broker_adjustment - withdrawals, 2)
-    
-    holdings = ledger.get("holdings", [])
-    transactions = ledger.get("transactions", [])
-    
-    realized_pnl = 0.0
-    total_charges_paid = 0.0
-    total_buy_cash_spent = 0.0
-    total_sell_cash_received = 0.0
-    
-    for tx in transactions:
-        total_charges_paid += float(tx.get("total_charges", 0))
-        if tx.get("type") == "BUY":
-            total_buy_cash_spent += float(tx.get("net_value", 0))
-        elif tx.get("type") == "SELL":
-            total_sell_cash_received += float(tx.get("net_value", 0))
-            realized_pnl += float(tx.get("realized_pnl", 0))
-
-    available_cash = round(total_deposited + total_sell_cash_received - total_buy_cash_spent, 2)
-    
-    price_map = {}
-    if screener_results:
-        for s in screener_results:
-            price_map[s["symbol"]] = float(s.get("ltp", 0.0))
-
-    enriched_holdings = []
-    invested_capital = 0.0
-    current_portfolio_val = 0.0
-
-    for h in holdings:
-        sym = h["symbol"]
-        qty = int(h.get("qty", 0))
-        avg_price = float(h.get("avg_price", 0.0))
-        buy_value = round(qty * avg_price, 2)
-        
-        live_price = price_map.get(sym) or float(h.get("last_price", avg_price))
-        mkt_val = round(qty * live_price, 2)
-        unrealized_pnl = round(mkt_val - buy_value, 2)
-        unrealized_pnl_pct = round((unrealized_pnl / buy_value * 100), 2) if buy_value > 0 else 0.0
-        
-        invested_capital += buy_value
-        current_portfolio_val += mkt_val
-
-        enriched_holdings.append({
-            **h,
-            "live_price": round(live_price, 2),
-            "buy_value": buy_value,
-            "market_value": mkt_val,
-            "unrealized_pnl": unrealized_pnl,
-            "unrealized_pnl_pct": unrealized_pnl_pct
-        })
-
-    total_unrealized_pnl = round(current_portfolio_val - invested_capital, 2)
-    total_pnl = round(realized_pnl + total_unrealized_pnl, 2)
-
     return {
         "start_date": start_date_str,
         "days_active": days_active,
-        "daily_accrual_rate": daily_rate,
-        "extra_deposits": extra_deposits,
-        "withdrawals": withdrawals,
-        "broker_adjustment": broker_adjustment,
-        "total_deposited": total_deposited,
-        "available_cash": available_cash,
-        "invested_capital": round(invested_capital, 2),
-        "current_portfolio_val": round(current_portfolio_val, 2),
-        "total_unrealized_pnl": total_unrealized_pnl,
-        "realized_pnl": round(realized_pnl, 2),
-        "total_pnl": total_pnl,
-        "total_charges_paid": round(total_charges_paid, 2),
-        "holdings": enriched_holdings,
-        "transactions": transactions
-    }
-
-
-def execute_lt_buy_order(symbol: str, qty: int, price: float) -> dict:
-    symbol = symbol.strip().upper()
-    qty = int(qty)
-    price = float(price)
-    if qty <= 0 or price <= 0:
-        raise ValueError("Quantity and price must be greater than zero")
-
-    gross_val = round(qty * price, 2)
-    fees = calc_indmoney_charges(gross_val, "BUY")
-    net_cost = fees["net_value"]
-
-    summary = get_lt_portfolio_summary()
-    available_cash = summary["available_cash"]
-
-    ledger = load_lt_capital_ledger()
-
-    # Automatically top up extra deposits if net_cost exceeds available cash to remove buy restriction
-    if net_cost > available_cash:
-        shortfall = round(net_cost - available_cash, 2)
-        ledger["extra_deposits"] = round(float(ledger.get("extra_deposits", 0.0)) + shortfall, 2)
-    holdings = ledger.get("holdings", [])
-    transactions = ledger.get("transactions", [])
-
-    existing = next((h for h in holdings if h["symbol"] == symbol), None)
-    if existing:
-        old_qty = int(existing["qty"])
-        old_avg = float(existing["avg_price"])
-        new_qty = old_qty + qty
-        new_avg = round(((old_qty * old_avg) + gross_val) / new_qty, 2)
-        existing["qty"] = new_qty
-        existing["avg_price"] = new_avg
-        existing["last_price"] = price
-    else:
-        holdings.append({
-            "symbol": symbol,
-            "qty": qty,
-            "avg_price": price,
-            "buy_date": datetime.datetime.now().strftime("%Y-%m-%d"),
-            "last_price": price
-        })
-
-    tx_id = f"TX-BUY-{int(datetime.datetime.now().timestamp())}"
-    tx_record = {
-        "id": tx_id,
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "type": "BUY",
-        "symbol": symbol,
-        "qty": qty,
-        "price": price,
-        "gross_value": gross_val,
-        "total_charges": fees["total_charges"],
-        "net_value": net_cost,
-        "charges_breakdown": fees
-    }
-    transactions.append(tx_record)
-
-    ledger["holdings"] = holdings
-    ledger["transactions"] = transactions
-    save_lt_capital_ledger(ledger)
-
-    # Ensure non-penny symbol (price > 75.0) is persisted in lt_watchlist.json so it is tracked in LT Watchlist dashboard
-    if price > 75.0:
-        try:
-            if os.path.exists(LT_WL_FILE):
-                with open(LT_WL_FILE, "r", encoding="utf-8") as f:
-                    wl_list = json.load(f)
-                if not any((item.get("symbol") or "").upper() == symbol for item in wl_list):
-                    wl_list.append({
-                        "symbol": symbol,
-                        "ticker": f"{symbol}.NS",
-                        "type": "Private",
-                        "sector": "Portfolio Holding",
-                        "durability_score": 75,
-                        "portfolio_role": "Active Holding",
-                        "gtt_mode": "auto",
-                        "gtt_level": None,
-                        "active": True,
-                        "added_date": datetime.datetime.now().strftime("%Y-%m-%d"),
-                        "notes": "Auto-added upon purchase"
-                    })
-                    with open(LT_WL_FILE, "w", encoding="utf-8") as f:
-                        json.dump(wl_list, f, indent=2)
-        except Exception as e:
-            log(f"⚠ Could not auto-add {symbol} to lt_watchlist.json: {e}")
-
-    return {
-        "status": "ok",
-        "message": f"Successfully bought {qty} shares of {symbol} @ ₹{price:.2f} (Net Cost: ₹{net_cost:.2f})",
-        "transaction": tx_record
-    }
-
-
-def execute_lt_sell_order(symbol: str, qty: int, price: float) -> dict:
-    symbol = symbol.strip().upper()
-    qty = int(qty)
-    price = float(price)
-    if qty <= 0 or price <= 0:
-        raise ValueError("Quantity and price must be greater than zero")
-
-    ledger = load_lt_capital_ledger()
-    holdings = ledger.get("holdings", [])
-    transactions = ledger.get("transactions", [])
-
-    existing = next((h for h in holdings if h["symbol"] == symbol), None)
-    if not existing or int(existing.get("qty", 0)) < qty:
-        avail_qty = int(existing.get("qty", 0)) if existing else 0
-        raise ValueError(f"Insufficient holding for {symbol}. Requested: {qty}, Available: {avail_qty}")
-
-    old_qty = int(existing["qty"])
-    avg_price = float(existing["avg_price"])
-    cost_of_sold = round(qty * avg_price, 2)
-    gross_val = round(qty * price, 2)
-    
-    fees = calc_indmoney_charges(gross_val, "SELL")
-    net_proceeds = fees["net_value"]
-    realized_pnl = round(net_proceeds - cost_of_sold, 2)
-
-    rem_qty = old_qty - qty
-    if rem_qty <= 0:
-        holdings = [h for h in holdings if h["symbol"] != symbol]
-    else:
-        existing["qty"] = rem_qty
-        existing["last_price"] = price
-
-    tx_id = f"TX-SELL-{int(datetime.datetime.now().timestamp())}"
-    tx_record = {
-        "id": tx_id,
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "type": "SELL",
-        "symbol": symbol,
-        "qty": qty,
-        "price": price,
-        "gross_value": gross_val,
-        "total_charges": fees["total_charges"],
-        "net_value": net_proceeds,
-        "realized_pnl": realized_pnl,
-        "charges_breakdown": fees
-    }
-    transactions.append(tx_record)
-
-    ledger["holdings"] = holdings
-    ledger["transactions"] = transactions
-    save_lt_capital_ledger(ledger)
-
-    return {
-        "status": "ok",
-        "message": f"Successfully sold {qty} shares of {symbol} @ ₹{price:.2f} (Net Proceeds ₹{net_proceeds:.2f} credited to Cash Balance)",
-        "transaction": tx_record
+        "holdings": [],
+        "transactions": []
     }
 
 
@@ -1698,7 +1760,7 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
     is_non_trading = mkt_info.get("is_weekend", False) or mkt_info.get("is_holiday", False)
     require_trading_day = cfg.get("only_add_pick_on_trading_days", True)
 
-    result_map = {r["symbol"]: r for r in screener_results}
+    result_map = {r["symbol"]: r for r in screener_results if isinstance(r, dict) and r.get("symbol")}
 
     # Update live scores, LTP, and status for ALL historical picks
     for item in history:
@@ -1722,9 +1784,9 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
         if history:
             top_pick = dict(history[0])
             if top_pick.get("symbol") in result_map:
-                res = result_map[top_pick["symbol"]]
-                top_pick["current_ltp"] = res["ltp"]
-                top_pick["ltp"] = res["ltp"]
+                res = result_map[top_pick.get("symbol")]
+                top_pick["current_ltp"] = res.get("ltp", top_pick.get("current_ltp", 0))
+                top_pick["ltp"] = res.get("ltp", top_pick.get("ltp", 0))
                 top_pick["pe"] = res.get("pe")
                 top_pick["rsi"] = res.get("rsi")
 
@@ -1737,8 +1799,8 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
             top_pick = {
                 "date": today_str,
                 "display_date": display_date,
-                "symbol": top["symbol"],
-                "name": top.get("name") or top["symbol"],
+                "symbol": top.get("symbol", ""),
+                "name": top.get("name") or top.get("symbol", ""),
                 "sector": top.get("sector", ""),
                 "total_score": top["total_score"],
                 "strength": top["strength"],
@@ -2013,8 +2075,29 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <title>Stock Screener — Phase 1 | Quality Watchlist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+<script>
+window.onerror = function(msg, url, lineNo, columnNo, error) {
+  console.error("Global JS Error:", msg, error);
+  var errDiv = document.getElementById("global-error-banner");
+  if (!errDiv) {
+    errDiv = document.createElement("div");
+    errDiv.id = "global-error-banner";
+    errDiv.style = "position:fixed;top:0;left:0;right:0;z-index:999999;background:#991b1b;color:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;font-family:sans-serif;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.5);";
+    errDiv.innerHTML = "<span>⚠️ Application encountered an issue: " + (msg || "Unknown error") + "</span> <button onclick='location.reload()' style='background:#fff;color:#991b1b;border:none;padding:6px 14px;border-radius:4px;font-weight:bold;cursor:pointer;'>Reload App</button>";
+    if (document.body) { document.body.insertBefore(errDiv, document.body.firstChild); }
+    else if (document.documentElement) { document.documentElement.appendChild(errDiv); }
+  }
+  return false;
+};
+window.addEventListener('unhandledrejection', function(event) {
+  console.error("Unhandled Rejection:", event.reason);
+});
+</script>
 <style>
 :root{
   --bg:#06060f;--card:#0e0e1e;--card2:#13132a;--border:#1e1e3a;
@@ -2022,9 +2105,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   --green:#10b981;--text:#e2e8f0;--muted:#64748b;--white:#fff;
   --font:'Inter',system-ui,sans-serif;
 }
+html, body { background: #06060f !important; color: #e2e8f0; font-family: var(--font, sans-serif); }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh}
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 /* ── Layout ── */
 .app-header{background:linear-gradient(135deg,#0a0a1a,#12123a);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
@@ -2276,14 +2358,18 @@ tr:hover td{background:#ffffff06}
     min-width: 650px !important;
   }
 
+  .main {
+    padding-bottom: calc(90px + env(safe-area-inset-bottom, 20px)) !important;
+  }
+
   /* Fixed Mobile Bottom Navigation Bar */
   .mobile-nav-bar {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    height: 60px;
-    background: rgba(10, 10, 26, 0.96);
+    min-height: 56px;
+    background: rgba(10, 10, 26, 0.98);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid rgba(255, 255, 255, 0.12);
@@ -2292,6 +2378,9 @@ tr:hover td{background:#ffffff06}
     align-items: center;
     z-index: 9999;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
+    padding-top: 6px;
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
+    box-sizing: content-box;
   }
 
   .mobile-nav-item {
@@ -2550,17 +2639,17 @@ details[open] summary::before {
 
   <!-- Desktop Top Tabs (Hidden on mobile where bottom nav is active) -->
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('screener')">🔍 Screener Results</button>
-    <button class="tab" onclick="switchTab('swing')">⚡ Swing Trading</button>
-    <button class="tab" onclick="switchTab('watchlist')">🛡️ LT Watchlist (<span id="wlCount">0</span>)</button>
-    <button class="tab" onclick="switchTab('penny')">💎 Quality Penny SIP (20)</button>
-    <button class="tab" onclick="switchTab('fno')">📊 F&amp;O Options</button>
-    <button class="tab" onclick="switchTab('holidays')">📅 Market Holidays (2026)</button>
+    <button class="tab active" data-tab="screener" onclick="switchTab('screener')">🔍 Full Screener</button>
+    <button class="tab" data-tab="swing" onclick="switchTab('swing')">⚡ Swing Top 10</button>
+    <button class="tab" data-tab="watchlist" onclick="switchTab('watchlist')">🛡️ LT Screen (<span id="wlCount">0</span>)</button>
+    <button class="tab" data-tab="penny" onclick="switchTab('penny')">💎 Penny Screen</button>
+    <button class="tab" data-tab="fno" onclick="switchTab('fno')">📊 F&amp;O Options</button>
+    <button class="tab" data-tab="holidays" onclick="switchTab('holidays')">📅 Market Holidays (2026)</button>
   </div>
 
 
   <!-- SCREENER TAB -->
-  <div id="tab-screener">
+  <div id="tab-screener" style="display:none">
     <div class="filters">
       <div class="filter-group">
         <label>Search</label>
@@ -2649,7 +2738,7 @@ details[open] summary::before {
   </div>
 
   <!-- SWING RADAR TAB -->
-  <div id="tab-swing" style="display:none">
+  <div id="tab-swing">
     <!-- Header Banner -->
     <div style="background:linear-gradient(135deg,rgba(108,99,255,0.15),rgba(0,212,170,0.10));border:1px solid rgba(108,99,255,0.35);border-radius:16px;padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
       <div>
@@ -2697,27 +2786,38 @@ details[open] summary::before {
       <div id="swingSpotlight" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
     </div>
 
+    <!-- Swing Title & Symbol Filter Bar -->
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <div style="position:relative;flex:1;min-width:260px">
+        <input type="text" id="swingTitleFilter" placeholder="🔍 Search / Filter stocks by Title, Symbol, Badge, Reason..." oninput="renderSwingRadar()" style="width:100%;padding:8px 14px 8px 34px;border-radius:20px;border:1px solid var(--border);background:var(--card);color:#fff;font-size:13px;outline:none;box-shadow:inset 0 1px 3px rgba(0,0,0,0.3)">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--muted);pointer-events:none">🔍</span>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="document.getElementById('swingTitleFilter').value='';renderSwingRadar()" style="border-radius:20px;font-size:12px;padding:6px 14px;background:var(--card2);border:1px solid var(--border);color:var(--text);cursor:pointer">Clear Filter</button>
+      </div>
+    </div>
+
     <!-- Full Swing Table -->
     <div style="font-size:12px;color:var(--muted);margin-bottom:8px" id="swingResultCount"></div>
     <div class="table-wrap">
       <table id="swingTable">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Symbol</th>
-            <th onclick="sortSwingTable('swing_score')" style="cursor:pointer">Swing Score ↕</th>
-            <th onclick="sortSwingTable('rs_rating')" style="cursor:pointer">RS Rating ↕</th>
-            <th>Badge</th>
-            <th onclick="sortSwingTable('ltp')" style="cursor:pointer">LTP ↕</th>
-            <th onclick="sortSwingTable('volume_spike')" style="cursor:pointer">Vol Spike ↕</th>
-            <th onclick="sortSwingTable('rsi')" style="cursor:pointer">RSI ↕</th>
-            <th onclick="sortSwingTable('momentum')" style="cursor:pointer">Momentum ↕</th>
-            <th>Order Flow</th>
-            <th>SL</th>
-            <th>Target 1 (1:2)</th>
-            <th>Target 2 (1:3)</th>
-            <th>Reason</th>
-            <th>Action</th>
+            <th onclick="sortSwingTable('index')" style="cursor:pointer" title="Sort by Index Title"># <span id="swing_sort_index">↕</span></th>
+            <th onclick="sortSwingTable('symbol')" style="cursor:pointer" title="Sort by Stock Title / Symbol">SYMBOL <span id="swing_sort_symbol">↕</span></th>
+            <th onclick="sortSwingTable('swing_score')" style="cursor:pointer" title="Sort by Swing Score">SWING SCORE <span id="swing_sort_swing_score">↕</span></th>
+            <th onclick="sortSwingTable('rs_rating')" style="cursor:pointer" title="Sort by RS Rating">RS RATING <span id="swing_sort_rs_rating">↕</span></th>
+            <th onclick="sortSwingTable('swing_badge')" style="cursor:pointer" title="Sort by Badge Title">BADGE <span id="swing_sort_swing_badge">↕</span></th>
+            <th onclick="sortSwingTable('ltp')" style="cursor:pointer" title="Sort by LTP Price">LTP <span id="swing_sort_ltp">↕</span></th>
+            <th onclick="sortSwingTable('volume_spike')" style="cursor:pointer" title="Sort by Volume Spike">VOL SPIKE <span id="swing_sort_volume_spike">↕</span></th>
+            <th onclick="sortSwingTable('rsi')" style="cursor:pointer" title="Sort by RSI">RSI <span id="swing_sort_rsi">↕</span></th>
+            <th onclick="sortSwingTable('momentum')" style="cursor:pointer" title="Sort by Momentum">MOMENTUM <span id="swing_sort_momentum">↕</span></th>
+            <th onclick="sortSwingTable('cmf')" style="cursor:pointer" title="Sort by Order Flow (CMF)">ORDER FLOW <span id="swing_sort_cmf">↕</span></th>
+            <th onclick="sortSwingTable('swing_sl')" style="cursor:pointer" title="Sort by Stop Loss">SL <span id="swing_sort_swing_sl">↕</span></th>
+            <th onclick="sortSwingTable('swing_t1')" style="cursor:pointer" title="Sort by Target 1">TARGET 1 (1:2) <span id="swing_sort_swing_t1">↕</span></th>
+            <th onclick="sortSwingTable('swing_t2')" style="cursor:pointer" title="Sort by Target 2">TARGET 2 (1:3) <span id="swing_sort_swing_t2">↕</span></th>
+            <th onclick="sortSwingTable('swing_reason')" style="cursor:pointer" title="Sort by Reason Title">REASON <span id="swing_sort_swing_reason">↕</span></th>
+            <th onclick="sortSwingTable('swing_action')" style="cursor:pointer" title="Sort by Action Signal Title">ACTION <span id="swing_sort_swing_action">↕</span></th>
           </tr>
         </thead>
         <tbody id="swingBody"></tbody>
@@ -3036,15 +3136,15 @@ details[open] summary::before {
   </button>
   <button class="mobile-nav-item" data-tab="swing" onclick="switchTab('swing')">
     <span class="mobile-nav-icon">⚡</span>
-    <span>Swing</span>
+    <span>Swing Top 10</span>
   </button>
   <button class="mobile-nav-item" data-tab="watchlist" onclick="switchTab('watchlist')">
     <span class="mobile-nav-icon">🛡️</span>
-    <span>LT Watchlist</span>
+    <span>LT Screen</span>
   </button>
   <button class="mobile-nav-item" data-tab="penny" onclick="switchTab('penny')">
     <span class="mobile-nav-icon">💎</span>
-    <span>Penny</span>
+    <span>Penny Screen</span>
   </button>
   <button class="mobile-nav-item" data-tab="fno" onclick="switchTab('fno')">
     <span class="mobile-nav-icon">📊</span>
@@ -3077,23 +3177,17 @@ let pollIntervalTimer = null;
 let pollIntervalMs = 10000;
 let currentPage = 1;
 let pageSize = 50;
+let lastLtpSuccessTime = null;
+let lastLtpError = null;
 
 function calculateCurrentMarketStatus() {
   const now = new Date();
-  const options = { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
-  const formatter = new Intl.DateTimeFormat('en-US', options);
-  const parts = formatter.formatToParts(now);
-  const p = {};
-  parts.forEach(item => { p[item.type] = item.value; });
-  
-  const year = parseInt(p.year);
-  const month = parseInt(p.month) - 1;
-  const day = parseInt(p.day);
-  const hours = parseInt(p.hour % 24);
-  const minutes = parseInt(p.minute);
-  
-  const istDate = new Date(year, month, day, hours, minutes);
+  const istStr = now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+  const istDate = new Date(istStr);
+
   const dayOfWeek = istDate.getDay(); // 0 = Sun, 6 = Sat
+  const hours = istDate.getHours();
+  const minutes = istDate.getMinutes();
   const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
   const tMins = hours * 60 + minutes;
   
@@ -3135,11 +3229,12 @@ function calculateCurrentMarketStatus() {
       is_pre_market: true
     };
   } else if (tMins >= eqOpenMins && tMins <= eqCloseMins) {
+    const timeFormatted = `${hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours)}:${minutes < 10 ? '0' + minutes : minutes} ${hours >= 12 ? 'PM' : 'AM'}`;
     return {
       status: "LIVE_MARKET",
-      badge: "🟢 Live Market (Stocks & Commodities Active)",
+      badge: `🟢 Live Market (${timeFormatted} IST · Active)`,
       badge_class: "badge-green",
-      message: "NSE/BSE & MCX Session Active. Live prices & returns updating.",
+      message: `NSE/BSE & MCX Session Active (${timeFormatted} IST). Live prices & returns updating.`,
       is_open: true,
       is_equity_open: true,
       is_pre_market: false
@@ -3207,8 +3302,9 @@ function renderMarketStatusHeader() {
 function isRealDesktopPC() {
   const isCapacitor = !!(window.Capacitor || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()));
   const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
-  const hasLocalPort = (window.location.port === '5000' || window.location.port === '3000');
-  return (!isCapacitor && !isMobileUA && hasLocalPort);
+  const isFileProto = window.location.protocol === 'file:';
+  const hasLocalPort = (window.location.port !== '' && window.location.port !== '80' && window.location.port !== '443') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  return (!isCapacitor && !isMobileUA && (hasLocalPort || isFileProto));
 }
 
 async function triggerAppScan() {
@@ -3229,20 +3325,50 @@ async function triggerAppScan() {
 
   if (overlay) overlay.style.display = 'flex';
   if (btnText) btnText.textContent = 'Initializing live stock & commodity scan...';
-  if (barInner) barInner.style.width = '20%';
+  if (barInner) barInner.style.width = '15%';
   if (btnLog) btnLog.textContent = 'Connecting to local scan engine server...';
 
-  const scanUrl = 'http://localhost:' + window.location.port + '/api/scan';
+  const scanUrl = 'http://localhost:' + (window.location.port || '8080') + '/api/scan';
+  const statusUrl = 'http://localhost:' + (window.location.port || '8080') + '/api/scan/status';
 
   try {
-    if (barInner) barInner.style.width = '40%';
-    if (btnLog) btnLog.textContent = 'Fetching Nifty 500 prices & scoring stocks...';
     const res = await fetch(scanUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
     if (res.ok) {
-      if (barInner) barInner.style.width = '100%';
-      if (btnText) btnText.textContent = 'Scan complete! Reloading latest data...';
-      if (btnLog) btnLog.textContent = 'Updating watchlist and daily picks...';
-      setTimeout(() => { window.location.reload(); }, 800);
+      if (barInner) barInner.style.width = '30%';
+      if (btnText) btnText.textContent = 'Nifty 500 scan in progress...';
+      if (btnLog) btnLog.textContent = 'Scoring technical setups, Mansfield RS, and Commodities...';
+
+      let progressPct = 30;
+      const pollTimer = setInterval(async () => {
+        try {
+          progressPct = Math.min(progressPct + 5, 90);
+          if (barInner) barInner.style.width = progressPct + '%';
+
+          const sResp = await fetch(statusUrl);
+          if (sResp.ok) {
+            const sData = await sResp.json();
+            if (!sData.scan_in_progress) {
+              clearInterval(pollTimer);
+              if (barInner) barInner.style.width = '100%';
+              if (btnText) btnText.textContent = 'Scan complete!';
+              if (btnLog) btnLog.textContent = 'Reloading latest scan report...';
+              setTimeout(() => { window.location.reload(); }, 600);
+            }
+          }
+        } catch (e) {
+          // Keep polling if transient network hiccup
+        }
+      }, 2000);
+
+      // Safety timeout after 120 seconds
+      setTimeout(() => {
+        clearInterval(pollTimer);
+        if (overlay && overlay.style.display !== 'none') {
+          overlay.style.display = 'none';
+          window.location.reload();
+        }
+      }, 120000);
+
     } else {
       throw new Error(`Server returned status ${res.status}`);
     }
@@ -3374,13 +3500,56 @@ function getSwingRingColor(s) {
 
 function renderSwingRadar() {
   const allMtf = getSwingData();
-  const filtered = applySwingPreset(allMtf);
+  let filtered = applySwingPreset(allMtf);
 
-  // Sort
+  // Filter stocks by Title / Symbol / Badge / Reason search box
+  const q = (document.getElementById('swingTitleFilter')?.value || '').trim().toLowerCase();
+  if (q) {
+    filtered = filtered.filter(s => 
+      (s.symbol && s.symbol.toLowerCase().includes(q)) ||
+      (s.name && s.name.toLowerCase().includes(q)) ||
+      (s.swing_badge && s.swing_badge.toLowerCase().includes(q)) ||
+      (s.swing_reason && s.swing_reason.toLowerCase().includes(q)) ||
+      (s.swing_action && s.swing_action.toLowerCase().includes(q)) ||
+      (s.cap_category && s.cap_category.toLowerCase().includes(q))
+    );
+  }
+
+  // Multi-column sorting (handles both numbers & string titles)
   const sorted = [...filtered].sort((a, b) => {
-    const av = a[swingSortCol] ?? -999;
-    const bv = b[swingSortCol] ?? -999;
+    let av = a[swingSortCol];
+    let bv = b[swingSortCol];
+
+    if (swingSortCol === 'index') {
+      av = allMtf.indexOf(a);
+      bv = allMtf.indexOf(b);
+    } else if (swingSortCol === 'cmf') {
+      av = a.cmf ?? (a.is_order_flow_bull ? 1 : 0);
+      bv = b.cmf ?? (b.is_order_flow_bull ? 1 : 0);
+    }
+
+    if (av === undefined || av === null) av = (typeof bv === 'string' ? '' : -999999);
+    if (bv === undefined || bv === null) bv = (typeof av === 'string' ? '' : -999999);
+
+    if (typeof av === 'string' || typeof bv === 'string') {
+      return swingSortDir * String(av).localeCompare(String(bv));
+    }
     return swingSortDir * (av - bv);
+  });
+
+  // Update header column sort indicators (↑ / ↓ / ↕)
+  const swingCols = ['index','symbol','swing_score','rs_rating','swing_badge','ltp','volume_spike','rsi','momentum','cmf','swing_sl','swing_t1','swing_t2','swing_reason','swing_action'];
+  swingCols.forEach(col => {
+    const el = document.getElementById('swing_sort_' + col);
+    if (el) {
+      if (swingSortCol === col) {
+        el.textContent = swingSortDir === -1 ? '↓' : '↑';
+        el.style.color = 'var(--accent)';
+      } else {
+        el.textContent = '↕';
+        el.style.color = 'var(--muted)';
+      }
+    }
   });
 
   // Update banner counts
@@ -3395,12 +3564,20 @@ function renderSwingRadar() {
 
   // Result count
   const rcEl = document.getElementById('swingResultCount');
-  if (rcEl) rcEl.textContent = `Showing ${sorted.length} swing stocks matching current preset`;
+  if (rcEl) {
+    const filterNotice = q ? ` (filtered by "${q}")` : '';
+    rcEl.textContent = `Showing ${sorted.length} swing stocks matching current preset${filterNotice}`;
+  }
 
-  // Top 10 Spotlight Cards
+  // Top 10 Spotlight Cards (Always top 10 highest swing_score stocks overall, strictly sorted #1 to #10)
   const spotlight = document.getElementById('swingSpotlight');
   if (spotlight) {
-    const top10 = sorted.slice(0, 10);
+    const top10 = [...allMtf].sort((a, b) => 
+      (b.swing_score || 0) - (a.swing_score || 0) || 
+      (b.total_score || 0) - (a.total_score || 0) || 
+      (b.rs_rating || 0) - (a.rs_rating || 0) || 
+      (a.symbol || '').localeCompare(b.symbol || '')
+    ).slice(0, 10);
     if (top10.length === 0) {
       spotlight.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px">No stocks match this filter.</div>';
     } else {
@@ -3436,8 +3613,9 @@ function renderSwingRadar() {
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;font-size:11px;margin-bottom:10px">
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
-              <div style="color:var(--muted);font-size:10px">LTP</div>
-              <div style="font-weight:700;color:#fff">₹${(s.ltp||0).toFixed(1)}</div>
+              <div style="color:var(--muted);font-size:10px;display:flex;align-items:center;justify-content:center;gap:3px">LTP <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#10b981;box-shadow:0 0 4px #10b981"></span></div>
+              <div style="font-weight:700;color:#fff;font-size:12px">₹${(s.ltp||0).toFixed(2)}</div>
+              ${s.day_chg_pct !== undefined ? `<div style="font-size:9px;font-weight:700;color:${s.day_chg_pct>=0?'#34d399':'#f87171'}">${s.day_chg_pct>=0?'+':''}${s.day_chg_pct.toFixed(2)}%</div>` : ''}
             </div>
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
               <div style="color:var(--muted);font-size:10px">RS</div>
@@ -3895,7 +4073,9 @@ function renderLtWatchlist() {
       ? SCREENER_DATA.find(s => s.symbol === item.symbol)
       : null;
     if (live) {
-      item.ltp = live.ltp || item.ltp || 0;
+      // Use live.ltp if it's a valid positive number; otherwise keep existing item.ltp
+      if (live.ltp != null && live.ltp > 0) item.ltp = live.ltp;
+      else if (item.ltp == null || item.ltp === 0) item.ltp = live.ltp || 0;
       item.rsi = live.rsi || item.rsi || 50;
       item.trend = live.trend || item.trend || 'Consolidation';
       item.trend_badge = live.tech_rating || item.trend_badge || '🟡 Consolidation Phase';
@@ -4327,24 +4507,6 @@ function init() {
   localStorage.removeItem('quality_watchlist_v6');
   localStorage.removeItem('quality_watchlist_v7');
 
-  // Client-side fallback if SCREENER_DATA is empty
-  if (typeof SCREENER_DATA === 'undefined' || !SCREENER_DATA || !Array.isArray(SCREENER_DATA) || SCREENER_DATA.length === 0) {
-    console.warn('SCREENER_DATA is empty. Attempting dynamic fetch of /screener_data.json...');
-    fetch('/screener_data.json')
-      .then(r => r.json())
-      .then(data => {
-        if (data && Array.isArray(data) && data.length > 0) {
-          SCREENER_DATA = data;
-          populateSectorFilter();
-          applyFilters();
-          renderWatchlist();
-          renderLtWatchlist();
-          updateWlCount();
-        }
-      })
-      .catch(err => console.warn('Client fallback fetch error:', err));
-  }
-
   // Always initialize Watchlist directly from fresh server scan
   const freshServerWatchlist = JSON.parse(JSON.stringify(WATCHLIST_SEED || []));
   
@@ -4380,7 +4542,6 @@ function init() {
 
   renderMarketStatusHeader();
   startPolling();
-  refreshLiveLTP(true);
   setInterval(renderMarketStatusHeader, 30000);
 
   checkStartupScanStatus();
@@ -4420,10 +4581,9 @@ function checkStartupScanStatus() {
           overlay.style.display = 'none';
         }
         if (banner) {
-          banner.style.background = 'linear-gradient(135deg,rgba(16,185,129,0.35),rgba(5,150,105,0.35))';
-          banner.innerHTML = `<span>✅</span> <span>Scan complete! Reloading latest data...</span>`;
-          setTimeout(() => window.location.reload(), 1000);
-        } else if (wasScanning) {
+          banner.remove();
+        }
+        if (wasScanning) {
           window.location.reload();
         }
         if (startupScanPoller) clearInterval(startupScanPoller);
@@ -4432,129 +4592,82 @@ function checkStartupScanStatus() {
     .catch(() => {});
 }
 
-// ── Auto-Add Top Suggestions ─────────────────────────────────────────────
-function autoAddTopSuggestions(silent = false) {
-  const available = CONFIG.max_stocks - watchlist.length;
-  if (available <= 0) {
-    if (!silent) alert('Watchlist is already full (20/20 slots used).');
-    return;
-  }
-  const qualified = SCREENER_DATA.filter(s => s.qualified || s.total_score >= 55).sort((a,b) => b.total_score - a.total_score);
-  const currentSyms = new Set(watchlist.map(w => w.symbol));
-  let addedCount = 0;
-
-  for (const s of qualified) {
-    if (watchlist.length >= CONFIG.max_stocks) break;
-    if (!currentSyms.has(s.symbol)) {
-      const ltp = s.ltp || 1;
-      const qty = Math.max(1, Math.floor(CONFIG.phase_budget_per_stock / ltp));
-      const newItem = {
-        symbol: s.symbol,
-        ticker: s.ticker,
-        name: s.name,
-        qty: qty,
-        avg_cost: ltp,
-        total_invested: Math.round(ltp * qty * 100) / 100,
-        added_at: new Date().toISOString().slice(0,10),
-        score_at_entry: s.total_score,
-        strength_at_entry: s.strength,
-        value_at_entry: s.value,
-        momentum_at_entry: s.momentum,
-        roe_at_entry: s.roe_pct,
-        de_at_entry: s.de_ratio,
-        npm_at_entry: s.npm_pct,
-        current_score: s.total_score,
-        current_strength: s.strength,
-        current_value: s.value,
-        current_momentum: s.momentum,
-        ltp: ltp,
-        sector: s.sector,
-        pe: s.pe,
-        roe_pct: s.roe_pct,
-        de_ratio: s.de_ratio,
-        npm_pct: s.npm_pct,
-        rsi: s.rsi,
-        wk52_return_pct: s.wk52_return_pct,
-        volume_spike: s.volume_spike,
-        today_volume: s.today_volume,
-        avg_volume_10d: s.avg_volume_10d,
-        news: s.news || [],
-        alerts: [],
-        auto_added: true
-      };
-      watchlist.push(newItem);
-      currentSyms.add(s.symbol);
-      addedCount++;
-    }
-  }
-
-  if (addedCount > 0) {
-    saveWatchlist();
-    updateWlCount();
-    renderTable();
-    renderStats();
-    renderWatchlist();
-    if (!silent) alert(`⚡ Auto-added ${addedCount} top qualified stock suggestions to your watchlist!`);
-  } else if (!silent) {
-    alert('No new top qualified stock suggestions found to add.');
-  }
+function formatAgo(ms) {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  return `${h}h ago`;
 }
 
-
-// ── Live LTP Polling System ───────────────────────────────────────────────
-function updateLtpBadgeStatus() {
+function updateLtpBadgeStatus(lastTimeStr, polledCount, attemptedCount, staleCount) {
   const dot = document.getElementById('ltpStatusDot');
   const txt = document.getElementById('ltpStatusText');
   if (!txt) return;
 
-  const isOpen = (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.is_open);
-  const isWeekend = (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.is_weekend);
-  const isHoliday = (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.is_holiday);
-
-  if (!isOpen) {
-    if (dot) {
-      dot.style.background = '#ef4444';
-      dot.style.boxShadow = '0 0 6px #ef4444';
-    }
-    if (isWeekend) {
-      txt.textContent = '🔴 Weekend — LTP Polling Stopped';
-    } else if (isHoliday) {
-      txt.textContent = '🔴 Exchange Holiday — LTP Polling Stopped';
-    } else {
-      txt.textContent = '🔴 Market Closed — LTP Polling Stopped';
-    }
-  } else {
-    if (dot) {
-      dot.style.background = '#10b981';
-      dot.style.boxShadow = '0 0 6px #10b981';
-    }
-    if (pollIntervalMs === 0) {
-      txt.textContent = 'Live LTP Polling: Off';
-    } else {
-      txt.textContent = `🟢 Live LTP Polling: Every ${pollIntervalMs / 1000}s`;
-    }
+  if (pollIntervalMs === 0) {
+    if (dot) { dot.style.background = '#6b7280'; dot.style.boxShadow = 'none'; }
+    txt.textContent = 'Live LTP Polling: Off';
+    return;
   }
+
+  // Only treat this as a real failure once we've actually attempted a cycle and it
+  // returned zero fresh prices — before the first cycle runs, attemptedCount is undefined.
+  const hasFailed = attemptedCount != null && attemptedCount > 0 && (!polledCount || polledCount === 0);
+
+  if (hasFailed) {
+    if (dot) { dot.style.background = '#ef4444'; dot.style.boxShadow = '0 0 8px #ef4444'; }
+    const sinceOk = lastLtpSuccessTime ? formatAgo(Date.now() - lastLtpSuccessTime) : 'never this session';
+    const staleTag = staleCount > 0 ? ` (showing ${staleCount} stale scan-time prices)` : '';
+    txt.textContent = `🔴 Live LTP Polling: Failed — last success ${sinceOk}${staleTag}`;
+    return;
+  }
+
+  if (dot) { dot.style.background = '#10b981'; dot.style.boxShadow = '0 0 8px #10b981'; }
+  const timeTag = lastTimeStr ? ` @ ${lastTimeStr}` : '';
+  const countTag = (polledCount != null && polledCount > 0) ? ` — ${polledCount} prices synced${timeTag}` : (lastTimeStr ? ` — Last Sync: ${lastTimeStr}` : '');
+  txt.textContent = `🟢 Live LTP Polling: Active (${pollIntervalMs / 1000}s)${countTag}`;
 }
 
 async function fetchLiveLTPForSymbol(ticker) {
-  // 1. Try local server IF on Desktop PC
+  const ts = Date.now();
   if (isRealDesktopPC()) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
-      const rUrl = `http://localhost:${window.location.port}/api/ltp?ticker=${encodeURIComponent(ticker)}`;
-      const res = await fetch(rUrl, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.price && data.price > 0) return data.price;
-      }
-    } catch (e) {}
+    const currentPort = window.location.port || '5050';
+    const localEps = [
+      window.location.origin && window.location.origin.startsWith('http') ? `${window.location.origin}/api/ltp?ticker=${encodeURIComponent(ticker)}&_t=${ts}` : null,
+      `http://127.0.0.1:${currentPort}/api/ltp?ticker=${encodeURIComponent(ticker)}&_t=${ts}`,
+      `http://localhost:${currentPort}/api/ltp?ticker=${encodeURIComponent(ticker)}&_t=${ts}`,
+      `http://127.0.0.1:5050/api/ltp?ticker=${encodeURIComponent(ticker)}&_t=${ts}`,
+      `http://localhost:5050/api/ltp?ticker=${encodeURIComponent(ticker)}&_t=${ts}`,
+      `http://127.0.0.1:8000/api/ltp?ticker=${encodeURIComponent(ticker)}&_t=${ts}`,
+      `http://localhost:8000/api/ltp?ticker=${encodeURIComponent(ticker)}&_t=${ts}`,
+      `http://127.0.0.1:8080/api/ltp?ticker=${encodeURIComponent(ticker)}&_t=${ts}`,
+      `http://localhost:8080/api/ltp?ticker=${encodeURIComponent(ticker)}&_t=${ts}`
+    ].filter((ep, idx, self) => ep && self.indexOf(ep) === idx);
+
+    for (const ep of localEps) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
+        const res = await fetch(ep, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && (data.price || data.ltp) && (data.price > 0 || data.ltp > 0)) {
+            return parseFloat(data.price || data.ltp);
+          }
+          const pObj = data.ltps || data.prices || {};
+          const cleanTicker = ticker.replace('.NS', '');
+          const p = pObj[ticker] || pObj[cleanTicker] || pObj[ticker + '.NS'];
+          if (p && p > 0) return parseFloat(p);
+        }
+      } catch (e) {}
+    }
   }
 
-  const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1m&range=1d`;
-  
-  // 2. Try Direct Yahoo Finance API
+  const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1m&range=1d&_t=${ts}`;
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2500);
@@ -4563,16 +4676,13 @@ async function fetchLiveLTPForSymbol(ticker) {
     if (res.ok) {
       const data = await res.json();
       const meta = data.chart?.result?.[0]?.meta;
-      if (meta && meta.regularMarketPrice) return meta.regularMarketPrice;
+      if (meta && meta.regularMarketPrice && meta.regularMarketPrice > 0) return meta.regularMarketPrice;
     }
   } catch (e) {}
 
-  // 3. High-availability CORS proxies for client browsers
   const proxies = [
-    `https://corsproxy.io/?${encodeURIComponent(yUrl)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(yUrl)}`,
     `https://api.allorigins.win/raw?url=${encodeURIComponent(yUrl)}`,
-    `https://finplus-g0b5.onrender.com/api/ltp?ticker=${encodeURIComponent(ticker)}`
+    `https://corsproxy.io/?${encodeURIComponent(yUrl)}`
   ];
 
   for (const px of proxies) {
@@ -4598,26 +4708,15 @@ async function fetchLiveLTPForSymbol(ticker) {
 }
 
 async function refreshLiveLTP(manual = false) {
-  const currentMkt = calculateCurrentMarketStatus();
-  const isOpen = currentMkt.is_open || currentMkt.is_equity_open;
-
-  if (!isOpen && !manual) {
-    if (pollIntervalTimer) {
-      clearInterval(pollIntervalTimer);
-      pollIntervalTimer = null;
-    }
-    updateLtpBadgeStatus();
-    return;
-  }
-
   const dot = document.getElementById('ltpStatusDot');
   const txt = document.getElementById('ltpStatusText');
   if (dot) dot.classList.add('updating');
-  if (txt && manual) txt.textContent = 'Refreshing prices...';
+  if (txt) txt.textContent = manual ? 'Refreshing prices...' : 'Polling LTP...';
 
   let priceChanged = false;
 
   const symbolsToPoll = new Map();
+  symbolsToPoll.set('NIFTY_INDEX', '^NSEI');
   if (typeof TOP_PICK !== 'undefined' && TOP_PICK && TOP_PICK.symbol) {
     symbolsToPoll.set(TOP_PICK.symbol, TOP_PICK.ticker || TOP_PICK.symbol + '.NS');
   }
@@ -4627,44 +4726,140 @@ async function refreshLiveLTP(manual = false) {
   if (typeof ltWatchlist !== 'undefined' && Array.isArray(ltWatchlist)) {
     ltWatchlist.forEach(w => symbolsToPoll.set(w.symbol, w.ticker || w.symbol + '.NS'));
   }
-  if (typeof filteredData !== 'undefined' && Array.isArray(filteredData)) {
-    filteredData.slice(0, 25).forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
+  if (typeof LT_WATCHLIST !== 'undefined' && Array.isArray(LT_WATCHLIST)) {
+    LT_WATCHLIST.forEach(w => symbolsToPoll.set(w.symbol, w.ticker || w.symbol + '.NS'));
+  }
+  if (typeof PENNY_STOCKS_DATA !== 'undefined' && Array.isArray(PENNY_STOCKS_DATA)) {
+    PENNY_STOCKS_DATA.forEach(p => symbolsToPoll.set(p.symbol, p.ticker || p.symbol + '.NS'));
   }
   if (typeof FNO_DATA !== 'undefined' && Array.isArray(FNO_DATA)) {
     FNO_DATA.forEach(f => symbolsToPoll.set(f.symbol, f.ticker || f.symbol + '.NS'));
   }
-
-  const fetchedPrices = new Map();
-  const tickerList = Array.from(symbolsToPoll.values());
-
-  if (isRealDesktopPC() && tickerList.length > 0) {
+  if (typeof getSwingData === 'function') {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-      const bUrl = `http://localhost:${window.location.port}/api/ltp?ticker=${encodeURIComponent(tickerList.join(','))}`;
-      const res = await fetch(bUrl, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        const pricesObj = data.prices || {};
-        for (const [sym, ticker] of symbolsToPoll.entries()) {
-          const p = pricesObj[ticker] || pricesObj[sym] || pricesObj[sym + '.NS'];
-          if (p && p > 0) fetchedPrices.set(sym, p);
-        }
+      const swingPicks = getSwingData();
+      if (Array.isArray(swingPicks)) {
+        swingPicks.forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
       }
-    } catch (e) {}
+    } catch(e) {}
+  }
+  if (typeof filteredData !== 'undefined' && Array.isArray(filteredData)) {
+    let effSize = (typeof pageSize !== 'undefined' && pageSize === 'all') ? filteredData.length : parseInt(pageSize || 50);
+    let startIdx = (typeof currentPage !== 'undefined') ? Math.max(0, (currentPage - 1) * effSize) : 0;
+    let visibleSlice = filteredData.slice(startIdx, startIdx + effSize);
+    visibleSlice.forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
+  }
+  if (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA)) {
+    SCREENER_DATA.filter(s => s.qualified).forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
+    SCREENER_DATA.slice(0, 100).forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
   }
 
+  const fetchedPrices = new Map();
+  const stalePrices = new Set();
+  const tickerList = Array.from(symbolsToPoll.values());
+  const attempted = symbolsToPoll.size;
+
+  const ts = Date.now();
+  const currentPort = window.location.port || '5050';
+  const originEp = window.location.origin && window.location.origin.startsWith('http') ? window.location.origin + '/api/ltp' : null;
+  // The hardcoded localhost/127.0.0.1 fallback ports only make sense when this page
+  // itself is being served from a local dev instance — on a deployed/production
+  // browser (or inside the Capacitor WebView) they can never resolve to the real
+  // server and just waste time before falling through to originEp/per-symbol fetch.
+  const localEndpoints = isRealDesktopPC() ? [
+    originEp,
+    `http://127.0.0.1:${currentPort}/api/ltp`,
+    `http://localhost:${currentPort}/api/ltp`,
+    'http://127.0.0.1:5050/api/ltp',
+    'http://localhost:5050/api/ltp',
+    'http://127.0.0.1:8000/api/ltp',
+    'http://localhost:8000/api/ltp',
+    'http://127.0.0.1:8080/api/ltp',
+    'http://localhost:8080/api/ltp'
+  ].filter((ep, idx, self) => ep && self.indexOf(ep) === idx) : (originEp ? [originEp] : []);
+
+  for (const ep of localEndpoints) {
+    if (fetchedPrices.size > 0) break;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+      let res = await fetch(ep, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbols: tickerList }),
+        signal: controller.signal
+      }).catch(() => null);
+
+      if (!res || !res.ok) {
+        const bUrl = `${ep}?symbols=${encodeURIComponent(tickerList.slice(0, 100).join(','))}&_t=${ts}`;
+        res = await fetch(bUrl, { signal: controller.signal }).catch(() => null);
+      }
+
+      clearTimeout(timeoutId);
+      if (res && res.ok) {
+        const data = await res.json();
+        const pricesObj = data.ltps || data.prices || {};
+        const staleObj = data.stale || {};
+        for (const [sym, ticker] of symbolsToPoll.entries()) {
+          const cleanSym = sym.replace('.NS', '');
+          const cleanTicker = ticker.replace('.NS', '');
+          const p = pricesObj[ticker] || pricesObj[sym] || pricesObj[cleanSym] || pricesObj[cleanTicker] || pricesObj[sym + '.NS'] || pricesObj[ticker + '.NS'];
+          if (p && p > 0) {
+            fetchedPrices.set(sym, parseFloat(p));
+            if (staleObj[ticker] || staleObj[sym] || staleObj[cleanSym] || staleObj[cleanTicker]) {
+              stalePrices.add(sym);
+            }
+          }
+        }
+      } else if (!res) {
+        lastLtpError = { when: Date.now(), stage: 'bulk', message: `no response from ${ep}` };
+      }
+    } catch (e) {
+      lastLtpError = { when: Date.now(), stage: 'bulk', message: (e && e.message) || String(e) };
+    }
+  }
+
+  // Per-symbol fallback for anything the bulk call missed. No longer hard-capped at
+  // the first 60 unpolled symbols (that silently left larger watchlists/screener
+  // pages stale with no indication to the user) — instead bounded by a wall-clock
+  // budget, so a slow/offline stretch (e.g. while the server is busy running the
+  // startup scan) can't stall an entire poll cycle for minutes; whatever doesn't
+  // finish in time is simply picked up on the next cycle, 10s later by default.
   const unpolled = Array.from(symbolsToPoll.entries()).filter(([sym, ticker]) => !fetchedPrices.has(sym));
   if (unpolled.length > 0) {
-    await Promise.all(unpolled.map(async ([sym, ticker]) => {
-      const p = await fetchLiveLTPForSymbol(ticker);
-      if (p && p > 0) fetchedPrices.set(sym, p);
-    }));
+    const chunkSize = 15;
+    const fallbackDeadline = Date.now() + 12000;
+    for (let i = 0; i < unpolled.length; i += chunkSize) {
+      if (Date.now() > fallbackDeadline) {
+        lastLtpError = { when: Date.now(), stage: 'fallback', message: `Time budget reached — ${unpolled.length - i} symbol(s) not retried this cycle` };
+        break;
+      }
+      const chunk = unpolled.slice(i, i + chunkSize);
+      await Promise.all(chunk.map(async ([sym, ticker]) => {
+        const p = await fetchLiveLTPForSymbol(ticker);
+        if (p && p > 0) fetchedPrices.set(sym, p);
+      }));
+    }
   }
 
   for (const [sym, newPrice] of fetchedPrices.entries()) {
-    if (typeof TOP_PICK !== 'undefined' && TOP_PICK && TOP_PICK.symbol === sym) {
+    const cleanSym = sym.replace('.NS', '');
+
+    if (sym === 'NIFTY_INDEX' || sym === '^NSEI' || (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.nifty && MARKET_INFO.nifty.symbol === sym)) {
+      if (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.nifty) {
+        if (Math.abs((MARKET_INFO.nifty.ltp || 0) - newPrice) > 0.01) {
+          MARKET_INFO.nifty.old_ltp = MARKET_INFO.nifty.ltp;
+          MARKET_INFO.nifty.ltp = newPrice;
+          if (MARKET_INFO.nifty.prev_close && MARKET_INFO.nifty.prev_close > 0) {
+            MARKET_INFO.nifty.change_pct = Math.round(((newPrice - MARKET_INFO.nifty.prev_close) / MARKET_INFO.nifty.prev_close) * 10000) / 100;
+          }
+          priceChanged = true;
+        }
+      }
+    }
+
+    if (typeof TOP_PICK !== 'undefined' && TOP_PICK && (TOP_PICK.symbol === sym || TOP_PICK.symbol === cleanSym)) {
       if (Math.abs((TOP_PICK.ltp || TOP_PICK.current_ltp || 0) - newPrice) > 0.01) {
         TOP_PICK.old_ltp = TOP_PICK.ltp;
         TOP_PICK.ltp = newPrice;
@@ -4677,33 +4872,68 @@ async function refreshLiveLTP(manual = false) {
       }
     }
 
-    const sc = SCREENER_DATA.find(s => s.symbol === sym);
-    if (sc && Math.abs(sc.ltp - newPrice) > 0.01) {
-      sc.old_ltp = sc.ltp;
-      sc.ltp = newPrice;
-      priceChanged = true;
-    }
-    const wl = watchlist.find(w => w.symbol === sym);
-    if (wl && Math.abs(wl.ltp - newPrice) > 0.01) {
-      wl.old_ltp = wl.ltp;
-      wl.ltp = newPrice;
-      if (wl.avg_cost && wl.qty > 0) {
-        wl.unrealised_pnl = Math.round((wl.ltp - wl.avg_cost) * wl.qty * 100) / 100;
-        wl.unrealised_pct = Math.round(((wl.ltp - wl.avg_cost) / wl.avg_cost) * 10000) / 100;
-        wl.current_value = Math.round(wl.ltp * wl.qty * 100) / 100;
+    if (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA)) {
+      const sc = SCREENER_DATA.find(s => s.symbol === sym || s.symbol === cleanSym);
+      if (sc && Math.abs((sc.ltp || 0) - newPrice) > 0.01) {
+        sc.old_ltp = sc.ltp;
+        sc.ltp = newPrice;
+        if (sc.gtt_breakout_level && sc.gtt_breakout_level > 0) {
+          sc.dist_to_gtt_pct = Math.round(((sc.ltp - sc.gtt_breakout_level) / sc.gtt_breakout_level) * 10000) / 100;
+          if (sc.ltp >= sc.gtt_breakout_level && (sc.status === 'WAIT' || sc.swing_action === 'WAIT FOR BREAKOUT')) {
+            sc.status = 'BUY_NOW';
+            sc.swing_action = 'BUY NOW';
+          }
+        }
+        if (sc.target_price && sc.target_price > 0) {
+          sc.dist_to_target_pct = Math.round(((sc.target_price - sc.ltp) / sc.ltp) * 10000) / 100;
+        }
+        if (sc.stop_loss && sc.stop_loss > 0) {
+          sc.dist_to_sl_pct = Math.round(((sc.ltp - sc.stop_loss) / sc.ltp) * 10000) / 100;
+        }
+        priceChanged = true;
       }
-      priceChanged = true;
     }
+
+    if (typeof watchlist !== 'undefined' && Array.isArray(watchlist)) {
+      const wl = watchlist.find(w => w.symbol === sym || w.symbol === cleanSym);
+      if (wl && Math.abs(wl.ltp - newPrice) > 0.01) {
+        wl.old_ltp = wl.ltp;
+        wl.ltp = newPrice;
+        if (wl.avg_cost && wl.qty > 0) {
+          wl.unrealised_pnl = Math.round((wl.ltp - wl.avg_cost) * wl.qty * 100) / 100;
+          wl.unrealised_pct = Math.round(((wl.ltp - wl.avg_cost) / wl.avg_cost) * 10000) / 100;
+          wl.current_value = Math.round(wl.ltp * wl.qty * 100) / 100;
+        }
+        priceChanged = true;
+      }
+    }
+
     if (typeof ltWatchlist !== 'undefined' && Array.isArray(ltWatchlist)) {
-      const lt = ltWatchlist.find(w => w.symbol === sym);
+      const lt = ltWatchlist.find(w => w.symbol === sym || w.symbol === cleanSym);
+      if (lt && Math.abs((lt.ltp || 0) - newPrice) > 0.01) {
+        lt.old_ltp = lt.ltp;
+        lt.ltp = newPrice;
+        if (lt.gtt_breakout_level && lt.gtt_breakout_level > 0) {
+          lt.dist_to_gtt_pct = Math.round(((lt.ltp - lt.gtt_breakout_level) / lt.gtt_breakout_level) * 10000) / 100;
+          if (lt.ltp >= lt.gtt_breakout_level && lt.status === 'WAIT') {
+            lt.status = 'BUY_NOW';
+          }
+        }
+        priceChanged = true;
+      }
+    }
+
+    if (typeof LT_WATCHLIST !== 'undefined' && Array.isArray(LT_WATCHLIST)) {
+      const lt = LT_WATCHLIST.find(w => w.symbol === sym || w.symbol === cleanSym);
       if (lt && Math.abs((lt.ltp || 0) - newPrice) > 0.01) {
         lt.old_ltp = lt.ltp;
         lt.ltp = newPrice;
         priceChanged = true;
       }
     }
+
     if (typeof FNO_DATA !== 'undefined' && Array.isArray(FNO_DATA)) {
-      const fn = FNO_DATA.find(f => f.symbol === sym);
+      const fn = FNO_DATA.find(f => f.symbol === sym || f.symbol === cleanSym);
       if (fn && Math.abs(fn.ltp - newPrice) > 0.01) {
         fn.old_ltp = fn.ltp;
         fn.ltp = newPrice;
@@ -4713,25 +4943,59 @@ async function refreshLiveLTP(manual = false) {
         priceChanged = true;
       }
     }
+
+    if (typeof PENNY_STOCKS_DATA !== 'undefined' && Array.isArray(PENNY_STOCKS_DATA)) {
+      const ps = PENNY_STOCKS_DATA.find(p => p.symbol === sym || p.symbol === cleanSym);
+      if (ps && Math.abs((ps.ltp || 0) - newPrice) > 0.01) {
+        ps.old_ltp = ps.ltp;
+        ps.ltp = newPrice;
+        if (ps.target_price && ps.target_price > 0) {
+          ps.dist_to_target_pct = Math.round(((ps.target_price - ps.ltp) / ps.ltp) * 10000) / 100;
+        }
+        if (ps.stop_loss && ps.stop_loss > 0) {
+          ps.dist_to_sl_pct = Math.round(((ps.ltp - ps.stop_loss) / ps.ltp) * 10000) / 100;
+        }
+        priceChanged = true;
+      }
+    }
   }
 
+  const nowStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
   if (dot) dot.classList.remove('updating');
-  updateLtpBadgeStatus();
 
-  if (priceChanged) {
-    saveWatchlist();
-    renderStats();
-    renderTable();
-    renderWatchlist();
-    if (typeof renderLtWatchlist === 'function') renderLtWatchlist();
-    if (typeof renderFnoTab === 'function') renderFnoTab();
-    if (typeof renderTopPick === 'function') renderTopPick();
+  // Only count a cycle as a real success if at least some prices are actually fresh —
+  // a cycle where every returned price is a stale scan-time fallback means live
+  // fetching is failing even though the server still answered with *something*.
+  const freshCount = fetchedPrices.size - stalePrices.size;
+  if (freshCount > 0) {
+    lastLtpSuccessTime = Date.now();
+    lastLtpError = null;
+  } else if (attempted > 0 && !lastLtpError) {
+    lastLtpError = fetchedPrices.size > 0
+      ? { when: Date.now(), stage: 'all', message: `All ${fetchedPrices.size} prices this cycle are stale fallbacks` }
+      : { when: Date.now(), stage: 'all', message: 'No prices returned this cycle' };
+  }
+  updateLtpBadgeStatus(nowStr, freshCount, attempted, stalePrices.size);
+
+  saveWatchlist();
+  renderStats();
+  renderTable();
+  renderWatchlist();
+  if (typeof renderLtWatchlist === 'function') renderLtWatchlist();
+  if (typeof renderFnoTab === 'function') renderFnoTab();
+  if (typeof renderTopPick === 'function') renderTopPick();
+  if (typeof renderSwingRadar === 'function') renderSwingRadar();
+  if (typeof renderSrBreakouts === 'function') renderSrBreakouts();
+  if (typeof renderNiftyRegimeBanner === 'function') renderNiftyRegimeBanner();
+  if (typeof renderPennyStocksTab === 'function') renderPennyStocksTab();
+
+  if (priceChanged || manual) {
     flashUpdatedPrices();
   }
 }
 
 function flashUpdatedPrices() {
-  document.querySelectorAll('.price, .wl-ltp').forEach(el => {
+  document.querySelectorAll('.price, .wl-ltp, .swing-card').forEach(el => {
     el.classList.remove('price-up', 'price-down');
     void el.offsetWidth;
     el.classList.add('price-up');
@@ -4744,8 +5008,6 @@ function startPolling() {
     clearInterval(pollIntervalTimer);
     pollIntervalTimer = null;
   }
-  const currentMkt = calculateCurrentMarketStatus();
-  const isOpen = currentMkt.is_open || currentMkt.is_equity_open;
 
   if (pollIntervalMs <= 0) {
     updateLtpBadgeStatus();
@@ -4753,21 +5015,27 @@ function startPolling() {
   }
 
   refreshLiveLTP(false);
-  if (isOpen) {
-    pollIntervalTimer = setInterval(() => refreshLiveLTP(false), pollIntervalMs);
-  }
+  pollIntervalTimer = setInterval(() => refreshLiveLTP(false), pollIntervalMs);
   updateLtpBadgeStatus();
 }
 
 function changePollInterval(val) {
   pollIntervalMs = parseInt(val);
   startPolling();
-  const currentMkt = calculateCurrentMarketStatus();
-  const isOpen = currentMkt.is_open || currentMkt.is_equity_open;
-  if (pollIntervalMs > 0 && isOpen) {
-    refreshLiveLTP(false);
-  }
 }
+
+// Pause polling while the tab/app is backgrounded instead of hammering the server
+// and Yahoo endpoints from every hidden tab; resume with an immediate refresh.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (pollIntervalTimer) {
+      clearInterval(pollIntervalTimer);
+      pollIntervalTimer = null;
+    }
+  } else {
+    startPolling();
+  }
+});
 
 function saveWatchlist() {
   const seedSyms = new Set(WATCHLIST_SEED.map(s => s.symbol));
@@ -4797,8 +5065,12 @@ function renderStats() {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  const tabs = ['screener', 'swing', 'watchlist', 'penny', 'fno', 'holidays'];
-  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', tabs[i] === tab));
+  // Both the desktop tab bar and mobile bottom nav carry a matching data-tab
+  // attribute, so a single lookup drives the active-highlight for both — previously
+  // the desktop bar used a hardcoded array matched to buttons by DOM position, which
+  // had silently drifted out of sync with the actual button order and highlighted
+  // the wrong tab as "active" on almost every switch.
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.mobile-nav-item').forEach(m => {
     m.classList.toggle('active', m.dataset.tab === tab);
   });
@@ -4999,7 +5271,7 @@ function renderFnoTab() {
     </div>
     <div class="fno-disclaimer">
       <span>⚠</span>
-      <span>These are <strong>underlying price signals</strong>, not option premium calls. Verify live IV, premium &amp; bid-ask from your broker's option chain before entering. Physical settlement applies on expiry — square off before expiry Thursday.</span>
+      <span>These are <strong>underlying price signals</strong>, not option premium calls. Verify live IV, premium &amp; bid-ask from your broker's option chain before entering. Physical settlement applies on expiry — square off before expiry Tuesday.</span>
     </div>
     <div class="filters">
       <div class="filter-group">
@@ -5076,52 +5348,38 @@ function renderPennyStocksTab() {
     }
   });
 
-  const buyNowCount = pennyList.filter(s => {
+  const getCategory = (s) => {
     const sym = (s.symbol || '').toUpperCase();
     const isB = hMap[sym] && hMap[sym].qty > 0;
-    return !isB && s.status === 'BUY_NOW';
-  }).length;
-  const boughtCount = pennyList.filter(s => {
-    const sym = (s.symbol || '').toUpperCase();
-    const isB = hMap[sym] && hMap[sym].qty > 0;
-    return isB || s.status === 'BOUGHT';
-  }).length;
-  const waitCount = pennyList.filter(s => {
-    const sym = (s.symbol || '').toUpperCase();
-    const isB = hMap[sym] && hMap[sym].qty > 0;
-    return !isB && s.status === 'WAIT';
-  }).length;
-  const watchingCount = pennyList.filter(s => {
-    const sym = (s.symbol || '').toUpperCase();
-    const isB = hMap[sym] && hMap[sym].qty > 0;
-    return !isB && (s.status === 'WATCHLIST' || s.status === 'WATCHING');
-  }).length;
+    if (isB || s.status === 'BOUGHT') return 'bought';
+    const st = (s.status || '').toUpperCase();
+    const badge = (s.status_badge || '').toUpperCase();
+    if (badge.includes('START SIP NOW') || st === 'START_SIP_NOW') {
+      return 'buy_now';
+    }
+    if (badge.includes('SIP ON DIP') || badge.includes('RETEST') || st === 'WAIT') {
+      return 'wait';
+    }
+    if (st === 'BUY_NOW' || st === 'BUY' || badge.includes('BUY NOW')) {
+      return 'buy_now';
+    }
+    return 'watching';
+  };
+
+  const buyNowCount = pennyList.filter(s => getCategory(s) === 'buy_now').length;
+  const boughtCount = pennyList.filter(s => getCategory(s) === 'bought').length;
+  const waitCount = pennyList.filter(s => getCategory(s) === 'wait').length;
+  const watchingCount = pennyList.filter(s => getCategory(s) === 'watching').length;
 
   let filtered = [...pennyList];
   if (pennyFilterCategory === 'buy_now') {
-    filtered = filtered.filter(s => {
-      const sym = (s.symbol || '').toUpperCase();
-      const isB = hMap[sym] && hMap[sym].qty > 0;
-      return !isB && s.status === 'BUY_NOW';
-    });
+    filtered = filtered.filter(s => getCategory(s) === 'buy_now');
   } else if (pennyFilterCategory === 'bought') {
-    filtered = filtered.filter(s => {
-      const sym = (s.symbol || '').toUpperCase();
-      const isB = hMap[sym] && hMap[sym].qty > 0;
-      return isB || s.status === 'BOUGHT';
-    });
+    filtered = filtered.filter(s => getCategory(s) === 'bought');
   } else if (pennyFilterCategory === 'wait') {
-    filtered = filtered.filter(s => {
-      const sym = (s.symbol || '').toUpperCase();
-      const isB = hMap[sym] && hMap[sym].qty > 0;
-      return !isB && s.status === 'WAIT';
-    });
+    filtered = filtered.filter(s => getCategory(s) === 'wait');
   } else if (pennyFilterCategory === 'watching') {
-    filtered = filtered.filter(s => {
-      const sym = (s.symbol || '').toUpperCase();
-      const isB = hMap[sym] && hMap[sym].qty > 0;
-      return !isB && (s.status === 'WATCHLIST' || s.status === 'WATCHING');
-    });
+    filtered = filtered.filter(s => getCategory(s) === 'watching');
   } else if (pennyFilterCategory === 'debt_free') {
     filtered = filtered.filter(s => s.de_ratio != null && s.de_ratio <= 0.15);
   } else if (pennyFilterCategory === 'high_roe') {
@@ -5978,11 +6236,20 @@ function sortTable(col) {
   else { sortCol = col; sortDir = -1; }
   document.querySelectorAll('th').forEach(th => {
     th.classList.remove('sorted-asc','sorted-desc');
-    if (th.textContent.replace(/ [↑↓]/,'').trim().toLowerCase().replace(/\s/g,'_') === col) {
+    if (th.textContent.replace(/ [↑↓↕]/,'').trim().toLowerCase().replace(/\s/g,'_') === col) {
       th.classList.add(sortDir === -1 ? 'sorted-desc' : 'sorted-asc');
     }
   });
-  filteredData.sort((a,b) => sortDir * ((a[sortCol]??-999) - (b[sortCol]??-999)));
+  filteredData.sort((a,b) => {
+    let av = a[sortCol];
+    let bv = b[sortCol];
+    if (av === undefined || av === null) av = (typeof bv === 'string' ? '' : -999999);
+    if (bv === undefined || bv === null) bv = (typeof av === 'string' ? '' : -999999);
+    if (typeof av === 'string' || typeof bv === 'string') {
+      return sortDir * String(av).localeCompare(String(bv));
+    }
+    return sortDir * (av - bv);
+  });
   renderTable();
 }
 
@@ -6546,6 +6813,28 @@ function openModal(symbol) {
       <div class="modal-metric"><div class="lbl">Avg Vol (10d)</div><div class="val">${s.avg_volume_10d?s.avg_volume_10d.toLocaleString():'—'}</div></div>
     </div>
 
+    ${(s.corporate_actions && s.corporate_actions.length > 0) ? `
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+      <h4 style="font-size:14px;font-weight:600;margin-bottom:10px;color:var(--accent)">🎁 Corporate Actions</h4>
+      <div style="display:flex;flex-direction:column;gap:8px;max-height:180px;overflow-y:auto;padding-right:4px">
+        ${s.corporate_actions.map(ca => `
+          <div style="background:var(--card2);padding:10px;border-radius:8px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--white)">${ca.subject || ca.purpose || 'Corporate Action'}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">
+                Ex-Date: <span style="color:var(--accent2);font-weight:600">${ca.ex_date || 'N/A'}</span>
+                ${ca.record_date ? ` · Record Date: ${ca.record_date}` : ''}
+              </div>
+            </div>
+            <span style="font-size:10px;padding:3px 8px;border-radius:12px;font-weight:700;background:rgba(255,193,7,0.15);color:#ffc107;border:1px solid rgba(255,193,7,0.3)">
+              ${ca.type || 'ACTION'}
+            </span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    ` : ''}
+
     ${(s.news && s.news.length > 0) ? `
     <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
       <h4 style="font-size:14px;font-weight:600;margin-bottom:10px;color:var(--accent2)">📰 Related News</h4>
@@ -6817,166 +7106,20 @@ function toggleLtHoldingsDrawer() {
   }
 }
 
-function promptLtDeposit() {
-  const amtStr = prompt('Enter Top-Up Capital Amount (₹) to add to LT available cash:');
-  if (!amtStr) return;
-  const amt = parseFloat(amtStr);
-  if (isNaN(amt) || amt <= 0) {
-    alert('Please enter a valid positive amount.');
-    return;
-  }
-
-  fetch('/api/lt-portfolio/deposit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ amount: amt })
-  }).then(r => r.json()).then(res => {
-    if (res.status === 'ok') {
-      alert(`✅ Successfully added ₹${amt.toFixed(2)} top-up capital!`);
-      if (res.summary) renderLtPortfolioSummary(res.summary);
-    } else {
-      alert(`❌ Deposit failed: ${res.message}`);
-    }
-  }).catch(err => alert('Error connecting to backend server.'));
-}
-
-function promptLtWithdrawal() {
-  const amtStr = prompt('Enter Capital Withdrawal Amount (₹) to deduct from LT available cash:');
-  if (!amtStr) return;
-  const amt = parseFloat(amtStr);
-  if (isNaN(amt) || amt <= 0) {
-    alert('Please enter a valid positive withdrawal amount.');
-    return;
-  }
-
-  fetch('/api/lt-portfolio/withdraw', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ amount: amt })
-  }).then(r => r.json()).then(res => {
-    if (res.status === 'ok') {
-      alert(`✅ Successfully recorded ₹${amt.toFixed(2)} capital withdrawal!`);
-      if (res.summary) renderLtPortfolioSummary(res.summary);
-    } else {
-      alert(`❌ Withdrawal failed: ${res.message}`);
-    }
-  }).catch(err => alert('Error connecting to backend server.'));
-}
-
-function promptLtAdjustment() {
-  const amtStr = prompt('Enter Broker Adjustment Amount (₹)\n\n(Use POSITIVE number for interest/credit, or NEGATIVE number for DP charges/fees):');
-  if (!amtStr) return;
-  const amt = parseFloat(amtStr);
-  if (isNaN(amt)) {
-    alert('Please enter a valid number.');
-    return;
-  }
-
-  fetch('/api/lt-portfolio/adjustment', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ amount: amt })
-  }).then(r => r.json()).then(res => {
-    if (res.status === 'ok') {
-      alert(`✅ Successfully recorded ₹${amt.toFixed(2)} broker adjustment!`);
-      if (res.summary) renderLtPortfolioSummary(res.summary);
-    } else {
-      alert(`❌ Adjustment failed: ${res.message}`);
-    }
-  }).catch(err => alert('Error connecting to backend server.'));
-}
-
 function openLtBuyModal(symbol, ltp) {
   let sym = symbol ? symbol.trim().toUpperCase() : '';
-  if (!sym) {
-    const symInput = prompt('Enter Stock Symbol to Record BUY (e.g. BEL, ASHOKLEY, POWERGRID):');
-    if (!symInput) return;
-    sym = symInput.trim().toUpperCase();
-    const found = (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA))
-      ? SCREENER_DATA.find(s => s.symbol === sym)
-      : null;
-    ltp = found ? found.ltp : 0;
-  }
-
-  const defaultPrice = ltp && ltp > 0 ? ltp.toFixed(2) : '';
-  const priceStr = prompt(`Record BUY Transaction for ${sym}\n\nEnter Buy Price per Share (₹):`, defaultPrice);
-  if (!priceStr) return;
-  const price = parseFloat(priceStr);
-  if (isNaN(price) || price <= 0) {
-    alert('Please enter a valid buy price.');
-    return;
-  }
-
-  const qtyStr = prompt(`Record BUY Transaction for ${sym} @ ₹${price.toFixed(2)}\n\nEnter Quantity of Shares Bought:`, '1');
-  if (!qtyStr) return;
-  const qty = parseInt(qtyStr, 10);
-  if (isNaN(qty) || qty <= 0) {
-    alert('Please enter a valid quantity.');
-    return;
-  }
-
-  const tradeVal = qty * price;
-  const brokerage = Math.min(20.0, tradeVal * 0.0005);
-  const stt = tradeVal * 0.001;
-  const stamp = tradeVal * 0.00015;
-  const exch = tradeVal * 0.0000297;
-  const gst = (brokerage + exch) * 0.18;
-  const totalFees = brokerage + stt + stamp + exch + gst;
-  const netCost = tradeVal + totalFees;
-
-  const confirmMsg = `🛒 CONFIRM BUY TRANSACTION\n\n` +
-    `• Stock: ${sym}\n` +
-    `• Quantity: ${qty} shares\n` +
-    `• Price / Share: ₹${price.toFixed(2)}\n` +
-    `• Trade Value: ₹${tradeVal.toFixed(2)}\n` +
-    `• INDmoney Delivery Charges: ₹${totalFees.toFixed(2)}\n` +
-    `========================================\n` +
-    `• Total Cash Required: ₹${netCost.toFixed(2)}\n\n` +
-    `Deduct ₹${netCost.toFixed(2)} from Available Cash & record in LT Portfolio?`;
-
-  if (confirm(confirmMsg)) {
-    fetch('/api/lt-portfolio/buy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbol: sym, qty: qty, price: price })
-    }).then(r => r.json()).then(res => {
-      if (res.status === 'ok') {
-        alert(`✅ ${res.message}`);
-        fetchLtPortfolioStatus();
-      } else {
-        alert(`❌ Buy Order Failed: ${res.message}`);
-      }
-    }).catch(err => alert('Error connecting to backend server.'));
-  }
+  let priceInfo = ltp && ltp > 0 ? ` (LTP: ₹${ltp.toFixed(2)})` : '';
+  alert(`ℹ️ Stock Screener Technical Signals:\n\nStock: ${sym || 'Selected Ticker'}${priceInfo}\n\nUse this Stock Screener for GTT breakout levels, Mansfield RS ratings, and technical discovery.`);
 }
 
 function openLtSellModal(symbol, maxQty, avgPrice, ltp) {
-  const qtyStr = prompt(`Execute SELL Order for ${symbol} (Holding: ${maxQty} shares @ ₹${avgPrice.toFixed(2)})\nLive Price: ₹${ltp.toFixed(2)}\n\nEnter Quantity to Sell:`, maxQty);
-  if (!qtyStr) return;
-  const qty = parseInt(qtyStr, 10);
-  if (isNaN(qty) || qty <= 0 || qty > maxQty) {
-    alert(`Invalid quantity. Must be between 1 and ${maxQty}.`);
-    return;
-  }
-
-  if (confirm(`Confirm SELL ${qty} shares of ${symbol} @ ₹${ltp.toFixed(2)}?\n\nNet sale proceeds will be automatically credited back to your Available Cash balance for reinvestment!`)) {
-    fetch('/api/lt-portfolio/sell', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbol: symbol, qty: qty, price: ltp })
-    }).then(r => r.json()).then(res => {
-      if (res.status === 'ok') {
-        alert(`✅ ${res.message}`);
-        fetchLtPortfolioStatus();
-      } else {
-        alert(`❌ Sell Order Failed: ${res.message}`);
-      }
-    }).catch(err => alert('Error connecting to backend server.'));
-  }
+  let sym = symbol ? symbol.trim().toUpperCase() : '';
+  alert(`ℹ️ Stock Screener Technical Signals:\n\nStock: ${sym || 'Selected Ticker'}\n\nUse this Stock Screener for GTT breakout levels, Mansfield RS ratings, and technical discovery.`);
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 init();
+switchTab('screener');
 fetchLtPortfolioStatus();
 </script>
 </body>
@@ -6985,37 +7128,37 @@ fetchLtPortfolioStatus();
 
 def fetch_15m_history_cffi(ticker: str) -> pd.DataFrame:
     try:
-        from curl_cffi import requests
-        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?interval=15m&range=5d"
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=15m&range=5d"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        r = requests.get(url, impersonate="chrome120", headers=headers, timeout=8)
-        if r.status_code == 200:
-            res = r.json().get("chart", {}).get("result", [{}])[0]
-            timestamps = res.get("timestamp", [])
-            quote = res.get("indicators", {}).get("quote", [{}])[0]
-            opens = quote.get("open", [])
-            highs = quote.get("high", [])
-            lows = quote.get("low", [])
-            closes = quote.get("close", [])
-            vols = quote.get("volume", [])
-            data = []
-            if timestamps and closes:
-                for idx, (t, c) in enumerate(zip(timestamps, closes)):
-                    if c is not None:
-                        o_val = opens[idx] if idx < len(opens) and opens[idx] is not None else c
-                        h_val = highs[idx] if idx < len(highs) and highs[idx] is not None else c
-                        l_val = lows[idx] if idx < len(lows) and lows[idx] is not None else c
-                        v_val = vols[idx] if idx < len(vols) and vols[idx] is not None else 1
-                        data.append({
-                            "Date": pd.to_datetime(t, unit="s"),
-                            "Open": float(o_val),
-                            "High": float(h_val),
-                            "Low": float(l_val),
-                            "Close": float(c),
-                            "Volume": float(v_val)
-                        })
-            if data:
-                return pd.DataFrame(data).set_index("Date")
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as r:
+            res_data = json.loads(r.read().decode('utf-8'))
+        res = res_data.get("chart", {}).get("result", [{}])[0]
+        timestamps = res.get("timestamp", [])
+        quote = res.get("indicators", {}).get("quote", [{}])[0]
+        opens = quote.get("open", [])
+        highs = quote.get("high", [])
+        lows = quote.get("low", [])
+        closes = quote.get("close", [])
+        vols = quote.get("volume", [])
+        data = []
+        if timestamps and closes:
+            for idx, (t, c) in enumerate(zip(timestamps, closes)):
+                if c is not None:
+                    o_val = opens[idx] if idx < len(opens) and opens[idx] is not None else c
+                    h_val = highs[idx] if idx < len(highs) and highs[idx] is not None else c
+                    l_val = lows[idx] if idx < len(lows) and lows[idx] is not None else c
+                    v_val = vols[idx] if idx < len(vols) and vols[idx] is not None else 1
+                    data.append({
+                        "Date": pd.to_datetime(t, unit="s"),
+                        "Open": float(o_val),
+                        "High": float(h_val),
+                        "Low": float(l_val),
+                        "Close": float(c),
+                        "Volume": float(v_val)
+                    })
+        if data:
+            return pd.DataFrame(data).set_index("Date")
     except Exception:
         pass
     return pd.DataFrame()
@@ -7025,45 +7168,82 @@ def fetch_1h_history_cffi(ticker: str, days: int = 60) -> pd.DataFrame:
     """
     Fetches 1-hour candle data for an NSE stock (up to 60 days).
     Used exclusively for S/R breakout detection on the correct timeframe.
-    Yahoo Finance supports 1h interval for up to 730 days.
+    Yahoo Finance supports 1h interval for up to 730 days. Uses 30-min disk cache.
     """
+    clean_t = ticker.replace(".NS", "").replace(".BO", "")
+    c_dir = os.path.join(BASE_DIR, "cache_1h")
+    c_file = os.path.join(c_dir, f"{clean_t}.json")
+    ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    now_ist = datetime.datetime.now(ist_offset)
+
+    if os.path.exists(c_file):
+        try:
+            with open(c_file, "r") as f:
+                c_data = json.load(f)
+            saved_at = datetime.datetime.fromisoformat(c_data.get("saved_at", "2000-01-01"))
+            if saved_at.tzinfo is None:
+                saved_at = saved_at.replace(tzinfo=ist_offset)
+            if (now_ist - saved_at).total_seconds() < 1800:
+                records = c_data.get("records", [])
+                if records:
+                    df = pd.DataFrame(records)
+                    df["Date"] = pd.to_datetime(df["Date"])
+                    df = df.set_index("Date").between_time("09:15", "15:30")
+                    return df
+        except Exception:
+            pass
+
     try:
-        from curl_cffi import requests
-        url = (f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}"
-               f"?interval=1h&range={days}d")
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1h&range={days}d"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        r = requests.get(url, impersonate="chrome120", headers=headers, timeout=10)
-        if r.status_code == 200:
-            res = r.json().get("chart", {}).get("result", [{}])[0]
-            timestamps = res.get("timestamp", [])
-            quote = res.get("indicators", {}).get("quote", [{}])[0]
-            opens  = quote.get("open", [])
-            highs  = quote.get("high", [])
-            lows   = quote.get("low", [])
-            closes = quote.get("close", [])
-            vols   = quote.get("volume", [])
-            data = []
-            if timestamps and closes:
-                for idx, (ts, c) in enumerate(zip(timestamps, closes)):
-                    if c is None:
-                        continue
-                    o_val = opens[idx]  if idx < len(opens)  and opens[idx]  is not None else c
-                    h_val = highs[idx]  if idx < len(highs)  and highs[idx]  is not None else c
-                    l_val = lows[idx]   if idx < len(lows)   and lows[idx]   is not None else c
-                    v_val = vols[idx]   if idx < len(vols)   and vols[idx]   is not None else 1
-                    data.append({
-                        "Date":   pd.to_datetime(ts, unit="s", utc=True).tz_convert("Asia/Kolkata"),
-                        "Open":   float(o_val),
-                        "High":   float(h_val),
-                        "Low":    float(l_val),
-                        "Close":  float(c),
-                        "Volume": float(v_val)
-                    })
-            if data:
-                df = pd.DataFrame(data).set_index("Date")
-                # Filter only NSE trading hours: 09:15 – 15:30 IST
-                df = df.between_time("09:15", "15:30")
-                return df
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as r:
+            res_data = json.loads(r.read().decode('utf-8'))
+        res = res_data.get("chart", {}).get("result", [{}])[0]
+        timestamps = res.get("timestamp", [])
+        quote = res.get("indicators", {}).get("quote", [{}])[0]
+        opens  = quote.get("open", [])
+        highs  = quote.get("high", [])
+        lows   = quote.get("low", [])
+        closes = quote.get("close", [])
+        vols   = quote.get("volume", [])
+        data = []
+        cache_records = []
+        if timestamps and closes:
+            for idx, (ts, c) in enumerate(zip(timestamps, closes)):
+                if c is None:
+                    continue
+                o_val = opens[idx]  if idx < len(opens)  and opens[idx]  is not None else c
+                h_val = highs[idx]  if idx < len(highs)  and highs[idx]  is not None else c
+                l_val = lows[idx]   if idx < len(lows)   and lows[idx]   is not None else c
+                v_val = vols[idx]   if idx < len(vols)   and vols[idx]   is not None else 1
+                dt_str = str(pd.to_datetime(ts, unit="s", utc=True).tz_convert("Asia/Kolkata"))
+                data.append({
+                    "Date":   pd.to_datetime(ts, unit="s", utc=True).tz_convert("Asia/Kolkata"),
+                    "Open":   float(o_val),
+                    "High":   float(h_val),
+                    "Low":    float(l_val),
+                    "Close":  float(c),
+                    "Volume": float(v_val)
+                })
+                cache_records.append({
+                    "Date":   dt_str,
+                    "Open":   float(o_val),
+                    "High":   float(h_val),
+                    "Low":    float(l_val),
+                    "Close":  float(c),
+                    "Volume": float(v_val)
+                })
+        if data:
+            df = pd.DataFrame(data).set_index("Date")
+            df = df.between_time("09:15", "15:30")
+            try:
+                os.makedirs(c_dir, exist_ok=True)
+                with open(c_file, "w") as f:
+                    json.dump({"saved_at": now_ist.isoformat(), "records": cache_records}, f)
+            except Exception:
+                pass
+            return df
     except Exception:
         pass
     # Fallback: yfinance
@@ -7121,15 +7301,28 @@ def fetch_nifty_history() -> tuple[pd.DataFrame, dict]:
     log("Fetching NIFTY 50 benchmark data (^NSEI)...")
     nifty_df = pd.DataFrame()
     try:
-        t = yf.Ticker("^NSEI")
-        nifty_df = t.history(period="6mo")
-    except Exception:
-        pass
+        url = 'https://query1.finance.yahoo.com/v8/finance/chart/^NSEI?range=6mo&interval=1d'
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.loads(r.read().decode('utf-8'))
+        result = data['chart']['result'][0]
+        timestamps = result['timestamp']
+        quote = result['indicators']['quote'][0]
+        nifty_df = pd.DataFrame({
+            'Open': quote['open'],
+            'High': quote['high'],
+            'Low': quote['low'],
+            'Close': quote['close'],
+            'Volume': quote['volume']
+        }, index=pd.to_datetime(timestamps, unit='s'))
+        nifty_df = nifty_df.dropna(subset=['Close'])
+    except Exception as e:
+        log(f"  ⚠ Fast urllib Nifty fetch failed: {e}")
 
     if nifty_df.empty:
         try:
-            from screener_engine import fetch_live_price_and_history_cffi
-            info, nifty_df = fetch_live_price_and_history_cffi("^NSEI")
+            t = yf.Ticker("^NSEI")
+            nifty_df = t.history(period="6mo")
         except Exception:
             pass
 
@@ -7199,24 +7392,6 @@ def fetch_commodity_signals() -> dict:
 def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist: list[dict], commodity_signals: dict, mkt_info: dict, fno_data: list[dict] | None = None) -> str:
     run_time = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
 
-    def json_serializer(o):
-        if hasattr(o, 'item'):
-            return o.item()
-        if hasattr(o, 'isoformat'):
-            return o.isoformat()
-        if isinstance(o, (bool, type(True))):
-            return bool(o)
-        return str(o)
-
-    backtest_data = {}
-    backtest_file = os.path.join(BASE_DIR, "cache", "backtest_results.json")
-    if os.path.exists(backtest_file):
-        try:
-            with open(backtest_file) as f:
-                backtest_data = json.load(f)
-        except Exception:
-            pass
-
     penny_stocks_data = compute_quality_penny_stocks(screener_results, top_n=20, monthly_sip=200.0)
     lt_summary = get_lt_portfolio_summary(screener_results)
 
@@ -7226,21 +7401,141 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "__MAX_STOCKS__": str(cfg["max_stocks"]),
         "__TOTAL_BUDGET__": f"{cfg['total_budget']:,}",
         "__RUN_TIME__": run_time,
-        "__SCREENER_JSON__": json.dumps(screener_results, ensure_ascii=False, default=json_serializer),
         "__WATCHLIST_JSON__": json.dumps(watchlist, ensure_ascii=False, default=json_serializer),
         "__LT_WATCHLIST_JSON__": json.dumps(lt_watchlist, ensure_ascii=False, default=json_serializer),
         "__CONFIG_JSON__": json.dumps(cfg, ensure_ascii=False, default=json_serializer),
         "__COMMODITIES_JSON__": json.dumps(commodity_signals, ensure_ascii=False, default=json_serializer),
         "__MARKET_INFO_JSON__": json.dumps(mkt_info, ensure_ascii=False, default=json_serializer),
-        "__BACKTEST_RESULTS_JSON__": json.dumps(backtest_data, ensure_ascii=False, default=json_serializer),
         "__FNO_JSON__": json.dumps(fno_data or [], ensure_ascii=False, default=json_serializer),
         "__PENNY_STOCKS_JSON__": json.dumps(penny_stocks_data, ensure_ascii=False, default=json_serializer),
         "__LT_PORTFOLIO_SUMMARY_JSON__": json.dumps(lt_summary, ensure_ascii=False, default=json_serializer),
     }
 
+    # ── Split the template into: (head+body markup, CSS, app JS) ──────────
+    # The full scan dataset used to be inlined directly into every page load via
+    # __SCREENER_JSON__ (an ~10MB string substitution), and the CSS/JS were embedded
+    # in the HTML itself, so every visit re-downloaded everything uncached. CSS/JS are
+    # now written out as separate static files the browser can cache across scans, and
+    # the scan data is fetched once from /screener_data.json instead of being inlined.
+    STYLE_OPEN, STYLE_CLOSE = "<style>", "</style>"
+    SCRIPT_OPEN, SCRIPT_CLOSE = "<script>", "</script>"
+
+    style_start = HTML_TEMPLATE.index(STYLE_OPEN)
+    style_content_start = style_start + len(STYLE_OPEN)
+    style_end = HTML_TEMPLATE.index(STYLE_CLOSE, style_content_start)
+    css_content = HTML_TEMPLATE[style_content_start:style_end]
+
+    # The first <script>...</script> pair (before <style>) is the tiny window.onerror
+    # handler and stays inline; this locates the second, much larger app-logic block.
+    script_start = HTML_TEMPLATE.index(SCRIPT_OPEN, style_end)
+    script_content_start = script_start + len(SCRIPT_OPEN)
+    script_end = HTML_TEMPLATE.index(SCRIPT_CLOSE, script_content_start)
+    js_raw = HTML_TEMPLATE[script_content_start:script_end]
+    tail_markup = HTML_TEMPLATE[script_end + len(SCRIPT_CLOSE):]
+
+    # app.js must not carry per-scan data (that would defeat long-lived caching), so
+    # the data-let block gets empty defaults instead of the __X_JSON__ tokens, and the
+    # boot-time invocation moves to the small per-scan inline script below (data must
+    # be fetched and assigned before init() runs).
+    data_let_block = (
+        "let SCREENER_DATA = __SCREENER_JSON__;\n"
+        "let WATCHLIST_SEED = __WATCHLIST_JSON__;\n"
+        "let LT_WATCHLIST = __LT_WATCHLIST_JSON__;\n"
+        "let CONFIG = __CONFIG_JSON__;\n"
+        "let COMMODITIES_DATA = __COMMODITIES_JSON__;\n"
+        "let MARKET_INFO = __MARKET_INFO_JSON__;\n"
+        "let FNO_DATA = __FNO_JSON__;\n"
+        "let PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;\n"
+        "let LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;"
+    )
+    # `var`, not `let`: app.js declares these once with empty defaults, and the small
+    # per-scan inline <script> below re-declares them with real values. Two separate
+    # <script> tags share one global lexical scope in classic (non-module) documents,
+    # so a second top-level `let` for the same name is a SyntaxError there — `var`
+    # is the one declaration form that's allowed to be redeclared like this.
+    data_let_defaults = (
+        "var SCREENER_DATA = [];\n"
+        "var WATCHLIST_SEED = [];\n"
+        "var LT_WATCHLIST = [];\n"
+        "var CONFIG = {};\n"
+        "var COMMODITIES_DATA = {};\n"
+        "var MARKET_INFO = {};\n"
+        "var FNO_DATA = [];\n"
+        "var PENNY_STOCKS_DATA = [];\n"
+        "var LT_PORTFOLIO_SUMMARY = {};"
+    )
+    if data_let_block not in js_raw:
+        raise RuntimeError("build_html: data-let block not found in app script — template shape changed, fix the split logic")
+    app_js = js_raw.replace(data_let_block, data_let_defaults, 1)
+
+    boot_invocation = "init();\nswitchTab('screener');\nfetchLtPortfolioStatus();\n"
+    if boot_invocation not in app_js:
+        raise RuntimeError("build_html: boot invocation not found in app script — template shape changed, fix the split logic")
+    app_js = app_js.replace(boot_invocation, "", 1)
+
+    try:
+        atomic_write_file(APP_CSS_FILE, css_content)
+        atomic_write_file(APP_JS_FILE, app_js)
+        # Mirror into www/static/ too — see WWW_STATIC_DIR comment above.
+        atomic_write_file(WWW_APP_CSS_FILE, css_content)
+        atomic_write_file(WWW_APP_JS_FILE, app_js)
+    except Exception as e:
+        log(f"⚠ Could not write static assets (app.css/app.js): {e}")
+
+    # Content-hashed query param so a redeploy that changes app.css/app.js is always
+    # visible immediately — without this, a browser holding the previous version
+    # cached under a fixed max-age would keep using stale JS for up to the cache
+    # lifetime after a redeploy, exactly the kind of silent breakage this split was
+    # supposed to avoid.
+    css_ver = hashlib.md5(css_content.encode("utf-8")).hexdigest()[:10]
+    js_ver = hashlib.md5(app_js.encode("utf-8")).hexdigest()[:10]
+
+    head_and_body_markup = (
+        HTML_TEMPLATE[:style_start]
+        + f'<link rel="stylesheet" href="/static/app.css?v={css_ver}">'
+        + HTML_TEMPLATE[style_end + len(STYLE_CLOSE):script_start]
+    )
+
+    # Small, per-scan-changing blobs stay inlined (all small); SCREENER_DATA itself is
+    # fetched from screener_data.json before init() runs, replacing the old inline-or-
+    # fallback branching that used to live inside init().
+    small_data_js = (
+        f"var WATCHLIST_SEED = {replacements['__WATCHLIST_JSON__']};\n"
+        f"var LT_WATCHLIST = {replacements['__LT_WATCHLIST_JSON__']};\n"
+        f"var CONFIG = {replacements['__CONFIG_JSON__']};\n"
+        f"var COMMODITIES_DATA = {replacements['__COMMODITIES_JSON__']};\n"
+        f"var MARKET_INFO = {replacements['__MARKET_INFO_JSON__']};\n"
+        f"var FNO_DATA = {replacements['__FNO_JSON__']};\n"
+        f"var PENNY_STOCKS_DATA = {replacements['__PENNY_STOCKS_JSON__']};\n"
+        f"var LT_PORTFOLIO_SUMMARY = {replacements['__LT_PORTFOLIO_SUMMARY_JSON__']};\n"
+        "var SCREENER_DATA = [];\n"
+    )
+    bootstrap_script = (
+        f'<script src="/static/app.js?v={js_ver}"></script>\n'
+        "<script>\n"
+        + small_data_js
+        + "fetch('/screener_data.json', {cache: 'no-store'})\n"
+        "  .then(function(r){ return r.json(); })\n"
+        "  .then(function(data){\n"
+        "    SCREENER_DATA = Array.isArray(data) ? data : [];\n"
+        "    init();\n"
+        "    switchTab('screener');\n"
+        "    fetchLtPortfolioStatus();\n"
+        "  })\n"
+        "  .catch(function(err){\n"
+        "    console.error('Failed to load screener_data.json:', err);\n"
+        "    var errDiv = document.createElement('div');\n"
+        "    errDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:#991b1b;color:#fff;padding:12px 20px;text-align:center;font-family:sans-serif;';\n"
+        "    errDiv.textContent = '\\u26A0\\uFE0F Could not load stock data. Please refresh the page.';\n"
+        "    if (document.body) document.body.prepend(errDiv);\n"
+        "  });\n"
+        "</script>\n"
+    )
+
     import re
     pattern = re.compile("|".join(re.escape(k) for k in replacements.keys()))
-    return pattern.sub(lambda m: replacements[m.group(0)], HTML_TEMPLATE)
+    final_head_and_body = pattern.sub(lambda m: replacements[m.group(0)], head_and_body_markup)
+    return final_head_and_body + bootstrap_script + tail_markup
 
 
 # ─── Local HTTP Scan Server ───────────────────────────────────────────────────
@@ -7249,100 +7544,323 @@ def sync_html_lt_watchlist():
     try:
         lt_wl_data = process_lt_watchlist(LATEST_SCREENER_RESULTS)
         lt_json = json.dumps(lt_wl_data, default=json_serializer)
-        target = "const LT_WATCHLIST = "
+        # NOTE: the template declares this with `let`/`var`, not `const` — searching for
+        # "const LT_WATCHLIST = " here always returned -1, so this whole function was
+        # a silent no-op: LT watchlist edits never got patched into the already-built
+        # HTML until the next full rescan. Also anchor the terminator on ";\n" rather
+        # than the first bare ";", since json.dumps escapes real newlines inside string
+        # values, so a raw "\n" byte can only appear right after the statement's own
+        # closing semicolon, not truncate mid-value.
+        target = "var LT_WATCHLIST = "
         for path in [OUT_HTML, OUT_WWW_HTML]:
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
                 idx = content.find(target)
                 if idx != -1:
-                    end_idx = content.find(";", idx)
+                    end_idx = content.find(";\n", idx)
                     if end_idx != -1:
-                        new_content = content[:idx] + "const LT_WATCHLIST = " + lt_json + content[end_idx:]
-                        with open(path, "w", encoding="utf-8") as f:
-                            f.write(new_content)
+                        new_content = content[:idx] + target + lt_json + content[end_idx:]
+                        atomic_write_file(path, new_content)
     except Exception as e:
         log(f"⚠ Could not sync LT_WATCHLIST in HTML: {e}")
 
 
 class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def handle_ltp_request(self):
+        parsed = urllib.parse.urlparse(self.path)
+        tickers = []
+        if self.command == 'POST':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                if length > 0:
+                    body = self.rfile.read(length).decode('utf-8')
+                    req_json = json.loads(body)
+                    if isinstance(req_json, dict):
+                        raw_syms = req_json.get('symbols') or req_json.get('ticker') or req_json.get('symbol') or []
+                        if isinstance(raw_syms, list):
+                            tickers = [str(t).strip() for t in raw_syms if str(t).strip()]
+                        elif isinstance(raw_syms, str):
+                            tickers = [t.strip() for t in raw_syms.split(',') if t.strip()]
+            except Exception:
+                pass
+
+        if not tickers:
+            query = urllib.parse.parse_qs(parsed.query)
+            raw_ticker = query.get('ticker', [''])[0] or query.get('symbols', [''])[0] or query.get('symbol', [''])[0]
+            tickers = [t.strip() for t in raw_ticker.split(',') if t.strip()]
+
+        raw_prices = {}
+        stale_set = set()
+        if tickers:
+            # Normalize symbol list (e.g. COALINDIA -> COALINDIA.NS) so Yahoo Finance live fetcher works 100%
+            normalized_map = {}
+            normalized_tickers = []
+            for raw_t in tickers:
+                t_clean = raw_t.strip()
+                if not t_clean: continue
+                if t_clean.startswith("^") or t_clean.endswith(".NS") or t_clean.endswith(".BO"):
+                    norm = t_clean
+                else:
+                    norm = f"{t_clean}.NS"
+                normalized_map[raw_t] = norm
+                if norm not in normalized_tickers:
+                    normalized_tickers.append(norm)
+
+            # Build lookup dict from latest screener results as instant fallback
+            fallback_map = {}
+            if LATEST_SCREENER_RESULTS:
+                for s in LATEST_SCREENER_RESULTS:
+                    sym = s.get("symbol")
+                    tick = s.get("ticker")
+                    p = s.get("ltp") or s.get("current_ltp")
+                    if p and p > 0:
+                        if sym:
+                            fallback_map[sym] = float(p)
+                            fallback_map[f"{sym}.NS"] = float(p)
+                        if tick:
+                            fallback_map[tick] = float(p)
+                            fallback_map[tick.replace(".NS", "")] = float(p)
+
+            # Fast cache lookup first (no threads needed for cached tickers)
+            now = time.time()
+            ttl = 10.0 if is_equity_market_open() else 120.0
+            uncached = []
+
+            with GLOBAL_LTP_CACHE_LOCK:
+                for norm_t in normalized_tickers:
+                    cached_entry = GLOBAL_LTP_CACHE.get(norm_t)
+                    if cached_entry and (now - cached_entry[1] < ttl):
+                        raw_prices[norm_t] = cached_entry[0]
+                    else:
+                        uncached.append(norm_t)
+
+            if uncached:
+                # Skip live network fetches while the background scan is running (it's
+                # already saturating outbound requests), but the fallback lookup below
+                # must still run unconditionally — it previously lived inside this same
+                # `if not IS_INITIAL_SCANNING` gate, which meant every ticker not already
+                # in GLOBAL_LTP_CACHE got literally NO price (not even a stale one) for
+                # the entire duration of every background scan, i.e. on every server
+                # restart. That's the main reason LTP polling looked broken right after
+                # launching the app.
+                if not IS_INITIAL_SCANNING:
+                    if len(uncached) == 1:
+                        t = uncached[0]
+                        p = fetch_live_price_only(t)
+                        if p and p > 0:
+                            raw_prices[t] = p
+                    else:
+                        from concurrent.futures import ThreadPoolExecutor, as_completed
+                        with ThreadPoolExecutor(max_workers=min(len(uncached), 10)) as executor:
+                            future_to_t = {executor.submit(fetch_live_price_only, t): t for t in uncached}
+                            for future in as_completed(future_to_t):
+                                t = future_to_t[future]
+                                try:
+                                    p = future.result()
+                                    if p and p > 0:
+                                        raw_prices[t] = p
+                                except Exception as e:
+                                    print(f"[LTP] live fetch failed for {t}: {e}")
+
+                # Fallback to static (last-scan) price whenever a live fetch failed,
+                # returned nothing, or was skipped above because a scan is in progress.
+                for t in uncached:
+                    if t not in raw_prices or not raw_prices[t]:
+                        fb = fallback_map.get(t) or fallback_map.get(t.replace('.NS', ''))
+                        if fb and fb > 0:
+                            raw_prices[t] = fb
+                            stale_set.add(t)
+
+        prices_map = {}
+        stale_map = {}
+        for norm_t, p in raw_prices.items():
+            if p and p > 0:
+                is_stale = norm_t in stale_set
+                clean = norm_t.replace('.NS', '').strip()
+                for key in (norm_t, clean, clean.upper()):
+                    prices_map[key] = p
+                    stale_map[key] = is_stale
+                if norm_t == '^NSEI' or clean == '^NSEI':
+                    prices_map['NIFTY_INDEX'] = p
+                    prices_map['NIFTY'] = p
+                    stale_map['NIFTY_INDEX'] = is_stale
+                    stale_map['NIFTY'] = is_stale
+
+        # Map back to raw input requested symbols
+        for raw_t, norm_t in normalized_map.items():
+            if norm_t in prices_map:
+                prices_map[raw_t] = prices_map[norm_t]
+                stale_map[raw_t] = stale_map.get(norm_t, False)
+
+        first_price = prices_map.get(tickers[0]) if tickers else None
+        resp_data = json.dumps({
+            "status": "success",
+            "ticker": tickers[0] if tickers else "",
+            "price": first_price,
+            "prices": prices_map,
+            "ltps": prices_map,
+            "stale": stale_map
+        }).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Content-Length', str(len(resp_data)))
+        self.end_headers()
+        self.wfile.write(resp_data)
+        try:
+            self.wfile.flush()
+        except Exception:
+            pass
+
+    def end_headers(self):
+        super().end_headers()
+        try:
+            self.wfile.flush()
+        except Exception:
+            pass
+
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With, Accept')
+        self.send_header('Content-Length', '0')
         self.end_headers()
+        try:
+            self.wfile.flush()
+        except Exception:
+            pass
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path in ('/', '/index.html'):
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html; charset=utf-8')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
-            self.send_header('Pragma', 'no-cache')
-            self.send_header('Expires', '0')
-            self.end_headers()
+            content = None
             if os.path.exists(OUT_HTML):
-                with open(OUT_HTML, 'rb') as f:
-                    self.wfile.write(f.read())
-            else:
-                self.wfile.write(b"HTML report not generated yet.")
-            return
-        elif parsed.path == '/api/ltp':
-            query = urllib.parse.parse_qs(parsed.query)
-            raw_ticker = query.get('ticker', [''])[0]
-            tickers = [t.strip() for t in raw_ticker.split(',') if t.strip()]
-            prices = {}
-            if tickers:
-                if len(tickers) == 1:
-                    t = tickers[0]
-                    p = fetch_live_price_only(t)
-                    if p: prices[t] = p
-                else:
-                    from concurrent.futures import ThreadPoolExecutor, as_completed
-                    with ThreadPoolExecutor(max_workers=min(len(tickers), 15)) as executor:
-                        future_to_t = {executor.submit(fetch_live_price_only, t): t for t in tickers}
-                        for future in as_completed(future_to_t):
-                            t = future_to_t[future]
-                            try:
-                                p = future.result()
-                                if p: prices[t] = p
-                            except Exception:
-                                pass
+                try:
+                    with open(OUT_HTML, 'rb') as f:
+                        content = f.read()
+                except Exception:
+                    content = None
 
-            first_price = prices.get(tickers[0]) if tickers else None
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps({
-                "ticker": raw_ticker,
-                "price": first_price,
-                "prices": prices
-            }).encode('utf-8'))
+            if not content or len(content) < 1000:
+                time.sleep(0.3)
+                if os.path.exists(OUT_HTML):
+                    try:
+                        with open(OUT_HTML, 'rb') as f:
+                            content = f.read()
+                    except Exception:
+                        pass
+
+            if content and len(content) > 1000:
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                self.send_header('Pragma', 'no-cache')
+                self.send_header('Expires', '0')
+                self.send_header('Content-Length', str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                try: self.wfile.flush()
+                except Exception: pass
+            else:
+                loading_page = (
+                    "<!DOCTYPE html><html><head><meta charset='utf-8'/><meta http-equiv='refresh' content='2'/>"
+                    "<title>Stock Screener - Loading</title><style>"
+                    "body{background:#06060f;color:#e2e8f0;font-family:sans-serif;display:flex;"
+                    "flex-direction:column;justify-content:center;align-items:center;height:100vh;margin:0;}"
+                    ".spinner{border:4px solid #1e1e3a;border-top:4px solid #00d4aa;border-radius:50%;"
+                    "width:48px;height:48px;animation:spin 1s linear infinite;margin-bottom:20px;}"
+                    "@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}"
+                    "h2{color:#6c63ff;margin-bottom:8px;}p{color:#64748b;font-size:14px;}"
+                    "</style></head><body><div class='spinner'></div>"
+                    "<h2>⚡ Stock Screener Server Initializing...</h2>"
+                    "<p>Building stock database & generating report. Auto-refreshing in 2 seconds...</p>"
+                    "</body></html>"
+                ).encode('utf-8')
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Content-Length', str(len(loading_page)))
+                self.end_headers()
+                self.wfile.write(loading_page)
+                try: self.wfile.flush()
+                except Exception: pass
+            return
+
+        elif parsed.path in ('/static/app.css', '/static/app.js'):
+            asset_path = APP_CSS_FILE if parsed.path.endswith('.css') else APP_JS_FILE
+            content_type = 'text/css; charset=utf-8' if parsed.path.endswith('.css') else 'application/javascript; charset=utf-8'
+            try:
+                with open(asset_path, 'rb') as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header('Content-Type', content_type)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                # Safe to cache indefinitely: the URL carries a content hash in ?v=,
+                # so a redeploy that changes app.css/app.js always produces a new URL
+                # instead of silently reusing a stale cached copy of the old one.
+                self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
+                self.send_header('Content-Length', str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                try: self.wfile.flush()
+                except Exception: pass
+            except Exception:
+                self.send_response(404)
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+            return
+
+        elif parsed.path == '/screener_data.json':
+            try:
+                with open(OUT_JSON_FILE, 'rb') as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                # Regenerated on every scan — never let the browser reuse a cached copy.
+                self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                self.send_header('Content-Length', str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                try: self.wfile.flush()
+                except Exception: pass
+            except Exception:
+                self.send_response(404)
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+            return
+
+        elif parsed.path == '/api/ltp':
+            self.handle_ltp_request()
             return
         elif parsed.path == '/api/lt-watchlist':
+            data = process_lt_watchlist(LATEST_SCREENER_RESULTS)
+            resp_bytes = json.dumps(data, default=json_serializer).encode('utf-8')
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Content-Length', str(len(resp_bytes)))
             self.end_headers()
-            data = process_lt_watchlist(LATEST_SCREENER_RESULTS)
-            self.wfile.write(json.dumps(data, default=json_serializer).encode('utf-8'))
+            self.wfile.write(resp_bytes)
+            try: self.wfile.flush()
+            except Exception: pass
             return
         elif parsed.path in ('/health', '/api/health'):
+            resp_bytes = json.dumps({"status": "online", "app": "Stock Screener"}).encode('utf-8')
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Content-Length', str(len(resp_bytes)))
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "online", "app": "Stock Screener"}).encode('utf-8'))
+            self.wfile.write(resp_bytes)
+            try: self.wfile.flush()
+            except Exception: pass
             return
         elif parsed.path == '/api/status':
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
             mkt_info = get_market_status()
             res = {
                 "server": "running",
@@ -7351,7 +7869,15 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "timestamp": datetime.datetime.now().isoformat(),
                 "is_scanning": IS_INITIAL_SCANNING
             }
-            self.wfile.write(json.dumps(res).encode('utf-8'))
+            resp_bytes = json.dumps(res).encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Content-Length', str(len(resp_bytes)))
+            self.end_headers()
+            self.wfile.write(resp_bytes)
+            try: self.wfile.flush()
+            except Exception: pass
             return
         elif parsed.path == '/api/lt-portfolio/status':
             try:
@@ -7361,11 +7887,15 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 res = {"status": "error", "message": str(e)}
                 self.send_response(400)
+            resp_bytes = json.dumps(res, default=json_serializer).encode('utf-8')
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Content-Length', str(len(resp_bytes)))
             self.end_headers()
-            self.wfile.write(json.dumps(res, default=json_serializer).encode('utf-8'))
+            self.wfile.write(resp_bytes)
+            try: self.wfile.flush()
+            except Exception: pass
             return
         else:
             super().do_GET()
@@ -7373,6 +7903,9 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         global LATEST_SCREENER_RESULTS
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == '/api/ltp':
+            self.handle_ltp_request()
+            return
         if parsed.path == '/api/scan':
             log("\n⚡ [API Request] Received Scan Now trigger from web app...")
             try:
@@ -7401,6 +7934,15 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                     screener_results, nifty_df,
                     nifty_regime_status=nifty_regime.get("status", "NEUTRAL")
                 )
+                LATEST_SCREENER_RESULTS = screener_results
+                try:
+                    clean_results = sanitize_for_strict_json(screener_results)
+                    with open(OUT_JSON_FILE, "w", encoding="utf-8") as f:
+                        json.dump(clean_results, f, default=json_serializer)
+                    with open(WWW_JSON_FILE, "w", encoding="utf-8") as f:
+                        json.dump(clean_results, f, default=json_serializer)
+                except Exception as e:
+                    log(f"  ⚠ Could not save screener_data.json: {e}")
 
                 log("Processing LT Watchlist stocks...")
                 lt_wl_data = process_lt_watchlist(screener_results)
@@ -7412,8 +7954,8 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 commodity_signals = fetch_commodity_signals()
                 fno_data = process_fno_stocks(screener_results)
                 html = build_html(screener_results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
-                with open(OUT_HTML, "w", encoding="utf-8") as f:
-                    f.write(html)
+                atomic_write_file(OUT_HTML, html)
+                atomic_write_file(OUT_WWW_HTML, html)
                 log("⚡ [API Request] Live Scan complete & index.html updated successfully!")
                 res = {"status": "ok", "message": "Scan completed successfully", "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                 self.send_response(200)
@@ -7597,111 +8139,11 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(res).encode('utf-8'))
             return
 
-        elif parsed.path == '/api/lt-portfolio/buy':
-            try:
-                length = int(self.headers.get('Content-Length', 0))
-                body = json.loads(self.rfile.read(length).decode('utf-8'))
-                sym = body.get("symbol")
-                qty = int(body.get("qty", 0))
-                price = float(body.get("price", 0.0))
-                res = execute_lt_buy_order(sym, qty, price)
-                self.send_response(200)
-            except Exception as e:
-                res = {"status": "error", "message": str(e)}
-                self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps(res).encode('utf-8'))
-            return
-
-        elif parsed.path == '/api/lt-portfolio/sell':
-            try:
-                length = int(self.headers.get('Content-Length', 0))
-                body = json.loads(self.rfile.read(length).decode('utf-8'))
-                sym = body.get("symbol")
-                qty = int(body.get("qty", 0))
-                price = float(body.get("price", 0.0))
-                res = execute_lt_sell_order(sym, qty, price)
-                self.send_response(200)
-            except Exception as e:
-                res = {"status": "error", "message": str(e)}
-                self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps(res).encode('utf-8'))
-            return
-
-        elif parsed.path == '/api/lt-portfolio/deposit':
-            try:
-                length = int(self.headers.get('Content-Length', 0))
-                body = json.loads(self.rfile.read(length).decode('utf-8'))
-                amount = float(body.get("amount", 0.0))
-                if amount <= 0:
-                    raise ValueError("Deposit amount must be positive")
-                ledger = load_lt_capital_ledger()
-                ledger["extra_deposits"] = round(float(ledger.get("extra_deposits", 0.0)) + amount, 2)
-                save_lt_capital_ledger(ledger)
-                summary = get_lt_portfolio_summary()
-                res = {"status": "ok", "message": f"Successfully deposited ₹{amount:.2f}", "summary": summary}
-                self.send_response(200)
-            except Exception as e:
-                res = {"status": "error", "message": str(e)}
-                self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps(res).encode('utf-8'))
-            return
-
-        elif parsed.path == '/api/lt-portfolio/withdraw':
-            try:
-                length = int(self.headers.get('Content-Length', 0))
-                body = json.loads(self.rfile.read(length).decode('utf-8'))
-                amount = float(body.get("amount", 0.0))
-                if amount <= 0:
-                    raise ValueError("Withdrawal amount must be positive")
-                ledger = load_lt_capital_ledger()
-                ledger["withdrawals"] = round(float(ledger.get("withdrawals", 0.0)) + amount, 2)
-                save_lt_capital_ledger(ledger)
-                summary = get_lt_portfolio_summary()
-                res = {"status": "ok", "message": f"Successfully withdrew ₹{amount:.2f}", "summary": summary}
-                self.send_response(200)
-            except Exception as e:
-                res = {"status": "error", "message": str(e)}
-                self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps(res).encode('utf-8'))
-            return
-
-        elif parsed.path == '/api/lt-portfolio/adjustment':
-            try:
-                length = int(self.headers.get('Content-Length', 0))
-                body = json.loads(self.rfile.read(length).decode('utf-8'))
-                amount = float(body.get("amount", 0.0))
-                ledger = load_lt_capital_ledger()
-                ledger["broker_adjustment"] = round(float(ledger.get("broker_adjustment", 0.0)) + amount, 2)
-                save_lt_capital_ledger(ledger)
-                summary = get_lt_portfolio_summary()
-                res = {"status": "ok", "message": f"Successfully updated broker adjustment by ₹{amount:.2f}", "summary": summary}
-                self.send_response(200)
-            except Exception as e:
-                res = {"status": "error", "message": str(e)}
-                self.send_response(400)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps(res).encode('utf-8'))
-            return
-
         elif parsed.path == '/api/settings':
             try:
                 length = int(self.headers.get('Content-Length', 0))
                 body = json.loads(self.rfile.read(length).decode('utf-8'))
-                settings_file = os.path.join(BASE_DIR, "finplus_settings.json")
+                settings_file = os.path.join(BASE_DIR, "screener_settings.json")
                 cur_settings = {}
                 if os.path.exists(settings_file):
                     try:
@@ -7736,13 +8178,60 @@ def open_in_browser(url_or_path: str) -> bool:
         return False
 
 
+def is_screener_running_on_port(check_port: int) -> bool:
+    """Checks if our Stock Screener app is already responding on check_port."""
+    try:
+        url = f"http://127.0.0.1:{check_port}/api/health"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=0.8) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode('utf-8'))
+                if data.get("app") == "Stock Screener":
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def is_port_bindable(check_port: int) -> bool:
+    """Tests if check_port can be bound on 127.0.0.1 without throwing socket error."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(('127.0.0.1', check_port))
+        s.close()
+        return True
+    except OSError:
+        s.close()
+        return False
+
+
 def run_server(port=None):
     if port is None:
-        port = int(os.environ.get("PORT", 5000))
+        port = int(os.environ.get("PORT", 5050))
+
+    candidate_ports = [port]
+    for fallback in [5050, 5005, 8050, 8505, 5001, 5002, 5000]:
+        if fallback not in candidate_ports:
+            candidate_ports.append(fallback)
+
+    selected_port = None
+    for p in candidate_ports:
+        if is_screener_running_on_port(p):
+            log(f"⚡ Stock Screener Server is already running at http://localhost:{p}")
+            open_in_browser(f"http://localhost:{p}")
+            return
+        if is_port_bindable(p):
+            selected_port = p
+            break
+
+    if selected_port is None:
+        selected_port = port
+
+    port = selected_port
     log("=" * 60)
     log(f"⚡ Stock Screener Server running at port {port}")
     log("=" * 60)
-    
+
     server_address = ('0.0.0.0', port)
     class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
         daemon_threads = True
@@ -7770,18 +8259,22 @@ def run_server(port=None):
 
     if httpd:
         try:
-            if "PORT" not in os.environ:
-                log(f"Opening http://localhost:{port} in default browser...")
-                open_in_browser(f"http://localhost:{port}")
+            if "PORT" not in os.environ and not os.environ.get("NO_BROWSER"):
+                try:
+                    log(f"Opening http://localhost:{port} in default browser...")
+                    open_in_browser(f"http://localhost:{port}")
+                except Exception:
+                    pass
             while True:
                 try:
                     httpd.serve_forever()
-                except (KeyboardInterrupt, SystemExit):
+                except KeyboardInterrupt:
+                    log("Server stopping on user interrupt...")
                     break
-                except Exception as e:
+                except BaseException as e:
                     log(f"Server exception (recovering): {e}")
                     time.sleep(0.5)
-        except (KeyboardInterrupt, SystemExit):
+        except KeyboardInterrupt:
             log("Server stopped.")
         except Exception as e:
             log(f"⚠ Server shutdown: {e}")
@@ -7818,17 +8311,27 @@ def background_initial_scan():
                     pass
 
         LATEST_SCREENER_RESULTS = screener_results
-        try:
-            with open(OUT_JSON_FILE, "w", encoding="utf-8") as f:
-                json.dump(screener_results, f, default=json_serializer)
-        except Exception as e:
-            log(f"  ⚠ Could not save screener_data.json: {e}")
 
         log("Computing Mansfield Relative Strength (RS Rating 1-99) vs Nifty...")
         screener_results = compute_relative_strength_ratings(
             screener_results, nifty_df,
             nifty_regime_status=nifty_regime.get("status", "NEUTRAL")
         )
+        # Re-point LATEST_SCREENER_RESULTS at the RS-enriched results and write
+        # screener_data.json from THIS version (not the pre-RS one above) — the
+        # generated HTML always inlines the post-RS-rating data, so writing the
+        # JSON file before RS ratings were computed silently left rs_rating/rs_badge
+        # missing/defaulted for every consumer of screener_data.json (the client-side
+        # fetch fallback, and any external tooling reading the file directly).
+        LATEST_SCREENER_RESULTS = screener_results
+        try:
+            clean_results = sanitize_for_strict_json(screener_results)
+            with open(OUT_JSON_FILE, "w", encoding="utf-8") as f:
+                json.dump(clean_results, f, default=json_serializer)
+            with open(WWW_JSON_FILE, "w", encoding="utf-8") as f:
+                json.dump(clean_results, f, default=json_serializer)
+        except Exception as e:
+            log(f"  ⚠ Could not save screener_data.json: {e}")
 
         log("Processing LT Watchlist stocks...")
         lt_wl_data = process_lt_watchlist(screener_results)
@@ -7845,14 +8348,8 @@ def background_initial_scan():
 
         log("Building HTML report...")
         html = build_html(screener_results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
-        with open(OUT_HTML, "w", encoding="utf-8") as f:
-            f.write(html)
-        try:
-            os.makedirs(os.path.dirname(OUT_WWW_HTML), exist_ok=True)
-            with open(OUT_WWW_HTML, "w", encoding="utf-8") as f:
-                f.write(html)
-        except Exception as e:
-            log(f"  ⚠ Could not copy report to www/index.html: {e}")
+        atomic_write_file(OUT_HTML, html)
+        atomic_write_file(OUT_WWW_HTML, html)
 
         log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
     finally:
@@ -7879,48 +8376,42 @@ def automated_hourly_market_scheduler():
                         background_initial_scan()
                         time.sleep(3300)  # Sleep ~55 mins after triggering
         except Exception as e:
-            log(f"⚠ Market scheduler error: {e}")
+            import traceback
+            log(f"⚠ Market scheduler error: {e}\n{traceback.format_exc()}")
 
 
-# ─── Main ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5050))
     log("=" * 60)
     log(f"  Quality Stock Screener — Phase 1 (Port {port})")
     log("  Source: Nifty 500 | Scoring: Strength + Value + Momentum")
     log("=" * 60)
 
-    # Immediate HTML report build at startup if cached database exists
-    if LATEST_SCREENER_RESULTS and len(LATEST_SCREENER_RESULTS) >= 10:
-        log(f"⚡ Building immediate index.html report from cached database ({len(LATEST_SCREENER_RESULTS)} stocks)...")
-        try:
-            wl_data = process_watchlist(LATEST_SCREENER_RESULTS)
-            lt_wl_data = process_lt_watchlist(LATEST_SCREENER_RESULTS)
-            mkt_info = get_market_status()
-            commodity_signals = fetch_commodity_signals()
-            fno_data = process_fno_stocks(LATEST_SCREENER_RESULTS)
-            html = build_html(LATEST_SCREENER_RESULTS, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
-            with open(OUT_HTML, "w", encoding="utf-8") as f:
-                f.write(html)
-            try:
-                os.makedirs(os.path.dirname(OUT_WWW_HTML), exist_ok=True)
-                with open(OUT_WWW_HTML, "w", encoding="utf-8") as f:
-                    f.write(html)
-            except Exception:
-                pass
-            apk_path = 'android/app/src/main/assets/public/index.html'
-            try:
-                os.makedirs(os.path.dirname(apk_path), exist_ok=True)
-                with open(apk_path, 'w', encoding='utf-8') as f:
-                    f.write(html)
-            except Exception:
-                pass
-        except Exception as e:
-            log(f"  ⚠ Startup HTML build skipped: {e}")
+    if is_screener_running_on_port(port):
+        log(f"⚡ Stock Screener Server is already running at http://localhost:{port}")
+        open_in_browser(f"http://localhost:{port}")
+        sys.exit(0)
 
-    # Launch background scan thread so server starts instantly on port 5000
-    log("⚡ Launching scan of 2413 stocks in background thread...")
-    scan_t = threading.Thread(target=background_initial_scan, daemon=True)
+    def startup_bg_tasks():
+        if LATEST_SCREENER_RESULTS and len(LATEST_SCREENER_RESULTS) >= 10:
+            log(f"⚡ Building immediate index.html report from cached database ({len(LATEST_SCREENER_RESULTS)} stocks)...")
+            try:
+                wl_data = process_watchlist(LATEST_SCREENER_RESULTS)
+                lt_wl_data = process_lt_watchlist(LATEST_SCREENER_RESULTS)
+                mkt_info = get_market_status()
+                commodity_signals = fetch_commodity_signals()
+                fno_data = process_fno_stocks(LATEST_SCREENER_RESULTS)
+                html = build_html(LATEST_SCREENER_RESULTS, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
+                atomic_write_file(OUT_HTML, html)
+                atomic_write_file(OUT_WWW_HTML, html)
+            except Exception as e:
+                log(f"  ⚠ Startup HTML build skipped: {e}")
+
+        log(f"⚡ Launching scan of {len(read_stock_list()) if os.path.exists(OUT_JSON_FILE) else 2415} stocks in background thread...")
+        background_initial_scan()
+
+    # Launch background startup tasks thread so server starts instantly on port 5000
+    scan_t = threading.Thread(target=startup_bg_tasks, daemon=True)
     scan_t.start()
 
     # Launch automated hourly market scheduler daemon thread

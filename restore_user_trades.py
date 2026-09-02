@@ -135,8 +135,8 @@ restored_trades = [
   }
 ]
 
-# Write to finplus_journal_data.json
-json_path = r"d:\FINPLUS PNL APP\finplus_journal_data.json"
+# Write to screener_journal_data.json
+json_path = r"d:\FINPLUS PNL APP\screener_journal_data.json"
 with open(json_path, "w") as f:
     json.dump(restored_trades, f, indent=2)
 

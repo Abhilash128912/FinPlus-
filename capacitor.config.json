@@ -3,7 +3,8 @@
   "appName": "Stock Screener",
   "webDir": "www",
   "server": {
-    "url": "https://abhilash128912.github.io/FinPlus-/",
+    "androidScheme": "https",
     "cleartext": true
   }
 }
+

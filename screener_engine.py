@@ -564,18 +564,28 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
     momentum, m_break = score_momentum(info, history)
     pa_score, pa_break = score_price_action_and_order_flow(history)
 
-    has_strength_data = any(v is not None for k, v in s_break.items() if not k.endswith("_pts"))
-    has_value_data = any(v is not None for k, v in v_break.items() if not k.endswith("_pts"))
+    valid_s = sum(1 for k, v in s_break.items() if not k.endswith("_pts") and v is not None)
+    valid_v = sum(1 for k, v in v_break.items() if not k.endswith("_pts") and v is not None)
 
-    if has_strength_data and has_value_data:
-        total = round((strength * 0.40) + (value * 0.35) + (momentum * 0.25), 1)
-    elif has_strength_data:
-        total = round((strength * 0.50) + (momentum * 0.30) + (pa_score * 0.20), 1)
-    elif has_value_data:
-        total = round((value * 0.50) + (momentum * 0.30) + (pa_score * 0.20), 1)
+    total_s_metrics = 3.0
+    total_v_metrics = 2.0
+    s_completeness = min(1.0, valid_s / total_s_metrics)
+    v_completeness = min(1.0, valid_v / total_v_metrics)
+
+    # Proportional confidence scaling: fundamental weight scales smoothly with data completeness
+    eff_s_weight = 0.40 * s_completeness
+    eff_v_weight = 0.35 * v_completeness
+    fund_weight = eff_s_weight + eff_v_weight
+    tech_weight = max(0.0, 1.0 - fund_weight)
+
+    if fund_weight >= 0.50:
+        mkt_momentum_w = tech_weight * 0.70
+        pa_w = tech_weight * 0.30
     else:
-        # Technical & Order Flow Mode (when fundamental metrics are unavailable)
-        total = round((momentum * 0.60) + (pa_score * 0.40), 1)
+        mkt_momentum_w = tech_weight * 0.60
+        pa_w = tech_weight * 0.40
+
+    total = round((strength * eff_s_weight) + (value * eff_v_weight) + (momentum * mkt_momentum_w) + (pa_score * pa_w), 1)
 
     current_price = (
         info.get("currentPrice") or
@@ -792,8 +802,8 @@ def compute_relative_strength_ratings(screener_results: list[dict], nifty_histor
         raw_rs = (0.4 * excess_1m) + (0.6 * excess_3m)
         raw_scores.append((raw_rs, s))
 
-    # Rank into 1-99 percentile
-    raw_scores.sort(key=lambda x: x[0])
+    # Rank into 1-99 percentile with deterministic tie-breakers (None-safe)
+    raw_scores.sort(key=lambda x: (x[0], x[1].get("wk52_return_pct") or 0, x[1].get("total_score") or 0, x[1].get("symbol") or ""))
     n = len(raw_scores)
     for rank_idx, (raw_val, s) in enumerate(raw_scores, 1):
         rs_rating = int(round((rank_idx / max(1, n)) * 99))
@@ -838,20 +848,204 @@ def compute_relative_strength_ratings(screener_results: list[dict], nifty_histor
     return screener_results
 
 
+def detect_rsi_divergence(history: pd.DataFrame, rsi_period: int = 14, lookback: int = 15) -> dict:
+    """
+    Detects Bullish RSI Divergence:
+    Price forms a Lower Low (or Equal Low) over the last 15 bars,
+    while RSI forms a Higher Low (indicating underlying accumulation/momentum reversal).
+    """
+    if history is None or history.empty or len(history) < rsi_period + lookback or "Close" not in history.columns:
+        return {"has_rsi_div": False, "rsi_div_badge": "", "rsi_div_pts": 0.0}
+
+    try:
+        close = history["Close"]
+        low = history["Low"] if "Low" in history.columns else close
+
+        delta = close.diff()
+        gain = delta.clip(lower=0)
+        loss = (-delta.clip(upper=0))
+        avg_gain = gain.ewm(alpha=1/rsi_period, min_periods=rsi_period, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1/rsi_period, min_periods=rsi_period, adjust=False).mean()
+        
+        rs = avg_gain / avg_loss.replace(0, 1e-6)
+        rsi_series = 100.0 - (100.0 / (1.0 + rs))
+
+        sub_lows = low.iloc[-lookback:]
+        sub_rsi = rsi_series.iloc[-lookback:]
+
+        mid = lookback // 2
+        l1_idx = sub_lows.iloc[:mid].idxmin()
+        l2_idx = sub_lows.iloc[mid:].idxmin()
+
+        if l1_idx is None or l2_idx is None:
+            return {"has_rsi_div": False, "rsi_div_badge": "", "rsi_div_pts": 0.0}
+
+        price_l1 = float(sub_lows.loc[l1_idx])
+        price_l2 = float(sub_lows.loc[l2_idx])
+
+        rsi_l1 = float(sub_rsi.loc[l1_idx])
+        rsi_l2 = float(sub_rsi.loc[l2_idx])
+
+        if price_l2 <= price_l1 * 1.002 and rsi_l2 >= rsi_l1 + 2.0 and rsi_l2 <= 58.0:
+            return {
+                "has_rsi_div": True,
+                "rsi_div_badge": f"📈 Bullish RSI Div ({rsi_l1:.0f}➔{rsi_l2:.0f})",
+                "rsi_div_pts": 10.0
+            }
+    except Exception:
+        pass
+
+    return {"has_rsi_div": False, "rsi_div_badge": "", "rsi_div_pts": 0.0}
+
+
+def compute_fibonacci_levels(history: pd.DataFrame, ltp: float = None) -> dict:
+    """
+    Computes Fibonacci Retracement levels from the recent swing high/low over 20-50 bars.
+    Levels: 38.2%, 50.0%, 61.8%.
+    Exclusion/Penalty Rule: If retracement exceeds 61.8%, the uptrend structure is broken (-25 penalty).
+    """
+    if history is None or history.empty or len(history) < 10 or "High" not in history.columns or "Low" not in history.columns:
+        return {
+            "fib_high": None, "fib_low": None, "fib_382": None, "fib_500": None, "fib_618": None,
+            "fib_retrace_pct": None, "fib_status": "NONE", "fib_badge": "⚪ Fib N/A", "fib_pts": 0.0
+        }
+
+    high_series = history["High"].dropna()
+    low_series = history["Low"].dropna()
+    close_series = history["Close"].dropna()
+
+    lookback = min(50, len(high_series))
+    recent_highs = high_series.iloc[-lookback:]
+    recent_lows = low_series.iloc[-lookback:]
+
+    swing_high = float(recent_highs.max())
+    swing_low = float(recent_lows.min())
+
+    if ltp is None or ltp <= 0:
+        ltp = float(close_series.iloc[-1]) if not close_series.empty else swing_high
+
+    rng = swing_high - swing_low
+    if rng <= 0 or swing_high <= 0:
+        return {
+            "fib_high": None, "fib_low": None, "fib_382": None, "fib_500": None, "fib_618": None,
+            "fib_retrace_pct": None, "fib_status": "NONE", "fib_badge": "⚪ Fib N/A", "fib_pts": 0.0
+        }
+
+    fib_382 = round(swing_high - (0.382 * rng), 2)
+    fib_500 = round(swing_high - (0.500 * rng), 2)
+    fib_618 = round(swing_high - (0.618 * rng), 2)
+
+    retrace_pct = round(((swing_high - ltp) / rng) * 100.0, 1)
+
+    if retrace_pct > 61.8:
+        fib_status = "FIB_618_EXCEEDED"
+        fib_badge = f"⚠️ Fib 61.8% Broken ({retrace_pct:.1f}% retrace)"
+        fib_pts = -25.0  # Severe penalty for trend breakdown
+    elif 42.0 <= retrace_pct <= 61.8:
+        fib_status = "FIB_500_ZONE"
+        fib_badge = f"📐 Fib 50% Support (₹{fib_500})"
+        fib_pts = 12.0
+    elif 28.0 <= retrace_pct < 42.0:
+        fib_status = "FIB_382_ZONE"
+        fib_badge = f"📐 Fib 38.2% Support (₹{fib_382})"
+        fib_pts = 15.0  # Prime swing entry zone
+    elif retrace_pct < 28.0:
+        fib_status = "FIB_SHALLOW"
+        fib_badge = f"📐 Shallow Retrace ({retrace_pct:.1f}%)"
+        fib_pts = 4.0
+    else:
+        fib_status = "NONE"
+        fib_badge = "⚪ Fib N/A"
+        fib_pts = 0.0
+
+    return {
+        "fib_high": round(swing_high, 2),
+        "fib_low": round(swing_low, 2),
+        "fib_382": fib_382,
+        "fib_500": fib_500,
+        "fib_618": fib_618,
+        "fib_retrace_pct": retrace_pct,
+        "fib_status": fib_status,
+        "fib_badge": fib_badge,
+        "fib_pts": fib_pts
+    }
+
+
+def compute_anchored_vwap(history: pd.DataFrame, ltp: float = None) -> dict:
+    """
+    Computes Anchored VWAP (AVWAP) from a high-volume catalyst/gap bar or key swing low in the last 30 bars.
+    Detects when price retraces to test the AVWAP line for a low-risk swing entry.
+    """
+    if history is None or history.empty or len(history) < 5 or "Volume" not in history.columns or "High" not in history.columns:
+        return {
+            "avwap": None, "dist_avwap_pct": None, "avwap_status": "NONE",
+            "avwap_badge": "⚓ AVWAP N/A", "avwap_pts": 0.0
+        }
+
+    lookback = min(30, len(history))
+    sub = history.iloc[-lookback:].copy()
+
+    highs = sub["High"]
+    lows = sub["Low"]
+    closes = sub["Close"]
+    vols = sub["Volume"]
+
+    if ltp is None or ltp <= 0:
+        ltp = float(closes.iloc[-1])
+
+    anchor_idx = 0
+    max_vol = -1.0
+    for i in range(len(sub)):
+        v_i = float(vols.iloc[i])
+        if v_i > max_vol:
+            max_vol = v_i
+            anchor_idx = i
+
+    typ_prices = (highs.iloc[anchor_idx:] + lows.iloc[anchor_idx:] + closes.iloc[anchor_idx:]) / 3.0
+    vols_sub = vols.iloc[anchor_idx:]
+
+    cum_vol = vols_sub.sum()
+    if cum_vol > 0:
+        avwap_val = float((typ_prices * vols_sub).sum() / cum_vol)
+    else:
+        avwap_val = float(typ_prices.mean())
+
+    avwap_val = round(avwap_val, 2)
+    dist_avwap_pct = round(((ltp - avwap_val) / avwap_val) * 100.0, 1) if avwap_val > 0 else 0.0
+
+    if -1.8 <= dist_avwap_pct <= 2.5:
+        avwap_status = "AVWAP_TEST_BOUNCE"
+        avwap_badge = f"⚓ AVWAP Bounce Support (₹{avwap_val})"
+        avwap_pts = 15.0  # High-conviction entry at AVWAP support
+    elif 2.5 < dist_avwap_pct <= 7.0:
+        avwap_status = "ABOVE_AVWAP"
+        avwap_badge = f"⚓ Above AVWAP (+{dist_avwap_pct:.1f}%)"
+        avwap_pts = 8.0
+    elif dist_avwap_pct > 7.0:
+        avwap_status = "EXTENDED_FROM_AVWAP"
+        avwap_badge = f"⚓ Extended from AVWAP (+{dist_avwap_pct:.1f}%)"
+        avwap_pts = 2.0
+    else:
+        avwap_status = "BELOW_AVWAP"
+        avwap_badge = f"⚓ Below AVWAP ({dist_avwap_pct:.1f}%)"
+        avwap_pts = -5.0
+
+    return {
+        "avwap": avwap_val,
+        "dist_avwap_pct": dist_avwap_pct,
+        "avwap_status": avwap_status,
+        "avwap_badge": avwap_badge,
+        "avwap_pts": avwap_pts
+    }
+
+
 def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
     """
     Decoupled Swing Trade Engine:
     Separates SETUP QUALITY (is this a high-conviction swing candidate?) 
     from ENTRY QUALITY (is now a low-risk entry point?).
 
-    Returns:
-      - setup_score : 0.0 - 100.0 (Structure, Breakout, Momentum, RS)
-      - entry_score : 0.0 - 100.0 (EMA20 proximity, Breakout proximity, Extension, R:R)
-      - swing_score : 0.0 - 100.0 (Weighted blend: 65% setup + 35% entry)
-      - swing_action: Action Label ("BUY NOW" | "BUY ON RETEST" | "EXTENDED — DON'T CHASE" | "WATCH / WAIT" | "REJECT")
-      - swing_badge : UI Badge string with status icon
-      - swing_class : CSS badge class ("badge-green" | "badge-orange" | "badge-yellow" | "badge-gray")
-      - swing_reason: Detailed rationale text
+    Includes Fibonacci Retracement & Anchored VWAP (AVWAP) engines.
     """
     vol_spike = float(scored.get("volume_spike") or 0.0)
     cmf = float(scored.get("cmf") or 0.0)
@@ -862,11 +1056,32 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
     ma50 = scored.get("ma50")
     ma200 = scored.get("ma200")
     ema20 = scored.get("ema20")
+
     market_structure = scored.get("market_structure") or "Neutral"
     pa_pattern = scored.get("pa_pattern") or "None"
     rs_rating = float(scored.get("rs_rating") or 50)
     ret_1m = float(scored.get("ret_1m") or 0.0)
     ret_3m = float(scored.get("ret_3m") or 0.0)
+
+    # ── Fibonacci, Anchored VWAP & Bullish RSI Divergence ──
+    fib_info = compute_fibonacci_levels(history, ltp) if history is not None else {
+        "fib_high": scored.get("fib_high"), "fib_low": scored.get("fib_low"),
+        "fib_382": scored.get("fib_382"), "fib_500": scored.get("fib_500"), "fib_618": scored.get("fib_618"),
+        "fib_retrace_pct": scored.get("fib_retrace_pct"), "fib_status": scored.get("fib_status", "NONE"),
+        "fib_badge": scored.get("fib_badge", "⚪ Fib N/A"), "fib_pts": float(scored.get("fib_pts") or 0.0)
+    }
+
+    avwap_info = compute_anchored_vwap(history, ltp) if history is not None else {
+        "avwap": scored.get("avwap"), "dist_avwap_pct": scored.get("dist_avwap_pct"),
+        "avwap_status": scored.get("avwap_status", "NONE"),
+        "avwap_badge": scored.get("avwap_badge", "⚓ AVWAP N/A"), "avwap_pts": float(scored.get("avwap_pts") or 0.0)
+    }
+
+    rsi_div_info = detect_rsi_divergence(history) if history is not None else {
+        "has_rsi_div": scored.get("has_rsi_div", False),
+        "rsi_div_badge": scored.get("rsi_div_badge", ""),
+        "rsi_div_pts": float(scored.get("rsi_div_pts") or 0.0)
+    }
 
     # 1H S/R Breakout & Retest signals
     sr_type = scored.get("sr_type") or "NONE"
@@ -879,6 +1094,12 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
 
     # ── 1. SETUP QUALITY SCORE (Max 70 raw points → 0-100 scale) ──────────────
     setup_pts = 0.0
+
+    # Fibonacci Retracement Score & Rejection Penalty
+    setup_pts += fib_info.get("fib_pts", 0.0)
+
+    # Bullish RSI Divergence Bonus
+    setup_pts += rsi_div_info.get("rsi_div_pts", 0.0)
 
     # A. Breakout & Structure (up to 40 pts)
     if is_break_res:
@@ -974,6 +1195,9 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
 
     # ── 2. ENTRY QUALITY SCORE (Max 100 raw points → 0-100 scale) ──────────────
     entry_pts = 0.0
+
+    # Anchored VWAP Support Score
+    entry_pts += avwap_info.get("avwap_pts", 0.0)
 
     # A. EMA20 Proximity (up to 25 pts)
     if dist_ema20_pct is not None:
@@ -1074,6 +1298,10 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
     elif nifty_regime == "CHOPPY":
         combined_score = max(0.0, combined_score - 5.0)
 
+    # 61.8% Fib Breakdown Rule: Severe penalty if pullback went too deep
+    if fib_info.get("fib_status") == "FIB_618_EXCEEDED":
+        combined_score = max(0.0, combined_score - 30.0)
+
     if ltp > 0 and ltp < 50.0:
         combined_score = max(0.0, combined_score - 25.0)
 
@@ -1081,7 +1309,12 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
 
 
     # ── 4. ACTION LABEL & BADGE ASSIGNMENT ─────────────────────────────────────
-    if nifty_regime == "CORRECTION" and setup_score < 60:
+    if fib_info.get("fib_status") == "FIB_618_EXCEEDED":
+        swing_action = "REJECT — FIB 61.8% BROKEN"
+        swing_badge = "⚠️ REJECT — FIB 61.8% BROKEN"
+        swing_class = "badge-red"
+        swing_reason = f"Pullback too deep ({fib_info.get('fib_retrace_pct', 0):.1f}% retrace) — uptrend structure broken"
+    elif nifty_regime == "CORRECTION" and setup_score < 60:
         swing_action = "AVOID — MARKET CORRECTION"
         swing_badge = "⛔ AVOID — MARKET CORRECTION"
         swing_class = "badge-red"
@@ -1136,7 +1369,21 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
         "swing_t1_pct": t1_pct,
         "swing_t2": target2,
         "swing_t2_pct": t2_pct,
-        "risk_reward": "1 : 1.5 / 1 : 2.5"
+        "risk_reward": "1 : 1.5 / 1 : 2.5",
+        "fib_high": fib_info.get("fib_high"),
+        "fib_low": fib_info.get("fib_low"),
+        "fib_382": fib_info.get("fib_382"),
+        "fib_500": fib_info.get("fib_500"),
+        "fib_618": fib_info.get("fib_618"),
+        "fib_retrace_pct": fib_info.get("fib_retrace_pct"),
+        "fib_status": fib_info.get("fib_status"),
+        "fib_badge": fib_info.get("fib_badge"),
+        "avwap": avwap_info.get("avwap"),
+        "dist_avwap_pct": avwap_info.get("dist_avwap_pct"),
+        "avwap_status": avwap_info.get("avwap_status"),
+        "avwap_badge": avwap_badge if 'avwap_badge' in locals() else avwap_info.get("avwap_badge"),
+        "has_rsi_div": rsi_div_info.get("has_rsi_div", False),
+        "rsi_div_badge": rsi_div_info.get("rsi_div_badge", "")
     }
 
 
@@ -2328,26 +2575,26 @@ def find_best_swing_candidate(screener_results: list[dict]) -> dict:
 
 def get_nse_monthly_expiry() -> tuple:
     """Return (days_to_expiry, expiry_date_str) for the active NSE monthly
-    stock options contract (expires last Thursday of each month).
+    stock options contract (expires last Tuesday of each month per NSE rules).
     Rolls over to next month if fewer than 4 days remain."""
     import datetime as _dt
     today = _dt.date.today()
 
-    def last_thursday(year: int, month: int) -> _dt.date:
+    def last_tuesday(year: int, month: int) -> _dt.date:
         if month == 12:
             last_day = _dt.date(year + 1, 1, 1) - _dt.timedelta(days=1)
         else:
             last_day = _dt.date(year, month + 1, 1) - _dt.timedelta(days=1)
-        offset = (last_day.weekday() - 3) % 7   # 3 = Thursday
+        offset = (last_day.weekday() - 1) % 7   # 1 = Tuesday
         return last_day - _dt.timedelta(days=offset)
 
-    expiry = last_thursday(today.year, today.month)
+    expiry = last_tuesday(today.year, today.month)
     days   = (expiry - today).days
     if days < 4:
         m, y = today.month + 1, today.year
         if m > 12:
             m, y = 1, y + 1
-        expiry = last_thursday(y, m)
+        expiry = last_tuesday(y, m)
         days   = (expiry - today).days
     return days, expiry.strftime("%d %b %Y")
 
@@ -2463,11 +2710,11 @@ def compute_fno_signal(scored: dict, fno_cfg: dict) -> dict:
 
     # ── Strike Selection ───────────────────────────────────────────────────────
     ce_base     = int(_math.ceil(ltp / strike_iv) * strike_iv)
-    ce_strike_1 = ce_base + strike_iv
-    ce_strike_2 = ce_base + 2 * strike_iv
+    ce_strike_1 = ce_base
+    ce_strike_2 = ce_base + strike_iv
     pe_base     = int(_math.floor(ltp / strike_iv) * strike_iv)
-    pe_strike_1 = pe_base - strike_iv
-    pe_strike_2 = pe_base - 2 * strike_iv
+    pe_strike_1 = pe_base
+    pe_strike_2 = pe_base - strike_iv
 
     ce_otm_pct_1 = round(((ce_strike_1 - ltp) / ltp) * 100, 1)
     ce_otm_pct_2 = round(((ce_strike_2 - ltp) / ltp) * 100, 1)
@@ -2518,67 +2765,6 @@ def compute_fno_signal(scored: dict, fno_cfg: dict) -> dict:
         "pa_pattern": scored.get("pa_pattern", "None"),
         "pa_badge": scored.get("pa_badge", "⚪ Neutral Order Flow"),
         "pa_class": scored.get("pa_class", "badge-gray"),
-    }
-
-
-def calc_indmoney_charges(trade_value: float, trade_type: str = "BUY") -> dict:
-    """
-    Calculates exact INDmoney Delivery Charges for Indian Equity:
-    - Brokerage: 0.05% or ₹20 (whichever is lower).
-    - STT (Securities Transaction Tax): 0.1% on Buy value & 0.1% on Sell value.
-    - Exchange Turnover Fee (NSE): 0.00297% of trade value.
-    - Stamp Duty: 0.015% on Buy value (0% on Sell).
-    - GST: 18% on (Brokerage + Exchange Turnover Fee).
-    - DP Charges (Depository Participant): ₹15.93 flat per sell order (CDSL/INDmoney).
-    - SEBI Turnover Fee: 0.0001% of trade value.
-    """
-    trade_val = float(trade_value)
-    if trade_val <= 0:
-        return {
-            "gross_value": 0.0, "total_charges": 0.0, "net_value": 0.0,
-            "brokerage": 0.0, "stt": 0.0, "stamp_duty": 0.0,
-            "exchange_fee": 0.0, "gst": 0.0, "dp_charges": 0.0, "sebi_fee": 0.0
-        }
-
-    # 1. Brokerage: 0.05% or ₹20 (whichever is lower)
-    brokerage = min(20.0, trade_val * 0.0005)
-    
-    # 2. STT: 0.1% on Buy & Sell
-    stt = trade_val * 0.001
-    
-    # 3. Exchange Turnover Fee (NSE): 0.00297%
-    exchange_fee = trade_val * 0.0000297
-    
-    # 4. Stamp Duty: 0.015% on Buy only
-    stamp_duty = (trade_val * 0.00015) if trade_type.upper() == "BUY" else 0.0
-    
-    # 5. GST: 18% on (Brokerage + Exchange Fee)
-    gst = (brokerage + exchange_fee) * 0.18
-    
-    # 6. DP Charges: ₹15.93 flat per Sell order
-    dp_charges = 15.93 if trade_type.upper() == "SELL" else 0.0
-    
-    # 7. SEBI Fee: 0.0001%
-    sebi_fee = trade_val * 0.000001
-
-    total_charges = round(brokerage + stt + exchange_fee + stamp_duty + gst + dp_charges + sebi_fee, 2)
-    
-    if trade_type.upper() == "BUY":
-        net_value = round(trade_val + total_charges, 2)
-    else:
-        net_value = round(max(0.0, trade_val - total_charges), 2)
-
-    return {
-        "gross_value": round(trade_val, 2),
-        "total_charges": total_charges,
-        "net_value": net_value,
-        "brokerage": round(brokerage, 2),
-        "stt": round(stt, 2),
-        "stamp_duty": round(stamp_duty, 2),
-        "exchange_fee": round(exchange_fee, 2),
-        "gst": round(gst, 2),
-        "dp_charges": round(dp_charges, 2),
-        "sebi_fee": round(sebi_fee, 2)
     }
 
 
@@ -2633,7 +2819,7 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
 
         penny_quality_score = round(min(100.0, max(0.0, q_pts)), 1)
 
-        # ── 2. PENNY ENTRY SCORE (0 - 100) ──────────────────────────────────────
+        # ── 2. STRICT PENNY ENTRY SCORE (0 - 100) ──────────────────────────────────────
         e_pts = 0.0
         ema20 = float(s.get("ema20") or 0)
         sr_sup = float(s.get("sup_level") or 0)
@@ -2641,31 +2827,30 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
         ma50 = float(s.get("ma50") or 0)
 
         auto_gtt = ema20 if (0 < ema20 < ltp) else sr_sup if (0 < sr_sup < ltp) else low20 if (0 < low20 < ltp) else ma50 if (0 < ma50 < ltp) else ltp
+        dist_gtt_pct = ((ltp - auto_gtt) / auto_gtt) * 100.0 if (auto_gtt > 0 and ltp > 0) else 99.0
+        dist_ema = abs((ltp - ema20) / ema20) * 100.0 if (ema20 > 0 and ltp > 0) else 99.0
 
-        if auto_gtt > 0 and ltp > 0:
-            dist_gtt_pct = ((ltp - auto_gtt) / auto_gtt) * 100.0
-            if dist_gtt_pct <= 3.0: e_pts += 35.0
-            elif dist_gtt_pct <= 8.0: e_pts += 22.0
-            elif dist_gtt_pct <= 15.0: e_pts += 12.0
-            else: e_pts += 5.0
-        else:
-            e_pts += 15.0
+        # Strict GTT Proximity (Max 40 pts) - Only award high points if within 3.5% of GTT support
+        if dist_gtt_pct <= 1.5: e_pts += 40.0
+        elif dist_gtt_pct <= 3.5: e_pts += 30.0
+        elif dist_gtt_pct <= 6.0: e_pts += 15.0
+        else: e_pts += 0.0
 
-        if ema20 > 0 and ltp > 0:
-            dist_ema = abs((ltp - ema20) / ema20) * 100.0
-            if dist_ema <= 4.0: e_pts += 30.0
-            elif dist_ema <= 10.0: e_pts += 18.0
-            else: e_pts += 8.0
-        else:
-            e_pts += 15.0
+        # Strict EMA20 Proximity (Max 30 pts)
+        if dist_ema <= 2.0: e_pts += 30.0
+        elif dist_ema <= 4.0: e_pts += 20.0
+        elif dist_ema <= 7.0: e_pts += 10.0
+        else: e_pts += 0.0
 
+        # RSI Sweet Spot 45-60 (Max 20 pts)
         rsi = float(s.get("rsi") or 50.0)
-        if 40 <= rsi <= 60: e_pts += 25.0
-        elif 60 < rsi <= 70: e_pts += 15.0
-        else: e_pts += 5.0
+        if 45 <= rsi <= 58: e_pts += 20.0
+        elif 40 <= rsi <= 65: e_pts += 10.0
+        else: e_pts += 0.0
 
-        day_chg = float(s.get("day_chg_pct") or 0.0)
-        if day_chg >= -0.35: e_pts += 10.0
+        # Intraday Inflow (Max 10 pts)
+        cmf = float(s.get("cmf") or 0.0)
+        if cmf > 0.05: e_pts += 10.0
 
         penny_entry_score = round(min(100.0, max(0.0, e_pts)), 1)
 
@@ -2673,19 +2858,24 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
         penny_rank_score = round((penny_quality_score * 0.65) + (penny_entry_score * 0.35), 1)
 
         if penny_quality_score >= 70:
-            if penny_entry_score >= 60:
+            # Strict Buy Now Gate: Entry Score >= 70 AND price within 3.5% of GTT support
+            if penny_entry_score >= 70.0 and dist_gtt_pct <= 3.5:
+                status = "BUY_NOW"
                 status_badge = "🟢 START SIP NOW"
                 status_badge_class = "badge-green"
-                status_reason = f"High durability wealth-builder ({penny_quality_score:.0f}/100) at ideal SIP entry ({penny_entry_score:.0f}/100 entry)"
+                status_reason = f"High durability ({penny_quality_score:.0f}/100) at strict GTT entry ({dist_gtt_pct:.1f}% from GTT ₹{auto_gtt:.2f})"
             else:
+                status = "WAIT"
                 status_badge = "🟢 SIP ON DIP / RETEST"
                 status_badge_class = "badge-green"
-                status_reason = f"Top quality micro-cap ({penny_quality_score:.0f}/100) — start initial tranche & accumulate on dips to GTT ₹{auto_gtt:.2f}"
+                status_reason = f"Top quality micro-cap ({penny_quality_score:.0f}/100) — currently +{dist_gtt_pct:.1f}% above GTT. Wait for dip to ₹{auto_gtt:.2f}"
         elif penny_quality_score >= 50:
+            status = "WATCHING"
             status_badge = "🟡 WATCHLIST"
             status_badge_class = "badge-yellow"
             status_reason = f"Developing micro-cap ({penny_quality_score:.0f}/100) — monitor earnings growth"
         else:
+            status = "REJECT"
             status_badge = "🔴 REJECT"
             status_badge_class = "badge-gray"
             status_reason = "Fails micro-cap durability requirements"
@@ -2712,6 +2902,7 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
         item["status_badge"] = status_badge
         item["status_badge_class"] = status_badge_class
         item["status_reason"] = status_reason
+        item["status"] = status
         item["auto_gtt"] = auto_gtt
         item["dist_from_gtt_pct"] = dist_from_gtt_pct
         qualified.append(item)
@@ -2793,22 +2984,25 @@ def run_lt_universe_discovery_pipeline(screener_results: list[dict], watchlist_i
     if not screener_results:
         return {"incumbents_audit": [], "top_challengers": []}
 
-    incumbent_symbols = {w["symbol"] for w in watchlist_items} if watchlist_items else set()
+    incumbent_symbols = {w.get("symbol") for w in watchlist_items if isinstance(w, dict) and w.get("symbol")} if watchlist_items else set()
 
     all_eval = []
     for s in screener_results:
-        eval_res = compute_sector_aware_lt_quality(s)
-        item = dict(s)
-        item.update(eval_res)
-        all_eval.append(item)
+        if isinstance(s, dict) and s.get("symbol"):
+            eval_res = compute_sector_aware_lt_quality(s)
+            item = dict(s)
+            item.update(eval_res)
+            all_eval.append(item)
 
-    all_eval.sort(key=lambda x: x["lt_quality_score"], reverse=True)
+    all_eval.sort(key=lambda x: x.get("lt_quality_score", 0), reverse=True)
 
     # Incumbent Audit & Classification using 7-status output actions from Final Brief
     incumbents_audit = []
     for w in (watchlist_items or []):
-        sym = w["symbol"]
-        scored_match = next((x for x in all_eval if x["symbol"] == sym), None)
+        sym = w.get("symbol")
+        if not sym:
+            continue
+        scored_match = next((x for x in all_eval if x.get("symbol") == sym), None)
         if scored_match:
             rank = all_eval.index(scored_match) + 1
             audit_res = evaluate_incumbent_status(scored_match)
@@ -2822,7 +3016,7 @@ def run_lt_universe_discovery_pipeline(screener_results: list[dict], watchlist_i
     # Top New Universe Challengers (Non-incumbents)
     top_challengers = []
     for x in all_eval:
-        if x["symbol"] not in incumbent_symbols and x["lt_quality_score"] >= 75.0:
+        if x.get("symbol") not in incumbent_symbols and x.get("lt_quality_score", 0) >= 75.0:
             rank = all_eval.index(x) + 1
             item = dict(x)
             item["incumbent_status"] = "NEW_DISCOVERY"

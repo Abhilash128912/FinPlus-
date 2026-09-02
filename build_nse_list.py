@@ -72,8 +72,9 @@ except Exception as e:
 # Sort by symbol
 result.sort(key=lambda x: x['s'])
 
-# Save to FINPLUS PNL APP public folder
-out_path = r'd:\FINPLUS PNL APP\public\nse_stocks.json'
+# Save to public folder
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+out_path = os.path.join(BASE_DIR, 'public', 'nse_stocks.json')
 os.makedirs(os.path.dirname(out_path), exist_ok=True)
 json.dump(result, open(out_path, 'w', encoding='utf-8'), separators=(',', ':'))
 print(f"\nSaved {len(result)} stocks to {out_path}")

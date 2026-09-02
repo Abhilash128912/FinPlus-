@@ -1,0 +1,17 @@
+{
+  "screener_opening_capital": "8200",
+  "screener_broker_adjustment": "0",
+  "screener_deposits": "0",
+  "screener_withdrawals": "0",
+  "screener_daily_risk_limit": "250",
+  "screener_challenge_start_date": "2026-07-23",
+  "screener_total_challenge_days": "1000",
+  "screener_alloc_intraday": "45",
+  "screener_alloc_natgas": "22.5",
+  "screener_alloc_nifty": "17.5",
+  "screener_alloc_crude": "10",
+  "screener_msl_intraday": "5",
+  "screener_msl_natgas": "10",
+  "screener_msl_nifty": "15",
+  "screener_msl_crude": "10"
+}

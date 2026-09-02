@@ -2,13 +2,13 @@ import json
 import sqlite3
 import os
 
-path = r"d:\FINPLUS PNL APP\finplus_journal_data.json"
-backup_path = r"d:\FINPLUS PNL APP\finplus_journal_mirror.json"
+path = r"d:\FINPLUS PNL APP\screener_journal_data.json"
+backup_path = r"d:\FINPLUS PNL APP\screener_journal_mirror.json"
 db_path = r"d:\FINPLUS PNL APP\trades_backup.db"
 
 trades_map = {}
 
-# 1. Read existing finplus_journal_data.json if present
+# 1. Read existing screener_journal_data.json if present
 if os.path.exists(path):
     try:
         existing = json.load(open(path, "r"))

@@ -7,10 +7,10 @@ echo   Source: Nifty 500 Universe (2400+ Stocks)
 echo ===================================================
 echo.
 
-echo [1/3] Terminating any existing server instances (Port 5000 ^& Python)...
-for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr :5000 ^| findstr LISTENING 2^>nul') do taskkill /F /PID %%a 2>nul
-taskkill /F /IM python.exe 2>nul
-timeout /t 1 /nobreak >nul
+if "%PORT%"=="" set PORT=5050
+echo [1/3] Terminating any existing Stock Screener server (Port %PORT%)...
+for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr :%PORT% ^| findstr LISTENING 2^>nul') do taskkill /F /PID %%a >nul 2>&1
+ping 127.0.0.1 -n 2 >nul
 
 echo [2/3] Cleaning Python bytecode ^& temporary system cache...
 if exist __pycache__ rmdir /s /q __pycache__ 2>nul
@@ -19,17 +19,15 @@ if exist .pytest_cache rmdir /s /q .pytest_cache 2>nul
 echo.
 
 echo [3/3] Launching Stock Screener Server ^& Web UI...
-echo         Starting server on http://localhost:5000 ...
+echo         Starting server on http://localhost:%PORT% ...
 echo.
 python fetch_and_build.py
 echo.
 if %ERRORLEVEL% NEQ 0 (
-  echo ❌ Error starting Python server. Please check python installation.
+  echo ❌ Server exited with code %ERRORLEVEL%.
   pause
   exit /b
 )
 
-echo Server active! Open in your browser at:
-echo http://localhost:5000
-echo.
+echo Server active! Press any key to stop server...
 pause
