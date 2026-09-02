@@ -2,6 +2,7 @@ import os
 import io
 import json
 import sys
+import datetime
 import pandas as pd
 import urllib.request
 
@@ -27,6 +28,8 @@ if os.path.exists(CONFIG_FILE):
         pass
 
 EXCEL_PATH = cfg.get("excel_path", r"D:\Nifty 500 stocks.xlsx")
+SYNC_STATE_FILE = os.path.join(BASE_DIR, "nse_list_sync_state.json")
+IST_OFFSET = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
 # Dict of popular Nifty indices and their constituent CSV links on niftyindices.com
 INDICES = {
@@ -77,12 +80,49 @@ def download_nse_equity_master() -> pd.DataFrame | None:
         print(f"  [ERROR] Error fetching NSE Master List: {e}")
     return None
 
+def _today_ist_str() -> str:
+    return datetime.datetime.now(IST_OFFSET).strftime("%Y-%m-%d")
+
+
+def _already_synced_today() -> bool:
+    if os.environ.get("FORCE_NSE_SYNC"):
+        return False
+    if not os.path.exists(SYNC_STATE_FILE):
+        return False
+    try:
+        with open(SYNC_STATE_FILE, encoding="utf-8") as f:
+            state = json.load(f)
+        return state.get("last_synced_date") == _today_ist_str()
+    except Exception:
+        return False
+
+
+def _mark_synced_today():
+    try:
+        with open(SYNC_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump({"last_synced_date": _today_ist_str()}, f)
+    except Exception:
+        pass
+
+
 def main():
+    # Index membership (Nifty 50/Midcap150/etc.) and the active-listings master
+    # list only change on NSE's quarterly rebalance schedule, plus the occasional
+    # new listing/delisting — never intraday. Re-running this on every hourly scan
+    # bought no real freshness and cost ~1-2 minutes of network I/O (6 sequential
+    # downloads) every single time. Once per calendar day (IST) is enough; set
+    # FORCE_NSE_SYNC=1 to force a re-sync regardless (e.g. after a known index
+    # rebalance announcement).
+    if _already_synced_today():
+        print("[INFO] NSE stock list already synced today — skipping re-download "
+              "(set FORCE_NSE_SYNC=1 to force).")
+        return
+
     print("=" * 60)
     print("         Full NSE Listed Equities & Indices Downloader")
     print("         Using curl_cffi browser impersonation")
     print("=" * 60)
-    
+
     all_new_stocks = []
     
     # 1. Download Nifty 50, Nifty Next 50, Nifty Midcap 150, Nifty Smallcap 250, Nifty 500
@@ -310,6 +350,8 @@ def main():
             pass
     else:
         print("[SUCCESS] Stock list is fully synchronized and reconciled. No changes needed.")
+
+    _mark_synced_today()
 
 if __name__ == "__main__":
     main()

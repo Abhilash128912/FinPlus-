@@ -1428,9 +1428,47 @@ function checkStartupScanStatus() {
         }
         if (wasScanning) {
           window.location.reload();
+          return;
         }
         if (startupScanPoller) clearInterval(startupScanPoller);
+        // This only ever watched the ONE scan that happened to be running when the
+        // page first loaded — once that finished (or never happened), the poller
+        // stopped for good, so a tab left open across a LATER scan (the hourly
+        // rescan, or a manual "Scan Now") never learned new data existed. Anyone
+        // watching the Intraday tab in particular would keep seeing whatever picks
+        // were computed when the page loaded, silently going stale. Hand off to a
+        // slower, persistent watcher for the rest of the page's lifetime instead.
+        if (res && res.last_scan_completed_at) {
+          knownScanCompletedAt = res.last_scan_completed_at;
+        }
+        if (!freshScanPoller) {
+          freshScanPoller = setInterval(checkForFreshScan, 60000);
+        }
       }
+    })
+    .catch(() => {});
+}
+
+let freshScanPoller = null;
+let knownScanCompletedAt = null;
+
+function checkForFreshScan() {
+  fetch('/api/status')
+    .then(r => r.json())
+    .then(res => {
+      if (!res || res.is_scanning || !res.last_scan_completed_at) return;
+      if (knownScanCompletedAt === null) {
+        knownScanCompletedAt = res.last_scan_completed_at;
+        return;
+      }
+      if (res.last_scan_completed_at === knownScanCompletedAt) return;
+
+      if (freshScanPoller) { clearInterval(freshScanPoller); freshScanPoller = null; }
+      const b = document.createElement('div');
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:linear-gradient(135deg,rgba(108,99,255,0.95),rgba(0,212,170,0.95));color:#fff;padding:10px 20px;text-align:center;font-size:13px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,0.4)';
+      b.textContent = '⚡ A newer scan just finished — refreshing with fresh data...';
+      document.body.prepend(b);
+      setTimeout(() => window.location.reload(), 2500);
     })
     .catch(() => {});
 }
