@@ -250,8 +250,18 @@ def log(msg):
 
 
 def open_in_browser(target: str) -> bool:
-    """Robust browser launcher for Windows shell + default browser fallback."""
+    """Robust browser launcher for Windows shell + default browser fallback.
+
+    Accepts either a URL or a local file path (auto-converted to a file:// URL).
+    This used to have a second, duplicate definition further down the file that
+    silently shadowed this one at runtime (Python just uses whichever def ran
+    last) — that duplicate only called webbrowser.open(), missing the more
+    reliable os.startfile()/shell "start" paths below, so every open_in_browser()
+    call in the app was quietly using the weaker implementation. Merged into one.
+    """
     import platform, subprocess
+    if not str(target).startswith(("http://", "https://", "file://")):
+        target = f"file:///{os.path.abspath(target).replace(os.sep, '/')}"
     if platform.system() == "Windows":
         try:
             os.startfile(target)
@@ -8366,16 +8376,6 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
-def open_in_browser(url_or_path: str) -> bool:
-    try:
-        import webbrowser
-        if not str(url_or_path).startswith("http"):
-            url_or_path = f"file:///{os.path.abspath(url_or_path).replace(os.sep, '/')}"
-        return webbrowser.open(url_or_path)
-    except Exception:
-        return False
-
-
 def is_screener_running_on_port(check_port: int) -> bool:
     """Checks if our Stock Screener app is already responding on check_port."""
     try:
@@ -8457,7 +8457,13 @@ def run_server(port=None):
 
     if httpd:
         try:
-            if "PORT" not in os.environ and not os.environ.get("NO_BROWSER"):
+            # Gating this on "PORT" env var presence used to break local auto-open
+            # the moment any launcher script (e.g. Run Screener.bat, to target the
+            # right port for its own kill/display logic) set PORT for reasons
+            # unrelated to being on a cloud host — that's exactly what happened.
+            # DYNO is Heroku-specific and essentially never set outside a real dyno,
+            # so it doesn't collide with local tooling the way a generic PORT check does.
+            if "DYNO" not in os.environ and not os.environ.get("NO_BROWSER"):
                 try:
                     log(f"Opening http://localhost:{port} in default browser...")
                     open_in_browser(f"http://localhost:{port}")
