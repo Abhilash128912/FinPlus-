@@ -2571,6 +2571,136 @@ def find_best_swing_candidate(screener_results: list[dict]) -> dict:
     }
 
 
+def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict:
+    """
+    Selects intraday MIS buy (long) and sell (short) candidates for same-day
+    square-off trades. Distinct from find_best_swing_candidate (3-7 day holds):
+    intraday setups require today's price action + volume to already confirm
+    direction, use much tighter stop-loss/target distances than a swing trade,
+    and enforce a stricter liquidity floor since MIS positions must be exited
+    the same day without excessive slippage.
+
+    Buy (long): positive day move already underway on above-average volume,
+    RSI in a bullish-but-not-yet-overbought zone, price holding above its
+    50-day MA (trend intact).
+
+    Sell (short): mirror conditions — negative day move on above-average
+    volume, RSI in a bearish-but-not-yet-oversold zone, price below its
+    50-day MA (trend broken). Assumes MIS intraday short-selling in the cash
+    segment (standard with Indian discount brokers), not F&O — the separate
+    F&O Options tab already covers options-based bearish plays.
+
+    Returns {"buy": [...up to top_n...], "sell": [...up to top_n...]}, ranked
+    by a composite of today's move size, volume confirmation, and RSI extension.
+    """
+    if not screener_results:
+        return {"buy": [], "sell": []}
+
+    MIN_LIQUIDITY = 200_000   # avg daily volume floor — avoid MIS slippage traps
+    MIN_PRICE = 20.0          # avoid circuit-prone micro-price names intraday
+
+    buy_candidates = []
+    sell_candidates = []
+
+    for s in screener_results:
+        ltp = s.get("ltp") or 0
+        if ltp < MIN_PRICE:
+            continue
+
+        liquidity = s.get("avg_volume_10d") or s.get("today_volume") or 0
+        if liquidity < MIN_LIQUIDITY:
+            continue
+
+        # prev_close comes from yfinance's `.info` dict upstream (score_stock），
+        # which is known to silently return incomplete data / get rate-limited —
+        # it's frequently None even when every other technical field is fine. Only
+        # gate on today's move when we actually have it; otherwise fall through to
+        # RSI + volume + trend alone rather than silently excluding everything
+        # (a hard "prev_close required" gate would zero out both lists on any scan
+        # where yfinance's .info degraded, which defeats the whole tab).
+        raw_prev_close = s.get("prev_close")
+        has_day_move = raw_prev_close is not None and raw_prev_close > 0
+        day_chg_pct = ((ltp - raw_prev_close) / raw_prev_close) * 100 if has_day_move else 0.0
+
+        rsi = s.get("rsi") or 50
+        vol_spike = s.get("volume_spike") or 1.0
+        ma50 = s.get("ma50") or ltp
+        dist_ma50_pct = ((ltp - ma50) / ma50) * 100 if ma50 > 0 else 0
+        momentum = s.get("momentum") or 0
+        rs_rating = s.get("rs_rating") or 50
+
+        day_move_bullish = (not has_day_move) or (0.4 <= day_chg_pct <= 7.0)
+        day_move_bearish = (not has_day_move) or (-7.0 <= day_chg_pct <= -0.4)
+
+        # Buy (long): today's up-move confirmed by volume (when known), RSI
+        # building but not yet overbought, trend intact.
+        if (day_move_bullish and vol_spike >= 1.3
+                and 54 <= rsi <= 74 and dist_ma50_pct >= -1.0):
+            score = (min(day_chg_pct, 5) * 4 + min(vol_spike, 3) * 8
+                      + (rsi - 50) * 0.6 + momentum * 0.3 + (rs_rating - 50) * 0.2)
+            buy_candidates.append((score, s, day_chg_pct, dist_ma50_pct, has_day_move))
+
+        # Sell (short): today's down-move confirmed by volume (when known), RSI
+        # breaking down but not yet oversold-exhausted, trend broken.
+        if (day_move_bearish and vol_spike >= 1.3
+                and 26 <= rsi <= 46 and dist_ma50_pct <= 1.0):
+            score = (min(abs(day_chg_pct), 5) * 4 + min(vol_spike, 3) * 8
+                      + (50 - rsi) * 0.6 + (-momentum) * 0.3 + (50 - rs_rating) * 0.2)
+            sell_candidates.append((score, s, day_chg_pct, dist_ma50_pct, has_day_move))
+
+    buy_candidates.sort(key=lambda x: x[0], reverse=True)
+    sell_candidates.sort(key=lambda x: x[0], reverse=True)
+
+    def _build_pick(entry, direction):
+        _, s, day_chg_pct, dist_ma50_pct, has_day_move = entry
+        ltp = s.get("ltp") or 0
+        # Much tighter risk sizing than a swing trade — MIS is same-day only.
+        risk_pct = 1.0
+        if direction == "BUY":
+            stop_loss = round(ltp * (1 - risk_pct / 100), 2)
+            target1 = round(ltp * (1 + 1.5 * risk_pct / 100), 2)
+            target2 = round(ltp * (1 + 2.5 * risk_pct / 100), 2)
+        else:
+            stop_loss = round(ltp * (1 + risk_pct / 100), 2)
+            target1 = round(ltp * (1 - 1.5 * risk_pct / 100), 2)
+            target2 = round(ltp * (1 - 2.5 * risk_pct / 100), 2)
+
+        return {
+            "symbol": s.get("symbol"),
+            "ticker": s.get("ticker"),
+            "name": s.get("name"),
+            "sector": s.get("sector"),
+            "direction": direction,
+            "ltp": ltp,
+            "day_chg_pct": round(day_chg_pct, 2) if has_day_move else None,
+            "has_day_move": has_day_move,
+            "rsi": s.get("rsi"),
+            "volume_spike": s.get("volume_spike"),
+            "dist_ma50_pct": round(dist_ma50_pct, 2),
+            "rs_rating": s.get("rs_rating"),
+            "total_score": s.get("total_score"),
+            "stop_loss": stop_loss,
+            "stop_loss_pct": risk_pct if direction == "SELL" else -risk_pct,
+            "target1": target1,
+            "target1_pct": 1.5 * risk_pct if direction == "BUY" else -1.5 * risk_pct,
+            "target2": target2,
+            "target2_pct": 2.5 * risk_pct if direction == "BUY" else -2.5 * risk_pct,
+            "timeframe": "Intraday (MIS — square off by 3:20 PM)",
+            "rationale": (
+                (f"Up {day_chg_pct:.1f}% today on " if has_day_move and direction == "BUY"
+                 else f"Down {abs(day_chg_pct):.1f}% today on " if has_day_move
+                 else "")
+                + f"{s.get('volume_spike')}x volume, RSI {s.get('rsi')}, "
+                f"{'above' if direction == 'BUY' else 'below'} 50DMA ({dist_ma50_pct:+.1f}%)."
+            ),
+        }
+
+    return {
+        "buy": [_build_pick(e, "BUY") for e in buy_candidates[:top_n]],
+        "sell": [_build_pick(e, "SELL") for e in sell_candidates[:top_n]],
+    }
+
+
 # ─── F&O Options Signal Engine ────────────────────────────────────────────────
 
 def get_nse_monthly_expiry() -> tuple:

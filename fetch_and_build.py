@@ -38,7 +38,7 @@ import logging
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
-from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline
+from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline, compute_intraday_picks
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -2641,6 +2641,7 @@ details[open] summary::before {
   <div class="tabs">
     <button class="tab active" data-tab="screener" onclick="switchTab('screener')">🔍 Full Screener</button>
     <button class="tab" data-tab="swing" onclick="switchTab('swing')">⚡ Swing Top 10</button>
+    <button class="tab" data-tab="intraday" onclick="switchTab('intraday')">🎯 Intraday</button>
     <button class="tab" data-tab="watchlist" onclick="switchTab('watchlist')">🛡️ LT Screen (<span id="wlCount">0</span>)</button>
     <button class="tab" data-tab="penny" onclick="switchTab('penny')">💎 Penny Screen</button>
     <button class="tab" data-tab="fno" onclick="switchTab('fno')">📊 F&amp;O Options</button>
@@ -3014,6 +3015,9 @@ details[open] summary::before {
   <!-- QUALITY PENNY STOCKS TAB -->
   <div id="tab-penny" style="display:none"></div>
 
+  <!-- INTRADAY BUY/SELL TAB -->
+  <div id="tab-intraday" style="display:none"></div>
+
   <!-- F&O OPTIONS TAB -->
   <div id="tab-fno" style="display:none"></div>
 
@@ -3138,6 +3142,10 @@ details[open] summary::before {
     <span class="mobile-nav-icon">⚡</span>
     <span>Swing Top 10</span>
   </button>
+  <button class="mobile-nav-item" data-tab="intraday" onclick="switchTab('intraday')">
+    <span class="mobile-nav-icon">🎯</span>
+    <span>Intraday</span>
+  </button>
   <button class="mobile-nav-item" data-tab="watchlist" onclick="switchTab('watchlist')">
     <span class="mobile-nav-icon">🛡️</span>
     <span>LT Screen</span>
@@ -3166,6 +3174,7 @@ let COMMODITIES_DATA = __COMMODITIES_JSON__;
 let MARKET_INFO = __MARKET_INFO_JSON__;
 let FNO_DATA = __FNO_JSON__;
 let PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;
+let INTRADAY_DATA = __INTRADAY_JSON__;
 let LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;
 
 // ── State ─────────────────────────────────────────────────────────────────
@@ -4732,6 +4741,10 @@ async function refreshLiveLTP(manual = false) {
   if (typeof PENNY_STOCKS_DATA !== 'undefined' && Array.isArray(PENNY_STOCKS_DATA)) {
     PENNY_STOCKS_DATA.forEach(p => symbolsToPoll.set(p.symbol, p.ticker || p.symbol + '.NS'));
   }
+  if (typeof INTRADAY_DATA !== 'undefined' && INTRADAY_DATA) {
+    (INTRADAY_DATA.buy || []).forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
+    (INTRADAY_DATA.sell || []).forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
+  }
   if (typeof FNO_DATA !== 'undefined' && Array.isArray(FNO_DATA)) {
     FNO_DATA.forEach(f => symbolsToPoll.set(f.symbol, f.ticker || f.symbol + '.NS'));
   }
@@ -4958,6 +4971,16 @@ async function refreshLiveLTP(manual = false) {
         priceChanged = true;
       }
     }
+
+    if (typeof INTRADAY_DATA !== 'undefined' && INTRADAY_DATA) {
+      const idPick = [...(INTRADAY_DATA.buy || []), ...(INTRADAY_DATA.sell || [])]
+        .find(s => s.symbol === sym || s.symbol === cleanSym);
+      if (idPick && Math.abs((idPick.ltp || 0) - newPrice) > 0.01) {
+        idPick.old_ltp = idPick.ltp;
+        idPick.ltp = newPrice;
+        priceChanged = true;
+      }
+    }
   }
 
   const nowStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
@@ -4983,6 +5006,7 @@ async function refreshLiveLTP(manual = false) {
   renderWatchlist();
   if (typeof renderLtWatchlist === 'function') renderLtWatchlist();
   if (typeof renderFnoTab === 'function') renderFnoTab();
+  if (typeof renderIntradayTab === 'function') renderIntradayTab();
   if (typeof renderTopPick === 'function') renderTopPick();
   if (typeof renderSwingRadar === 'function') renderSwingRadar();
   if (typeof renderSrBreakouts === 'function') renderSrBreakouts();
@@ -5079,9 +5103,12 @@ function switchTab(tab) {
   document.getElementById('tab-watchlist').style.display = tab === 'watchlist' ? '' : 'none';
   const pennyTab = document.getElementById('tab-penny');
   if (pennyTab) pennyTab.style.display                   = tab === 'penny'     ? '' : 'none';
+  const intradayTab = document.getElementById('tab-intraday');
+  if (intradayTab) intradayTab.style.display             = tab === 'intraday'  ? '' : 'none';
   document.getElementById('tab-fno').style.display       = tab === 'fno'       ? '' : 'none';
   document.getElementById('tab-holidays').style.display  = tab === 'holidays'  ? '' : 'none';
   if (tab === 'swing')      { renderSwingRadar(); renderSrBreakouts(); }
+  if (tab === 'intraday')   renderIntradayTab();
   if (tab === 'watchlist')  { renderLtWatchlist(); fetchLtPortfolioStatus(); }
   if (tab === 'penny')      renderPennyStocksTab();
   if (tab === 'fno')        renderFnoTab();
@@ -5302,6 +5329,89 @@ function renderFnoTab() {
       </div>
     </div>
     <div class="fno-grid">${gridContent}</div>
+  `;
+}
+
+// ── Intraday Buy/Sell Tab (Top 5 MIS long + Top 5 MIS short setups) ────
+function renderIntradayTab() {
+  const container = document.getElementById('tab-intraday');
+  if (!container) return;
+
+  const data = (typeof INTRADAY_DATA !== 'undefined' && INTRADAY_DATA) ? INTRADAY_DATA : { buy: [], sell: [] };
+  const buys = data.buy || [];
+  const sells = data.sell || [];
+
+  function fmt(n) { return (n || n === 0) ? '₹' + Number(n).toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2}) : '-'; }
+  function pillColor(v, goodAbove) { return v >= goodAbove ? '#4ade80' : v >= goodAbove * 0.6 ? '#fbbf24' : '#f87171'; }
+
+  function card(s) {
+    const isBuy = s.direction === 'BUY';
+    const hasChg = s.has_day_move && s.day_chg_pct != null;
+    const chgCls = hasChg ? (s.day_chg_pct >= 0 ? 'pos' : 'neg') : '';
+    const chgLabel = hasChg ? `${s.day_chg_pct >= 0 ? '+' : ''}${s.day_chg_pct}%` : 'Day chg n/a';
+    const dirBadge = isBuy
+      ? '<span class="fno-signal-badge fno-signal-ce">▲ BUY (Long)</span>'
+      : '<span class="fno-signal-badge fno-signal-pe">▼ SELL (Short)</span>';
+    const rsiCls = pillColor(isBuy ? s.rsi : (100 - s.rsi), 55);
+    const volCls = pillColor(s.volume_spike, 1.5);
+    return `
+    <div class="fno-card">
+      <div class="fno-card-header">
+        <div>
+          <div class="fno-card-sym">${s.symbol}</div>
+          <div class="fno-card-name">${s.name || ''}</div>
+        </div>
+        <div class="fno-card-price">
+          <div class="fno-card-ltp">${fmt(s.ltp)}</div>
+          <div class="fno-card-chg ${chgCls}">${chgLabel}</div>
+        </div>
+      </div>
+      <div class="fno-signal-row">
+        ${dirBadge}
+      </div>
+      <div class="fno-section-title">Intraday Risk / Reward (MIS)</div>
+      <div class="fno-rr-grid">
+        <div class="fno-rr-cell">
+          <div class="fno-rr-label">Stop Loss</div>
+          <div class="fno-rr-val ${isBuy ? 'neg' : 'pos'}">${fmt(s.stop_loss)}</div>
+        </div>
+        <div class="fno-rr-cell">
+          <div class="fno-rr-label">Target 1</div>
+          <div class="fno-rr-val ${isBuy ? 'pos' : 'neg'}">${fmt(s.target1)}</div>
+        </div>
+        <div class="fno-rr-cell">
+          <div class="fno-rr-label">Target 2</div>
+          <div class="fno-rr-val ${isBuy ? 'pos' : 'neg'}">${fmt(s.target2)}</div>
+        </div>
+      </div>
+      <div class="fno-tech-row">
+        <span class="fno-tech-pill" style="background:${rsiCls}18;color:${rsiCls};border:1px solid ${rsiCls}44">RSI ${s.rsi}</span>
+        <span class="fno-tech-pill" style="background:${volCls}18;color:${volCls};border:1px solid ${volCls}44">Vol ${s.volume_spike}x</span>
+        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">50DMA ${s.dist_ma50_pct >= 0 ? '+' : ''}${s.dist_ma50_pct}%</span>
+      </div>
+      <div class="fno-lot-info" style="padding:10px 18px 16px">
+        <span style="color:var(--muted);font-size:11.5px">${s.rationale || ''}</span>
+      </div>
+    </div>`;
+  }
+
+  const buyCards = buys.map(card).join('') || '<div class="fno-no-data" style="grid-column: 1 / -1; padding: 30px">⚠ No strong intraday buy setups found in today\'s scan.</div>';
+  const sellCards = sells.map(card).join('') || '<div class="fno-no-data" style="grid-column: 1 / -1; padding: 30px">⚠ No strong intraday sell setups found in today\'s scan.</div>';
+
+  container.innerHTML = `
+    <div class="fno-header">
+      <div class="fno-header-left">
+        <span style="font-size:28px">🎯</span>
+        <div>
+          <div class="fno-header-title">Intraday MIS Buy / Sell Setups</div>
+          <div class="fno-header-sub">Same-day square-off &bull; Ranked by today's move + volume confirmation &bull; Not investment advice</div>
+        </div>
+      </div>
+    </div>
+    <div class="fno-section-title" style="margin-top:4px">🟢 Top ${buys.length} Buy (Long) Setups</div>
+    <div class="fno-grid">${buyCards}</div>
+    <div class="fno-section-title" style="margin-top:24px">🔴 Top ${sells.length} Sell (Short) Setups</div>
+    <div class="fno-grid">${sellCards}</div>
   `;
 }
 
@@ -7393,6 +7503,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
     run_time = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
 
     penny_stocks_data = compute_quality_penny_stocks(screener_results, top_n=20, monthly_sip=200.0)
+    intraday_data = compute_intraday_picks(screener_results, top_n=5)
     lt_summary = get_lt_portfolio_summary(screener_results)
 
     replacements = {
@@ -7408,6 +7519,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "__MARKET_INFO_JSON__": json.dumps(mkt_info, ensure_ascii=False, default=json_serializer),
         "__FNO_JSON__": json.dumps(fno_data or [], ensure_ascii=False, default=json_serializer),
         "__PENNY_STOCKS_JSON__": json.dumps(penny_stocks_data, ensure_ascii=False, default=json_serializer),
+        "__INTRADAY_JSON__": json.dumps(intraday_data, ensure_ascii=False, default=json_serializer),
         "__LT_PORTFOLIO_SUMMARY_JSON__": json.dumps(lt_summary, ensure_ascii=False, default=json_serializer),
     }
 
@@ -7446,6 +7558,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "let MARKET_INFO = __MARKET_INFO_JSON__;\n"
         "let FNO_DATA = __FNO_JSON__;\n"
         "let PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;\n"
+        "let INTRADAY_DATA = __INTRADAY_JSON__;\n"
         "let LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;"
     )
     # `var`, not `let`: app.js declares these once with empty defaults, and the small
@@ -7462,6 +7575,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "var MARKET_INFO = {};\n"
         "var FNO_DATA = [];\n"
         "var PENNY_STOCKS_DATA = [];\n"
+        "var INTRADAY_DATA = {};\n"
         "var LT_PORTFOLIO_SUMMARY = {};"
     )
     if data_let_block not in js_raw:
@@ -7507,6 +7621,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         f"var MARKET_INFO = {replacements['__MARKET_INFO_JSON__']};\n"
         f"var FNO_DATA = {replacements['__FNO_JSON__']};\n"
         f"var PENNY_STOCKS_DATA = {replacements['__PENNY_STOCKS_JSON__']};\n"
+        f"var INTRADAY_DATA = {replacements['__INTRADAY_JSON__']};\n"
         f"var LT_PORTFOLIO_SUMMARY = {replacements['__LT_PORTFOLIO_SUMMARY_JSON__']};\n"
         "var SCREENER_DATA = [];\n"
     )
