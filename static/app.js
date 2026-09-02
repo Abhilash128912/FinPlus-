@@ -9,6 +9,7 @@ var MARKET_INFO = {};
 var FNO_DATA = [];
 var PENNY_STOCKS_DATA = [];
 var INTRADAY_DATA = {};
+var LT_MONTHLY_PICKS = {};
 var LT_PORTFOLIO_SUMMARY = {};
 
 // ── State ─────────────────────────────────────────────────────────────────
@@ -1981,7 +1982,7 @@ function switchTab(tab) {
   document.getElementById('tab-holidays').style.display  = tab === 'holidays'  ? '' : 'none';
   if (tab === 'swing')      { renderSwingRadar(); renderSrBreakouts(); }
   if (tab === 'intraday')   renderIntradayTab();
-  if (tab === 'watchlist')  { renderLtWatchlist(); fetchLtPortfolioStatus(); }
+  if (tab === 'watchlist')  { renderLtWatchlist(); renderLtMonthlyPicks(); fetchLtPortfolioStatus(); }
   if (tab === 'penny')      renderPennyStocksTab();
   if (tab === 'fno')        renderFnoTab();
   if (tab === 'holidays')   renderHolidaysTab();
@@ -2284,6 +2285,93 @@ function renderIntradayTab() {
     <div class="fno-grid">${buyCards}</div>
     <div class="fno-section-title" style="margin-top:24px">🔴 Top ${sells.length} Sell (Short) Setups</div>
     <div class="fno-grid">${sellCards}</div>
+  `;
+}
+
+// ── This Month's Locked LT Discovery Picks (regenerated once every 30 days) ──
+function renderLtMonthlyPicks() {
+  const container = document.getElementById('ltMonthlyPicksSection');
+  if (!container) return;
+
+  const data = (typeof LT_MONTHLY_PICKS !== 'undefined' && LT_MONTHLY_PICKS) ? LT_MONTHLY_PICKS : { picks: [] };
+  const picks = data.picks || [];
+
+  if (!picks.length) {
+    container.innerHTML = '';
+    return;
+  }
+
+  function fmt(n) { return (n || n === 0) ? '₹' + Number(n).toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2}) : '-'; }
+  function valColor(status) {
+    if (status === 'UNDERVALUED') return '#4ade80';
+    if (status === 'FAIRLY_VALUED') return '#fbbf24';
+    return '#f87171';
+  }
+  function riskColor(risk) {
+    if (risk === 'LOW') return '#4ade80';
+    if (risk === 'MODERATE') return '#fbbf24';
+    return '#f87171';
+  }
+
+  const cards = picks.map(p => {
+    const vColor = valColor(p.lt_valuation_status);
+    const rColor = riskColor(p.lt_risk_level);
+    const valLabel = (p.lt_valuation_status || '').replace(/_/g, ' ');
+    return `
+    <div class="fno-card">
+      <div class="fno-card-header">
+        <div>
+          <div class="fno-card-sym">#${p.monthly_rank || ''} ${p.symbol}</div>
+          <div class="fno-card-name">${p.name || ''} &bull; ${p.sector_group || ''}</div>
+        </div>
+        <div class="fno-card-price">
+          <div class="fno-card-ltp">${fmt(p.ltp)}</div>
+        </div>
+      </div>
+      <div class="fno-section-title">LT Quality Breakdown</div>
+      <div class="fno-rr-grid">
+        <div class="fno-rr-cell">
+          <div class="fno-rr-label">Quality Score</div>
+          <div class="fno-rr-val pos">${(p.lt_quality_score||0).toFixed(0)}/100</div>
+        </div>
+        <div class="fno-rr-cell">
+          <div class="fno-rr-label">Valuation</div>
+          <div class="fno-rr-val" style="color:${vColor}">${valLabel}</div>
+        </div>
+        <div class="fno-rr-cell">
+          <div class="fno-rr-label">Risk</div>
+          <div class="fno-rr-val" style="color:${rColor}">${p.lt_risk_level || '-'}</div>
+        </div>
+      </div>
+      <div class="fno-tech-row">
+        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">ROE ${(p.roe_pct||0).toFixed(1)}%</span>
+        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">D/E ${(p.de_ratio||0).toFixed(2)}</span>
+        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">Rev Growth ${(p.rev_growth_pct||0).toFixed(1)}%</span>
+      </div>
+      <div class="fno-lot-info" style="padding:10px 18px 16px">
+        <span style="color:var(--muted);font-size:11.5px">${p.rationale || ''}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  const lockedUntilStr = data.locked_until
+    ? new Date(data.locked_until).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '';
+  const generatedStr = data.generated_on
+    ? new Date(data.generated_on).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '';
+
+  container.innerHTML = `
+    <div class="fno-header" style="margin-bottom:14px">
+      <div class="fno-header-left">
+        <span style="font-size:28px">🔒</span>
+        <div>
+          <div class="fno-header-title">This Month's Locked LT Discovery Picks</div>
+          <div class="fno-header-sub">Generated ${generatedStr} &bull; Locked until ${lockedUntilStr} (won't reshuffle until then) &bull; Excludes stocks already in your watchlist &bull; Not investment advice</div>
+        </div>
+      </div>
+    </div>
+    <div class="fno-grid">${cards}</div>
   `;
 }
 

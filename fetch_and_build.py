@@ -38,7 +38,7 @@ import logging
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
-from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline, compute_intraday_picks
+from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline, compute_intraday_picks, select_monthly_lt_picks
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -47,6 +47,7 @@ CACHE_DIR  = os.path.join(BASE_DIR, "cache")
 WL_SEED    = os.path.join(BASE_DIR, "watchlist_seed.json")
 WL_FILE    = os.path.join(BASE_DIR, "watchlist_data.json")
 LT_WL_FILE = os.path.join(BASE_DIR, "lt_watchlist.json")
+LT_MONTHLY_PICKS_FILE = os.path.join(BASE_DIR, "lt_monthly_picks.json")
 OUT_HTML   = os.path.join(BASE_DIR, "screener.html")
 OUT_WWW_HTML = os.path.join(BASE_DIR, "www", "screener.html")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -3020,6 +3021,9 @@ details[open] summary::before {
       </div>
     </div>
 
+    <!-- 🔒 This Month's Locked LT Discovery Picks -->
+    <div id="ltMonthlyPicksSection"></div>
+
     <!-- LT Holdings Collapsible Drawer -->
     <div id="ltHoldingsDrawer" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:20px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -3304,6 +3308,7 @@ let MARKET_INFO = __MARKET_INFO_JSON__;
 let FNO_DATA = __FNO_JSON__;
 let PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;
 let INTRADAY_DATA = __INTRADAY_JSON__;
+let LT_MONTHLY_PICKS = __LT_MONTHLY_JSON__;
 let LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;
 
 // ── State ─────────────────────────────────────────────────────────────────
@@ -5276,7 +5281,7 @@ function switchTab(tab) {
   document.getElementById('tab-holidays').style.display  = tab === 'holidays'  ? '' : 'none';
   if (tab === 'swing')      { renderSwingRadar(); renderSrBreakouts(); }
   if (tab === 'intraday')   renderIntradayTab();
-  if (tab === 'watchlist')  { renderLtWatchlist(); fetchLtPortfolioStatus(); }
+  if (tab === 'watchlist')  { renderLtWatchlist(); renderLtMonthlyPicks(); fetchLtPortfolioStatus(); }
   if (tab === 'penny')      renderPennyStocksTab();
   if (tab === 'fno')        renderFnoTab();
   if (tab === 'holidays')   renderHolidaysTab();
@@ -5579,6 +5584,93 @@ function renderIntradayTab() {
     <div class="fno-grid">${buyCards}</div>
     <div class="fno-section-title" style="margin-top:24px">🔴 Top ${sells.length} Sell (Short) Setups</div>
     <div class="fno-grid">${sellCards}</div>
+  `;
+}
+
+// ── This Month's Locked LT Discovery Picks (regenerated once every 30 days) ──
+function renderLtMonthlyPicks() {
+  const container = document.getElementById('ltMonthlyPicksSection');
+  if (!container) return;
+
+  const data = (typeof LT_MONTHLY_PICKS !== 'undefined' && LT_MONTHLY_PICKS) ? LT_MONTHLY_PICKS : { picks: [] };
+  const picks = data.picks || [];
+
+  if (!picks.length) {
+    container.innerHTML = '';
+    return;
+  }
+
+  function fmt(n) { return (n || n === 0) ? '₹' + Number(n).toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2}) : '-'; }
+  function valColor(status) {
+    if (status === 'UNDERVALUED') return '#4ade80';
+    if (status === 'FAIRLY_VALUED') return '#fbbf24';
+    return '#f87171';
+  }
+  function riskColor(risk) {
+    if (risk === 'LOW') return '#4ade80';
+    if (risk === 'MODERATE') return '#fbbf24';
+    return '#f87171';
+  }
+
+  const cards = picks.map(p => {
+    const vColor = valColor(p.lt_valuation_status);
+    const rColor = riskColor(p.lt_risk_level);
+    const valLabel = (p.lt_valuation_status || '').replace(/_/g, ' ');
+    return `
+    <div class="fno-card">
+      <div class="fno-card-header">
+        <div>
+          <div class="fno-card-sym">#${p.monthly_rank || ''} ${p.symbol}</div>
+          <div class="fno-card-name">${p.name || ''} &bull; ${p.sector_group || ''}</div>
+        </div>
+        <div class="fno-card-price">
+          <div class="fno-card-ltp">${fmt(p.ltp)}</div>
+        </div>
+      </div>
+      <div class="fno-section-title">LT Quality Breakdown</div>
+      <div class="fno-rr-grid">
+        <div class="fno-rr-cell">
+          <div class="fno-rr-label">Quality Score</div>
+          <div class="fno-rr-val pos">${(p.lt_quality_score||0).toFixed(0)}/100</div>
+        </div>
+        <div class="fno-rr-cell">
+          <div class="fno-rr-label">Valuation</div>
+          <div class="fno-rr-val" style="color:${vColor}">${valLabel}</div>
+        </div>
+        <div class="fno-rr-cell">
+          <div class="fno-rr-label">Risk</div>
+          <div class="fno-rr-val" style="color:${rColor}">${p.lt_risk_level || '-'}</div>
+        </div>
+      </div>
+      <div class="fno-tech-row">
+        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">ROE ${(p.roe_pct||0).toFixed(1)}%</span>
+        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">D/E ${(p.de_ratio||0).toFixed(2)}</span>
+        <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">Rev Growth ${(p.rev_growth_pct||0).toFixed(1)}%</span>
+      </div>
+      <div class="fno-lot-info" style="padding:10px 18px 16px">
+        <span style="color:var(--muted);font-size:11.5px">${p.rationale || ''}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  const lockedUntilStr = data.locked_until
+    ? new Date(data.locked_until).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '';
+  const generatedStr = data.generated_on
+    ? new Date(data.generated_on).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '';
+
+  container.innerHTML = `
+    <div class="fno-header" style="margin-bottom:14px">
+      <div class="fno-header-left">
+        <span style="font-size:28px">🔒</span>
+        <div>
+          <div class="fno-header-title">This Month's Locked LT Discovery Picks</div>
+          <div class="fno-header-sub">Generated ${generatedStr} &bull; Locked until ${lockedUntilStr} (won't reshuffle until then) &bull; Excludes stocks already in your watchlist &bull; Not investment advice</div>
+        </div>
+      </div>
+    </div>
+    <div class="fno-grid">${cards}</div>
   `;
 }
 
@@ -7666,11 +7758,66 @@ def fetch_commodity_signals() -> dict:
     return results
 
 
+def get_or_refresh_monthly_lt_picks(screener_results: list[dict], lt_watchlist: list[dict]) -> dict:
+    """
+    Returns this month's locked LT pick list, regenerating the SELECTION only
+    once every 30 days (persisted in LT_MONTHLY_PICKS_FILE) — every scan in
+    between just refreshes live fields (ltp, rsi, score) on the SAME 15 symbols,
+    so the list a user is looking at doesn't reshuffle underneath them scan to
+    scan, hour to hour.
+    """
+    ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+    today = datetime.datetime.now(ist_offset).date()
+
+    existing = None
+    if os.path.exists(LT_MONTHLY_PICKS_FILE):
+        try:
+            with open(LT_MONTHLY_PICKS_FILE, encoding="utf-8") as f:
+                existing = json.load(f)
+        except Exception:
+            existing = None
+
+    if existing and existing.get("locked_until") and existing.get("picks"):
+        try:
+            locked_until = datetime.date.fromisoformat(existing["locked_until"])
+        except Exception:
+            locked_until = today  # malformed date -> treat as expired, regenerate below
+
+        if today < locked_until:
+            live_by_symbol = {s.get("symbol"): s for s in screener_results if isinstance(s, dict) and s.get("symbol")}
+            refreshed = []
+            for p in existing["picks"]:
+                live = live_by_symbol.get(p.get("symbol"))
+                if live:
+                    p = dict(p)
+                    for k in ("ltp", "rsi", "total_score", "volume_spike"):
+                        if live.get(k) is not None:
+                            p[k] = live[k]
+                refreshed.append(p)
+            return {"picks": refreshed, "locked_until": existing["locked_until"], "generated_on": existing.get("generated_on")}
+
+    # Lock expired (or no picks yet) — generate a fresh selection for the new month.
+    picks = select_monthly_lt_picks(screener_results, lt_watchlist, top_n=15)
+    result = {
+        "picks": picks,
+        "locked_until": (today + datetime.timedelta(days=30)).isoformat(),
+        "generated_on": today.isoformat(),
+    }
+    try:
+        with open(LT_MONTHLY_PICKS_FILE, "w", encoding="utf-8") as f:
+            json.dump(result, f, default=json_serializer)
+        log(f"  🔒 Generated new monthly LT pick list ({len(picks)} stocks, locked until {result['locked_until']})")
+    except Exception as e:
+        log(f"  ⚠ Could not save lt_monthly_picks.json: {e}")
+    return result
+
+
 def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist: list[dict], commodity_signals: dict, mkt_info: dict, fno_data: list[dict] | None = None) -> str:
     run_time = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
 
     penny_stocks_data = compute_quality_penny_stocks(screener_results, top_n=20, monthly_sip=200.0)
     intraday_data = compute_intraday_picks(screener_results, top_n=5)
+    monthly_lt_data = get_or_refresh_monthly_lt_picks(screener_results, lt_watchlist)
     lt_summary = get_lt_portfolio_summary(screener_results)
 
     replacements = {
@@ -7687,6 +7834,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "__FNO_JSON__": json.dumps(fno_data or [], ensure_ascii=False, default=json_serializer),
         "__PENNY_STOCKS_JSON__": json.dumps(penny_stocks_data, ensure_ascii=False, default=json_serializer),
         "__INTRADAY_JSON__": json.dumps(intraday_data, ensure_ascii=False, default=json_serializer),
+        "__LT_MONTHLY_JSON__": json.dumps(monthly_lt_data, ensure_ascii=False, default=json_serializer),
         "__LT_PORTFOLIO_SUMMARY_JSON__": json.dumps(lt_summary, ensure_ascii=False, default=json_serializer),
     }
 
@@ -7726,6 +7874,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "let FNO_DATA = __FNO_JSON__;\n"
         "let PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;\n"
         "let INTRADAY_DATA = __INTRADAY_JSON__;\n"
+        "let LT_MONTHLY_PICKS = __LT_MONTHLY_JSON__;\n"
         "let LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;"
     )
     # `var`, not `let`: app.js declares these once with empty defaults, and the small
@@ -7743,6 +7892,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "var FNO_DATA = [];\n"
         "var PENNY_STOCKS_DATA = [];\n"
         "var INTRADAY_DATA = {};\n"
+        "var LT_MONTHLY_PICKS = {};\n"
         "var LT_PORTFOLIO_SUMMARY = {};"
     )
     if data_let_block not in js_raw:
@@ -7789,6 +7939,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         f"var FNO_DATA = {replacements['__FNO_JSON__']};\n"
         f"var PENNY_STOCKS_DATA = {replacements['__PENNY_STOCKS_JSON__']};\n"
         f"var INTRADAY_DATA = {replacements['__INTRADAY_JSON__']};\n"
+        f"var LT_MONTHLY_PICKS = {replacements['__LT_MONTHLY_JSON__']};\n"
         f"var LT_PORTFOLIO_SUMMARY = {replacements['__LT_PORTFOLIO_SUMMARY_JSON__']};\n"
         "var SCREENER_DATA = [];\n"
     )

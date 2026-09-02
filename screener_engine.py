@@ -3165,3 +3165,70 @@ def run_lt_universe_discovery_pipeline(screener_results: list[dict], watchlist_i
     }
 
 
+def select_monthly_lt_picks(screener_results: list[dict], watchlist_items: list[dict] | None = None,
+                             top_n: int = 15) -> list[dict]:
+    """
+    Selects top_n stocks for a LOCKED, month-long long-term buy list, using the
+    exact same sector-aware LT quality scoring as the LT Watchlist / Discovery
+    Pipeline (compute_sector_aware_lt_quality) — same "buying logic", just a
+    separate, persisted selection. Distinct from run_lt_universe_discovery_
+    pipeline()'s top_challengers, which is recomputed fresh every single scan:
+    the caller (fetch_and_build.py) is expected to persist THIS list and not
+    regenerate it until a full month has passed, so it functions as a stable
+    monthly pick list rather than something that reshuffles hourly.
+
+    Adds a liquidity + price floor on top of the discovery pipeline's bare
+    quality-score gate — a high lt_quality_score can come from a thinly-traded
+    microcap with sparse, noisy fundamentals (a handful of data points can
+    swing ROE/D/E dramatically for a tiny company), which isn't a sound
+    long-term-hold recommendation regardless of the score. Also excludes
+    symbols already in the caller's LT watchlist, since the point is fresh
+    ideas, not re-suggesting what's already being tracked.
+    """
+    if not screener_results:
+        return []
+
+    MIN_LIQUIDITY = 100_000  # lighter than the Intraday tab's 200k — an LT hold
+                              # doesn't need same-day exit liquidity, just enough
+                              # to not be a delisting/manipulation risk.
+    MIN_PRICE = 20.0
+    existing_symbols = {w.get("symbol") for w in (watchlist_items or []) if isinstance(w, dict) and w.get("symbol")}
+
+    candidates = []
+    for s in screener_results:
+        if not isinstance(s, dict):
+            continue
+        sym = s.get("symbol")
+        if not sym or sym in existing_symbols:
+            continue
+        ltp = s.get("ltp") or 0
+        if ltp < MIN_PRICE:
+            continue
+        liquidity = s.get("avg_volume_10d") or s.get("today_volume") or 0
+        if liquidity < MIN_LIQUIDITY:
+            continue
+
+        eval_res = compute_sector_aware_lt_quality(s)
+        if eval_res.get("lt_quality_score", 0) < 75.0:
+            continue
+
+        item = dict(s)
+        item.update(eval_res)
+        candidates.append(item)
+
+    candidates.sort(key=lambda x: x.get("lt_quality_score", 0), reverse=True)
+    top = candidates[:top_n]
+
+    for rank, c in enumerate(top, 1):
+        c["monthly_rank"] = rank
+        val_label = str(c.get("lt_valuation_status", "")).replace("_", " ").title()
+        risk_label = str(c.get("lt_risk_level", "")).title()
+        c["rationale"] = (
+            f"Quality {c.get('lt_quality_score', 0):.0f}/100 ({c.get('sector_group', '')}) — "
+            f"{val_label}, {risk_label} risk. "
+            f"ROE {float(c.get('roe_pct') or 0):.1f}%, D/E {float(c.get('de_ratio') or 0):.2f}, "
+            f"Rev growth {float(c.get('rev_growth_pct') or 0):.1f}%."
+        )
+    return top
+
+

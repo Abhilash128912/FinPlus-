@@ -16,4 +16,5 @@ www/
 *.apk
 backtest_intraday_trades.csv
 nse_list_sync_state.json
+lt_monthly_picks.json
 
