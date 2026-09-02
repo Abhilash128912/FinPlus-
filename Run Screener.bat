@@ -22,13 +22,29 @@ echo.
 echo [3/3] Launching Stock Screener Server ^& Web UI...
 echo         Starting server on http://localhost:%SCREENER_PORT% ...
 echo.
+
+set /a RESTART_COUNT=0
+:launch
 python fetch_and_build.py
+set "EXIT_CODE=%ERRORLEVEL%"
 echo.
-if %ERRORLEVEL% NEQ 0 (
-  echo ❌ Server exited with code %ERRORLEVEL%.
+
+if "%EXIT_CODE%"=="0" (
+  echo Server stopped normally.
+  goto :end
+)
+
+set /a RESTART_COUNT+=1
+if %RESTART_COUNT% GEQ 5 (
+  echo X Server crashed 5 times in a row ^(last exit code %EXIT_CODE%^). Not retrying further - something is wrong.
   pause
   exit /b
 )
 
-echo Server active! Press any key to stop server...
+echo !! Server exited unexpectedly with code %EXIT_CODE% ^(crash, not a normal stop^). Restarting in 3s... ^(attempt %RESTART_COUNT%/5^)
+ping 127.0.0.1 -n 4 >nul
+goto :launch
+
+:end
+echo Press any key to close this window...
 pause

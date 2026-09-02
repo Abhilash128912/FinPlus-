@@ -73,6 +73,11 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(WWW_STATIC_DIR, exist_ok=True)
 IS_INITIAL_SCANNING = False
 LATEST_SCREENER_RESULTS = []
+# Bumped every time a scan finishes (background_initial_scan / the /api/scan POST
+# handler) so an already-open tab can tell a *later* scan completed, not just the
+# one that happened to be running when it first loaded — see checkScanFreshness()
+# client-side, which replaces the old one-shot startup-only reload check.
+LAST_SCAN_COMPLETED_AT = None
 OUT_JSON_FILE = os.path.join(BASE_DIR, "screener_data.json")
 if os.path.exists(OUT_JSON_FILE):
     try:
@@ -720,13 +725,25 @@ def fetch_via_curl_cffi(ticker: str) -> dict | None:
                     "exchange": meta.get("exchangeName", "NSE")
                 }
 
-                # Fetch genuine fundamental ratios via Yahoo Finance quoteSummary
+                # Fetch genuine fundamental ratios via Yahoo Finance quoteSummary.
+                # get_yahoo_crumb_session() caches and returns ONE shared curl_cffi
+                # Session object (its cookies are tied to the crumb, so a fresh
+                # session per call won't authenticate) — that object is a libcurl
+                # C-extension handle and is NOT safe to call .get() on concurrently
+                # from multiple threads, unlike a bare module-level curl_cffi.requests
+                # .get() call (which creates its own throwaway session internally and
+                # is fine). This ran unlocked across the scan's 16 worker threads,
+                # which is almost certainly what was crashing the whole process
+                # intermittently with no Python traceback (a native segfault, not a
+                # catchable exception) — serialize every use of the shared session
+                # under the same lock that guards its creation.
                 sess, crumb = get_yahoo_crumb_session()
                 if sess and crumb:
                     try:
                         summary_url = (f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}"
                                        f"?modules=financialData,defaultKeyStatistics,summaryDetail,assetProfile&crumb={crumb}")
-                        r_sum = sess.get(summary_url, headers=headers, timeout=6)
+                        with _CRUMB_LOCK:
+                            r_sum = sess.get(summary_url, headers=headers, timeout=6)
                         if r_sum.status_code == 200:
                             res_sum = (r_sum.json().get("quoteSummary", {}).get("result") or [{}])[0]
                             fd = res_sum.get("financialData", {})
@@ -4706,9 +4723,47 @@ function checkStartupScanStatus() {
         }
         if (wasScanning) {
           window.location.reload();
+          return;
         }
         if (startupScanPoller) clearInterval(startupScanPoller);
+        // This only ever watched the ONE scan that happened to be running when the
+        // page first loaded — once that finished (or never happened), the poller
+        // stopped for good, so a tab left open across a LATER scan (the hourly
+        // rescan, or a manual "Scan Now") never learned new data existed. Anyone
+        // watching the Intraday tab in particular would keep seeing whatever picks
+        // were computed when the page loaded, silently going stale. Hand off to a
+        // slower, persistent watcher for the rest of the page's lifetime instead.
+        if (res && res.last_scan_completed_at) {
+          knownScanCompletedAt = res.last_scan_completed_at;
+        }
+        if (!freshScanPoller) {
+          freshScanPoller = setInterval(checkForFreshScan, 60000);
+        }
       }
+    })
+    .catch(() => {});
+}
+
+let freshScanPoller = null;
+let knownScanCompletedAt = null;
+
+function checkForFreshScan() {
+  fetch('/api/status')
+    .then(r => r.json())
+    .then(res => {
+      if (!res || res.is_scanning || !res.last_scan_completed_at) return;
+      if (knownScanCompletedAt === null) {
+        knownScanCompletedAt = res.last_scan_completed_at;
+        return;
+      }
+      if (res.last_scan_completed_at === knownScanCompletedAt) return;
+
+      if (freshScanPoller) { clearInterval(freshScanPoller); freshScanPoller = null; }
+      const b = document.createElement('div');
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:linear-gradient(135deg,rgba(108,99,255,0.95),rgba(0,212,170,0.95));color:#fff;padding:10px 20px;text-align:center;font-size:13px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,0.4)';
+      b.textContent = '⚡ A newer scan just finished — refreshing with fresh data...';
+      document.body.prepend(b);
+      setTimeout(() => window.location.reload(), 2500);
     })
     .catch(() => {});
 }
@@ -8094,7 +8149,8 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "market_info": mkt_info,
                 "out_html": OUT_HTML,
                 "timestamp": datetime.datetime.now().isoformat(),
-                "is_scanning": IS_INITIAL_SCANNING
+                "is_scanning": IS_INITIAL_SCANNING,
+                "last_scan_completed_at": LAST_SCAN_COMPLETED_AT
             }
             resp_bytes = json.dumps(res).encode('utf-8')
             self.send_response(200)
@@ -8128,7 +8184,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             super().do_GET()
 
     def do_POST(self):
-        global LATEST_SCREENER_RESULTS
+        global LATEST_SCREENER_RESULTS, LAST_SCAN_COMPLETED_AT
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == '/api/ltp':
             self.handle_ltp_request()
@@ -8184,6 +8240,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 atomic_write_file(OUT_HTML, html)
                 atomic_write_file(OUT_WWW_HTML, html)
                 atomic_write_file(WWW_INDEX_HTML, html)
+                LAST_SCAN_COMPLETED_AT = datetime.datetime.now().isoformat()
                 log("⚡ [API Request] Live Scan complete & index.html updated successfully!")
                 res = {"status": "ok", "message": "Scan completed successfully", "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                 self.send_response(200)
@@ -8505,7 +8562,7 @@ def run_server(port=None):
 
 
 def background_initial_scan():
-    global IS_INITIAL_SCANNING, LATEST_SCREENER_RESULTS
+    global IS_INITIAL_SCANNING, LATEST_SCREENER_RESULTS, LAST_SCAN_COMPLETED_AT
     IS_INITIAL_SCANNING = True
     try:
         log("Checking for Nifty stock list updates from NSE...")
@@ -8575,6 +8632,7 @@ def background_initial_scan():
         atomic_write_file(OUT_HTML, html)
         atomic_write_file(OUT_WWW_HTML, html)
         atomic_write_file(WWW_INDEX_HTML, html)
+        LAST_SCAN_COMPLETED_AT = datetime.datetime.now().isoformat()
 
         log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
 
