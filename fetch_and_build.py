@@ -62,6 +62,11 @@ WWW_STATIC_DIR = os.path.join(BASE_DIR, "www", "static")
 WWW_APP_CSS_FILE = os.path.join(WWW_STATIC_DIR, "app.css")
 WWW_APP_JS_FILE = os.path.join(WWW_STATIC_DIR, "app.js")
 WWW_JSON_FILE = os.path.join(BASE_DIR, "www", "screener_data.json")
+# The Capacitor CLI (`npx cap sync`) hard-requires an index.html at the webDir root
+# as the app's entry point — it has no config option to point at a differently named
+# file — so www/index.html must exist as a copy of www/screener.html even though the
+# Python server itself is fine with either name.
+WWW_INDEX_HTML = os.path.join(BASE_DIR, "www", "index.html")
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
@@ -8071,6 +8076,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 html = build_html(screener_results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
                 atomic_write_file(OUT_HTML, html)
                 atomic_write_file(OUT_WWW_HTML, html)
+                atomic_write_file(WWW_INDEX_HTML, html)
                 log("⚡ [API Request] Live Scan complete & index.html updated successfully!")
                 res = {"status": "ok", "message": "Scan completed successfully", "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                 self.send_response(200)
@@ -8465,6 +8471,7 @@ def background_initial_scan():
         html = build_html(screener_results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
         atomic_write_file(OUT_HTML, html)
         atomic_write_file(OUT_WWW_HTML, html)
+        atomic_write_file(WWW_INDEX_HTML, html)
 
         log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
     finally:
@@ -8519,6 +8526,7 @@ if __name__ == "__main__":
                 html = build_html(LATEST_SCREENER_RESULTS, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
                 atomic_write_file(OUT_HTML, html)
                 atomic_write_file(OUT_WWW_HTML, html)
+                atomic_write_file(WWW_INDEX_HTML, html)
             except Exception as e:
                 log(f"  ⚠ Startup HTML build skipped: {e}")
 
