@@ -776,6 +776,12 @@ def fetch_live_price_only(ticker: str) -> float | None:
     Finance chart API (1-minute interval, intraday).
     TTL: 10s during market hours (live prices change), 120s when closed.
     Returns None on failure.
+
+    Fetcher order:
+      1. urllib query1 / query2 (parallel-safe, fast when Yahoo cooperates)
+      2. curl_cffi Chrome impersonation (bypasses Yahoo SSL fingerprint block)
+         — called WITHOUT CFFI_LOCK because curl_cffi.requests.get() creates
+           its own libcurl Session per call and is documented thread-safe.
     """
     now = time.time()
     ttl = 10.0 if is_equity_market_open() else 120.0
@@ -784,6 +790,7 @@ def fetch_live_price_only(ticker: str) -> float | None:
         if cached_entry and (now - cached_entry[1] < ttl):
             return cached_entry[0]
 
+    _ltp_errors = []
     for host in ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]:
         try:
             import urllib.request
@@ -793,7 +800,7 @@ def fetch_live_price_only(ticker: str) -> float | None:
                 url,
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
             )
-            with urllib.request.urlopen(req, timeout=1.5) as resp:
+            with urllib.request.urlopen(req, timeout=3.5) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     meta = (data.get("chart", {}).get("result") or [{}])[0].get("meta", {})
@@ -804,35 +811,93 @@ def fetch_live_price_only(ticker: str) -> float | None:
                             GLOBAL_LTP_CACHE[ticker] = (val, time.time())
                         return val
         except Exception as e:
-            print(f"[LTP] {host} fetch failed for {ticker}: {e}")
+            _ltp_errors.append(f"{host}: {e}")
 
-    # Fallback to curl_cffi if urllib fails
-    with CFFI_LOCK:
-        try:
-            from curl_cffi import requests as cffi_req
-            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-            r = cffi_req.get(url, impersonate="chrome120", headers=headers, timeout=2.5)
-            if r.status_code == 200:
-                meta = (r.json().get("chart", {}).get("result") or [{}])[0].get("meta", {})
-                price = meta.get("regularMarketPrice") or meta.get("chartPreviousClose")
-                if price and float(price) > 0:
-                    val = float(price)
-                    with GLOBAL_LTP_CACHE_LOCK:
-                        GLOBAL_LTP_CACHE[ticker] = (val, time.time())
-                    return val
-        except Exception as e:
-            print(f"[LTP] curl_cffi fetch failed for {ticker}: {e}")
+    # curl_cffi fallback: uses Chrome TLS fingerprint so Yahoo can't block it.
+    # No CFFI_LOCK needed here — curl_cffi.requests.get() is a module-level
+    # helper that internally does Session().request(), giving each call its own
+    # libcurl handle with no shared mutable state between threads.
+    try:
+        from curl_cffi import requests as cffi_req
+        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1m&range=1d"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        r = cffi_req.get(url, impersonate="chrome120", headers=headers, timeout=2.5)
+        if r.status_code == 200:
+            meta = (r.json().get("chart", {}).get("result") or [{}])[0].get("meta", {})
+            price = meta.get("regularMarketPrice") or meta.get("chartPreviousClose")
+            if price and float(price) > 0:
+                val = float(price)
+                with GLOBAL_LTP_CACHE_LOCK:
+                    GLOBAL_LTP_CACHE[ticker] = (val, time.time())
+                return val
+    except Exception as e:
+        _ltp_errors.append(f"curl_cffi: {e}")
 
+    # All fetchers failed — log a single consolidated line instead of per-host spam
+    if _ltp_errors:
+        print(f"[LTP] {ticker} — all fetchers failed: {'; '.join(_ltp_errors)}")
     return None
 
 
-def fetch_ticker_data(ticker: str) -> dict | None:
+def batch_fetch_live_prices(tickers: list[str], chunk_size: int = 150) -> dict[str, float]:
+    """
+    Refreshes live prices for many tickers using yfinance's own download() pipeline,
+    which batches many symbols into far fewer underlying HTTP requests than fetching
+    each ticker individually. This is what a full-universe scan's price-refresh step
+    should use instead of calling fetch_live_price_only() once per ticker — 2500+
+    separate per-ticker HTTPS round-trips is what actually produced the ~20+ minute
+    scan times, since each one is individually exposed to Yahoo's per-IP rate
+    limiting/timeouts, where a couple dozen batched requests are not.
+
+    Yahoo's own batch quote endpoint (/v7/finance/quote) was tried first and
+    rejected — it returns 401 Unauthorized even with browser impersonation
+    (curl_cffi + chrome UA) because it requires a proper crumb/cookie session,
+    which yfinance's download() already manages internally.
+
+    Only touches price — fundamentals/history for tickers that already have a
+    cached entry are left untouched; this only fills in a fresher `regularMarketPrice`
+    for fetch_ticker_data's stale-price-refresh branch.
+    """
+    if not tickers:
+        return {}
+
+    price_map: dict[str, float] = {}
+    chunks = [tickers[i:i + chunk_size] for i in range(0, len(tickers), chunk_size)]
+    log(f"  Batch price refresh: {len(tickers)} tickers in {len(chunks)} chunk(s) of up to {chunk_size}...")
+
+    for chunk in chunks:
+        try:
+            data = yf.download(tickers=chunk, period="1d", group_by="ticker",
+                                threads=True, progress=False, timeout=15)
+            if data is None or data.empty:
+                continue
+            is_multi = hasattr(data.columns, "get_level_values")
+            for t in chunk:
+                try:
+                    if is_multi:
+                        if t not in data.columns.get_level_values(0):
+                            continue
+                        closes = data[t]["Close"].dropna()
+                    else:
+                        # Flat frame — only happens with a single-ticker chunk.
+                        closes = data["Close"].dropna()
+                    if len(closes) > 0:
+                        price_map[t] = float(closes.iloc[-1])
+                except Exception:
+                    continue
+        except Exception as e:
+            log(f"  ⚠ Batch price chunk failed ({len(chunk)} tickers): {e}")
+
+    log(f"  Batch price refresh got {len(price_map)}/{len(tickers)} live prices.")
+    return price_map
+
+
+def fetch_ticker_data(ticker: str, live_price_override: float | None = None) -> dict | None:
     cached = load_cache(ticker)
     if cached:
         cached_at_str = cached.get("cached_at", "2000-01-01")
         if is_price_stale(cached_at_str):
-            live_price = fetch_live_price_only(ticker)
+            live_price = live_price_override if live_price_override and live_price_override > 0 else fetch_live_price_only(ticker)
             if live_price and live_price > 0:
                 cached["info"]["currentPrice"] = live_price
                 cached["info"]["regularMarketPrice"] = live_price
@@ -1020,11 +1085,23 @@ def run_scan(tickers: list[str]) -> list[dict]:
         log(f"Error initializing dynamic fno_symbols: {e}")
         fno_symbols = {s.get("symbol") for s in cfg.get("fno_stocks", []) if isinstance(s, dict) and s.get("symbol")}
 
+    # Pre-fetch fresh prices for every ticker whose cache is otherwise valid
+    # (fundamentals intact) but whose price has gone stale, in a handful of batched
+    # requests rather than one network round-trip per ticker inside the scan loop
+    # below — see batch_fetch_live_prices() for why this is the actual fix for scan
+    # duration, not raising the worker count.
+    stale_price_tickers = []
+    for t in tickers:
+        c = load_cache(t)
+        if c and is_price_stale(c.get("cached_at", "2000-01-01")):
+            stale_price_tickers.append(t)
+    batch_prices = batch_fetch_live_prices(stale_price_tickers) if stale_price_tickers else {}
+
     def process_single_ticker(args):
         try:
             i, ticker = args
             clean = ticker.replace(".NS", "").replace(".BO", "")
-            data = fetch_ticker_data(ticker)
+            data = fetch_ticker_data(ticker, live_price_override=batch_prices.get(ticker))
             if data is None:
                 return None, "nodata"
             info = data.get("info", {})
@@ -8474,6 +8551,26 @@ def background_initial_scan():
         atomic_write_file(WWW_INDEX_HTML, html)
 
         log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
+
+        # Pre-populate GLOBAL_LTP_CACHE from freshly-scanned prices so the
+        # very first LTP poll after the page auto-reloads returns live (non-stale)
+        # prices immediately — without this, GLOBAL_LTP_CACHE is empty after every
+        # scan and the first cycle always falls back to stale fallback_map values.
+        try:
+            populated = 0
+            _now = time.time()
+            with GLOBAL_LTP_CACHE_LOCK:
+                for s in (screener_results or []):
+                    ticker = s.get("ticker") or (s.get("symbol", "") + ".NS")
+                    price = s.get("ltp") or s.get("current_ltp")
+                    if ticker and price and float(price) > 0:
+                        GLOBAL_LTP_CACHE[ticker] = (float(price), _now)
+                        GLOBAL_LTP_CACHE[ticker.replace(".NS", "")] = (float(price), _now)
+                        populated += 1
+            log(f"  ✅ Pre-seeded GLOBAL_LTP_CACHE with {populated} scan prices for instant post-reload polling.")
+        except Exception as e:
+            log(f"  ⚠ Could not pre-seed LTP cache: {e}")
+
     finally:
         IS_INITIAL_SCANNING = False
 
