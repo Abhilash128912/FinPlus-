@@ -76,6 +76,24 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(WWW_STATIC_DIR, exist_ok=True)
 IS_INITIAL_SCANNING = False
+SCAN_STARTED_AT = 0.0
+# Live LTP fetches stand aside while a scan runs so the two do not compete for
+# Yahoo's per-IP budget. But a scan that overruns must not blank live prices for
+# the rest of the session: past this bound, polling resumes even mid-scan. One
+# batched LTP request per poll is cheap enough not to provoke rate limiting --
+# it was ~100 individual requests that made deferring necessary in the first place.
+MAX_SCAN_LTP_BLACKOUT_SEC = 600.0
+
+
+def ltp_should_defer_to_scan() -> bool:
+    """True while an in-flight scan should suppress live LTP fetches."""
+    if not IS_INITIAL_SCANNING:
+        return False
+    if SCAN_STARTED_AT and (time.time() - SCAN_STARTED_AT) > MAX_SCAN_LTP_BLACKOUT_SEC:
+        return False
+    return True
+
+
 LATEST_SCREENER_RESULTS = []
 # Bumped every time a scan finishes (background_initial_scan / the /api/scan POST
 # handler) so an already-open tab can tell a *later* scan completed, not just the
@@ -8238,6 +8256,9 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         f"var INTRADAY_DATA = {replacements['__INTRADAY_JSON__']};\n"
         f"var LT_MONTHLY_PICKS = {replacements['__LT_MONTHLY_JSON__']};\n"
         f"var LT_PORTFOLIO_SUMMARY = {replacements['__LT_PORTFOLIO_SUMMARY_JSON__']};\n"
+        # Without this the page keeps app.js's empty default, so every trend badge
+        # renders neutral grey and the uptrend filter matches nothing.
+        f"var TREND_CONFIG = {replacements['__TREND_STATES_JSON__']};\n"
         "var SCREENER_DATA = [];\n"
     )
     # app.js MUST load first — it declares WATCHLIST_SEED/LT_WATCHLIST/CONFIG/etc as
@@ -8382,24 +8403,28 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # the entire duration of every background scan, i.e. on every server
                 # restart. That's the main reason LTP polling looked broken right after
                 # launching the app.
-                if not IS_INITIAL_SCANNING:
+                if not ltp_should_defer_to_scan():
                     if len(uncached) == 1:
                         t = uncached[0]
                         p = fetch_live_price_only(t)
                         if p and p > 0:
                             raw_prices[t] = p
                     else:
-                        from concurrent.futures import ThreadPoolExecutor, as_completed
-                        with ThreadPoolExecutor(max_workers=min(len(uncached), 10)) as executor:
-                            future_to_t = {executor.submit(fetch_live_price_only, t): t for t in uncached}
-                            for future in as_completed(future_to_t):
-                                t = future_to_t[future]
-                                try:
-                                    p = future.result()
-                                    if p and p > 0:
-                                        raw_prices[t] = p
-                                except Exception as e:
-                                    print(f"[LTP] live fetch failed for {t}: {e}")
+                        # One batched request rather than one HTTPS round-trip per
+                        # ticker. The per-ticker path (a 10-worker pool calling
+                        # fetch_live_price_only) measured ~1.9s per symbol here:
+                        # 10 symbols took 18.7s, so the ~100-symbol payload this
+                        # endpoint actually receives needed ~170s against a 10s
+                        # poll interval. Polls could never finish before the next
+                        # one fired, so the UI showed no live prices at all.
+                        # batch_fetch_live_prices exists for exactly this reason.
+                        try:
+                            batched = batch_fetch_live_prices(uncached)
+                            for t, p in batched.items():
+                                if p and p > 0:
+                                    raw_prices[t] = p
+                        except Exception as e:
+                            print(f"[LTP] batch fetch failed ({len(uncached)} tickers): {e}")
 
                 # Fallback to static (last-scan) price whenever a live fetch failed,
                 # returned nothing, or was skipped above because a scan is in progress.
@@ -9055,8 +9080,9 @@ def run_server(port=None):
 
 
 def background_initial_scan():
-    global IS_INITIAL_SCANNING, LATEST_SCREENER_RESULTS, LAST_SCAN_COMPLETED_AT
+    global IS_INITIAL_SCANNING, LATEST_SCREENER_RESULTS, LAST_SCAN_COMPLETED_AT, SCAN_STARTED_AT
     IS_INITIAL_SCANNING = True
+    SCAN_STARTED_AT = time.time()
     try:
         log("Checking for Nifty stock list updates from NSE...")
         try:
