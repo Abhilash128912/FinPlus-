@@ -65,41 +65,76 @@ OUT_WWW_HTML = os.path.join(BASE_DIR, "www", "screener.html")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 APP_CSS_FILE = os.path.join(STATIC_DIR, "app.css")
 APP_JS_FILE = os.path.join(STATIC_DIR, "app.js")
-# The Capacitor Android WebView serves everything straight out of www/ as a bundled,
-# offline-capable local site (webDir in capacitor.config.json) — it never talks to
-# the Python HTTP server. So the split-out CSS/JS/data files also need copies under
-# www/ with the same relative layout (www/static/app.css etc), or the packaged app
-# would load an HTML shell that references /static/app.js and /screener_data.json
-# with nothing there to serve them, and show a blank page.
+# www/ is the Capacitor webDir: whatever sits here is copied into the APK by
+# `npx cap sync`. Mirrors of the split CSS/JS/data live here only when the app is
+# built to run offline out of its own bundle -- see BUNDLE_WEB_ASSETS below.
 WWW_STATIC_DIR = os.path.join(BASE_DIR, "www", "static")
 WWW_APP_CSS_FILE = os.path.join(WWW_STATIC_DIR, "app.css")
 WWW_APP_JS_FILE = os.path.join(WWW_STATIC_DIR, "app.js")
 WWW_JSON_FILE = os.path.join(BASE_DIR, "www", "screener_data.json")
-# www/ is the Capacitor webDir, so everything in it ships inside the APK.
-# screener_data.json is ~10.4MB of a ~10.8MB bundle -- about 95% of the app.
-# capacitor.config.json sets server.url to the Render deployment, so the APK
-# loads the live site and never reads this bundled copy; shipping it only made
-# the download bigger. Set SCREENER_BUNDLE_SCAN_DATA=1 to restore it, which is
-# needed only if the app is ever rebuilt to run fully offline from www/.
-BUNDLE_SCAN_DATA_IN_WWW = os.environ.get("SCREENER_BUNDLE_SCAN_DATA", "").strip().lower() in ("1", "true", "yes")
+# capacitor.config.json sets server.url to the Render deployment, so the APK is a
+# shell around the live site: on launch the WebView fetches the page over the
+# network and never reads anything under www/. Nor is there a path by which it
+# could -- Capacitor only loads a local file on a failed page load when
+# server.errorPath is set (Bridge.getErrorUrl / BridgeWebViewClient
+# .onReceivedError), and it is not set here, so an offline launch gets the
+# WebView's own network-error page. A bundled mirror is therefore dead weight
+# that ships in every build and renders never; worse, it is a frozen snapshot, so
+# if anything ever did surface it the user would read build-time prices as live
+# ones. Bundling is off by default: set SCREENER_BUNDLE_WEB_ASSETS=1 to restore
+# the full offline mirror (page, CSS, JS and scan data), which is only meaningful
+# alongside an errorPath and a visible "prices as of <build time>" banner.
+BUNDLE_WEB_ASSETS = os.environ.get("SCREENER_BUNDLE_WEB_ASSETS", "").strip().lower() in ("1", "true", "yes")
 
 
 def write_scan_json(clean_results) -> None:
     """Write screener_data.json, and the www/ copy only when bundling is enabled."""
     with open(OUT_JSON_FILE, "w", encoding="utf-8") as f:
         json.dump(clean_results, f, default=json_serializer)
-    if BUNDLE_SCAN_DATA_IN_WWW:
+    if BUNDLE_WEB_ASSETS:
         with open(WWW_JSON_FILE, "w", encoding="utf-8") as f:
             json.dump(clean_results, f, default=json_serializer)
 # The Capacitor CLI (`npx cap sync`) hard-requires an index.html at the webDir root
 # as the app's entry point — it has no config option to point at a differently named
-# file — so www/index.html must exist as a copy of www/screener.html even though the
-# Python server itself is fine with either name.
+# file. With bundling on it is a copy of the built page; with bundling off it is a
+# few hundred bytes of placeholder, present only so `cap sync` has an entry point to
+# resolve. Either way the running app loads server.url instead.
 WWW_INDEX_HTML = os.path.join(BASE_DIR, "www", "index.html")
+WWW_DIR = os.path.join(BASE_DIR, "www")
+WWW_PLACEHOLDER_HTML = """<!doctype html>
+<meta charset='utf-8'>
+<title>Stock Screener</title>
+<!-- Placeholder entry point. This app loads server.url (see capacitor.config.json);
+     nothing here is rendered. Deliberately carries no market data, so it can never
+     show a build-time price as a live one. Set SCREENER_BUNDLE_WEB_ASSETS=1 to
+     bundle the real page instead. -->
+<body>Stock Screener requires a network connection.</body>
+"""
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
-os.makedirs(WWW_STATIC_DIR, exist_ok=True)
+if BUNDLE_WEB_ASSETS:
+    os.makedirs(WWW_STATIC_DIR, exist_ok=True)
+else:
+    # Leave webDir holding nothing but the placeholder entry point, so a stale
+    # mirror from an earlier bundled build cannot be picked up by `cap sync` and
+    # shipped as if it were current.
+    os.makedirs(WWW_DIR, exist_ok=True)
+    for _stale in ("screener.html", "screener_data.json"):
+        try:
+            os.remove(os.path.join(WWW_DIR, _stale))
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+    if os.path.isdir(WWW_STATIC_DIR):
+        import shutil as _shutil
+        _shutil.rmtree(WWW_STATIC_DIR, ignore_errors=True)
+    try:
+        with open(WWW_INDEX_HTML, "w", encoding="utf-8") as _f:
+            _f.write(WWW_PLACEHOLDER_HTML)
+    except OSError:
+        pass
 IS_INITIAL_SCANNING = False
 SCAN_STARTED_AT = 0.0
 # Live LTP fetches stand aside while a scan runs so the two do not compete for
@@ -317,6 +352,26 @@ def atomic_write_file(filepath: str, content: str):
                 f.write(content)
         except Exception as ex:
             log(f"⚠ Warning: atomic write failed for {filepath}: {ex}")
+
+
+def published_html_paths() -> list:
+    """Every on-disk copy of the built page, in the order they are written.
+
+    One list so the writer and the LT_WATCHLIST hot-patch below cannot disagree
+    about which copies exist -- a mismatch would leave a stale bundled page that
+    the patch silently skipped.
+    """
+    paths = [OUT_HTML]
+    if BUNDLE_WEB_ASSETS:
+        paths += [OUT_WWW_HTML, WWW_INDEX_HTML]
+    return paths
+
+
+def publish_html(html: str) -> None:
+    """Write the built page to every copy this build ships."""
+    for path in published_html_paths():
+        atomic_write_file(path, html)
+
 
 def json_serializer(o):
     if hasattr(o, 'item'):
@@ -8581,9 +8636,9 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
     try:
         atomic_write_file(APP_CSS_FILE, css_content)
         atomic_write_file(APP_JS_FILE, app_js)
-        # Mirror into www/static/ too — see WWW_STATIC_DIR comment above.
-        atomic_write_file(WWW_APP_CSS_FILE, css_content)
-        atomic_write_file(WWW_APP_JS_FILE, app_js)
+        if BUNDLE_WEB_ASSETS:
+            atomic_write_file(WWW_APP_CSS_FILE, css_content)
+            atomic_write_file(WWW_APP_JS_FILE, app_js)
     except Exception as e:
         log(f"⚠ Could not write static assets (app.css/app.js): {e}")
 
@@ -8670,7 +8725,7 @@ def sync_html_lt_watchlist():
         # values, so a raw "\n" byte can only appear right after the statement's own
         # closing semicolon, not truncate mid-value.
         target = "var LT_WATCHLIST = "
-        for path in [OUT_HTML, OUT_WWW_HTML]:
+        for path in published_html_paths():
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
@@ -9143,9 +9198,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 commodity_signals = fetch_commodity_signals()
                 fno_data = process_fno_stocks(screener_results)
                 html = build_html(screener_results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
-                atomic_write_file(OUT_HTML, html)
-                atomic_write_file(OUT_WWW_HTML, html)
-                atomic_write_file(WWW_INDEX_HTML, html)
+                publish_html(html)
                 LAST_SCAN_COMPLETED_AT = datetime.datetime.now().isoformat()
                 log("⚡ [API Request] Live Scan complete & index.html updated successfully!")
                 res = {"status": "ok", "message": "Scan completed successfully", "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
@@ -9539,9 +9592,7 @@ def background_initial_scan():
 
         log("Building HTML report...")
         html = build_html(screener_results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
-        atomic_write_file(OUT_HTML, html)
-        atomic_write_file(OUT_WWW_HTML, html)
-        atomic_write_file(WWW_INDEX_HTML, html)
+        publish_html(html)
         LAST_SCAN_COMPLETED_AT = datetime.datetime.now().isoformat()
 
         log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
@@ -9625,9 +9676,7 @@ if __name__ == "__main__":
                 commodity_signals = fetch_commodity_signals()
                 fno_data = process_fno_stocks(LATEST_SCREENER_RESULTS)
                 html = build_html(LATEST_SCREENER_RESULTS, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
-                atomic_write_file(OUT_HTML, html)
-                atomic_write_file(OUT_WWW_HTML, html)
-                atomic_write_file(WWW_INDEX_HTML, html)
+                publish_html(html)
             except Exception as e:
                 log(f"  ⚠ Startup HTML build skipped: {e}")
 
