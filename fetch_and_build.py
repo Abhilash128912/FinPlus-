@@ -1963,6 +1963,11 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
             "status_badge":      gate["badge"],
             "status_badge_class": gate["badge_class"],
             "status_reason":     gate["reason"],
+            # The gate's own scores were computed and then dropped, so nothing
+            # downstream — the mobile API, the UI, or any check of why a row got
+            # its status — could see the entry timing that produced it.
+            "lt_entry_score":    gate.get("lt_entry_score"),
+            "lt_gate_quality_score": gate.get("lt_quality_score"),
             "holding":           holding,
             "live_data_found":   live is not None,
             **sector_eval

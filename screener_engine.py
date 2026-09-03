@@ -2374,31 +2374,37 @@ def get_lt_watchlist_status(
     lt_quality_score = eval_res["lt_quality_score"]
 
     # ── LT ENTRY SCORE (0 - 100) ────────────────────────────────────────────
+    # Missing inputs score ZERO, not a default. These branches previously awarded
+    # 15 points when gtt_level or ma50 was absent — more than the 5 given for a
+    # genuinely bad reading — so a stock with neither collected 30 points for being
+    # unmeasurable. Entry timing that cannot be measured has not been established,
+    # and rewarding its absence is what let weak setups clear the entry floor.
     lt_e_pts = 0.0
     if gtt_level and gtt_level > 0 and ltp > 0:
         dist_gtt_pct = ((ltp - gtt_level) / gtt_level) * 100.0
         if dist_gtt_pct <= 1.0: lt_e_pts += 35.0
-        elif dist_gtt_pct <= 5.0: lt_e_pts += 25.0
-        elif dist_gtt_pct <= 10.0: lt_e_pts += 15.0
-        else: lt_e_pts += 5.0
-    else:
-        lt_e_pts += 15.0
+        elif dist_gtt_pct <= 3.0: lt_e_pts += 24.0
+        elif dist_gtt_pct <= 6.0: lt_e_pts += 12.0
+        # beyond 6% above support this is not an entry, so no points
 
     ma50 = float(scored.get("ma50") or 0)
     if ma50 > 0 and ltp > 0:
         dist_ma50 = abs((ltp - ma50) / ma50) * 100.0
-        if dist_ma50 <= 5.0: lt_e_pts += 25.0
-        elif dist_ma50 <= 12.0: lt_e_pts += 15.0
-        else: lt_e_pts += 5.0
-    else:
-        lt_e_pts += 15.0
+        if dist_ma50 <= 5.0: lt_e_pts += 20.0
+        elif dist_ma50 <= 12.0: lt_e_pts += 10.0
 
     if rsi is not None:
-        if 40 <= rsi <= 62: lt_e_pts += 25.0
-        elif 62 < rsi <= 72: lt_e_pts += 15.0
-        else: lt_e_pts += 5.0
+        if 40 <= rsi <= 62: lt_e_pts += 20.0
+        elif 62 < rsi <= 72: lt_e_pts += 10.0
 
-    if is_reversal_up or day_chg >= -0.3: lt_e_pts += 15.0
+    # Money flow — independent evidence that buyers are present at this level,
+    # rather than price merely drifting down onto its moving average.
+    lt_cmf = float(scored.get("cmf") or 0.0)
+    if lt_cmf > 0.10: lt_e_pts += 15.0
+    elif lt_cmf > 0.05: lt_e_pts += 9.0
+    elif lt_cmf > 0.0: lt_e_pts += 4.0
+
+    if is_reversal_up or day_chg >= -0.3: lt_e_pts += 10.0
 
     lt_entry_score = round(min(100.0, max(0.0, lt_e_pts)), 1)
 
@@ -2417,7 +2423,16 @@ def get_lt_watchlist_status(
         # BUY_NOW only for Strong Uptrend + GTT triggered (price at/near support)
         gtt_triggered = (gtt_level and gtt_level > 0 and ltp > 0 and
                         ((ltp - gtt_level) / gtt_level) * 100.0 <= 2.0)
-        if lt_entry_score >= 65 and trend == TREND_STRONG_UPTREND and gtt_triggered:
+        # Entry floor raised 65 -> 70 alongside the stricter scoring above. With the
+        # free points for missing data removed, 65 no longer represents the same
+        # standard it did when unmeasurable inputs contributed 30 points on their own.
+        #
+        # Quality stays at 70 rather than following the penny tab to 85. The two tabs
+        # serve different jobs: the penny budget is ₹200/month, so it must resolve to
+        # a single name and silence is the right answer most days. LT is accumulation
+        # across a 31-stock watchlist with a real budget, where 2-4 simultaneous
+        # candidates are actionable rather than noise.
+        if lt_entry_score >= 70 and trend == TREND_STRONG_UPTREND and gtt_triggered:
             status = "BUY_NOW"
             badge = "🟢 BUY NOW (ACCUMULATE)"
             badge_class = "badge-green"
@@ -3148,27 +3163,35 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
         dist_gtt_pct = ((ltp - auto_gtt) / auto_gtt) * 100.0 if (auto_gtt > 0 and ltp > 0) else 99.0
         dist_ema = abs((ltp - ema20) / ema20) * 100.0 if (ema20 > 0 and ltp > 0) else 99.0
 
-        # Strict GTT Proximity (Max 40 pts) - Only award high points if within 3.5% of GTT support
+        # Support proximity (Max 40 pts). This used to be scored twice — 40 pts for
+        # GTT proximity plus 30 for EMA20 proximity — but auto_gtt is *derived from*
+        # ema20 (see the fallback chain above), so those rewarded the same fact
+        # wearing two hats. 70 of 100 entry points for one signal meant any stock
+        # hugging its 20-EMA cleared an entry>=70 gate automatically, which is why
+        # six of a fifteen-stock cohort showed BUY_NOW at once.
         if dist_gtt_pct <= 1.5: e_pts += 40.0
-        elif dist_gtt_pct <= 3.5: e_pts += 30.0
-        elif dist_gtt_pct <= 6.0: e_pts += 15.0
+        elif dist_gtt_pct <= 3.0: e_pts += 28.0
+        elif dist_gtt_pct <= 6.0: e_pts += 12.0
         else: e_pts += 0.0
 
-        # Strict EMA20 Proximity (Max 30 pts)
-        if dist_ema <= 2.0: e_pts += 30.0
-        elif dist_ema <= 4.0: e_pts += 20.0
-        elif dist_ema <= 7.0: e_pts += 10.0
-        else: e_pts += 0.0
-
-        # RSI Sweet Spot 45-60 (Max 20 pts)
+        # RSI Sweet Spot (Max 25 pts) — momentum neither exhausted nor rolling over.
         rsi = float(s.get("rsi") or 50.0)
-        if 45 <= rsi <= 58: e_pts += 20.0
-        elif 40 <= rsi <= 65: e_pts += 10.0
+        if 45 <= rsi <= 58: e_pts += 25.0
+        elif 40 <= rsi <= 65: e_pts += 12.0
         else: e_pts += 0.0
 
-        # Intraday Inflow (Max 10 pts)
+        # Money flow (Max 20 pts) — independent confirmation that buyers are present
+        # at this level, rather than price merely drifting down onto its average.
         cmf = float(s.get("cmf") or 0.0)
-        if cmf > 0.05: e_pts += 10.0
+        if cmf > 0.10: e_pts += 20.0
+        elif cmf > 0.05: e_pts += 12.0
+        elif cmf > 0.0: e_pts += 6.0
+
+        # Trend intact (Max 15 pts) — near support is only an entry if the structure
+        # above it still holds; otherwise it is a falling knife at its 20-EMA.
+        penny_trend = s.get("trend") or TREND_CONSOLIDATION
+        if penny_trend in UPTREND_STATES: e_pts += 15.0
+        elif penny_trend == TREND_CONSOLIDATION: e_pts += 7.0
 
         penny_entry_score = round(min(100.0, max(0.0, e_pts)), 1)
 
@@ -3197,9 +3220,13 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
             (penny_quality_score * 0.45) + (penny_value_score * 0.30) + (penny_entry_score * 0.25), 1
         )
 
+        # BUY_NOW is deliberately rare. The budget for this tab is ₹200/month — one
+        # purchase — so six simultaneous signals are worth no more than none. At
+        # quality>=85 / entry>=80 / within 2% this fires on roughly 0-2 names a day.
+        # Silence means wait, which is correct behaviour when accumulating monthly,
+        # not a failure of the screen.
         if penny_quality_score >= 70:
-            # Strict Buy Now Gate: Entry Score >= 70 AND price within 3.5% of GTT support
-            if penny_entry_score >= 70.0 and dist_gtt_pct <= 3.5:
+            if penny_quality_score >= 85.0 and penny_entry_score >= 80.0 and dist_gtt_pct <= 2.0:
                 status = "BUY_NOW"
                 status_badge = "🟢 START SIP NOW"
                 status_badge_class = "badge-green"
