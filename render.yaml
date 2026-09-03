@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: stock-screener-api
+    runtime: python311
+    plan: standard
+    buildCommand: |
+      pip install -r requirements.txt
+    startCommand: python fetch_and_build.py
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    routes:
+      - path: /
+        destination: http://localhost:10000
+      - path: /api/mobile/*
+        destination: http://localhost:10000
+      - path: /api/ltp
+        destination: http://localhost:10000
+    autoDeploy: true
+    headers:
+      - path: /api/mobile/*
+        name: Access-Control-Allow-Origin
+        value: "*"
+      - path: /api/mobile/*
+        name: Content-Type
+        value: "application/json"

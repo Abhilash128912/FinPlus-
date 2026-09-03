@@ -39,6 +39,7 @@ logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
 from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline, compute_intraday_picks, select_monthly_lt_watchlist_additions
+from mobile_api import get_screener_data, get_lt_watchlist, get_holdings, search_stocks, get_stock_detail, get_app_status
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -8219,6 +8220,20 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             pass
 
+    def send_json_response(self, data: dict, status_code: int = 200):
+        """Send JSON response for mobile API."""
+        resp_data = json.dumps(data, default=json_serializer).encode('utf-8')
+        self.send_response(status_code)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Content-Length', str(len(resp_data)))
+        self.end_headers()
+        self.wfile.write(resp_data)
+        try:
+            self.wfile.flush()
+        except Exception:
+            pass
+
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -8403,6 +8418,29 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         global LATEST_SCREENER_RESULTS, LAST_SCAN_COMPLETED_AT
         parsed = urllib.parse.urlparse(self.path)
+
+        # Mobile API endpoints
+        if parsed.path == '/api/mobile/screener':
+            self.send_json_response(get_screener_data())
+            return
+        if parsed.path == '/api/mobile/watchlist':
+            self.send_json_response(get_lt_watchlist())
+            return
+        if parsed.path == '/api/mobile/holdings':
+            self.send_json_response(get_holdings())
+            return
+        if parsed.path == '/api/mobile/status':
+            self.send_json_response(get_app_status())
+            return
+        if parsed.path.startswith('/api/mobile/search'):
+            query = urllib.parse.parse_qs(parsed.query).get('q', [''])[0]
+            self.send_json_response(search_stocks(query))
+            return
+        if parsed.path.startswith('/api/mobile/stock'):
+            symbol = urllib.parse.parse_qs(parsed.query).get('symbol', [''])[0]
+            self.send_json_response(get_stock_detail(symbol))
+            return
+
         if parsed.path == '/api/ltp':
             self.handle_ltp_request()
             return
