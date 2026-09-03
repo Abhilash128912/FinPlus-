@@ -7,29 +7,29 @@
     "avg_cost": 160.53,
     "total_invested": 321.06,
     "added_at": "2026-08-13",
-    "score_at_entry": 28.8,
+    "score_at_entry": 30.4,
     "strength_at_entry": 39.0,
     "value_at_entry": 15.0,
-    "momentum_at_entry": 35.0,
+    "momentum_at_entry": 41.0,
     "roe_at_entry": 21.64,
     "de_at_entry": 3.45,
     "npm_at_entry": 6.02,
-    "current_score": 28.8,
+    "current_score": 30.4,
     "current_strength": 39.0,
-    "current_value": 333.94,
-    "current_momentum": 35.0,
-    "ltp": 166.97,
+    "current_value": 336.78,
+    "current_momentum": 41.0,
+    "ltp": 168.39,
     "sector": "Industrials",
     "pe": 29.69,
     "roe_pct": 21.64,
     "de_ratio": 3.45,
     "npm_pct": 6.02,
-    "rsi": 43.2,
-    "ma200": 171.11,
-    "wk52_return_pct": 28.62,
-    "volume_spike": 0.34,
-    "today_volume": 3844871.0,
-    "avg_volume_10d": 15340385.6,
+    "rsi": 45.4,
+    "ma200": 171.12,
+    "wk52_return_pct": 29.71,
+    "volume_spike": 0.51,
+    "today_volume": 7307517.0,
+    "avg_volume_10d": 15513517.9,
     "news": [
       {
         "title": "Ashok Leyland (NSEI:ASHOKLEY) Stock Fair Value Moves Lower On More Cautious Analyst Assumptions",
@@ -72,7 +72,7 @@
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 28.8 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 30.4 (below 40 threshold)"
       },
       {
         "level": "ALERT",
@@ -82,14 +82,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9166.97 fell below 200-day MA \u20b9171.11"
+        "message": "Trend Broken \u2014 Price \u20b9168.39 fell below 200-day MA \u20b9171.12"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 28.8 (<40)",
-    "unrealised_pnl": 12.88,
-    "unrealised_pct": 4.01
+    "signal_reason": "Quality score collapsed to 30.4 (<40)",
+    "unrealised_pnl": 15.72,
+    "unrealised_pct": 4.9
   },
   {
     "symbol": "BEL",
@@ -108,20 +108,20 @@
     "npm_at_entry": 21.4,
     "current_score": 44.8,
     "current_strength": 77.0,
-    "current_value": 1226.25,
+    "current_value": 1226.1,
     "current_momentum": 41.0,
-    "ltp": 408.75,
+    "ltp": 408.7,
     "sector": "Industrials",
     "pe": 49.04,
     "roe_pct": 25.6,
     "de_ratio": 0.0,
     "npm_pct": 21.4,
-    "rsi": 50.8,
+    "rsi": 50.7,
     "ma200": 419.19,
-    "wk52_return_pct": 12.34,
-    "volume_spike": 0.83,
-    "today_volume": 5742981.0,
-    "avg_volume_10d": 9361282.05,
+    "wk52_return_pct": 12.33,
+    "volume_spike": 0.78,
+    "today_volume": 6764021.0,
+    "avg_volume_10d": 9412334.05,
     "news": [
       {
         "title": "Bharat Electronics shares to be in focus on Thursday as company secures \u20b9730 crore order",
@@ -164,14 +164,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9408.75 fell below 200-day MA \u20b9419.19"
+        "message": "Trend Broken \u2014 Price \u20b9408.7 fell below 200-day MA \u20b9419.19"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Price below 200-day MA (\u20b9419.19) & score <50",
-    "unrealised_pnl": 15.69,
-    "unrealised_pct": 1.3
+    "unrealised_pnl": 15.54,
+    "unrealised_pct": 1.28
   },
   {
     "symbol": "BORANA",
@@ -190,20 +190,20 @@
     "npm_at_entry": 16.87,
     "current_score": 53.2,
     "current_strength": 77.0,
-    "current_value": 305.15,
+    "current_value": 305.7,
     "current_momentum": 25.0,
-    "ltp": 305.15,
+    "ltp": 305.7,
     "sector": "Consumer Cyclical",
     "pe": 12.43,
     "roe_pct": 35.01,
     "de_ratio": 0.25,
     "npm_pct": 16.87,
-    "rsi": 42.3,
-    "ma200": 327.78,
-    "wk52_return_pct": 42.23,
-    "volume_spike": 0.6,
-    "today_volume": 13690.0,
-    "avg_volume_10d": 30613.5,
+    "rsi": 42.8,
+    "ma200": 327.94,
+    "wk52_return_pct": 42.48,
+    "volume_spike": 0.65,
+    "today_volume": 16066.0,
+    "avg_volume_10d": 26507.05,
     "news": [
       {
         "title": "Borana Weaves Ltd Key Financial Ratios \u2013 Valuation, Profitability & More",
@@ -246,14 +246,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9305.15 fell below 200-day MA \u20b9327.78"
+        "message": "Trend Broken \u2014 Price \u20b9305.7 fell below 200-day MA \u20b9327.94"
       }
     ],
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": -36.85,
-    "unrealised_pct": -10.77
+    "unrealised_pnl": -36.3,
+    "unrealised_pct": -10.61
   },
   {
     "symbol": "FEDERALBNK",
@@ -263,29 +263,29 @@
     "avg_cost": 356.1,
     "total_invested": 712.2,
     "added_at": "2026-08-13",
-    "score_at_entry": 46.3,
+    "score_at_entry": 47.0,
     "strength_at_entry": 45.0,
     "value_at_entry": 44.0,
-    "momentum_at_entry": 55.0,
+    "momentum_at_entry": 59.0,
     "roe_at_entry": 11.52,
     "de_at_entry": null,
     "npm_at_entry": 30.72,
-    "current_score": 46.3,
+    "current_score": 47.0,
     "current_strength": 45.0,
-    "current_value": 692.8,
-    "current_momentum": 55.0,
-    "ltp": 346.4,
+    "current_value": 691.1,
+    "current_momentum": 59.0,
+    "ltp": 345.55,
     "sector": "Financial Services",
     "pe": 18.39,
     "roe_pct": 11.52,
     "de_ratio": null,
     "npm_pct": 30.72,
-    "rsi": 46.5,
+    "rsi": 45.9,
     "ma200": 297.1,
-    "wk52_return_pct": 80.64,
-    "volume_spike": 1.19,
-    "today_volume": 4132026.0,
-    "avg_volume_10d": 4711923.95,
+    "wk52_return_pct": 80.2,
+    "volume_spike": 1.24,
+    "today_volume": 5470029.0,
+    "avg_volume_10d": 4778824.1,
     "news": [
       {
         "title": "Federal Bank Ltd Share Price Today,, FEDERALBNK Share Price NSE, BSE",
@@ -328,8 +328,8 @@
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": -19.4,
-    "unrealised_pct": -2.72
+    "unrealised_pnl": -21.1,
+    "unrealised_pct": -2.96
   },
   {
     "symbol": "ITC",
@@ -339,29 +339,29 @@
     "avg_cost": 275.45,
     "total_invested": 275.45,
     "added_at": "2026-08-13",
-    "score_at_entry": 44.2,
+    "score_at_entry": 45.0,
     "strength_at_entry": 65.0,
     "value_at_entry": 46.0,
-    "momentum_at_entry": 2.0,
+    "momentum_at_entry": 10.0,
     "roe_at_entry": 33.8,
     "de_at_entry": 0.03,
     "npm_at_entry": 25.94,
-    "current_score": 44.2,
+    "current_score": 45.0,
     "current_strength": 65.0,
-    "current_value": 264.55,
-    "current_momentum": 2.0,
-    "ltp": 264.55,
+    "current_value": 263.45,
+    "current_momentum": 10.0,
+    "ltp": 263.45,
     "sector": "Consumer Defensive",
     "pe": 16.8,
     "roe_pct": 33.8,
     "de_ratio": 0.03,
     "npm_pct": 25.94,
-    "rsi": 39.7,
+    "rsi": 38.7,
     "ma200": 315.57,
-    "wk52_return_pct": -34.01,
-    "volume_spike": 0.56,
-    "today_volume": 5533989.0,
-    "avg_volume_10d": 13313669.5,
+    "wk52_return_pct": -34.29,
+    "volume_spike": 1.29,
+    "today_volume": 16474335.0,
+    "avg_volume_10d": 13860686.8,
     "news": [
       {
         "title": "ITC HOTELS LIMITED Share Price - Live NSE: ITCHOTELS Stock Price & Chart",
@@ -409,14 +409,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9264.55 fell below 200-day MA \u20b9315.57"
+        "message": "Trend Broken \u2014 Price \u20b9263.45 fell below 200-day MA \u20b9315.57"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Price below 200-day MA (\u20b9315.57) & score <50",
-    "unrealised_pnl": -10.9,
-    "unrealised_pct": -3.96
+    "unrealised_pnl": -12.0,
+    "unrealised_pct": -4.36
   },
   {
     "symbol": "NMDC",
@@ -435,20 +435,20 @@
     "npm_at_entry": 23.22,
     "current_score": 54.6,
     "current_strength": 63.0,
-    "current_value": 506.58,
+    "current_value": 508.74,
     "current_momentum": 38.0,
-    "ltp": 84.43,
+    "ltp": 84.79,
     "sector": "Basic Materials",
     "pe": 10.22,
     "roe_pct": 23.36,
     "de_ratio": 0.19,
     "npm_pct": 23.22,
-    "rsi": 46.1,
+    "rsi": 47.3,
     "ma200": 83.58,
-    "wk52_return_pct": 22.84,
-    "volume_spike": 0.68,
-    "today_volume": 9052965.0,
-    "avg_volume_10d": 18159590.85,
+    "wk52_return_pct": 23.37,
+    "volume_spike": 0.64,
+    "today_volume": 10757390.0,
+    "avg_volume_10d": 18244812.1,
     "news": [
       {
         "title": "NMDC opens special window for physical share dematerialization",
@@ -491,8 +491,8 @@
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": -4.68,
-    "unrealised_pct": -0.92
+    "unrealised_pnl": -2.52,
+    "unrealised_pct": -0.49
   },
   {
     "symbol": "TATAPOWER",
@@ -502,29 +502,29 @@
     "avg_cost": 382.25,
     "total_invested": 382.25,
     "added_at": "2026-08-13",
-    "score_at_entry": 25.3,
+    "score_at_entry": 24.3,
     "strength_at_entry": 21.0,
     "value_at_entry": 28.0,
-    "momentum_at_entry": 22.0,
+    "momentum_at_entry": 16.0,
     "roe_at_entry": 9.77,
     "de_at_entry": 1.68,
     "npm_at_entry": 6.09,
-    "current_score": 25.3,
+    "current_score": 24.3,
     "current_strength": 21.0,
-    "current_value": 365.9,
-    "current_momentum": 22.0,
-    "ltp": 365.9,
+    "current_value": 364.8,
+    "current_momentum": 16.0,
+    "ltp": 364.8,
     "sector": "Utilities",
     "pe": 29.15,
     "roe_pct": 9.77,
     "de_ratio": 1.68,
     "npm_pct": 6.09,
-    "rsi": 45.7,
+    "rsi": 44.6,
     "ma200": 388.51,
-    "wk52_return_pct": -1.4,
-    "volume_spike": 1.14,
-    "today_volume": 4606407.0,
-    "avg_volume_10d": 5473610.0,
+    "wk52_return_pct": -1.7,
+    "volume_spike": 1.03,
+    "today_volume": 5224484.0,
+    "avg_volume_10d": 5504513.85,
     "news": [
       {
         "title": "Tata Power Falls 4% After Singapore Court Rejects Appeal",
@@ -567,7 +567,7 @@
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 25.3 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 24.3 (below 40 threshold)"
       },
       {
         "level": "ALERT",
@@ -577,14 +577,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9365.9 fell below 200-day MA \u20b9388.51"
+        "message": "Trend Broken \u2014 Price \u20b9364.8 fell below 200-day MA \u20b9388.51"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 25.3 (<40)",
-    "unrealised_pnl": -16.35,
-    "unrealised_pct": -4.28
+    "signal_reason": "Quality score collapsed to 24.3 (<40)",
+    "unrealised_pnl": -17.45,
+    "unrealised_pct": -4.57
   },
   {
     "symbol": "TATASTEEL",
@@ -594,29 +594,29 @@
     "avg_cost": 182.82,
     "total_invested": 182.82,
     "added_at": "2026-08-13",
-    "score_at_entry": 32.3,
+    "score_at_entry": 34.5,
     "strength_at_entry": 34.0,
     "value_at_entry": 36.0,
-    "momentum_at_entry": 16.0,
+    "momentum_at_entry": 25.0,
     "roe_at_entry": 10.8,
     "de_at_entry": 0.89,
     "npm_at_entry": 4.6,
-    "current_score": 32.3,
+    "current_score": 34.5,
     "current_strength": 34.0,
-    "current_value": 182.46,
-    "current_momentum": 16.0,
-    "ltp": 182.46,
+    "current_value": 183.95,
+    "current_momentum": 25.0,
+    "ltp": 183.95,
     "sector": "Basic Materials",
     "pe": 21.1,
     "roe_pct": 10.8,
     "de_ratio": 0.89,
     "npm_pct": 4.6,
-    "rsi": 39.4,
-    "ma200": 192.75,
-    "wk52_return_pct": 18.77,
-    "volume_spike": 0.77,
-    "today_volume": 14950793.0,
-    "avg_volume_10d": 26141894.4,
+    "rsi": 42.9,
+    "ma200": 192.76,
+    "wk52_return_pct": 19.74,
+    "volume_spike": 0.8,
+    "today_volume": 19490536.0,
+    "avg_volume_10d": 26368881.55,
     "news": [
       {
         "title": "Tata Steel Share Price - Live NSE: TATASTEEL Stock Price & Chart",
@@ -659,19 +659,19 @@
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 32.3 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 34.5 (below 40 threshold)"
       },
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9182.46 fell below 200-day MA \u20b9192.75"
+        "message": "Trend Broken \u2014 Price \u20b9183.95 fell below 200-day MA \u20b9192.76"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 32.3 (<40)",
-    "unrealised_pnl": -0.36,
-    "unrealised_pct": -0.2
+    "signal_reason": "Quality score collapsed to 34.5 (<40)",
+    "unrealised_pnl": 1.13,
+    "unrealised_pct": 0.62
   },
   {
     "symbol": "UYFINCORP",
@@ -690,20 +690,20 @@
     "npm_at_entry": 29.06,
     "current_score": 64.1,
     "current_strength": 65.0,
-    "current_value": 236.88,
+    "current_value": 238.8,
     "current_momentum": 70.0,
-    "ltp": 19.74,
+    "ltp": 19.9,
     "sector": "Financial Services",
     "pe": 6.06,
     "roe_pct": 13.44,
     "de_ratio": 0.01,
     "npm_pct": 29.06,
-    "rsi": 52.7,
-    "ma200": 15.11,
-    "wk52_return_pct": 55.8,
+    "rsi": 53.9,
+    "ma200": 15.13,
+    "wk52_return_pct": 57.06,
     "volume_spike": 0.23,
-    "today_volume": 70085.0,
-    "avg_volume_10d": 404454.6,
+    "today_volume": 85211.0,
+    "avg_volume_10d": 386206.7,
     "news": [
       {
         "title": "Benign Growth For U. Y. Fincorp Limited (NSE:UYFINCORP) Underpins Its Share Price",
@@ -746,7 +746,7 @@
     "signal": "BUY",
     "signal_badge": "\ud83d\udfe2 BUY",
     "signal_reason": "Strong quality score (64.1) & solid fundamentals",
-    "unrealised_pnl": 4.92,
-    "unrealised_pct": 2.12
+    "unrealised_pnl": 6.84,
+    "unrealised_pct": 2.95
   }
 ]
