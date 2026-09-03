@@ -337,18 +337,36 @@ def score_momentum(info: dict, history: pd.DataFrame) -> tuple[float, dict]:
     vol = info.get("volume") or info.get("regularMarketVolume") or 0
     avg_vol_20d = info.get("averageVolume") or 0   # yfinance 'averageVolume' is ~3-month avg
 
-    if (not vol or not avg_vol_20d) and len(history) >= 20 and "Volume" in history.columns:
-        vol = float(history["Volume"].iloc[-1])
+    if not avg_vol_20d and len(history) >= 20 and "Volume" in history.columns:
         avg_vol_20d = float(history["Volume"].tail(20).mean())
     elif not avg_vol_20d and len(history) >= 10 and "Volume" in history.columns:
-        vol = float(history["Volume"].iloc[-1])
         avg_vol_20d = float(history["Volume"].tail(10).mean())
+
+    if not vol and len(history) >= 1 and "Volume" in history.columns:
+        vol = float(history["Volume"].iloc[-1])
 
     vol_spike = 0.0
     vol_pts = 0
 
     if vol > 0 and avg_vol_20d > 0:
-        vol_spike = round(vol / avg_vol_20d, 2)
+        vol_pace = vol
+        try:
+            import datetime
+            ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+            now_dt = datetime.datetime.now(ist_offset)
+            if now_dt.weekday() < 5:
+                now_t = now_dt.time()
+                market_open_t = datetime.time(9, 15)
+                market_close_t = datetime.time(15, 30)
+                if market_open_t <= now_t <= market_close_t:
+                    mins_elapsed = (now_t.hour * 60 + now_t.minute) - (9 * 60 + 15)
+                    if mins_elapsed > 15:
+                        progress = min(1.0, max(0.08, mins_elapsed / 375.0))
+                        vol_pace = vol / progress
+        except Exception:
+            pass
+
+        vol_spike = round(vol_pace / avg_vol_20d, 2)
         if vol_spike >= 2.5:   vol_pts = 15
         elif vol_spike >= 1.8: vol_pts = 12
         elif vol_spike >= 1.2: vol_pts = 8
@@ -2639,8 +2657,33 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
     if not screener_results:
         return {"buy": [], "sell": []}
 
-    MIN_LIQUIDITY = 200_000   # avg daily volume floor — avoid MIS slippage traps
-    MIN_PRICE = 20.0          # avoid circuit-prone micro-price names intraday
+    # ── LIQUIDITY & CIRCUIT-TRAP GATES ──────────────────────────────────────
+    # An MIS position has to be exitable the same day. Two things prevent that:
+    # too little money changing hands, and the stock locking at a circuit band.
+    #
+    # Liquidity is measured in RUPEES TRADED, not share count. A share-count
+    # floor is blind to price: against this scan set, 48 stocks clear 200,000
+    # shares/day while trading under ₹2 Cr — PRIMO passes on 214,198 shares that
+    # come to just ₹0.45 Cr. A meaningful position cannot be exited in that
+    # without moving the price against you, which is the slippage a liquidity
+    # floor exists to prevent. ₹5 Cr/day sits near the 10th percentile of names
+    # that cleared the old gate, so this tightens the thin tail without gutting
+    # the candidate pool.
+    MIN_TRADED_VALUE = 5_00_00_000
+    MIN_PRICE = 20.0
+
+    # NSE circuit bands cluster at 5 / 10 / 20%. A stock pinned just under a band
+    # is about to lock, and a locked stock cannot be exited at any price — the
+    # trap this gate exists to avoid. A move that has already gone *past* a band
+    # is evidence the stock does not have that band, so only the approach zone is
+    # rejected, not everything above it.
+    CIRCUIT_BANDS = (5.0, 10.0, 20.0)
+    CIRCUIT_APPROACH_PCT = 0.5
+
+    def is_near_circuit(move_pct: float) -> bool:
+        """True when today's move sits in the approach zone below a circuit band."""
+        m = abs(move_pct)
+        return any(band - CIRCUIT_APPROACH_PCT <= m <= band for band in CIRCUIT_BANDS)
 
     buy_candidates = []
     sell_candidates = []
@@ -2650,8 +2693,8 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
         if ltp < MIN_PRICE:
             continue
 
-        liquidity = s.get("avg_volume_10d") or s.get("today_volume") or 0
-        if liquidity < MIN_LIQUIDITY:
+        liquidity_shares = s.get("avg_volume_10d") or s.get("today_volume") or 0
+        if ltp * liquidity_shares < MIN_TRADED_VALUE:
             continue
 
         # prev_close comes from yfinance's `.info` dict upstream (score_stock），
@@ -2672,8 +2715,14 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
         momentum = s.get("momentum") or 0
         rs_rating = s.get("rs_rating") or 50
 
-        day_move_bullish = (not has_day_move) or (0.4 <= day_chg_pct <= 7.0)
-        day_move_bearish = (not has_day_move) or (-7.0 <= day_chg_pct <= -0.4)
+        # A stock already pinned just under a circuit band is the trap this tab
+        # must not walk into: once it locks there is no exit at any price, and an
+        # MIS position has to be closed the same day.
+        if has_day_move and is_near_circuit(day_chg_pct):
+            continue
+
+        day_move_bullish = has_day_move and (0.4 <= day_chg_pct <= 7.0)
+        day_move_bearish = has_day_move and (-7.0 <= day_chg_pct <= -0.4)
 
         # Buy (long): today's up-move confirmed by volume (when known), RSI
         # building but not yet overbought, trend intact.
@@ -2697,6 +2746,7 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
     def _build_pick(entry, direction):
         _, s, day_chg_pct, dist_ma50_pct, has_day_move = entry
         ltp = s.get("ltp") or 0
+        raw_prev_close = s.get("prev_close")
         # Much tighter risk sizing than a swing trade — MIS is same-day only.
         risk_pct = 1.0
         if direction == "BUY":
@@ -2715,6 +2765,7 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
             "sector": s.get("sector"),
             "direction": direction,
             "ltp": ltp,
+            "prev_close": raw_prev_close,
             "day_chg_pct": round(day_chg_pct, 2) if has_day_move else None,
             "has_day_move": has_day_move,
             "rsi": s.get("rsi"),
@@ -3331,9 +3382,9 @@ def select_monthly_lt_watchlist_additions(screener_results: list[dict], existing
     if not screener_results:
         return []
 
-    MIN_LIQUIDITY = 100_000  # lighter than the Intraday tab's 200k — an LT hold
-                              # doesn't need same-day exit liquidity, just enough
-                              # to not be a delisting/manipulation risk.
+    MIN_LIQUIDITY = 100_000  # lighter than the Intraday tab's traded-value floor —
+                              # an LT hold doesn't need same-day exit liquidity, just
+                              # enough to not be a delisting/manipulation risk.
     MIN_PRICE = 20.0
 
     candidates = []

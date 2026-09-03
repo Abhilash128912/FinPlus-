@@ -1875,6 +1875,10 @@ async function refreshLiveLTP(manual = false) {
       if (idPick && Math.abs((idPick.ltp || 0) - newPrice) > 0.01) {
         idPick.old_ltp = idPick.ltp;
         idPick.ltp = newPrice;
+        if (idPick.prev_close && idPick.prev_close > 0) {
+          idPick.day_chg_pct = Number((((newPrice - idPick.prev_close) / idPick.prev_close) * 100).toFixed(2));
+          idPick.has_day_move = true;
+        }
         priceChanged = true;
       }
     }
