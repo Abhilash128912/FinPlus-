@@ -2356,11 +2356,14 @@ def get_lt_watchlist_status(
         }
 
     if lt_quality_score >= 70:
-        if lt_entry_score >= 65:
+        # BUY_NOW only for Strong Uptrend + GTT triggered (price at/near support)
+        gtt_triggered = (gtt_level and gtt_level > 0 and ltp > 0 and
+                        ((ltp - gtt_level) / gtt_level) * 100.0 <= 2.0)
+        if lt_entry_score >= 65 and trend == "Strong Uptrend" and gtt_triggered:
             status = "BUY_NOW"
             badge = "🟢 BUY NOW (ACCUMULATE)"
             badge_class = "badge-green"
-            reason = f"High conviction compounder ({lt_quality_score:.0f}/100) in prime accumulation zone ({lt_entry_score:.0f}/100 entry)"
+            reason = f"High conviction compounder ({lt_quality_score:.0f}/100) in prime accumulation zone ({lt_entry_score:.0f}/100 entry) · Strong Uptrend + GTT Triggered"
         else:
             status = "ACCUMULATE_ON_DIP"
             badge = "🟢 ACCUMULATE ON DIP"
