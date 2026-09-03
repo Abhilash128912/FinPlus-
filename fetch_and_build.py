@@ -42,6 +42,15 @@ from screener_engine import score_stock, check_quality_alerts, compute_signal, c
 from screener_engine import TREND_STATES, UPTREND_STATES, TREND_DOWNTREND, sane_metric
 from mobile_api import get_screener_data, get_lt_watchlist, get_holdings, search_stocks, get_stock_detail, get_app_status
 
+# ─── Time ─────────────────────────────────────────────────────────────────────
+# Every market rule in this file -- session windows, trading-day rollover, cache
+# ages, the "last scan" stamp on the page -- is expressed in IST, because that is
+# what NSE runs on and what the user reads. The host clock is not: Render runs UTC,
+# so a naive datetime.now() renders 5.5 hours behind and mislabels a freshly built
+# page as stale. Pass IST to datetime.now(); never call it with no tzinfo.
+IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+
+
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
@@ -390,8 +399,7 @@ def is_non_trading_day(date_s: str) -> bool:
 
 def is_equity_market_open() -> bool:
     """Return True when NSE equity session is currently live (09:15–15:30 IST on trading days)."""
-    ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
-    now = datetime.datetime.now(ist_offset)
+    now = datetime.datetime.now(IST)
     if is_non_trading_day(now.strftime("%Y-%m-%d")):
         return False
     t = now.time()
@@ -406,12 +414,11 @@ def is_price_stale(cached_at_str: str) -> bool:
        This guarantees that mid-day intraday caches (e.g. 14:01) are automatically refreshed to
        the final closing price once market closes.
     """
-    ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
-    now_ist = datetime.datetime.now(ist_offset)
+    now_ist = datetime.datetime.now(IST)
     try:
         cached_dt = datetime.datetime.fromisoformat(cached_at_str)
         if cached_dt.tzinfo is None:
-            cached_dt = cached_dt.replace(tzinfo=ist_offset)
+            cached_dt = cached_dt.replace(tzinfo=IST)
     except Exception:
         return True
 
@@ -431,7 +438,7 @@ def is_price_stale(cached_at_str: str) -> bool:
             check_date -= datetime.timedelta(days=1)
         last_trading_date = check_date
 
-    last_market_close = datetime.datetime.combine(last_trading_date, datetime.time(15, 30), tzinfo=ist_offset)
+    last_market_close = datetime.datetime.combine(last_trading_date, datetime.time(15, 30), tzinfo=IST)
     return cached_dt < last_market_close
 
 
@@ -504,10 +511,9 @@ def load_cache(ticker):
             data = json.load(f)
         info = data.get("info", {})
         cached_at = datetime.datetime.fromisoformat(data.get("cached_at", "2000-01-01"))
-        ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
         if cached_at.tzinfo is None:
-            cached_at = cached_at.replace(tzinfo=ist_offset)
-        now_ist = datetime.datetime.now(ist_offset)
+            cached_at = cached_at.replace(tzinfo=IST)
+        now_ist = datetime.datetime.now(IST)
         age_hrs = (now_ist - cached_at).total_seconds() / 3600
         # If cache is valid (< 24h old) and has fundamentals, use it
         has_fund = any(info.get(k) is not None for k in ["returnOnEquity", "debtToEquity", "trailingPE", "profitMargins"])
@@ -536,8 +542,7 @@ def save_cache(ticker, data):
         except Exception:
             pass
 
-    ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
-    data["cached_at"] = datetime.datetime.now(ist_offset).isoformat()
+    data["cached_at"] = datetime.datetime.now(IST).isoformat()
     try:
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
@@ -1413,7 +1418,7 @@ def run_scan(tickers: list[str]) -> list[dict]:
     # below — see batch_fetch_live_prices() for why this is the actual fix for scan
     # duration, not raising the worker count.
     stale_price_tickers = []
-    now_ist = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=5, minutes=30)))
+    now_ist = datetime.datetime.now(IST)
     today_s = now_ist.strftime("%Y-%m-%d")
     is_trading_today = not is_non_trading_day(today_s)
 
@@ -2034,8 +2039,7 @@ def get_market_status() -> dict:
     Equity Trading Hours (NSE/BSE): Monday - Friday, 09:15 AM to 03:30 PM IST.
     """
     now_utc = datetime.datetime.now(datetime.timezone.utc)
-    ist_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
-    now_ist = now_utc.astimezone(ist_tz)
+    now_ist = now_utc.astimezone(IST)
 
     weekday = now_ist.weekday()  # Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
     t = now_ist.time()
@@ -2404,7 +2408,7 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
     tech_class = trend_st["class"]
     pick_st = check_top_pick_status(top)
 
-    ist_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=5, minutes=30)))
+    ist_now = datetime.datetime.now(IST)
     is_pre_mkt = mkt_info["is_pre_market"] and (ist_now.time() < datetime.time(9, 15))
 
     if is_pre_mkt:
@@ -8006,8 +8010,7 @@ def fetch_1h_history_cffi(ticker: str, days: int = 60) -> pd.DataFrame:
     clean_t = ticker.replace(".NS", "").replace(".BO", "")
     c_dir = os.path.join(BASE_DIR, "cache_1h")
     c_file = os.path.join(c_dir, f"{clean_t}.json")
-    ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
-    now_ist = datetime.datetime.now(ist_offset)
+    now_ist = datetime.datetime.now(IST)
 
     if os.path.exists(c_file):
         try:
@@ -8015,7 +8018,7 @@ def fetch_1h_history_cffi(ticker: str, days: int = 60) -> pd.DataFrame:
                 c_data = json.load(f)
             saved_at = datetime.datetime.fromisoformat(c_data.get("saved_at", "2000-01-01"))
             if saved_at.tzinfo is None:
-                saved_at = saved_at.replace(tzinfo=ist_offset)
+                saved_at = saved_at.replace(tzinfo=IST)
             if (now_ist - saved_at).total_seconds() < 1800:
                 records = c_data.get("records", [])
                 if records:
@@ -8246,8 +8249,7 @@ def sync_monthly_lt_watchlist_additions(screener_results: list[dict]) -> None:
     if not screener_results:
         return
 
-    ist_offset = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
-    today = datetime.datetime.now(ist_offset).date()
+    today = datetime.datetime.now(IST).date()
 
     state = None
     if os.path.exists(LT_MONTHLY_PICKS_FILE):
@@ -8467,7 +8469,7 @@ def get_or_refresh_monthly_lt_picks(screener_results: list[dict], lt_watchlist: 
 
 
 def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist: list[dict], commodity_signals: dict, mkt_info: dict, fno_data: list[dict] | None = None) -> str:
-    run_time = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
+    run_time = datetime.datetime.now(IST).strftime("%d %b %Y, %I:%M %p")
 
     penny_monthly = get_or_refresh_monthly_penny_picks(screener_results, top_n=20, monthly_sip=200.0)
     penny_stocks_data = penny_monthly["picks"]
