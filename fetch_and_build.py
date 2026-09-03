@@ -8759,7 +8759,37 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             pass
 
+    def send_response(self, code, message=None):
+        # Reset per response, not per connection: keep-alive reuses one handler
+        # instance across requests, so a flag left set would suppress the header
+        # on every later response over the same connection.
+        self._cache_control_sent = False
+        super().send_response(code, message)
+
+    def send_header(self, keyword, value):
+        if str(keyword).lower() == 'cache-control':
+            self._cache_control_sent = True
+        super().send_header(keyword, value)
+
     def end_headers(self):
+        # The explicit routes above already set no-store on the HTML and on
+        # screener_data.json, but a direct /screener.html falls through to
+        # SimpleHTTPRequestHandler's default file serving, which sends no cache
+        # directives at all — so that one path could hand back a page built
+        # before the last scan. Intraday picks and LT statuses are baked into the
+        # HTML at build time, so a cached page means stale *picks*, not just
+        # stale styling, which is exactly the failure that showed a circuit-band
+        # name still listed after the gate that excludes it had shipped.
+        #
+        # Hashed assets (app.css/app.js?v=) set their own long-lived caching
+        # before reaching here, so this never downgrades them.
+        if not getattr(self, '_cache_control_sent', False):
+            try:
+                path = urllib.parse.urlparse(self.path).path
+                if path.endswith('.html') or path.endswith('/'):
+                    self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            except Exception:
+                pass
         super().end_headers()
         try:
             self.wfile.flush()
