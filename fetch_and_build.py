@@ -2556,6 +2556,76 @@ tr:hover td{background:#ffffff06}
 
   .mobile-nav-icon {
     font-size: 16px;
+    line-height: 1;
+  }
+
+  /* ── Mobile readability pass ──────────────────────────────────────────────
+     The phone layout was the desktop one scaled down: content ran under the
+     status bar, seven nav labels wrapped to two and three lines inside ~77px
+     tabs, and card padding left very little data visible per screen. */
+
+  /* The status bar overlaps a fixed header without this. viewport-fit=cover is
+     already set on the meta tag, which is what makes the inset resolve. */
+  .app-header {
+    padding-top: calc(12px + env(safe-area-inset-top, 0px)) !important;
+    padding-left: max(14px, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(14px, env(safe-area-inset-right, 0px)) !important;
+    padding-bottom: 12px !important;
+    gap: 10px !important;
+  }
+  .app-title { font-size: 18px !important; }
+
+  /* All seven tabs share the width evenly so none is pushed off-screen. An
+     earlier attempt let the bar scroll horizontally, but that hid the last tab
+     with no visual cue that it existed -- measured at 421px of tabs in a 375px
+     viewport. Equal flex basis with min-width:0 lets them compress to fit
+     instead, and the label truncates rather than wrapping to a second line. */
+  .mobile-nav-bar {
+    justify-content: space-between;
+    overflow: hidden;
+  }
+
+  .mobile-nav-item {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 6px 2px !important;
+    font-size: 9.5px !important;
+    line-height: 1.2;
+  }
+  .mobile-nav-item > span:last-child {
+    display: block;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Denser cards: the previous 16px padding and 28px figures meant roughly one
+     stat per thumb-scroll. */
+  .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)) !important;
+    gap: 8px !important;
+    margin-bottom: 14px !important;
+  }
+  .stat-card { padding: 10px 8px !important; border-radius: 10px !important; }
+  .stat-val  { font-size: 20px !important; margin-bottom: 2px !important; }
+  .stat-lbl  { font-size: 9.5px !important; letter-spacing: .03em !important; }
+
+  /* Long headings such as "Commodities Intraday Signals" broke mid-phrase. */
+  h1, h2, h3, .card-title { overflow-wrap: break-word; hyphens: none; }
+  h2 { font-size: 16px !important; }
+  h3 { font-size: 14px !important; }
+
+  /* This row is flex/nowrap with a long trailing chip ("15m timeframe (15/20
+     EMA Crossover)"). At 311px the chip refused to shrink, squeezing the title
+     to 131px so it wrapped mid-phrase. Letting the row wrap drops the chip onto
+     its own line and gives the title the full width. */
+  .commodity-bar-title {
+    flex-wrap: wrap !important;
+    row-gap: 4px !important;
+  }
+  .commodity-bar-title > span:last-child {
+    flex-basis: 100%;
   }
 }
 
@@ -3288,7 +3358,7 @@ __TREND_OPTIONS_HTML__
   </button>
   <button class="mobile-nav-item" data-tab="swing" onclick="switchTab('swing')">
     <span class="mobile-nav-icon">⚡</span>
-    <span>Swing Top 10</span>
+    <span>Swing</span>
   </button>
   <button class="mobile-nav-item" data-tab="intraday" onclick="switchTab('intraday')">
     <span class="mobile-nav-icon">🎯</span>
@@ -3296,11 +3366,11 @@ __TREND_OPTIONS_HTML__
   </button>
   <button class="mobile-nav-item" data-tab="watchlist" onclick="switchTab('watchlist')">
     <span class="mobile-nav-icon">🛡️</span>
-    <span>LT Screen</span>
+    <span>LT</span>
   </button>
   <button class="mobile-nav-item" data-tab="penny" onclick="switchTab('penny')">
     <span class="mobile-nav-icon">💎</span>
-    <span>Penny Screen</span>
+    <span>Penny</span>
   </button>
   <button class="mobile-nav-item" data-tab="fno" onclick="switchTab('fno')">
     <span class="mobile-nav-icon">📊</span>
@@ -3308,7 +3378,7 @@ __TREND_OPTIONS_HTML__
   </button>
   <button class="mobile-nav-item" data-tab="holidays" onclick="switchTab('holidays')">
     <span class="mobile-nav-icon">📅</span>
-    <span>Holidays</span>
+    <span>Dates</span>
   </button>
 </div>
 
