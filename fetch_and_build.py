@@ -66,6 +66,22 @@ WWW_STATIC_DIR = os.path.join(BASE_DIR, "www", "static")
 WWW_APP_CSS_FILE = os.path.join(WWW_STATIC_DIR, "app.css")
 WWW_APP_JS_FILE = os.path.join(WWW_STATIC_DIR, "app.js")
 WWW_JSON_FILE = os.path.join(BASE_DIR, "www", "screener_data.json")
+# www/ is the Capacitor webDir, so everything in it ships inside the APK.
+# screener_data.json is ~10.4MB of a ~10.8MB bundle -- about 95% of the app.
+# capacitor.config.json sets server.url to the Render deployment, so the APK
+# loads the live site and never reads this bundled copy; shipping it only made
+# the download bigger. Set SCREENER_BUNDLE_SCAN_DATA=1 to restore it, which is
+# needed only if the app is ever rebuilt to run fully offline from www/.
+BUNDLE_SCAN_DATA_IN_WWW = os.environ.get("SCREENER_BUNDLE_SCAN_DATA", "").strip().lower() in ("1", "true", "yes")
+
+
+def write_scan_json(clean_results) -> None:
+    """Write screener_data.json, and the www/ copy only when bundling is enabled."""
+    with open(OUT_JSON_FILE, "w", encoding="utf-8") as f:
+        json.dump(clean_results, f, default=json_serializer)
+    if BUNDLE_SCAN_DATA_IN_WWW:
+        with open(WWW_JSON_FILE, "w", encoding="utf-8") as f:
+            json.dump(clean_results, f, default=json_serializer)
 # The Capacitor CLI (`npx cap sync`) hard-requires an index.html at the webDir root
 # as the app's entry point — it has no config option to point at a differently named
 # file — so www/index.html must exist as a copy of www/screener.html even though the
@@ -141,9 +157,23 @@ else:
 # the UI has actually asked about, and the handler only ever reads the cache. That
 # makes responses immediate, caps outbound traffic at one in-flight batch, and
 # keeps prices as fresh as the network genuinely allows.
-LTP_HOT_SYMBOLS: set = set()
+# symbol -> epoch seconds it was last requested by a client.
+#
+# This was a plain set that only ever grew: every symbol any client had ever
+# polled stayed in it forever, so after browsing a few pages of a 2,568-stock
+# table the warmer was refreshing 500+ symbols per cycle at 30-190s a batch, and
+# a given price only came round again every 1-2 minutes. Timestamps let the
+# warmer track what is actually on screen now and drop the rest.
+LTP_HOT_SYMBOLS: dict = {}
 LTP_HOT_LOCK = threading.Lock()
 LTP_LAST_REFRESH_AT = 0.0
+# A symbol not requested within this long stops being refreshed. Comfortably
+# longer than the 10s client poll, so a symbol on screen never ages out.
+LTP_HOT_TTL_SEC = 90.0
+# Upper bound on one warmer batch. Beyond this the cycle takes long enough that
+# everything in it goes stale waiting, which is the problem being fixed. The most
+# recently requested symbols win, so the visible page is always covered.
+LTP_MAX_BATCH = 120
 # How stale a cached price may be before it is reported as stale to the client.
 # Sized above a typical refresh cycle so a normal cycle is not mislabelled, while
 # still flagging genuinely dead data rather than passing it off as live.
@@ -203,8 +233,25 @@ def disk_price_map() -> dict:
 
 def note_hot_symbols(symbols) -> None:
     """Record symbols the UI is polling so the warmer keeps them fresh."""
+    now = time.time()
     with LTP_HOT_LOCK:
-        LTP_HOT_SYMBOLS.update(symbols)
+        for s in symbols:
+            LTP_HOT_SYMBOLS[s] = now
+
+
+def hot_symbols_to_refresh() -> list:
+    """Symbols requested recently enough to still be worth refreshing.
+
+    Prunes anything past LTP_HOT_TTL_SEC and returns at most LTP_MAX_BATCH,
+    most-recently-requested first, so a large batch can never crowd out the page
+    the user is actually looking at.
+    """
+    cutoff = time.time() - LTP_HOT_TTL_SEC
+    with LTP_HOT_LOCK:
+        for sym in [s for s, seen in LTP_HOT_SYMBOLS.items() if seen < cutoff]:
+            del LTP_HOT_SYMBOLS[sym]
+        ranked = sorted(LTP_HOT_SYMBOLS.items(), key=lambda kv: kv[1], reverse=True)
+    return [s for s, _ in ranked[:LTP_MAX_BATCH]]
 
 
 def background_ltp_warmer():
@@ -220,8 +267,7 @@ def background_ltp_warmer():
             time.sleep(5)
             if ltp_should_defer_to_scan():
                 continue
-            with LTP_HOT_LOCK:
-                symbols = sorted(LTP_HOT_SYMBOLS)
+            symbols = hot_symbols_to_refresh()
             if not symbols:
                 continue
             prices = batch_fetch_live_prices(symbols)
@@ -8975,10 +9021,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 LATEST_SCREENER_RESULTS = screener_results
                 try:
                     clean_results = sanitize_for_strict_json(screener_results)
-                    with open(OUT_JSON_FILE, "w", encoding="utf-8") as f:
-                        json.dump(clean_results, f, default=json_serializer)
-                    with open(WWW_JSON_FILE, "w", encoding="utf-8") as f:
-                        json.dump(clean_results, f, default=json_serializer)
+                    write_scan_json(clean_results)
                 except Exception as e:
                     log(f"  ⚠ Could not save screener_data.json: {e}")
 
@@ -9363,10 +9406,7 @@ def background_initial_scan():
         LATEST_SCREENER_RESULTS = screener_results
         try:
             clean_results = sanitize_for_strict_json(screener_results)
-            with open(OUT_JSON_FILE, "w", encoding="utf-8") as f:
-                json.dump(clean_results, f, default=json_serializer)
-            with open(WWW_JSON_FILE, "w", encoding="utf-8") as f:
-                json.dump(clean_results, f, default=json_serializer)
+            write_scan_json(clean_results)
         except Exception as e:
             log(f"  ⚠ Could not save screener_data.json: {e}")
 
