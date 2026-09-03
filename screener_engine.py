@@ -5,6 +5,7 @@ All inputs come from yfinance .info dict + price history DataFrame.
 No mock data — if a metric is missing, it is skipped and score is partial.
 """
 
+import bisect
 import pandas as pd
 import numpy as np
 
@@ -2940,38 +2941,109 @@ def compute_fno_signal(scored: dict, fno_cfg: dict) -> dict:
     }
 
 
+# Validity bounds for the raw fundamentals feed. These are NOT scoring
+# thresholds -- they mark values that cannot be real: npm_pct arrives as high as
+# 75,825% and roe_pct as low as -4,016% for some symbols. A value outside these
+# bounds is treated as MISSING rather than clamped, because a corrupt figure is
+# not a small figure, and clamping would silently admit it to the ranking.
+PENNY_SANE_BOUNDS = {
+    "roe_pct":   (-100.0, 100.0),
+    "npm_pct":   (-100.0, 100.0),
+    "de_ratio":  (0.0, 50.0),
+    # A P/E below ~3 on a profitable company is nearly always an artifact -- a
+    # one-off gain inflating EPS, or stale earnings against a re-rated price --
+    # rather than genuine value. Left in, these dominate the cheapness percentile
+    # and pull the whole list toward value traps (RELINFRA screened at P/E 0.8).
+    # Treated as unmeasurable, consistent with the other bounds here.
+    "pe":        (3.0, 300.0),
+}
+
+
+def sane_metric(row: dict, field: str):
+    """Return row[field] as a float when it is real and within validity bounds, else None."""
+    value = row.get(field)
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    if v != v or v in (float("inf"), float("-inf")):   # NaN / +-inf
+        return None
+    lo, hi = PENNY_SANE_BOUNDS.get(field, (float("-inf"), float("inf")))
+    return v if lo <= v <= hi else None
+
+
+def percentile_rank(sorted_values: list, value: float) -> float:
+    """Fraction of `sorted_values` at or below `value`, in 0.0-1.0."""
+    if not sorted_values:
+        return 0.5
+    return bisect.bisect_right(sorted_values, value) / len(sorted_values)
+
+
 def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, monthly_sip: float = 200.0) -> list[dict]:
     """
-    Decoupled Quality Penny / Micro-Cap Engine:
-    Separates Wealth-Builder Durability (Debt-free status, ROE, Margin) 
-    from SIP Entry Timing (Distance from GTT / EMA20 support).
+    Quality + Value Penny / Micro-Cap Engine.
+
+    Separates three independent judgements:
+      - Durability : debt-free status, ROE, margin  (is the business sound?)
+      - Value      : P/E and quality-adjusted P/E   (is it cheap for what it is?)
+      - Entry      : distance from GTT / EMA20      (is now the moment?)
+
+    Valuation is scored by PERCENTILE within the qualifying penny universe rather
+    than against fixed P/E cut-offs. A "cheap" multiple is only meaningful
+    relative to what else is available, and percentiles re-baseline themselves as
+    the market moves instead of hardcoding a number that silently goes stale.
+
+    A usable P/E is required: judging a stock "undervalued" without a valuation
+    measure would be an unsupported claim, so unmeasurable stocks are excluded
+    rather than admitted on durability alone.
     """
     if not screener_results:
         return []
 
-    qualified = []
+    # ── PASS 1: hard gates, and collect the universe used for percentiles ──────
+    candidates = []
     for s in screener_results:
         ltp = float(s.get("ltp") or 0.0)
         mc = float(s.get("market_cap") or 0.0)
-        roe = float(s.get("roe_pct") if s.get("roe_pct") is not None else 0.0)
-        npm = float(s.get("npm_pct") if s.get("npm_pct") is not None else 0.0)
-        de = float(s.get("de_ratio") if s.get("de_ratio") is not None else 1.0)
         vol = float(s.get("avg_volume_10d") or s.get("today_volume") or 0.0)
         total_score = float(s.get("total_score") or 0.0)
+
+        roe = sane_metric(s, "roe_pct")
+        npm = sane_metric(s, "npm_pct")
+        de  = sane_metric(s, "de_ratio")
+        pe  = sane_metric(s, "pe")
 
         # Gate 1: Price Range (₹5 to ₹75)
         if not (5.0 <= ltp <= 75.0): continue
         # Gate 2: Market Cap Floor (>= ₹50 Cr)
         if mc > 0 and mc < 500000000: continue
-        # Gate 3: Solvency (D/E <= 1.0)
-        if de > 1.0: continue
-        # Gate 4: Profitability (ROE >= 6% and Margin > 0%)
-        if roe < 6.0 or npm <= 0.0: continue
+        # Gate 3: Solvency — a missing/implausible D/E is disqualifying, not assumed safe
+        if de is None or de > 1.0: continue
+        # Gate 4: Profitability (ROE >= 6% and positive margin)
+        if roe is None or npm is None or roe < 6.0 or npm <= 0.0: continue
         # Gate 5: Liquidity (Avg Volume >= 20,000)
         if vol > 0 and vol < 20000: continue
         # Gate 6: Minimum Quality Score (>= 45)
         if total_score < 45.0: continue
+        # Gate 7: Valuation must be measurable and positive. A negative or absent
+        # P/E means loss-making or unreported earnings — neither can be called
+        # undervalued, which is a stated requirement of this list.
+        if pe is None or pe <= 0.0: continue
 
+        candidates.append((s, ltp, mc, roe, npm, de, pe, vol, total_score))
+
+    if not candidates:
+        return []
+
+    # Universe distributions for percentile scoring. pe_by_quality is a PEG-style
+    # measure: the multiple paid per unit of return on equity, so a high-ROE
+    # business on a moderate multiple ranks ahead of a mediocre one on a low
+    # multiple -- which is what separates genuine value from a value trap.
+    pe_universe = sorted(c[6] for c in candidates)
+    peg_universe = sorted((c[6] / c[3]) for c in candidates if c[3] > 0)
+
+    qualified = []
+    for s, ltp, mc, roe, npm, de, pe, vol, total_score in candidates:
         # ── 1. PENNY QUALITY SCORE (0 - 100) ────────────────────────────────────
         q_pts = 0.0
         if de <= 0.15: q_pts += 25.0
@@ -3026,8 +3098,30 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
 
         penny_entry_score = round(min(100.0, max(0.0, e_pts)), 1)
 
-        # ── 3. COMBINED PENNY RANK SCORE & ACTION ──────────────────────────────
-        penny_rank_score = round((penny_quality_score * 0.65) + (penny_entry_score * 0.35), 1)
+        # ── 3. PENNY VALUE SCORE (0 - 100) ─────────────────────────────────────
+        # Scored by rank within this scan's qualifying universe, not against fixed
+        # multiples: "cheap" only means anything relative to what else is on offer,
+        # and a percentile re-baselines itself as the market re-rates.
+        pe_rank = percentile_rank(pe_universe, pe)            # 0 = cheapest
+        v_pts = (1.0 - pe_rank) * 60.0
+
+        # Quality-adjusted multiple (P/E per unit of ROE). This is what separates a
+        # genuinely cheap good business from a value trap -- a low multiple earned
+        # by weak returns scores no better than a fair multiple on strong ones.
+        if roe > 0:
+            peg_rank = percentile_rank(peg_universe, pe / roe)
+            v_pts += (1.0 - peg_rank) * 40.0
+        else:
+            v_pts += 20.0                                     # neutral, not rewarded
+
+        penny_value_score = round(min(100.0, max(0.0, v_pts)), 1)
+
+        # ── 4. COMBINED PENNY RANK SCORE & ACTION ──────────────────────────────
+        # Durability leads, value is the second voice, entry timing only breaks ties
+        # -- a well-timed entry into a poor business should never outrank a sound one.
+        penny_rank_score = round(
+            (penny_quality_score * 0.45) + (penny_value_score * 0.30) + (penny_entry_score * 0.25), 1
+        )
 
         if penny_quality_score >= 70:
             # Strict Buy Now Gate: Entry Score >= 70 AND price within 3.5% of GTT support
@@ -3066,7 +3160,10 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
         item = dict(s)
         item["penny_quality_score"] = penny_quality_score
         item["penny_entry_score"] = penny_entry_score
+        item["penny_value_score"] = penny_value_score
         item["penny_rank_score"] = penny_rank_score
+        item["pe"] = pe
+        item["pe_percentile"] = round(pe_rank * 100, 1)
         item["monthly_sip_qty"] = sip_qty
         item["monthly_sip_cost"] = sip_cost
         item["durability_tag"] = durability_tag
@@ -3079,7 +3176,9 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
         item["dist_from_gtt_pct"] = dist_from_gtt_pct
         qualified.append(item)
 
-    qualified.sort(key=lambda x: x["penny_quality_score"], reverse=True)
+    # Rank on the combined score so valuation actually influences selection; sorting
+    # on quality alone would have made the new value component decorative.
+    qualified.sort(key=lambda x: x["penny_rank_score"], reverse=True)
     return qualified[:top_n]
 
 

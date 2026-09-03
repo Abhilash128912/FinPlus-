@@ -39,7 +39,7 @@ logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
 from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline, compute_intraday_picks, select_monthly_lt_watchlist_additions
-from screener_engine import TREND_STATES, UPTREND_STATES, TREND_DOWNTREND
+from screener_engine import TREND_STATES, UPTREND_STATES, TREND_DOWNTREND, sane_metric
 from mobile_api import get_screener_data, get_lt_watchlist, get_holdings, search_stocks, get_stock_detail, get_app_status
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
@@ -50,6 +50,7 @@ WL_SEED    = os.path.join(BASE_DIR, "watchlist_seed.json")
 WL_FILE    = os.path.join(BASE_DIR, "watchlist_data.json")
 LT_WL_FILE = os.path.join(BASE_DIR, "lt_watchlist.json")
 LT_MONTHLY_PICKS_FILE = os.path.join(BASE_DIR, "lt_monthly_picks.json")
+PENNY_MONTHLY_PICKS_FILE = os.path.join(BASE_DIR, "penny_monthly_picks.json")
 OUT_HTML   = os.path.join(BASE_DIR, "screener.html")
 OUT_WWW_HTML = os.path.join(BASE_DIR, "www", "screener.html")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -7877,6 +7878,118 @@ def sync_monthly_lt_watchlist_additions(screener_results: list[dict]) -> None:
         log(f"  ⚠ Could not save lt_monthly_picks.json state: {e}")
 
 
+PENNY_LOCK_DAYS = 30
+
+
+def _penny_hard_failure(row: dict) -> str | None:
+    """Reason a locked penny pick must be dropped, or None if it still stands.
+
+    Deliberately only hard, thesis-breaking conditions -- not score drift. Scores
+    move on every scan, so ejecting on those would recreate the churn the monthly
+    lock exists to prevent.
+    """
+    ltp = float(row.get("ltp") or 0.0)
+    npm = sane_metric(row, "npm_pct")
+    de = sane_metric(row, "de_ratio")
+
+    if not (5.0 <= ltp <= 75.0):
+        return f"price ₹{ltp:.2f} left the ₹5–75 band"
+    if npm is None or npm <= 0.0:
+        return "no longer profitable"
+    if de is None or de > 1.0:
+        return f"debt/equity {de if de is not None else 'unknown'} breached the 1.0 limit"
+    return None
+
+
+def get_or_refresh_monthly_penny_picks(screener_results: list[dict], top_n: int = 20,
+                                       monthly_sip: float = 200.0) -> dict:
+    """Return the monthly penny cohort, membership locked but data live.
+
+    The selection is frozen for PENNY_LOCK_DAYS so the list can actually be
+    watched and acted on. Prices, entry scores and BUY/WAIT status still refresh
+    on every scan -- freezing those would defeat the purpose, which is to catch
+    the entry moment on a stable set of names.
+    """
+    today = datetime.datetime.now().date()
+
+    state = {}
+    if os.path.exists(PENNY_MONTHLY_PICKS_FILE):
+        try:
+            with open(PENNY_MONTHLY_PICKS_FILE, encoding="utf-8") as f:
+                raw = json.load(f)
+            if isinstance(raw, dict) and "locked_until" in raw:
+                state = raw
+        except Exception as e:
+            log(f"  ⚠ Could not read penny_monthly_picks.json ({e}) — reselecting")
+
+    # Score the whole qualifying universe; locked names are looked up in here so
+    # they carry current prices and status rather than the values they were
+    # selected with.
+    scored_all = compute_quality_penny_stocks(screener_results, top_n=10_000, monthly_sip=monthly_sip)
+    by_symbol = {(r.get("symbol") or "").upper(): r for r in scored_all}
+    raw_by_symbol = {(r.get("symbol") or "").upper(): r for r in screener_results}
+
+    locked_until = state.get("locked_until")
+    lock_active = False
+    if locked_until:
+        try:
+            lock_active = datetime.datetime.strptime(locked_until, "%Y-%m-%d").date() > today
+        except Exception:
+            lock_active = False
+
+    if lock_active and state.get("batch_symbols"):
+        picks, ejected = [], []
+        for sym in state["batch_symbols"]:
+            sym_u = sym.upper()
+            reason = _penny_hard_failure(raw_by_symbol.get(sym_u, {})) if sym_u in raw_by_symbol else "no longer in scan universe"
+            row = by_symbol.get(sym_u)
+            if reason or row is None:
+                # Kept visible so a disappearance is explained, but never actionable.
+                base = dict(row or raw_by_symbol.get(sym_u, {"symbol": sym}))
+                base.update({
+                    "status": "EJECTED",
+                    "status_badge": "🔴 EJECTED",
+                    "status_badge_class": "badge-red",
+                    "status_reason": f"Dropped mid-lock — {reason or 'no longer meets penny quality gates'}",
+                })
+                ejected.append(base)
+            else:
+                picks.append(row)
+        if ejected:
+            log(f"  ⚠ Penny lock: {len(ejected)} pick(s) ejected on hard failure")
+        return {
+            "picks": picks + ejected,
+            "locked_until": locked_until,
+            "generated_on": state.get("generated_on"),
+            "batch_size": len(state.get("batch_symbols", [])),
+            "ejected_count": len(ejected),
+            "lock_active": True,
+        }
+
+    # Lock expired or absent — select a fresh cohort and lock it.
+    fresh = scored_all[:top_n]
+    new_state = {
+        "locked_until": (today + datetime.timedelta(days=PENNY_LOCK_DAYS)).isoformat(),
+        "generated_on": today.isoformat(),
+        "batch_symbols": [(r.get("symbol") or "").upper() for r in fresh],
+    }
+    try:
+        with open(PENNY_MONTHLY_PICKS_FILE, "w", encoding="utf-8") as f:
+            json.dump(new_state, f, indent=2)
+        log(f"  🔒 Locked {len(fresh)} penny pick(s) until {new_state['locked_until']}")
+    except Exception as e:
+        log(f"  ⚠ Could not save penny_monthly_picks.json: {e}")
+
+    return {
+        "picks": fresh,
+        "locked_until": new_state["locked_until"],
+        "generated_on": new_state["generated_on"],
+        "batch_size": len(fresh),
+        "ejected_count": 0,
+        "lock_active": True,
+    }
+
+
 def get_or_refresh_monthly_lt_picks(screener_results: list[dict], lt_watchlist: list[dict]) -> dict:
     """
     Returns the current monthly lock-state metadata so the HTML can show
@@ -7911,7 +8024,8 @@ def get_or_refresh_monthly_lt_picks(screener_results: list[dict], lt_watchlist: 
 def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist: list[dict], commodity_signals: dict, mkt_info: dict, fno_data: list[dict] | None = None) -> str:
     run_time = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
 
-    penny_stocks_data = compute_quality_penny_stocks(screener_results, top_n=20, monthly_sip=200.0)
+    penny_monthly = get_or_refresh_monthly_penny_picks(screener_results, top_n=20, monthly_sip=200.0)
+    penny_stocks_data = penny_monthly["picks"]
     intraday_data = compute_intraday_picks(screener_results, top_n=5)
     monthly_lt_data = get_or_refresh_monthly_lt_picks(screener_results, lt_watchlist)
     lt_summary = get_lt_portfolio_summary(screener_results)
