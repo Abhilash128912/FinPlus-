@@ -22,6 +22,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # GitHub only fires `schedule` from the default branch (main), but Render
+          # deploys from `screener`. Without this the scan ran against main and
+          # committed there, so refreshed data never reached the deployment or the
+          # phone. Check out and commit to the branch that is actually served.
+          ref: screener
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -115,13 +121,20 @@ jobs:
           git config --global user.name  "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
 
-          git add screener.html screener_data.json static/app.css static/app.js daily_picks_history.json watchlist_data.json || true
+          # lt_watchlist_enriched.json carries the computed LT buy/wait signals the
+          # mobile API serves. Without it the phone falls back to the static config,
+          # which has no status/badge/ltp at all, so an automated scan would refresh
+          # the desktop page while leaving the app's signals frozen.
+          git add screener.html screener_data.json static/app.css static/app.js \
+                  daily_picks_history.json watchlist_data.json \
+                  lt_watchlist_enriched.json lt_discovery_pipeline.json \
+                  penny_monthly_picks.json || true
 
           if git diff --cached --quiet; then
             echo "No changes to commit (data unchanged since last scan)"
           else
             IST=$(TZ='Asia/Kolkata' date '+%Y-%m-%d %H:%M IST')
             git commit -m "auto: daily scan $IST [skip ci]"
-            git push
-            echo "Successfully pushed updated scan report"
+            git push origin HEAD:screener
+            echo "Successfully pushed updated scan report to screener"
           fi
