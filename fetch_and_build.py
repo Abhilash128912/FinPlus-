@@ -100,6 +100,70 @@ LATEST_SCREENER_RESULTS = []
 # one that happened to be running when it first loaded — see checkScanFreshness()
 # client-side, which replaces the old one-shot startup-only reload check.
 LAST_SCAN_COMPLETED_AT = None
+# Epoch seconds of the last completed scan. LAST_SCAN_COMPLETED_AT above is an ISO
+# string for the client; this is the machine-readable twin the scheduler needs to
+# do interval arithmetic without reparsing it.
+LAST_SCAN_FINISHED_AT = 0.0
+# Minimum gap between automated scans. The scheduler previously only checked that
+# no scan was *currently* running, so five minutes after the startup scan finished
+# it immediately launched another full one -- back-to-back scans that each take
+# ~6 minutes and suppress live LTP while they run.
+MIN_SECONDS_BETWEEN_AUTO_SCANS = 3600.0
+
+# ── LTP refresh: background warmer, cache-only serving ───────────────────────
+# The /api/ltp handler used to fetch from Yahoo inline. yf.download costs ~30-190s
+# per call almost regardless of symbol count, while the cache TTL and the browser
+# poll interval are both 10s -- so every poll missed cache, started its own fetch,
+# and the fetches piled up overlapping each other (15+ concurrent batch refreshes
+# observed in the server log). Requests never completed within the poll interval,
+# so the UI showed no live prices at all.
+#
+# Now a single background thread owns all network fetching for the set of symbols
+# the UI has actually asked about, and the handler only ever reads the cache. That
+# makes responses immediate, caps outbound traffic at one in-flight batch, and
+# keeps prices as fresh as the network genuinely allows.
+LTP_HOT_SYMBOLS: set = set()
+LTP_HOT_LOCK = threading.Lock()
+LTP_LAST_REFRESH_AT = 0.0
+# How stale a cached price may be before it is reported as stale to the client.
+# Sized above a typical refresh cycle so a normal cycle is not mislabelled, while
+# still flagging genuinely dead data rather than passing it off as live.
+LTP_FRESH_WINDOW_SEC = 180.0
+
+
+def note_hot_symbols(symbols) -> None:
+    """Record symbols the UI is polling so the warmer keeps them fresh."""
+    with LTP_HOT_LOCK:
+        LTP_HOT_SYMBOLS.update(symbols)
+
+
+def background_ltp_warmer():
+    """Continuously refresh cached prices for the symbols the UI is polling.
+
+    Runs one batch at a time. Skips entirely while a scan is in flight so the two
+    never compete for Yahoo's per-IP budget, subject to the same overrun bound the
+    request path uses.
+    """
+    global LTP_LAST_REFRESH_AT
+    while True:
+        try:
+            time.sleep(5)
+            if ltp_should_defer_to_scan():
+                continue
+            with LTP_HOT_LOCK:
+                symbols = sorted(LTP_HOT_SYMBOLS)
+            if not symbols:
+                continue
+            prices = batch_fetch_live_prices(symbols)
+            if prices:
+                now = time.time()
+                with GLOBAL_LTP_CACHE_LOCK:
+                    for t, p in prices.items():
+                        if p and p > 0:
+                            GLOBAL_LTP_CACHE[t] = (float(p), now)
+                LTP_LAST_REFRESH_AT = now
+        except Exception as e:
+            log(f"  ⚠ LTP warmer cycle failed: {e}")
 OUT_JSON_FILE = os.path.join(BASE_DIR, "screener_data.json")
 if os.path.exists(OUT_JSON_FILE):
     try:
@@ -8351,9 +8415,15 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         raw_prices = {}
         stale_set = set()
+        # Initialised outside the `if tickers:` guard because the map-back loop at the
+        # end of this method reads it unconditionally. When a request arrived with no
+        # symbols -- a poll fired before the table populates, or a malformed body --
+        # this stayed unbound and raised UnboundLocalError, killing the handler
+        # thread. Enough of those took the whole server down and the supervisor
+        # restarted it mid-session.
+        normalized_map = {}
         if tickers:
             # Normalize symbol list (e.g. COALINDIA -> COALINDIA.NS) so Yahoo Finance live fetcher works 100%
-            normalized_map = {}
             normalized_tickers = []
             for raw_t in tickers:
                 t_clean = raw_t.strip()
@@ -8365,6 +8435,12 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 normalized_map[raw_t] = norm
                 if norm not in normalized_tickers:
                     normalized_tickers.append(norm)
+
+            # Register every requested symbol, not just cache misses. The startup
+            # pre-seed makes everything look cached initially, so registering only
+            # misses would leave the warmer with an empty set and nothing would ever
+            # refresh.
+            note_hot_symbols(normalized_tickers)
 
             # Build lookup dict from latest screener results as instant fallback
             fallback_map = {}
@@ -8383,7 +8459,11 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             # Fast cache lookup first (no threads needed for cached tickers)
             now = time.time()
-            ttl = 10.0 if is_equity_market_open() else 120.0
+            # Sized to the warmer's real cycle time, not the browser's poll interval.
+            # At the old 10s TTL every poll considered every price expired and fell
+            # through to the scan-time fallback, so the UI reported stale prices even
+            # while the warmer was refreshing them normally.
+            ttl = LTP_FRESH_WINDOW_SEC if is_equity_market_open() else 600.0
             uncached = []
 
             with GLOBAL_LTP_CACHE_LOCK:
@@ -8403,28 +8483,11 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # the entire duration of every background scan, i.e. on every server
                 # restart. That's the main reason LTP polling looked broken right after
                 # launching the app.
-                if not ltp_should_defer_to_scan():
-                    if len(uncached) == 1:
-                        t = uncached[0]
-                        p = fetch_live_price_only(t)
-                        if p and p > 0:
-                            raw_prices[t] = p
-                    else:
-                        # One batched request rather than one HTTPS round-trip per
-                        # ticker. The per-ticker path (a 10-worker pool calling
-                        # fetch_live_price_only) measured ~1.9s per symbol here:
-                        # 10 symbols took 18.7s, so the ~100-symbol payload this
-                        # endpoint actually receives needed ~170s against a 10s
-                        # poll interval. Polls could never finish before the next
-                        # one fired, so the UI showed no live prices at all.
-                        # batch_fetch_live_prices exists for exactly this reason.
-                        try:
-                            batched = batch_fetch_live_prices(uncached)
-                            for t, p in batched.items():
-                                if p and p > 0:
-                                    raw_prices[t] = p
-                        except Exception as e:
-                            print(f"[LTP] batch fetch failed ({len(uncached)} tickers): {e}")
+                # Deliberately no network call here. This handler is now cache-only:
+                # the background warmer owns fetching, so a poll returns immediately
+                # with the freshest price already available instead of blocking for
+                # 30-190s on yf.download and stacking up behind the 10s poll interval.
+                note_hot_symbols(uncached)
 
                 # Fallback to static (last-scan) price whenever a live fetch failed,
                 # returned nothing, or was skipped above because a scan is in progress.
@@ -9080,7 +9143,7 @@ def run_server(port=None):
 
 
 def background_initial_scan():
-    global IS_INITIAL_SCANNING, LATEST_SCREENER_RESULTS, LAST_SCAN_COMPLETED_AT, SCAN_STARTED_AT
+    global IS_INITIAL_SCANNING, LATEST_SCREENER_RESULTS, LAST_SCAN_COMPLETED_AT, SCAN_STARTED_AT, LAST_SCAN_FINISHED_AT
     IS_INITIAL_SCANNING = True
     SCAN_STARTED_AT = time.time()
     try:
@@ -9182,6 +9245,7 @@ def background_initial_scan():
 
     finally:
         IS_INITIAL_SCANNING = False
+        LAST_SCAN_FINISHED_AT = time.time()
 
 
 def automated_hourly_market_scheduler():
@@ -9199,10 +9263,16 @@ def automated_hourly_market_scheduler():
                 end_time = now.replace(hour=15, minute=30, second=0, microsecond=0)
                 if start_time <= now <= end_time:
                     global IS_INITIAL_SCANNING
-                    if not IS_INITIAL_SCANNING:
+                    since_last = time.time() - LAST_SCAN_FINISHED_AT
+                    if IS_INITIAL_SCANNING:
+                        pass  # a scan is already in flight; never overlap them
+                    elif since_last < MIN_SECONDS_BETWEEN_AUTO_SCANS:
+                        # The startup scan counts as this hour's scan. Without this the
+                        # loop fired a second full scan within minutes of the first.
+                        pass
+                    else:
                         log("⏰ [Market Hours Scheduler] Triggering hourly scan for 1H candle breakouts...")
                         background_initial_scan()
-                        time.sleep(3300)  # Sleep ~55 mins after triggering
         except Exception as e:
             import traceback
             log(f"⚠ Market scheduler error: {e}\n{traceback.format_exc()}")
@@ -9246,6 +9316,10 @@ if __name__ == "__main__":
     # Launch automated hourly market scheduler daemon thread
     sched_t = threading.Thread(target=automated_hourly_market_scheduler, daemon=True)
     sched_t.start()
+
+    # Owns all live-price fetching so /api/ltp never blocks on the network.
+    warmer_t = threading.Thread(target=background_ltp_warmer, daemon=True)
+    warmer_t.start()
 
     # Run the HTTP server immediately in main thread
     run_server(port)
