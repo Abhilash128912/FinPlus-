@@ -131,6 +131,57 @@ LTP_LAST_REFRESH_AT = 0.0
 LTP_FRESH_WINDOW_SEC = 180.0
 
 
+_DISK_PRICE_CACHE: dict = {}
+_DISK_PRICE_MTIME = 0.0
+_DISK_PRICE_LOCK = threading.Lock()
+
+
+def disk_price_map() -> dict:
+    """Symbol -> last-scan price, read from screener_data.json.
+
+    LATEST_SCREENER_RESULTS is only populated by a scan running in *this* process.
+    On a freshly started or restarted instance (Render, or any restart before its
+    first scan finishes) it is empty, so the in-memory fallback had nothing to
+    offer and /api/ltp returned {} -- no price at all rather than a stale one. The
+    JSON on disk always has the last scan's prices, so this guarantees the endpoint
+    can always answer with something, correctly flagged stale.
+
+    Re-read only when the file changes; it is ~10MB and requests are frequent.
+    """
+    global _DISK_PRICE_CACHE, _DISK_PRICE_MTIME
+    try:
+        mtime = os.path.getmtime(OUT_JSON_FILE)
+    except OSError:
+        return {}
+    with _DISK_PRICE_LOCK:
+        if mtime == _DISK_PRICE_MTIME and _DISK_PRICE_CACHE:
+            return _DISK_PRICE_CACHE
+    try:
+        with open(OUT_JSON_FILE, encoding="utf-8") as f:
+            rows = json.load(f)
+    except Exception as e:
+        log(f"  ⚠ Could not read {OUT_JSON_FILE} for price fallback: {e}")
+        return {}
+    built = {}
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        price = row.get("ltp") or row.get("current_ltp")
+        if not price or float(price) <= 0:
+            continue
+        sym, tick = row.get("symbol"), row.get("ticker")
+        if sym:
+            built[sym] = float(price)
+            built[f"{sym}.NS"] = float(price)
+        if tick:
+            built[tick] = float(price)
+            built[tick.replace(".NS", "")] = float(price)
+    with _DISK_PRICE_LOCK:
+        _DISK_PRICE_CACHE = built
+        _DISK_PRICE_MTIME = mtime
+    return built
+
+
 def note_hot_symbols(symbols) -> None:
     """Record symbols the UI is polling so the warmer keeps them fresh."""
     with LTP_HOT_LOCK:
@@ -158,8 +209,9 @@ def background_ltp_warmer():
             if prices:
                 now = time.time()
                 with GLOBAL_LTP_CACHE_LOCK:
-                    for t, p in prices.items():
-                        if p and p > 0:
+                    for t, item in prices.items():
+                        p = item.get("price") if isinstance(item, dict) else item
+                        if p and float(p) > 0:
                             GLOBAL_LTP_CACHE[t] = (float(p), now)
                 LTP_LAST_REFRESH_AT = now
         except Exception as e:
@@ -728,6 +780,12 @@ def fetch_via_curl_cffi(ticker: str) -> dict | None:
                 info = {
                     "regularMarketPrice": price,
                     "currentPrice": price,
+                    "volume": meta.get("regularMarketVolume"),
+                    "regularMarketVolume": meta.get("regularMarketVolume"),
+                    "open": opens[-1] if opens and opens[-1] is not None else meta.get("regularMarketDayHigh"),
+                    "regularMarketOpen": opens[-1] if opens and opens[-1] is not None else meta.get("regularMarketDayHigh"),
+                    "dayHigh": meta.get("regularMarketDayHigh"),
+                    "dayLow": meta.get("regularMarketDayLow"),
                     # Yahoo's chart API meta has NO "previousClose" key at all (that
                     # always silently returned None) — "chartPreviousClose" exists but
                     # is the close at the START of the requested `range` (here 1y), not
@@ -792,6 +850,12 @@ def fetch_via_curl_cffi(ticker: str) -> dict | None:
                 info = {
                     "regularMarketPrice": price,
                     "currentPrice": price,
+                    "volume": meta.get("regularMarketVolume"),
+                    "regularMarketVolume": meta.get("regularMarketVolume"),
+                    "open": opens[-1] if opens and opens[-1] is not None else meta.get("regularMarketDayHigh"),
+                    "regularMarketOpen": opens[-1] if opens and opens[-1] is not None else meta.get("regularMarketDayHigh"),
+                    "dayHigh": meta.get("regularMarketDayHigh"),
+                    "dayLow": meta.get("regularMarketDayLow"),
                     # Yahoo's chart API meta has NO "previousClose" key at all (that
                     # always silently returned None) — "chartPreviousClose" exists but
                     # is the close at the START of the requested `range` (here 1y), not
@@ -972,36 +1036,27 @@ def fetch_live_price_only(ticker: str) -> float | None:
     return None
 
 
-def batch_fetch_live_prices(tickers: list[str], chunk_size: int = 150) -> dict[str, float]:
+def batch_fetch_live_prices(tickers: list[str], chunk_size: int = 150) -> dict[str, dict]:
     """
-    Refreshes live prices for many tickers using yfinance's own download() pipeline,
-    which batches many symbols into far fewer underlying HTTP requests than fetching
-    each ticker individually. This is what a full-universe scan's price-refresh step
-    should use instead of calling fetch_live_price_only() once per ticker — 2500+
-    separate per-ticker HTTPS round-trips is what actually produced the ~20+ minute
-    scan times, since each one is individually exposed to Yahoo's per-IP rate
-    limiting/timeouts, where a couple dozen batched requests are not.
-
-    Yahoo's own batch quote endpoint (/v7/finance/quote) was tried first and
-    rejected — it returns 401 Unauthorized even with browser impersonation
-    (curl_cffi + chrome UA) because it requires a proper crumb/cookie session,
-    which yfinance's download() already manages internally.
-
-    Only touches price — fundamentals/history for tickers that already have a
-    cached entry are left untouched; this only fills in a fresher `regularMarketPrice`
-    for fetch_ticker_data's stale-price-refresh branch.
+    Refreshes live prices and market data for many tickers using yfinance's download() pipeline.
+    Fetches 5-day daily bars so that each ticker gets:
+      - Live price (Close)
+      - Previous trading day close (prev_close)
+      - Today's Open, High, Low
+      - Today's live volume
+      - Up-to-date recent daily candles to merge into history_close
     """
     if not tickers:
         return {}
 
-    price_map: dict[str, float] = {}
+    market_data: dict[str, dict] = {}
     chunks = [tickers[i:i + chunk_size] for i in range(0, len(tickers), chunk_size)]
-    log(f"  Batch price refresh: {len(tickers)} tickers in {len(chunks)} chunk(s) of up to {chunk_size}...")
+    log(f"  Batch price & market data refresh: {len(tickers)} tickers in {len(chunks)} chunk(s) of up to {chunk_size}...")
 
     for chunk in chunks:
         try:
-            data = yf.download(tickers=chunk, period="1d", group_by="ticker",
-                                threads=True, progress=False, timeout=15)
+            data = yf.download(tickers=chunk, period="5d", group_by="ticker",
+                                threads=True, progress=False, timeout=25)
             if data is None or data.empty:
                 continue
             is_multi = hasattr(data.columns, "get_level_values")
@@ -1010,32 +1065,101 @@ def batch_fetch_live_prices(tickers: list[str], chunk_size: int = 150) -> dict[s
                     if is_multi:
                         if t not in data.columns.get_level_values(0):
                             continue
-                        closes = data[t]["Close"].dropna()
+                        sub = data[t].dropna(subset=["Close"])
                     else:
-                        # Flat frame — only happens with a single-ticker chunk.
-                        closes = data["Close"].dropna()
-                    if len(closes) > 0:
-                        price_map[t] = float(closes.iloc[-1])
+                        sub = data.dropna(subset=["Close"])
+                    if len(sub) == 0:
+                        continue
+                    latest_bar = sub.iloc[-1]
+                    price = float(latest_bar["Close"])
+                    prev_close = float(sub.iloc[-2]["Close"]) if len(sub) >= 2 else None
+                    open_p = float(latest_bar["Open"]) if "Open" in latest_bar and not pd.isna(latest_bar["Open"]) else None
+                    high_p = float(latest_bar["High"]) if "High" in latest_bar and not pd.isna(latest_bar["High"]) else None
+                    low_p = float(latest_bar["Low"]) if "Low" in latest_bar and not pd.isna(latest_bar["Low"]) else None
+                    vol_p = float(latest_bar["Volume"]) if "Volume" in latest_bar and not pd.isna(latest_bar["Volume"]) else 0.0
+
+                    recent_bars = []
+                    for dt_idx, row in sub.iterrows():
+                        try:
+                            ts = str(int(dt_idx.timestamp()))
+                        except Exception:
+                            ts = str(dt_idx)
+                        recent_bars.append({
+                            "date": ts,
+                            "open": float(row["Open"]) if "Open" in row and not pd.isna(row["Open"]) else float(row["Close"]),
+                            "high": float(row["High"]) if "High" in row and not pd.isna(row["High"]) else float(row["Close"]),
+                            "low": float(row["Low"]) if "Low" in row and not pd.isna(row["Low"]) else float(row["Close"]),
+                            "close": float(row["Close"]),
+                            "volume": float(row["Volume"]) if "Volume" in row and not pd.isna(row["Volume"]) else 0.0
+                        })
+
+                    market_data[t] = {
+                        "price": price,
+                        "prev_close": prev_close,
+                        "open": open_p,
+                        "high": high_p,
+                        "low": low_p,
+                        "volume": vol_p,
+                        "recent_bars": recent_bars
+                    }
                 except Exception:
                     continue
         except Exception as e:
             log(f"  ⚠ Batch price chunk failed ({len(chunk)} tickers): {e}")
 
-    log(f"  Batch price refresh got {len(price_map)}/{len(tickers)} live prices.")
-    return price_map
+    log(f"  Batch market data refresh got {len(market_data)}/{len(tickers)} live records.")
+    return market_data
 
 
-def fetch_ticker_data(ticker: str, live_price_override: float | None = None) -> dict | None:
+def fetch_ticker_data(ticker: str, live_price_override: float | dict | None = None) -> dict | None:
     cached = load_cache(ticker)
     if cached:
         cached_at_str = cached.get("cached_at", "2000-01-01")
-        if is_price_stale(cached_at_str):
-            live_price = live_price_override if live_price_override and live_price_override > 0 else fetch_live_price_only(ticker)
+        if is_price_stale(cached_at_str) or live_price_override:
+            override_data = live_price_override
+            live_price = None
+            prev_close = None
+            open_p = None
+            vol = None
+            recent_bars = None
+
+            if isinstance(override_data, dict):
+                live_price = override_data.get("price")
+                prev_close = override_data.get("prev_close")
+                open_p = override_data.get("open")
+                vol = override_data.get("volume")
+                recent_bars = override_data.get("recent_bars")
+            elif isinstance(override_data, (int, float)):
+                live_price = float(override_data)
+
+            if not live_price or live_price <= 0:
+                live_price = fetch_live_price_only(ticker)
+
             if live_price and live_price > 0:
                 cached["info"]["currentPrice"] = live_price
                 cached["info"]["regularMarketPrice"] = live_price
-                if cached.get("history_close") and len(cached["history_close"]) > 0:
+                if prev_close and prev_close > 0:
+                    cached["info"]["previousClose"] = prev_close
+                    cached["info"]["regularMarketPreviousClose"] = prev_close
+                if open_p and open_p > 0:
+                    cached["info"]["open"] = open_p
+                    cached["info"]["regularMarketOpen"] = open_p
+                if vol is not None and vol >= 0:
+                    cached["info"]["volume"] = vol
+                    cached["info"]["regularMarketVolume"] = vol
+
+                if recent_bars:
+                    # Cleanly merge recent bars by timestamp
+                    existing_records = cached.get("history_close", [])
+                    first_new_ts = int(recent_bars[0]["date"]) if str(recent_bars[0].get("date", "")).isdigit() else 0
+                    kept_records = [
+                        r for r in existing_records
+                        if (int(r.get("date", 0)) if str(r.get("date", "0")).isdigit() else 0) < first_new_ts
+                    ]
+                    cached["history_close"] = kept_records + recent_bars
+                elif cached.get("history_close") and len(cached["history_close"]) > 0:
                     cached["history_close"][-1]["close"] = live_price
+
                 cached["last_live_price_update"] = datetime.datetime.now().isoformat()
                 save_cache(ticker, cached)
         return cached
@@ -1224,10 +1348,34 @@ def run_scan(tickers: list[str]) -> list[dict]:
     # below — see batch_fetch_live_prices() for why this is the actual fix for scan
     # duration, not raising the worker count.
     stale_price_tickers = []
+    now_ist = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=5, minutes=30)))
+    today_s = now_ist.strftime("%Y-%m-%d")
+    is_trading_today = not is_non_trading_day(today_s)
+
     for t in tickers:
         c = load_cache(t)
-        if c and is_price_stale(c.get("cached_at", "2000-01-01")):
+        if not c:
+            continue
+        # If cache is stale or missing fundamentals/volume/prev_close
+        if is_price_stale(c.get("cached_at", "2000-01-01")) or not c.get("info", {}).get("previousClose") or not c.get("info", {}).get("volume"):
             stale_price_tickers.append(t)
+        else:
+            # Check if history is missing today's candle on an active trading day
+            hist = c.get("history_close", [])
+            if not hist:
+                stale_price_tickers.append(t)
+            elif is_trading_today:
+                last_ts = hist[-1].get("date")
+                if last_ts and str(last_ts).isdigit():
+                    try:
+                        last_d = datetime.datetime.fromtimestamp(int(last_ts)).strftime("%Y-%m-%d")
+                        if last_d < today_s:
+                            stale_price_tickers.append(t)
+                    except Exception:
+                        stale_price_tickers.append(t)
+                else:
+                    stale_price_tickers.append(t)
+
     batch_prices = batch_fetch_live_prices(stale_price_tickers) if stale_price_tickers else {}
 
     def process_single_ticker(args):
@@ -5341,6 +5489,10 @@ async function refreshLiveLTP(manual = false) {
       if (idPick && Math.abs((idPick.ltp || 0) - newPrice) > 0.01) {
         idPick.old_ltp = idPick.ltp;
         idPick.ltp = newPrice;
+        if (idPick.prev_close && idPick.prev_close > 0) {
+          idPick.day_chg_pct = Number((((newPrice - idPick.prev_close) / idPick.prev_close) * 100).toFixed(2));
+          idPick.has_day_move = true;
+        }
         priceChanged = true;
       }
     }
@@ -8442,8 +8594,11 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             # refresh.
             note_hot_symbols(normalized_tickers)
 
-            # Build lookup dict from latest screener results as instant fallback
-            fallback_map = {}
+            # Build lookup dict from latest screener results as instant fallback.
+            # Seeded from disk first so a process that has not run its own scan yet
+            # still has prices to serve; in-memory results then override with the
+            # fresher values when this process has scanned.
+            fallback_map = dict(disk_price_map())
             if LATEST_SCREENER_RESULTS:
                 for s in LATEST_SCREENER_RESULTS:
                     sym = s.get("symbol")
