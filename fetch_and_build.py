@@ -3332,7 +3332,9 @@ let TREND_CONFIG = __TREND_STATES_JSON__;
 // neutral class rather than being styled as something they are not.
 function trendBadgeClass(trend) {
   const meta = (TREND_CONFIG.states || {})[trend];
-  return (meta && meta.class) || 'badge-yellow';
+  // Neutral grey for an unknown/absent trend. Falling back to a real state's
+  // colour would visually assert a classification the engine never made.
+  return (meta && meta.class) || 'badge-gray';
 }
 
 // ── State ─────────────────────────────────────────────────────────────────
@@ -4403,7 +4405,7 @@ function renderLtWatchlist() {
       </td>
       <td>
         <span class="badge ${trendBadgeClass(s.trend)}" style="font-size:10px">
-          ${s.trend_badge || s.trend || 'Consolidation'}
+          ${s.trend_badge || s.trend || '—'}
         </span>
       </td>
       <td><span style="font-size:11px;font-weight:600">${rsiStr}</span></td>
@@ -5687,19 +5689,34 @@ function renderPennyStocksTab() {
     const sym = (h.symbol || '').toUpperCase();
     const price = parseFloat(h.live_price || h.last_price || h.avg_price || 0);
     if (h.qty > 0 && price <= 75.0 && !pennyList.some(s => (s.symbol || '').toUpperCase() === sym)) {
+      // Pull the real scan row for this holding. Everything below must come from
+      // measured data or be left null -- never invented. Nulls render as an
+      // em dash, and the ROE/D-E quality filters drop null rows, which is the
+      // correct outcome for a stock whose fundamentals we do not actually know.
+      //
+      // These fields used to be fabricated (roe 15.0, D/E 0.1, npm 10.0, trend
+      // 'Strong Uptrend'). Those numbers sat exactly on the filter thresholds
+      // (roe >= 15.0, de <= 0.15), so every held penny stock silently passed
+      // quality screening no matter what its real financials were, and showed a
+      // strong-uptrend badge regardless of its actual price structure.
+      const scan = (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA))
+        ? SCREENER_DATA.find(s => (s.symbol || '').toUpperCase() === sym)
+        : null;
+      const pick = (key) => (h[key] != null ? h[key] : (scan && scan[key] != null ? scan[key] : null));
+
       pennyList.push({
         symbol: h.symbol,
-        name: h.symbol,
+        name: (scan && scan.name) || h.symbol,
         ltp: h.live_price || h.last_price || h.avg_price,
         status: 'BOUGHT',
         status_badge: `🟢 BOUGHT (${h.qty})`,
         status_badge_class: 'badge-green',
         status_reason: `Purchased on ${h.buy_date || ''} (${h.qty} shares @ ₹${parseFloat(h.avg_price).toFixed(2)})`,
-        roe_pct: h.roe_pct || 15.0,
-        de_ratio: h.de_ratio || 0.1,
-        npm_pct: h.npm_pct || 10.0,
-        trend: 'Strong Uptrend',
-        trend_badge: '🟢 Strong Uptrend',
+        roe_pct: pick('roe_pct'),
+        de_ratio: pick('de_ratio'),
+        npm_pct: pick('npm_pct'),
+        trend: scan ? scan.trend : null,
+        trend_badge: scan ? (scan.trend_badge || scan.tech_rating) : null,
         auto_gtt: h.avg_price
       });
     }
@@ -5791,7 +5808,9 @@ function renderPennyStocksTab() {
 
 
     // Trend & CMF Badge
-    const trendText = s.trend_badge || s.trend || 'Consolidation';
+    // No trend claim when the stock is not in the scan set — an em dash is
+    // honest, whereas defaulting to a named state asserts something unmeasured.
+    const trendText = s.trend_badge || s.trend || '—';
     const trendClass = trendBadgeClass(s.trend);
     const cmfBadge = s.pa_badge ? `<div style="font-size:9px;margin-top:3px"><span class="badge ${s.pa_class || 'badge-gray'}" style="font-size:9px">${s.pa_badge}</span></div>` : '';
 
