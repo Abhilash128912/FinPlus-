@@ -2685,12 +2685,35 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
         m = abs(move_pct)
         return any(band - CIRCUIT_APPROACH_PCT <= m <= band for band in CIRCUIT_BANDS)
 
+    def is_circuit_safe_class(s: dict) -> bool:
+        """True for stocks that are not prone to locking at a circuit in the first place.
+
+        Gating on today's move alone was the wrong instrument: it treats a symptom
+        and lets a stock through the moment it moves past a band. BODALCHEM is the
+        worked example -- a ₹1,249 Cr small cap, not MTF-approved, which the
+        day-move rule admitted at +5.31% simply because 5.31 > 5.0, even though its
+        circuit exposure had not changed at all. Its ₹50 Cr turnover that day was
+        also a 4.15x volume spike, not its normal ~₹12 Cr.
+
+        Stock class is the durable signal:
+          - MTF-approved: the broker funds margin against it, which they do not do
+            for names that gap and lock.
+          - Large/mid cap: institutional depth, and dynamic rather than hard bands.
+        A small cap outside both carries fixed 5/10/20% bands and can lock with no
+        exit at any price -- precisely the trap an MIS position cannot survive.
+        """
+        return bool(s.get("is_mtf") or s.get("is_large_cap") or s.get("is_mid_cap"))
+
     buy_candidates = []
     sell_candidates = []
 
     for s in screener_results:
         ltp = s.get("ltp") or 0
         if ltp < MIN_PRICE:
+            continue
+
+        # Circuit exposure is a property of the stock, not of today's move.
+        if not is_circuit_safe_class(s):
             continue
 
         liquidity_shares = s.get("avg_volume_10d") or s.get("today_volume") or 0

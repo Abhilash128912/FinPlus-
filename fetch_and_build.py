@@ -5292,6 +5292,39 @@ async function fetchLiveLTPForSymbol(ticker) {
   return null;
 }
 
+// Which tab is on screen. Only that tab's dataset needs live prices — polling
+// every tab's data at once is most of what made the request 570 symbols wide.
+function activeTabName() {
+  const el = document.querySelector('.tab.active, .mobile-nav-item.active');
+  return (el && el.dataset && el.dataset.tab) || 'screener';
+}
+
+// Symbols whose table rows are on screen, plus a margin either side so a scroll
+// finds them already warm instead of waiting a cycle. Rows are tagged with
+// data-symbol/data-ticker at render time.
+//
+// This matters because the server warms only the symbols recently asked for, in
+// one bounded batch. Asking for hundreds of off-screen rows pushed the ones
+// actually being looked at out of that batch, so the visible page showed stale
+// prices while the warmer refreshed rows nobody could see.
+function visibleRowSymbols(marginPx = 1200) {
+  const found = [];
+  try {
+    const rows = document.querySelectorAll('tr[data-symbol]');
+    const top = -marginPx;
+    const bottom = (window.innerHeight || 800) + marginPx;
+    rows.forEach(tr => {
+      // offsetParent null => the row (or its tab) is display:none.
+      if (tr.offsetParent === null) return;
+      const r = tr.getBoundingClientRect();
+      if (r.bottom >= top && r.top <= bottom) {
+        found.push([tr.dataset.symbol, tr.dataset.ticker || (tr.dataset.symbol + '.NS')]);
+      }
+    });
+  } catch (e) {}
+  return found;
+}
+
 async function refreshLiveLTP(manual = false) {
   const dot = document.getElementById('ltpStatusDot');
   const txt = document.getElementById('ltpStatusText');
@@ -5300,47 +5333,64 @@ async function refreshLiveLTP(manual = false) {
 
   let priceChanged = false;
 
+  // Poll what is on screen, not everything the page knows about.
+  //
+  // This previously accumulated every tab's dataset plus every "qualified" stock
+  // plus an arbitrary SCREENER_DATA.slice(0, 100), reaching ~570 symbols
+  // regardless of what was being viewed. The server warms recently-requested
+  // symbols in one bounded batch, so a request that wide pushed the rows
+  // actually on screen out of the batch — the page showed "Live LTP Polling:
+  // Failed" and stale prices while the warmer refreshed rows nobody could see.
   const symbolsToPoll = new Map();
-  symbolsToPoll.set('NIFTY_INDEX', '^NSEI');
+  const addSym = (sym, ticker) => { if (sym) symbolsToPoll.set(sym, ticker || (sym + '.NS')); };
+
+  // Always needed: the index drives the regime banner, and the top pick is shown
+  // in the header on every tab.
+  addSym('NIFTY_INDEX', '^NSEI');
   if (typeof TOP_PICK !== 'undefined' && TOP_PICK && TOP_PICK.symbol) {
-    symbolsToPoll.set(TOP_PICK.symbol, TOP_PICK.ticker || TOP_PICK.symbol + '.NS');
+    addSym(TOP_PICK.symbol, TOP_PICK.ticker);
   }
+
+  // The user's own watchlist is small and is the thing they most want current,
+  // so it stays regardless of which tab is open.
   if (typeof watchlist !== 'undefined' && Array.isArray(watchlist)) {
-    watchlist.forEach(w => symbolsToPoll.set(w.symbol, w.ticker || w.symbol + '.NS'));
+    watchlist.forEach(w => addSym(w.symbol, w.ticker));
   }
-  if (typeof ltWatchlist !== 'undefined' && Array.isArray(ltWatchlist)) {
-    ltWatchlist.forEach(w => symbolsToPoll.set(w.symbol, w.ticker || w.symbol + '.NS'));
+
+  // Only the visible tab's dataset. Each of these is small (10-30 rows); it was
+  // holding all of them at once that was expensive.
+  const tab = activeTabName();
+  if (tab === 'watchlist') {
+    if (typeof ltWatchlist !== 'undefined' && Array.isArray(ltWatchlist)) ltWatchlist.forEach(w => addSym(w.symbol, w.ticker));
+    if (typeof LT_WATCHLIST !== 'undefined' && Array.isArray(LT_WATCHLIST)) LT_WATCHLIST.forEach(w => addSym(w.symbol, w.ticker));
+  } else if (tab === 'penny') {
+    if (typeof PENNY_STOCKS_DATA !== 'undefined' && Array.isArray(PENNY_STOCKS_DATA)) PENNY_STOCKS_DATA.forEach(p => addSym(p.symbol, p.ticker));
+  } else if (tab === 'intraday') {
+    if (typeof INTRADAY_DATA !== 'undefined' && INTRADAY_DATA) {
+      (INTRADAY_DATA.buy || []).forEach(s => addSym(s.symbol, s.ticker));
+      (INTRADAY_DATA.sell || []).forEach(s => addSym(s.symbol, s.ticker));
+    }
+  } else if (tab === 'fno') {
+    if (typeof FNO_DATA !== 'undefined' && Array.isArray(FNO_DATA)) FNO_DATA.forEach(f => addSym(f.symbol, f.ticker));
+  } else if (tab === 'swing') {
+    if (typeof getSwingData === 'function') {
+      try {
+        const swingPicks = getSwingData();
+        if (Array.isArray(swingPicks)) swingPicks.forEach(s => addSym(s.symbol, s.ticker));
+      } catch (e) {}
+    }
   }
-  if (typeof LT_WATCHLIST !== 'undefined' && Array.isArray(LT_WATCHLIST)) {
-    LT_WATCHLIST.forEach(w => symbolsToPoll.set(w.symbol, w.ticker || w.symbol + '.NS'));
-  }
-  if (typeof PENNY_STOCKS_DATA !== 'undefined' && Array.isArray(PENNY_STOCKS_DATA)) {
-    PENNY_STOCKS_DATA.forEach(p => symbolsToPoll.set(p.symbol, p.ticker || p.symbol + '.NS'));
-  }
-  if (typeof INTRADAY_DATA !== 'undefined' && INTRADAY_DATA) {
-    (INTRADAY_DATA.buy || []).forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
-    (INTRADAY_DATA.sell || []).forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
-  }
-  if (typeof FNO_DATA !== 'undefined' && Array.isArray(FNO_DATA)) {
-    FNO_DATA.forEach(f => symbolsToPoll.set(f.symbol, f.ticker || f.symbol + '.NS'));
-  }
-  if (typeof getSwingData === 'function') {
-    try {
-      const swingPicks = getSwingData();
-      if (Array.isArray(swingPicks)) {
-        swingPicks.forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
-      }
-    } catch(e) {}
-  }
-  if (typeof filteredData !== 'undefined' && Array.isArray(filteredData)) {
-    let effSize = (typeof pageSize !== 'undefined' && pageSize === 'all') ? filteredData.length : parseInt(pageSize || 50);
-    let startIdx = (typeof currentPage !== 'undefined') ? Math.max(0, (currentPage - 1) * effSize) : 0;
-    let visibleSlice = filteredData.slice(startIdx, startIdx + effSize);
-    visibleSlice.forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
-  }
-  if (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA)) {
-    SCREENER_DATA.filter(s => s.qualified).forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
-    SCREENER_DATA.slice(0, 100).forEach(s => symbolsToPoll.set(s.symbol, s.ticker || s.symbol + '.NS'));
+
+  // Rows currently on screen (plus a scroll margin), so scrolling a long page
+  // brings its prices live without waiting for a page change.
+  visibleRowSymbols().forEach(([sym, tick]) => addSym(sym, tick));
+
+  // Fallback for the moment before the table has rendered: take the current
+  // page slice so the first poll after load is not empty.
+  if (symbolsToPoll.size <= 2 && typeof filteredData !== 'undefined' && Array.isArray(filteredData)) {
+    const effSize = (typeof pageSize !== 'undefined' && pageSize === 'all') ? 60 : parseInt(pageSize || 50);
+    const startIdx = (typeof currentPage !== 'undefined') ? Math.max(0, (currentPage - 1) * effSize) : 0;
+    filteredData.slice(startIdx, startIdx + effSize).forEach(s => addSym(s.symbol, s.ticker));
   }
 
   const fetchedPrices = new Map();
@@ -5627,6 +5677,27 @@ function changePollInterval(val) {
   pollIntervalMs = parseInt(val);
   startPolling();
 }
+
+// Scrolling brings different rows on screen, and the poll only asks for what is
+// visible — so without this a scroll would sit on scan-time prices until the next
+// 10s tick. Debounced so a long flick fires one refresh when it settles, not one
+// per scroll event, and skipped when no genuinely new symbol came into view.
+let scrollRefreshTimer = null;
+let lastVisibleKey = '';
+document.addEventListener('scroll', () => {
+  if (scrollRefreshTimer) clearTimeout(scrollRefreshTimer);
+  scrollRefreshTimer = setTimeout(() => {
+    scrollRefreshTimer = null;
+    if (document.hidden) return;
+    try {
+      const key = visibleRowSymbols().map(v => v[0]).sort().join(',');
+      if (key && key !== lastVisibleKey) {
+        lastVisibleKey = key;
+        refreshLiveLTP(false);
+      }
+    } catch (e) {}
+  }, 400);
+}, { passive: true });
 
 // Pause polling while the tab/app is backgrounded instead of hammering the server
 // and Yahoo endpoints from every hidden tab; resume with an immediate refresh.
@@ -7054,7 +7125,7 @@ function renderTable() {
     const rsVal = s.rs_rating || 50;
     const rsBadge = `<span class="badge ${rsVal>=80?'badge-green':rsVal>=60?'badge-green':rsVal>=40?'badge-gray':'badge-red'}" style="font-size:11px;font-weight:700">RS ${rsVal}</span>`;
 
-    return `<tr>
+    return `<tr data-symbol="${s.symbol}" data-ticker="${s.ticker || (s.symbol + '.NS')}">
       <td>
         <div class="stock-name">${s.symbol}</div>
         <div class="stock-sym">${s.name||''}</div>
