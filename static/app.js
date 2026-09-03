@@ -11,6 +11,16 @@ var PENNY_STOCKS_DATA = [];
 var INTRADAY_DATA = {};
 var LT_MONTHLY_PICKS = {};
 var LT_PORTFOLIO_SUMMARY = {};
+var TREND_CONFIG = { states: {}, uptrend: [], downtrend: '' };
+
+// Resolve a trend's badge class from the table the Python classifier owns
+// (screener_engine.TREND_STATES), so the UI can never label a state the engine
+// does not emit -- or miss one it does. Unknown/absent trends fall back to the
+// neutral class rather than being styled as something they are not.
+function trendBadgeClass(trend) {
+  const meta = (TREND_CONFIG.states || {})[trend];
+  return (meta && meta.class) || 'badge-yellow';
+}
 
 // ── State ─────────────────────────────────────────────────────────────────
 let watchlist = [];
@@ -855,7 +865,7 @@ function calculateClientStatus(item) {
   const serverStatus = item.status || 'WATCHLIST';
   const serverRank = statusRank[serverStatus] || 0;
 
-  const uptrendStates = ["Uptrend", "Accumulation", "Strong Uptrend"];
+  const uptrendStates = TREND_CONFIG.uptrend;
   const trend = item.trend || "Consolidation";
   const rsi = item.rsi || 50;
   const ltp = item.ltp || 0;
@@ -1079,7 +1089,7 @@ function renderLtWatchlist() {
         <span class="badge ${statusBadgeCls}" style="font-size:11px;font-weight:700" title="${s.status_reason || ''}">${statusBadgeText}</span>
       </td>
       <td>
-        <span class="badge ${s.trend === 'Uptrend' || s.trend === 'Strong Uptrend' ? 'badge-green' : s.trend === 'Accumulation' ? 'badge-purple' : s.trend === 'Downtrend' ? 'badge-red' : 'badge-yellow'}" style="font-size:10px">
+        <span class="badge ${trendBadgeClass(s.trend)}" style="font-size:10px">
           ${s.trend_badge || s.trend || 'Consolidation'}
         </span>
       </td>
@@ -2469,7 +2479,7 @@ function renderPennyStocksTab() {
 
     // Trend & CMF Badge
     const trendText = s.trend_badge || s.trend || 'Consolidation';
-    const trendClass = (s.trend === 'Uptrend' || s.trend === 'Strong Uptrend') ? 'badge-green' : (s.trend === 'Accumulation' ? 'badge-purple' : (s.trend === 'Downtrend' ? 'badge-red' : 'badge-yellow'));
+    const trendClass = trendBadgeClass(s.trend);
     const cmfBadge = s.pa_badge ? `<div style="font-size:9px;margin-top:3px"><span class="badge ${s.pa_class || 'badge-gray'}" style="font-size:9px">${s.pa_badge}</span></div>` : '';
 
     // Support Target GTT
@@ -3184,7 +3194,8 @@ function applyFilters() {
     }
 
     if (trend === 'uptrend_downtrend') {
-      if (s.trend !== 'Uptrend' && s.trend !== 'Strong Uptrend' && s.trend !== 'Downtrend') return false;
+      const keep = (TREND_CONFIG.uptrend || []).concat([TREND_CONFIG.downtrend]);
+      if (!keep.includes(s.trend)) return false;
     } else if (trend !== 'all' && s.trend !== trend) {
       return false;
     }

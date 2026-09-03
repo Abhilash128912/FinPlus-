@@ -1965,14 +1965,52 @@ def check_top_pick_status(scored: dict) -> dict:
         }
 
 
+# ── TREND STATES ────────────────────────────────────────────────────────────
+# Single source of truth for trend classification. Every consumer -- the scoring
+# gates, the HTML filter dropdown, the JS badge rendering -- derives from this
+# table instead of repeating string literals.
+#
+# This exists because repeating them silently broke the BUY_NOW gate: the
+# classifier emitted trend "Uptrend" while carrying the badge "Strong Uptrend",
+# and the gate compared trend against the literal "Strong Uptrend". That is
+# always False, so BUY_NOW became unreachable with nothing to indicate it.
+# Comparing against a name makes that class of mismatch a NameError, not silence.
+TREND_STRONG_UPTREND = "Strong Uptrend"
+TREND_UPTREND        = "Uptrend"
+TREND_ACCUMULATION   = "Accumulation"
+TREND_DISTRIBUTION   = "Distribution"
+TREND_CONSOLIDATION  = "Consolidation"
+TREND_DOWNTREND      = "Downtrend"
+
+# Ordered strongest -> weakest. The frontend builds its filter dropdown from
+# this, so adding a state here surfaces it in the UI with no further changes.
+TREND_STATES: dict = {
+    TREND_STRONG_UPTREND: {"badge": "🟢 Strong Uptrend",      "class": "badge-green"},
+    TREND_UPTREND:        {"badge": "🟢 Uptrend",             "class": "badge-green"},
+    TREND_ACCUMULATION:   {"badge": "🔵 Accumulation Phase",  "class": "badge-purple"},
+    TREND_CONSOLIDATION:  {"badge": "🟡 Consolidation Phase", "class": "badge-yellow"},
+    TREND_DISTRIBUTION:   {"badge": "🟠 Distribution Phase",  "class": "badge-yellow"},
+    TREND_DOWNTREND:      {"badge": "🔴 Downtrend",           "class": "badge-red"},
+}
+
+# Trend states that represent constructive price structure.
+UPTREND_STATES = (TREND_UPTREND, TREND_ACCUMULATION, TREND_STRONG_UPTREND)
+
+
+def trend_result(state: str) -> dict:
+    """Build a classification result from the TREND_STATES table.
+
+    Keeping trend/badge/class together here means a state can never again ship
+    with a badge that disagrees with the value the gates compare against.
+    """
+    meta = TREND_STATES[state]
+    return {"trend": state, "badge": meta["badge"], "class": meta["class"]}
+
+
 def compute_trend_classification(scored: dict) -> dict:
     """
-    Evaluates 5-stage market trend:
-    - 🟢 Strong Uptrend
-    - 🔵 Accumulation Phase
-    - 🟡 Consolidation Phase
-    - 🟠 Distribution Phase
-    - 🔴 Downtrend
+    Evaluates market trend, returning one of TREND_STATES.
+    See that table for the full set and their badges.
     """
     ltp = scored.get("ltp", 0)
     ema20 = scored.get("ema20")
@@ -1983,35 +2021,35 @@ def compute_trend_classification(scored: dict) -> dict:
     wk52_h = scored.get("week_high_52")
 
     if ltp <= 0:
-        return {"trend": "Consolidation", "badge": "🟡 Consolidation Phase", "class": "badge-yellow"}
+        return trend_result(TREND_CONSOLIDATION)
 
     above_20 = (ema20 is not None and ltp >= ema20)
     above_50 = (ma50 is not None and ltp >= ma50)
     above_200 = (ma200 is not None and ltp >= ma200) if ma200 else (above_20 or above_50)
     dist_52h_pct = ((ltp - wk52_h) / wk52_h * 100) if (wk52_h and wk52_h > 0) else -100
 
-    # 🔴 Downtrend: Price below 20-EMA, 50-MA, and 200-MA
+    # Price below 20-EMA, 50-MA, and 200-MA
     if not above_20 and not above_50 and (ma200 is None or not above_200):
-        return {"trend": "Downtrend", "badge": "🔴 Downtrend", "class": "badge-red"}
+        return trend_result(TREND_DOWNTREND)
 
-    # 🟠 Distribution Phase: Near 52W High (within 10%) or above 50MA, but volume spike >= 1.2x & weakening RSI (<48)
+    # Near 52W High (within 10%) or above 50MA, but volume spike >= 1.2x & weakening RSI (<48)
     if (dist_52h_pct >= -10 or above_50) and vol_spike >= 1.2 and (rsi is not None and rsi < 48):
-        return {"trend": "Distribution", "badge": "🟠 Distribution Phase", "class": "badge-yellow"}
+        return trend_result(TREND_DISTRIBUTION)
 
-    # 🔵 Accumulation Phase: Price above 200MA or 20-EMA, volume spike >= 1.2x, healthy RSI (45-58)
+    # Price above 200MA or 20-EMA, volume spike >= 1.2x, healthy RSI (45-58)
     if (above_200 or above_20) and vol_spike >= 1.2 and (rsi is not None and 45 <= rsi <= 58):
-        return {"trend": "Accumulation", "badge": "🔵 Accumulation Phase", "class": "badge-purple"}
+        return trend_result(TREND_ACCUMULATION)
 
-    # 🟢 Strong Uptrend: Price > 20-EMA and Price > 50-MA (or 200-MA) with healthy RSI (>=50)
+    # Price > 20-EMA and > 50-MA (or 200-MA) with healthy RSI — full trend structure
     if above_20 and (ma50 is None or above_50) and (rsi is None or rsi >= 48):
-        return {"trend": "Strong Uptrend", "badge": "🟢 Strong Uptrend", "class": "badge-green"}
+        return trend_result(TREND_STRONG_UPTREND)
 
-    # 🟢 Uptrend: above the 20-EMA only — a weaker structure than the above
+    # Above the 20-EMA only — constructive but a weaker structure than the above
     if above_20:
-        return {"trend": "Uptrend", "badge": "🟢 Uptrend", "class": "badge-green"}
+        return trend_result(TREND_UPTREND)
 
-    # 🟡 Consolidation Phase: Price consolidating near moving averages
-    return {"trend": "Consolidation", "badge": "🟡 Consolidation Phase", "class": "badge-yellow"}
+    # Consolidating near moving averages
+    return trend_result(TREND_CONSOLIDATION)
 
 
 def classify_stock_sector_group(sector: str, industry: str) -> str:
@@ -2156,7 +2194,7 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
     strength = float(scored.get("strength") or 50.0)
     pe = scored.get("pe")
     pb = scored.get("pb")
-    trend = scored.get("trend") or "Consolidation"
+    trend = scored.get("trend") or TREND_CONSOLIDATION
 
     # ── 1. BUSINESS QUALITY & GOVERNANCE (50% max = 50 pts) ─────────────────
     bq_pts = 0.0
@@ -2201,8 +2239,8 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
     elif rev_growth >= 10.0: g_pts += 10.0
     elif rev_growth > 0.0: g_pts += 5.0
 
-    if trend in ("Uptrend", "Accumulation", "Strong Uptrend"): g_pts += 10.0
-    elif trend == "Consolidation": g_pts += 5.0
+    if trend in UPTREND_STATES: g_pts += 10.0
+    elif trend == TREND_CONSOLIDATION: g_pts += 5.0
 
     lt_growth_score = round(min(25.0, max(0.0, g_pts)), 1)
 
@@ -2280,7 +2318,7 @@ def get_lt_watchlist_status(
     Separates Business Quality (fundamental conviction) from Entry Timing (GTT / MA support proximity).
     """
     scored = scored or {}
-    UPTREND_STATES = ("Uptrend", "Accumulation", "Strong Uptrend")
+    # UPTREND_STATES is the module-level constant defined with TREND_STATES.
     COOLING_OFF_DAYS = 10
 
     # If holding active, manage BOUGHT status & cooling off
@@ -2360,7 +2398,7 @@ def get_lt_watchlist_status(
         # BUY_NOW only for Strong Uptrend + GTT triggered (price at/near support)
         gtt_triggered = (gtt_level and gtt_level > 0 and ltp > 0 and
                         ((ltp - gtt_level) / gtt_level) * 100.0 <= 2.0)
-        if lt_entry_score >= 65 and trend == "Strong Uptrend" and gtt_triggered:
+        if lt_entry_score >= 65 and trend == TREND_STRONG_UPTREND and gtt_triggered:
             status = "BUY_NOW"
             badge = "🟢 BUY NOW (ACCUMULATE)"
             badge_class = "badge-green"

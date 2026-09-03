@@ -10,6 +10,10 @@ from typing import Dict, List, Any
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT_JSON_FILE = os.path.join(BASE_DIR, "screener_data.json")
 LT_WATCHLIST_FILE = os.path.join(BASE_DIR, "lt_watchlist.json")
+# Written by process_lt_watchlist() on every scan. Holds the same enriched rows
+# the web page renders (status, badge, ltp, trend, scores, GTT distance), so the
+# mobile app and the desktop app cannot drift apart.
+LT_ENRICHED_FILE = os.path.join(BASE_DIR, "lt_watchlist_enriched.json")
 HOLDINGS_FILE = os.path.join(BASE_DIR, "holdings.json")
 
 
@@ -36,36 +40,51 @@ def get_screener_data() -> Dict:
 
 
 def get_lt_watchlist() -> Dict:
-    """Get LT watchlist with computed statuses."""
-    watchlist = load_json_file(LT_WATCHLIST_FILE, [])
-    holdings = load_json_file(HOLDINGS_FILE, {})
+    """Get the LT watchlist with the computed buy/wait signals.
 
-    # Enrich watchlist with dynamic data
-    enriched = []
+    Reads lt_watchlist_enriched.json, which process_lt_watchlist() writes on
+    every scan. That file carries the status/badge/ltp/trend/score fields the
+    app renders. lt_watchlist.json is only the static config (symbol, sector,
+    gtt_mode...) and has no signals, so it is used purely as a fallback when no
+    scan has run yet -- in which case the caller is told the data is stale.
+    """
+    holdings = load_json_file(HOLDINGS_FILE, {})
+    enriched_rows = load_json_file(LT_ENRICHED_FILE, [])
+    enriched_available = bool(enriched_rows)
+
+    if not enriched_available:
+        enriched_rows = load_json_file(LT_WATCHLIST_FILE, [])
+
+    watchlist = []
     buy_now_count = 0
     wait_count = 0
 
-    for stock in watchlist:
-        if isinstance(stock, dict):
-            sym = stock.get('symbol', '')
-            # Note: Status computed server-side during render
-            if stock.get('status') == 'BUY_NOW':
+    for stock in enriched_rows:
+        if not isinstance(stock, dict):
+            continue
+
+        sym = stock.get('symbol', '')
+        # Only active rows carry a tradable signal; mirrors the desktop counts.
+        if stock.get('active', True):
+            status = stock.get('status')
+            if status == 'BUY_NOW':
                 buy_now_count += 1
-            elif stock.get('status') == 'WAIT':
+            elif status == 'WAIT':
                 wait_count += 1
 
-            enriched.append({
-                **stock,
-                "holding": holdings.get(sym)
-            })
+        watchlist.append({
+            **stock,
+            "holding": stock.get('holding') or holdings.get(sym)
+        })
 
     return {
         "status": "success",
         "timestamp": datetime.now().isoformat(),
-        "total": len(enriched),
+        "signals_available": enriched_available,
+        "total": len(watchlist),
         "buy_now": buy_now_count,
         "wait": wait_count,
-        "watchlist": enriched
+        "watchlist": watchlist
     }
 
 

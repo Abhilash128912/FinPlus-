@@ -3,8 +3,8 @@
   "appName": "Stock Screener",
   "webDir": "www",
   "server": {
+    "url": "https://finplus-g0b5.onrender.com",
     "androidScheme": "https",
     "cleartext": true
   }
 }
-

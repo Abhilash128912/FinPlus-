@@ -39,6 +39,7 @@ logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
 from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline, compute_intraday_picks, select_monthly_lt_watchlist_additions
+from screener_engine import TREND_STATES, UPTREND_STATES, TREND_DOWNTREND
 from mobile_api import get_screener_data, get_lt_watchlist, get_holdings, search_stocks, get_stock_detail, get_app_status
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
@@ -1676,6 +1677,16 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
     log(f"  LT Watchlist: {sum(1 for e in enriched if e.get('active'))} active / {len(enriched)} total · "
         f"{buy_now_count} BUY_NOW · {sum(1 for e in enriched if e.get('status')=='WAIT' and e.get('active'))} WAIT · {bought_count} BOUGHT")
 
+    # Persist the enriched rows so the mobile API serves the exact signals the web
+    # page renders. Without this the API can only see the static lt_watchlist.json
+    # config, which carries no status/badge/ltp and would show an empty watchlist.
+    enriched_file = os.path.join(BASE_DIR, "lt_watchlist_enriched.json")
+    try:
+        with open(enriched_file, "w", encoding="utf-8") as f:
+            json.dump(sanitize_for_strict_json(enriched), f, indent=2, default=json_serializer)
+    except Exception as e:
+        log(f"  ⚠ Failed to save lt_watchlist_enriched.json: {e}")
+
     # Run 4-Stage Universe Discovery & Incumbent Audit Pipeline across 2,414 NSE Stocks
     discovery_res = run_lt_universe_discovery_pipeline(screener_results, enriched)
     discovery_file = os.path.join(BASE_DIR, "lt_discovery_pipeline.json")
@@ -2821,12 +2832,7 @@ details[open] summary::before {
         <select id="fTrend" onchange="applyFilters()">
           <option value="all">All Trends</option>
           <option value="uptrend_downtrend">⚡ Uptrend & Downtrend Only</option>
-          <option value="Strong Uptrend">🟢 Strong Uptrend</option>
-          <option value="Uptrend">🟢 Uptrend</option>
-          <option value="Downtrend">🔴 Downtrend</option>
-          <option value="Accumulation">🔵 Accumulation</option>
-          <option value="Consolidation">🟡 Consolidation</option>
-          <option value="Distribution">🟠 Distribution</option>
+__TREND_OPTIONS_HTML__
         </select>
       </div>
       <button class="filter-reset" onclick="resetFilters()">↺ Reset</button>
@@ -3318,6 +3324,16 @@ let PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;
 let INTRADAY_DATA = __INTRADAY_JSON__;
 let LT_MONTHLY_PICKS = __LT_MONTHLY_JSON__;
 let LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;
+let TREND_CONFIG = __TREND_STATES_JSON__;
+
+// Resolve a trend's badge class from the table the Python classifier owns
+// (screener_engine.TREND_STATES), so the UI can never label a state the engine
+// does not emit -- or miss one it does. Unknown/absent trends fall back to the
+// neutral class rather than being styled as something they are not.
+function trendBadgeClass(trend) {
+  const meta = (TREND_CONFIG.states || {})[trend];
+  return (meta && meta.class) || 'badge-yellow';
+}
 
 // ── State ─────────────────────────────────────────────────────────────────
 let watchlist = [];
@@ -4162,7 +4178,7 @@ function calculateClientStatus(item) {
   const serverStatus = item.status || 'WATCHLIST';
   const serverRank = statusRank[serverStatus] || 0;
 
-  const uptrendStates = ["Uptrend", "Accumulation", "Strong Uptrend"];
+  const uptrendStates = TREND_CONFIG.uptrend;
   const trend = item.trend || "Consolidation";
   const rsi = item.rsi || 50;
   const ltp = item.ltp || 0;
@@ -4386,7 +4402,7 @@ function renderLtWatchlist() {
         <span class="badge ${statusBadgeCls}" style="font-size:11px;font-weight:700" title="${s.status_reason || ''}">${statusBadgeText}</span>
       </td>
       <td>
-        <span class="badge ${s.trend === 'Uptrend' || s.trend === 'Strong Uptrend' ? 'badge-green' : s.trend === 'Accumulation' ? 'badge-purple' : s.trend === 'Downtrend' ? 'badge-red' : 'badge-yellow'}" style="font-size:10px">
+        <span class="badge ${trendBadgeClass(s.trend)}" style="font-size:10px">
           ${s.trend_badge || s.trend || 'Consolidation'}
         </span>
       </td>
@@ -5776,7 +5792,7 @@ function renderPennyStocksTab() {
 
     // Trend & CMF Badge
     const trendText = s.trend_badge || s.trend || 'Consolidation';
-    const trendClass = (s.trend === 'Uptrend' || s.trend === 'Strong Uptrend') ? 'badge-green' : (s.trend === 'Accumulation' ? 'badge-purple' : (s.trend === 'Downtrend' ? 'badge-red' : 'badge-yellow'));
+    const trendClass = trendBadgeClass(s.trend);
     const cmfBadge = s.pa_badge ? `<div style="font-size:9px;margin-top:3px"><span class="badge ${s.pa_class || 'badge-gray'}" style="font-size:9px">${s.pa_badge}</span></div>` : '';
 
     // Support Target GTT
@@ -6491,7 +6507,8 @@ function applyFilters() {
     }
 
     if (trend === 'uptrend_downtrend') {
-      if (s.trend !== 'Uptrend' && s.trend !== 'Strong Uptrend' && s.trend !== 'Downtrend') return false;
+      const keep = (TREND_CONFIG.uptrend || []).concat([TREND_CONFIG.downtrend]);
+      if (!keep.includes(s.trend)) return false;
     } else if (trend !== 'all' && s.trend !== trend) {
       return false;
     }
@@ -7896,6 +7913,21 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "__INTRADAY_JSON__": json.dumps(intraday_data, ensure_ascii=False, default=json_serializer),
         "__LT_MONTHLY_JSON__": json.dumps(monthly_lt_data, ensure_ascii=False, default=json_serializer),
         "__LT_PORTFOLIO_SUMMARY_JSON__": json.dumps(lt_summary, ensure_ascii=False, default=json_serializer),
+        # Trend vocabulary comes from screener_engine.TREND_STATES so the filter
+        # dropdown and the JS badge logic cannot drift from what the classifier
+        # actually emits. Adding a state there surfaces it here automatically.
+        "__TREND_STATES_JSON__": json.dumps(
+            {
+                "states": TREND_STATES,
+                "uptrend": list(UPTREND_STATES),
+                "downtrend": TREND_DOWNTREND,
+            },
+            ensure_ascii=False, default=json_serializer,
+        ),
+        "__TREND_OPTIONS_HTML__": "\n".join(
+            f'          <option value="{state}">{meta["badge"]}</option>'
+            for state, meta in TREND_STATES.items()
+        ),
     }
 
     # ── Split the template into: (head+body markup, CSS, app JS) ──────────
@@ -7935,7 +7967,8 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "let PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;\n"
         "let INTRADAY_DATA = __INTRADAY_JSON__;\n"
         "let LT_MONTHLY_PICKS = __LT_MONTHLY_JSON__;\n"
-        "let LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;"
+        "let LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;\n"
+        "let TREND_CONFIG = __TREND_STATES_JSON__;"
     )
     # `var`, not `let`: app.js declares these once with empty defaults, and the small
     # per-scan inline <script> below re-declares them with real values. Two separate
@@ -7953,7 +7986,8 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "var PENNY_STOCKS_DATA = [];\n"
         "var INTRADAY_DATA = {};\n"
         "var LT_MONTHLY_PICKS = {};\n"
-        "var LT_PORTFOLIO_SUMMARY = {};"
+        "var LT_PORTFOLIO_SUMMARY = {};\n"
+        "var TREND_CONFIG = { states: {}, uptrend: [], downtrend: '' };"
     )
     if data_let_block not in js_raw:
         raise RuntimeError("build_html: data-let block not found in app script — template shape changed, fix the split logic")
