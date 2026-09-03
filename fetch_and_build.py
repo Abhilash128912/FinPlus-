@@ -110,6 +110,25 @@ LAST_SCAN_FINISHED_AT = 0.0
 # ~6 minutes and suppress live LTP while they run.
 MIN_SECONDS_BETWEEN_AUTO_SCANS = 3600.0
 
+# Whether this process should run the full 2,568-stock scan at all.
+#
+# On Render it should not. The scan never completed there -- /api/status reported
+# is_scanning:True with last_scan_completed_at empty -- and while it runs,
+# ltp_should_defer_to_scan() suppresses live price refresh, which is the one job
+# the deployment actually has. The scan belongs on the laptop, which completes it
+# in ~6 minutes; screener_data.json and lt_watchlist_enriched.json are committed,
+# so every deploy already ships that scan's output.
+#
+# Render sets RENDER=true in its environment. SCREENER_ENABLE_SCAN=1 forces it
+# back on if a deployment ever should scan.
+_scan_flag = os.environ.get("SCREENER_ENABLE_SCAN", "").strip().lower()
+if _scan_flag in ("1", "true", "yes"):
+    SCAN_ENABLED = True          # explicit opt-in wins everywhere
+elif _scan_flag in ("0", "false", "no"):
+    SCAN_ENABLED = False         # explicit opt-out wins everywhere
+else:
+    SCAN_ENABLED = not os.environ.get("RENDER")   # Render sets this automatically
+
 # ── LTP refresh: background warmer, cache-only serving ───────────────────────
 # The /api/ltp handler used to fetch from Yahoo inline. yf.download costs ~30-190s
 # per call almost regardless of symbol count, while the cache TTL and the browser
@@ -9408,6 +9427,9 @@ def automated_hourly_market_scheduler():
     Automated background loop that runs during NSE market hours (Mon-Fri 09:15-15:30 IST).
     Triggers a fresh scan every hour so 1-hour candle breakout changes are caught live.
     """
+    if not SCAN_ENABLED:
+        log("⏭  Hourly market scheduler disabled for this deployment.")
+        return
     while True:
         try:
             time.sleep(300)  # Check clock every 5 minutes
@@ -9461,8 +9483,12 @@ if __name__ == "__main__":
             except Exception as e:
                 log(f"  ⚠ Startup HTML build skipped: {e}")
 
-        log(f"⚡ Launching scan of {len(read_stock_list()) if os.path.exists(OUT_JSON_FILE) else 2415} stocks in background thread...")
-        background_initial_scan()
+        if not SCAN_ENABLED:
+            log("⏭  Scanning disabled for this deployment — serving committed scan data "
+                "and keeping live prices warm instead.")
+        else:
+            log(f"⚡ Launching scan of {len(read_stock_list()) if os.path.exists(OUT_JSON_FILE) else 2415} stocks in background thread...")
+            background_initial_scan()
 
     # Launch background startup tasks thread so server starts instantly on port 5000
     scan_t = threading.Thread(target=startup_bg_tasks, daemon=True)
