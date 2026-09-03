@@ -2821,7 +2821,8 @@ details[open] summary::before {
         <select id="fTrend" onchange="applyFilters()">
           <option value="all">All Trends</option>
           <option value="uptrend_downtrend">⚡ Uptrend & Downtrend Only</option>
-          <option value="Uptrend">🟢 Strong Uptrend</option>
+          <option value="Strong Uptrend">🟢 Strong Uptrend</option>
+          <option value="Uptrend">🟢 Uptrend</option>
           <option value="Downtrend">🔴 Downtrend</option>
           <option value="Accumulation">🔵 Accumulation</option>
           <option value="Consolidation">🟡 Consolidation</option>
@@ -6490,7 +6491,7 @@ function applyFilters() {
     }
 
     if (trend === 'uptrend_downtrend') {
-      if (s.trend !== 'Uptrend' && s.trend !== 'Downtrend') return false;
+      if (s.trend !== 'Uptrend' && s.trend !== 'Strong Uptrend' && s.trend !== 'Downtrend') return false;
     } else if (trend !== 'all' && s.trend !== trend) {
       return false;
     }

@@ -3184,7 +3184,7 @@ function applyFilters() {
     }
 
     if (trend === 'uptrend_downtrend') {
-      if (s.trend !== 'Uptrend' && s.trend !== 'Downtrend') return false;
+      if (s.trend !== 'Uptrend' && s.trend !== 'Strong Uptrend' && s.trend !== 'Downtrend') return false;
     } else if (trend !== 'all' && s.trend !== trend) {
       return false;
     }

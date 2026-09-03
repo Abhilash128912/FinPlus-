@@ -2004,10 +2004,11 @@ def compute_trend_classification(scored: dict) -> dict:
 
     # 🟢 Strong Uptrend: Price > 20-EMA and Price > 50-MA (or 200-MA) with healthy RSI (>=50)
     if above_20 and (ma50 is None or above_50) and (rsi is None or rsi >= 48):
-        return {"trend": "Uptrend", "badge": "🟢 Strong Uptrend", "class": "badge-green"}
+        return {"trend": "Strong Uptrend", "badge": "🟢 Strong Uptrend", "class": "badge-green"}
 
+    # 🟢 Uptrend: above the 20-EMA only — a weaker structure than the above
     if above_20:
-        return {"trend": "Uptrend", "badge": "🟢 Strong Uptrend", "class": "badge-green"}
+        return {"trend": "Uptrend", "badge": "🟢 Uptrend", "class": "badge-green"}
 
     # 🟡 Consolidation Phase: Price consolidating near moving averages
     return {"trend": "Consolidation", "badge": "🟡 Consolidation Phase", "class": "badge-yellow"}
