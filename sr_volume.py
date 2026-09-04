@@ -56,6 +56,13 @@ GATES: dict = {
     # it keeps the reward figure honest for the horizon being traded; the untouched
     # level is still reported as srv_level_target.
     "max_target_pct": None,
+    # What counts as a turn. "close > open, or close > the last close" admits a
+    # doji and a one-tick drift: TATACHEM printed a 0.07 body/range doji at support
+    # and then a 0.65 rupee (+0.10%) bar, and was called a BUY while flat on the
+    # day. A level being defended looks like a decisive bar, not a pause.
+    "min_body_range": 0.40,       # doji filter: body as a share of the bar's range
+    "min_close_position": 0.60,   # close must sit in the top 40% of the range (buy)
+    "min_turn_atr": 0.25,         # and cover real distance, in box depths
 }
 
 NO_SIGNAL = {
@@ -232,8 +239,25 @@ def compute_signal(df, gates: dict = None) -> dict:
         near = depth * float(g["near_box_mult"])
         support, resistance = find_volume_levels(o, h, l, c, v, g, price)
 
-        turned_up = c[-1] > o[-1] or (len(c) > 1 and c[-1] > c[-2])
-        turned_down = c[-1] < o[-1] or (len(c) > 1 and c[-1] < c[-2])
+        # The turn bar, judged on its own shape rather than on a bare comparison.
+        bar_rng = float(h[-1] - l[-1])
+        body = abs(float(c[-1] - o[-1]))
+        body_ratio = (body / bar_rng) if bar_rng > 0 else 0.0
+        close_pos = ((c[-1] - l[-1]) / bar_rng) if bar_rng > 0 else 0.5
+        decisive = body_ratio >= float(g["min_body_range"])
+        travelled_up = (c[-1] - l[-1]) >= float(g["min_turn_atr"]) * depth
+        travelled_down = (h[-1] - c[-1]) >= float(g["min_turn_atr"]) * depth
+
+        turned_up = (
+            c[-1] > o[-1] and decisive
+            and close_pos >= float(g["min_close_position"])
+            and travelled_up
+        )
+        turned_down = (
+            c[-1] < o[-1] and decisive
+            and close_pos <= 1.0 - float(g["min_close_position"])
+            and travelled_down
+        )
         has_vol = vol_ratio >= float(g["min_turn_vol_ratio"])
 
         # How close price actually came to each level in the last few bars.
@@ -286,9 +310,12 @@ def compute_signal(df, gates: dict = None) -> dict:
         # level beneath it, and defined risk beats defined reward.
         # Touched the level recently, has not broken decisively through it, and is
         # now turning away from it on volume.
+        # Price must still be above the level. Allowing it a depth below meant a
+        # support that had already broken -- price falling away from it, which is
+        # the short -- still read as a buy.
         if (support
                 and abs(recent_low - support["level"]) <= near
-                and price >= support["level"] - depth):
+                and price > support["level"]):
             if turned_up and has_vol:
                 res = resistance["level"] if resistance else None
                 b_entry = round(price, 2)
@@ -317,7 +344,7 @@ def compute_signal(df, gates: dict = None) -> dict:
 
         if (resistance
                 and abs(recent_high - resistance["level"]) <= near
-                and price <= resistance["level"] + depth):
+                and price < resistance["level"]):
             if turned_down and has_vol:
                 sup = support["level"] if support else None
                 s_entry = round(price, 2)
