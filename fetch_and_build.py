@@ -4052,7 +4052,15 @@ function renderCommodityBar() {
   for (const [key, item] of Object.entries(COMMODITIES_DATA)) {
     if (!item) continue;
     const usdPriceStr = item.curr_price ? `${item.unit}${item.curr_price}` : 'N/A';
-    const mcxPriceStr = item.mcx_inr_price ? ` · MCX Est: ₹${item.mcx_inr_price.toLocaleString('en-IN')}` : '';
+    // The MCX figure is the traded contract now, not a dollar price times an FX
+    // rate, so it is no longer labelled an estimate -- and when MCX cannot be
+    // reached the field is simply absent rather than falling back to a number
+    // that looks Indian but is not.
+    const mcxPriceStr = item.mcx_inr_price
+      ? ` · MCX ${item.mcx_expiry || ''} ₹${item.mcx_inr_price.toLocaleString('en-IN')}`
+        + (item.mcx_pct != null ? ` (${item.mcx_pct > 0 ? '+' : ''}${item.mcx_pct}%)` : '')
+      : ' · MCX price unavailable';
+    const srcStr = item.signal_source ? ` — signal from ${item.signal_source}` : '';
     const emaStr = (item.ema15 && item.ema20) ? `15EMA: ${item.ema15} · 20EMA: ${item.ema20} (${item.diff_pct > 0 ? '+' : ''}${item.diff_pct}%)` : '';
 
     let badgeStyle = 'background: rgba(255,255,255,0.08); color:#ccc; border: 1px solid rgba(255,255,255,0.1);';
@@ -4071,7 +4079,7 @@ function renderCommodityBar() {
         <span style="font-size:16px">${item.icon || '⛽'}</span>
         <div>
           <div class="commodity-card-name">${item.name} <span class="commodity-card-price">${usdPriceStr}</span><span style="color:#00d4aa;font-size:12px;font-weight:600">${mcxPriceStr}</span></div>
-          <div class="commodity-card-emas">${emaStr}</div>
+          <div class="commodity-card-emas">${emaStr}${srcStr}</div>
         </div>
         <span class="commodity-badge" style="${badgeStyle}">
           ${item.badge}
@@ -8449,6 +8457,71 @@ def fetch_nifty_history() -> tuple[pd.DataFrame, dict]:
     return nifty_df, regime
 
 
+# MCX publishes its own market watch; the app was inferring Indian prices instead.
+# The snapshot is ~1.7MB and covers every contract, so it is fetched at most once
+# every few minutes and shared by both commodities.
+_MCX_CACHE = {"at": 0.0, "rows": []}
+_MCX_TTL_SEC = 180.0
+MCX_MARKET_WATCH_URL = "https://www.mcxindia.com/market-data/market-watch/GetMarketWatch?culture=en"
+
+
+def fetch_mcx_futures(symbol: str) -> dict:
+    """Front-month MCX futures for a commodity, as actually traded.
+
+    The app previously multiplied WTI in dollars by the USD/INR rate and labelled
+    the result an estimate. It is a proxy for a different instrument: MCX crude is
+    its own contract with its own basis and expiry, and on 04 Sep the estimate read
+    8,657.20 against a traded 8,636.00. Close, but not a price anyone can act on,
+    and the error moves with the basis rather than staying put.
+
+    MCX's own market watch carries the real thing. Front month is chosen by volume
+    rather than by nearest expiry, because the most traded contract is the one a
+    quote should follow -- the front contract goes illiquid near expiry while
+    volume has already rolled.
+
+    Returns {} when unavailable; the caller degrades rather than inventing a price.
+    """
+    global _MCX_CACHE
+    now = time.time()
+    if not _MCX_CACHE["rows"] or (now - _MCX_CACHE["at"]) > _MCX_TTL_SEC:
+        try:
+            from curl_cffi import requests as cr
+            sess = cr.Session(impersonate="chrome")
+            # The endpoint 404s unless the page has been visited first.
+            sess.get("https://www.mcxindia.com/market-data/market-watch", timeout=20)
+            resp = sess.get(MCX_MARKET_WATCH_URL, timeout=25, headers={
+                "Referer": "https://www.mcxindia.com/market-data/market-watch",
+                "X-Requested-With": "XMLHttpRequest",
+                "Accept": "application/json, text/javascript, */*; q=0.01",
+            })
+            payload = json.loads(resp.text)
+            _MCX_CACHE = {"at": now, "rows": (payload.get("data") or {}).get("Data") or []}
+        except Exception as e:
+            log(f"  ⚠ MCX market watch unavailable: {e}")
+            if not _MCX_CACHE["rows"]:
+                return {}
+
+    futures = [r for r in _MCX_CACHE["rows"]
+               if r.get("Symbol") == symbol and r.get("InstrumentName") == "FUTCOM"]
+    if not futures:
+        return {}
+    front = max(futures, key=lambda r: r.get("Volume") or 0)
+    return {
+        "mcx_symbol": symbol,
+        "mcx_expiry": front.get("ExpiryDate"),
+        "mcx_unit": front.get("Unit"),
+        "mcx_ltp": front.get("LTP"),
+        "mcx_open": front.get("Open"),
+        "mcx_high": front.get("High"),
+        "mcx_low": front.get("Low"),
+        "mcx_prev_close": front.get("PreviousClose"),
+        "mcx_pct": front.get("PercentChange"),
+        "mcx_volume": front.get("Volume"),
+        "mcx_oi": front.get("OpenInterest"),
+        "mcx_last_traded": front.get("sLTT"),
+    }
+
+
 def fetch_commodity_signals() -> dict:
     log("Fetching 15m intraday commodity data (Crude Oil & Natural Gas)...")
     from screener_engine import calculate_ema_crossover_15m
@@ -8458,8 +8531,10 @@ def fetch_commodity_signals() -> dict:
     log(f"  Live USD/INR Rate: ₹{usdinr_rate:.2f}")
 
     items = [
-        {"id": "crude", "name": "Crude Oil (WTI)", "ticker": "CL=F", "unit": "$", "icon": "🛢️"},
-        {"id": "gas",   "name": "Natural Gas",    "ticker": "NG=F", "unit": "$", "icon": "⚡"}
+        {"id": "crude", "name": "Crude Oil", "ticker": "CL=F", "unit": "$",
+         "icon": "🛢️", "mcx": "CRUDEOIL"},
+        {"id": "gas", "name": "Natural Gas", "ticker": "NG=F", "unit": "$",
+         "icon": "⚡", "mcx": "NATURALGAS"}
     ]
     results = {}
 
@@ -8475,7 +8550,7 @@ def fetch_commodity_signals() -> dict:
 
             calc = calculate_ema_crossover_15m(df_15m)
             curr_usd = calc.get("curr_price")
-            mcx_inr_price = round(curr_usd * usdinr_rate, 2) if curr_usd else None
+            mcx = fetch_mcx_futures(c["mcx"])
 
             results[c["id"]] = {
                 "name": c["name"],
@@ -8483,10 +8558,25 @@ def fetch_commodity_signals() -> dict:
                 "unit": c["unit"],
                 "icon": c["icon"],
                 "usdinr": round(usdinr_rate, 2),
-                "mcx_inr_price": mcx_inr_price,
+                # Real traded price when MCX answers. No dollar-times-FX fallback:
+                # a number that looks like an Indian price but is not one is worse
+                # than an empty field, because it invites a trade.
+                "mcx_inr_price": mcx.get("mcx_ltp"),
+                "mcx_available": bool(mcx),
+                # The 15m signal still comes from WTI / Henry Hub, which is a
+                # directional proxy, not the MCX contract. Labelled so, because the
+                # price beside it is now the real one and the two must not be read
+                # as coming from the same instrument.
+                "signal_source": "WTI 15m" if c["id"] == "crude" else "Henry Hub 15m",
+                **mcx,
                 **calc
             }
-            log(f"  ✓ {c['name']} ({c['ticker']}): LTP=${curr_usd} (MCX Est: ₹{mcx_inr_price}) | Signal={calc.get('badge')}")
+            if mcx:
+                log(f"  ✓ {c['name']}: MCX {mcx['mcx_symbol']} {mcx['mcx_expiry']} "
+                    f"₹{mcx['mcx_ltp']} ({mcx['mcx_pct']}%) vol={mcx['mcx_volume']} "
+                    f"| {c['ticker']} ${curr_usd} | Signal={calc.get('badge')}")
+            else:
+                log(f"  ⚠ {c['name']}: MCX price unavailable; showing no Indian price")
         except Exception as e:
             log(f"  ⚠ Error fetching commodity {c['ticker']}: {e}")
             results[c["id"]] = {
@@ -8496,6 +8586,7 @@ def fetch_commodity_signals() -> dict:
                 "icon": c["icon"],
                 "usdinr": round(usdinr_rate, 2),
                 "mcx_inr_price": None,
+                "mcx_available": False,
                 "signal": "NO_DATA",
                 "badge": "⚪ NO DATA",
                 "badge_cls": "badge-gray",

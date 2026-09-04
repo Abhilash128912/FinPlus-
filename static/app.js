@@ -247,7 +247,15 @@ function renderCommodityBar() {
   for (const [key, item] of Object.entries(COMMODITIES_DATA)) {
     if (!item) continue;
     const usdPriceStr = item.curr_price ? `${item.unit}${item.curr_price}` : 'N/A';
-    const mcxPriceStr = item.mcx_inr_price ? ` · MCX Est: ₹${item.mcx_inr_price.toLocaleString('en-IN')}` : '';
+    // The MCX figure is the traded contract now, not a dollar price times an FX
+    // rate, so it is no longer labelled an estimate -- and when MCX cannot be
+    // reached the field is simply absent rather than falling back to a number
+    // that looks Indian but is not.
+    const mcxPriceStr = item.mcx_inr_price
+      ? ` · MCX ${item.mcx_expiry || ''} ₹${item.mcx_inr_price.toLocaleString('en-IN')}`
+        + (item.mcx_pct != null ? ` (${item.mcx_pct > 0 ? '+' : ''}${item.mcx_pct}%)` : '')
+      : ' · MCX price unavailable';
+    const srcStr = item.signal_source ? ` — signal from ${item.signal_source}` : '';
     const emaStr = (item.ema15 && item.ema20) ? `15EMA: ${item.ema15} · 20EMA: ${item.ema20} (${item.diff_pct > 0 ? '+' : ''}${item.diff_pct}%)` : '';
 
     let badgeStyle = 'background: rgba(255,255,255,0.08); color:#ccc; border: 1px solid rgba(255,255,255,0.1);';
@@ -266,7 +274,7 @@ function renderCommodityBar() {
         <span style="font-size:16px">${item.icon || '⛽'}</span>
         <div>
           <div class="commodity-card-name">${item.name} <span class="commodity-card-price">${usdPriceStr}</span><span style="color:#00d4aa;font-size:12px;font-weight:600">${mcxPriceStr}</span></div>
-          <div class="commodity-card-emas">${emaStr}</div>
+          <div class="commodity-card-emas">${emaStr}${srcStr}</div>
         </div>
         <span class="commodity-badge" style="${badgeStyle}">
           ${item.badge}
