@@ -3441,10 +3441,21 @@ __TREND_OPTIONS_HTML__
     </div>
 
     <!-- Top 10 Swing Spotlight -->
+    <!-- Volume-backed S/R setups, the same model the intraday tab runs. Buy only:
+         the cash segment has no sell-and-hold, so a short signal is untradeable. -->
+    <div style="margin-bottom:24px">
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:8px">
+        <span style="background:linear-gradient(135deg,#10b981,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent">◆ At a volume-backed level</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400">buy only · price is at a level real volume built</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Ranked by setup strength, not by momentum score.</div>
+      <div id="swingSrSetups" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
+    </div>
+
     <div style="margin-bottom:24px">
       <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:8px">
         <span style="background:linear-gradient(135deg,#6c63ff,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent">⚡ Top 10 Swing Picks</span>
-        <span style="font-size:11px;color:var(--muted);font-weight:400">(current preset)</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400">(momentum score · current preset)</span>
       </div>
       <div id="swingSpotlight" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
     </div>
@@ -3840,9 +3851,19 @@ let MARKET_INFO = __MARKET_INFO_JSON__;
 let FNO_DATA = __FNO_JSON__;
 let PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;
 let INTRADAY_DATA = __INTRADAY_JSON__;
+let SWING_SR = __SWING_SR_JSON__;
 let LT_MONTHLY_PICKS = __LT_MONTHLY_JSON__;
 let LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;
 let TREND_CONFIG = __TREND_STATES_JSON__;
+
+// Volume-backed S/R verdicts, keyed by symbol. Only stocks with a real level
+// behind them appear; the swing radar's own score says nothing about levels, so
+// without this a stock with no level reads identically to one sitting on a level
+// that heavy volume built. Declared outside the data block above, which the asset
+// splitter matches verbatim.
+function swingSrOf(s) {
+  return (s && s.symbol && typeof SWING_SR !== 'undefined') ? (SWING_SR[s.symbol] || null) : null;
+}
 
 // Resolve a trend's badge class from the table the Python classifier owns
 // (screener_engine.TREND_STATES), so the UI can never label a state the engine
@@ -4275,10 +4296,42 @@ function renderSwingRadar() {
     rcEl.textContent = `Showing ${sorted.length} swing stocks matching current preset${filterNotice}`;
   }
 
+  // Volume-backed S/R setups. Same model and same card shape as the intraday tab,
+  // so a setup reads identically wherever it appears.
+  const srBox = document.getElementById('swingSrSetups');
+  if (srBox) {
+    const srRows = Object.keys(SWING_SR)
+      .map(sym => ({ sym, sr: SWING_SR[sym], row: allMtf.find(x => x.symbol === sym) }))
+      .filter(x => x.sr && x.sr.srv_signal === 'BUY')
+      .sort((a, b) => (b.sr.srv_strength || 0) - (a.sr.srv_strength || 0));
+    srBox.innerHTML = srRows.length ? srRows.map(({ sym, sr, row }) => `
+      <div style="background:var(--card);border:1px solid #10b98155;border-radius:12px;padding:12px">
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <div style="font-size:15px;font-weight:700;color:#fff">${sym}</div>
+          <div style="font-size:10px;color:#34d399;border:1px solid #10b98155;border-radius:8px;padding:2px 7px">BUY ◆ ${(sr.srv_level_kind||'support').toUpperCase()}</div>
+          <div style="margin-left:auto;font-size:12px;color:var(--muted)">${(sr.srv_strength||0).toFixed(0)}/100</div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin:2px 0 8px">${((row&&row.name)||'').substring(0,32)}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px">
+          <div><div style="color:#fff;font-weight:600">₹${sr.srv_entry ?? '–'}</div><div style="color:var(--muted);font-size:9px">ENTRY</div></div>
+          <div><div style="color:#f87171;font-weight:600">₹${sr.srv_stop ?? '–'}</div><div style="color:var(--muted);font-size:9px">STOP</div></div>
+          <div><div style="color:#34d399;font-weight:600">₹${sr.srv_target1 ?? '–'}</div><div style="color:var(--muted);font-size:9px">TARGET</div></div>
+          <div><div style="color:#fff">${sr.srv_rr ?? '–'}</div><div style="color:var(--muted);font-size:9px">R:R</div></div>
+          <div><div style="color:#fff">${sr.srv_level_vol ?? '–'}×</div><div style="color:var(--muted);font-size:9px">LEVEL VOL</div></div>
+          <div><div style="color:#fff">₹${sr.srv_support ?? '–'}</div><div style="color:var(--muted);font-size:9px">LEVEL</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:8px">${sr.srv_reason || ''}</div>
+      </div>`).join('') :
+      '<div style="color:var(--muted);font-size:12px;padding:16px 2px">Nothing is sitting on a volume-backed level with the volume to turn off it. Rare by design — the momentum list below is not filtered by levels.</div>';
+  }
+
   // Top 10 Spotlight Cards (Always top 10 highest swing_score stocks overall, strictly sorted #1 to #10)
   const spotlight = document.getElementById('swingSpotlight');
   if (spotlight) {
-    const top10 = [...allMtf].sort((a, b) => 
+    // A level with real volume behind it outranks a high score with nothing under
+    // it. Within each group the existing ordering is untouched.
+    const top10 = [...allMtf].sort((a, b) =>
+      ((swingSrOf(b) ? 1 : 0) - (swingSrOf(a) ? 1 : 0)) ||
       (b.swing_score || 0) - (a.swing_score || 0) || 
       (b.total_score || 0) - (a.total_score || 0) || 
       (b.rs_rating || 0) - (a.rs_rating || 0) || 
@@ -4351,7 +4404,11 @@ function renderSwingRadar() {
             </div>
           </div>
           <div style="display:flex;gap:6px;margin-top:8px;border-top:1px solid var(--border);padding-top:6px;align-items:center;justify-content:space-between">
-            <div style="font-size:10px;color:var(--muted)">${s.swing_reason||''}</div>
+            <div style="font-size:10px;color:var(--muted)">${(() => {
+              const sr = swingSrOf(s);
+              if (sr) return `◆ at ${sr.srv_level_kind || 'support'} ₹${sr.srv_support ?? '–'} · level built on ${sr.srv_level_vol ?? '–'}× volume · R:R ${sr.srv_rr ?? '–'}`;
+              return `<span style="color:#f59e0b">⚠ no volume-backed level</span> · ${s.swing_reason || ''}`;
+            })()}</div>
             <div style="display:flex;gap:4px">
               <button class="btn-add" onclick="event.stopPropagation();openSwingCalcModal('${s.symbol}')" style="padding:3px 8px;font-size:10px;background:var(--card2)">🧮 Calc</button>
               <button class="btn-add" onclick="event.stopPropagation();addToWatchlist('${s.symbol}')" style="padding:3px 8px;font-size:10px;background:linear-gradient(135deg,#00d4aa,#10b981);color:#06060f;font-weight:700">⭐ +WL</button>
@@ -9012,6 +9069,23 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
     penny_monthly = get_or_refresh_monthly_penny_picks(screener_results, top_n=20, monthly_sip=200.0)
     penny_stocks_data = penny_monthly["picks"]
     intraday_data = intraday_picks_with_1h_sr(screener_results, top_n=5)
+
+    # Which swing names actually have a volume-backed level under them. 61 of the
+    # 465 qualifying stocks score a perfect 100/100 setup and 37 of those carry no
+    # S/R signal at all, so the radar's own score cannot separate them.
+    try:
+        swing_sr_map = {
+            sym: {k: sig.get(k) for k in
+                  ("srv_signal", "srv_strength", "srv_support", "srv_resistance",
+                   "srv_entry", "srv_stop", "srv_target1", "srv_rr", "srv_level_kind",
+                   "srv_level_vol", "srv_reason")}
+            for sym, sig in scan_sr_volume_signals(
+                screener_results, gates=SR_PROFILES["swing"]).items()
+            if sig.get("srv_signal") in SWING_SR_SIDES
+        }
+    except Exception as e:
+        log(f"⚠ Swing S/R map unavailable: {e}")
+        swing_sr_map = {}
     monthly_lt_data = get_or_refresh_monthly_lt_picks(screener_results, lt_watchlist)
     lt_summary = get_lt_portfolio_summary(screener_results)
 
@@ -9029,6 +9103,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "__FNO_JSON__": json.dumps(fno_data or [], ensure_ascii=False, default=json_serializer),
         "__PENNY_STOCKS_JSON__": json.dumps(penny_stocks_data, ensure_ascii=False, default=json_serializer),
         "__INTRADAY_JSON__": json.dumps(intraday_data, ensure_ascii=False, default=json_serializer),
+        "__SWING_SR_JSON__": json.dumps(swing_sr_map, ensure_ascii=False, default=json_serializer),
         "__LT_MONTHLY_JSON__": json.dumps(monthly_lt_data, ensure_ascii=False, default=json_serializer),
         "__LT_PORTFOLIO_SUMMARY_JSON__": json.dumps(lt_summary, ensure_ascii=False, default=json_serializer),
         # Trend vocabulary comes from screener_engine.TREND_STATES so the filter
@@ -9084,6 +9159,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "let FNO_DATA = __FNO_JSON__;\n"
         "let PENNY_STOCKS_DATA = __PENNY_STOCKS_JSON__;\n"
         "let INTRADAY_DATA = __INTRADAY_JSON__;\n"
+        "let SWING_SR = __SWING_SR_JSON__;\n"
         "let LT_MONTHLY_PICKS = __LT_MONTHLY_JSON__;\n"
         "let LT_PORTFOLIO_SUMMARY = __LT_PORTFOLIO_SUMMARY_JSON__;\n"
         "let TREND_CONFIG = __TREND_STATES_JSON__;"
@@ -9103,6 +9179,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "var FNO_DATA = [];\n"
         "var PENNY_STOCKS_DATA = [];\n"
         "var INTRADAY_DATA = {};\n"
+        "var SWING_SR = {};\n"
         "var LT_MONTHLY_PICKS = {};\n"
         "var LT_PORTFOLIO_SUMMARY = {};\n"
         "var TREND_CONFIG = { states: {}, uptrend: [], downtrend: '' };"
@@ -9151,6 +9228,9 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         f"var FNO_DATA = {replacements['__FNO_JSON__']};\n"
         f"var PENNY_STOCKS_DATA = {replacements['__PENNY_STOCKS_JSON__']};\n"
         f"var INTRADAY_DATA = {replacements['__INTRADAY_JSON__']};\n"
+        # Without this the swing radar keeps app.js's empty default, so every stock
+        # reads as having no level behind it and the S/R section renders empty.
+        f"var SWING_SR = {replacements['__SWING_SR_JSON__']};\n"
         f"var LT_MONTHLY_PICKS = {replacements['__LT_MONTHLY_JSON__']};\n"
         f"var LT_PORTFOLIO_SUMMARY = {replacements['__LT_PORTFOLIO_SUMMARY_JSON__']};\n"
         # Without this the page keeps app.js's empty default, so every trend badge

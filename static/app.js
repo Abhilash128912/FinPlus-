@@ -9,9 +9,19 @@ var MARKET_INFO = {};
 var FNO_DATA = [];
 var PENNY_STOCKS_DATA = [];
 var INTRADAY_DATA = {};
+var SWING_SR = {};
 var LT_MONTHLY_PICKS = {};
 var LT_PORTFOLIO_SUMMARY = {};
 var TREND_CONFIG = { states: {}, uptrend: [], downtrend: '' };
+
+// Volume-backed S/R verdicts, keyed by symbol. Only stocks with a real level
+// behind them appear; the swing radar's own score says nothing about levels, so
+// without this a stock with no level reads identically to one sitting on a level
+// that heavy volume built. Declared outside the data block above, which the asset
+// splitter matches verbatim.
+function swingSrOf(s) {
+  return (s && s.symbol && typeof SWING_SR !== 'undefined') ? (SWING_SR[s.symbol] || null) : null;
+}
 
 // Resolve a trend's badge class from the table the Python classifier owns
 // (screener_engine.TREND_STATES), so the UI can never label a state the engine
@@ -444,10 +454,42 @@ function renderSwingRadar() {
     rcEl.textContent = `Showing ${sorted.length} swing stocks matching current preset${filterNotice}`;
   }
 
+  // Volume-backed S/R setups. Same model and same card shape as the intraday tab,
+  // so a setup reads identically wherever it appears.
+  const srBox = document.getElementById('swingSrSetups');
+  if (srBox) {
+    const srRows = Object.keys(SWING_SR)
+      .map(sym => ({ sym, sr: SWING_SR[sym], row: allMtf.find(x => x.symbol === sym) }))
+      .filter(x => x.sr && x.sr.srv_signal === 'BUY')
+      .sort((a, b) => (b.sr.srv_strength || 0) - (a.sr.srv_strength || 0));
+    srBox.innerHTML = srRows.length ? srRows.map(({ sym, sr, row }) => `
+      <div style="background:var(--card);border:1px solid #10b98155;border-radius:12px;padding:12px">
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <div style="font-size:15px;font-weight:700;color:#fff">${sym}</div>
+          <div style="font-size:10px;color:#34d399;border:1px solid #10b98155;border-radius:8px;padding:2px 7px">BUY ◆ ${(sr.srv_level_kind||'support').toUpperCase()}</div>
+          <div style="margin-left:auto;font-size:12px;color:var(--muted)">${(sr.srv_strength||0).toFixed(0)}/100</div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin:2px 0 8px">${((row&&row.name)||'').substring(0,32)}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px">
+          <div><div style="color:#fff;font-weight:600">₹${sr.srv_entry ?? '–'}</div><div style="color:var(--muted);font-size:9px">ENTRY</div></div>
+          <div><div style="color:#f87171;font-weight:600">₹${sr.srv_stop ?? '–'}</div><div style="color:var(--muted);font-size:9px">STOP</div></div>
+          <div><div style="color:#34d399;font-weight:600">₹${sr.srv_target1 ?? '–'}</div><div style="color:var(--muted);font-size:9px">TARGET</div></div>
+          <div><div style="color:#fff">${sr.srv_rr ?? '–'}</div><div style="color:var(--muted);font-size:9px">R:R</div></div>
+          <div><div style="color:#fff">${sr.srv_level_vol ?? '–'}×</div><div style="color:var(--muted);font-size:9px">LEVEL VOL</div></div>
+          <div><div style="color:#fff">₹${sr.srv_support ?? '–'}</div><div style="color:var(--muted);font-size:9px">LEVEL</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:8px">${sr.srv_reason || ''}</div>
+      </div>`).join('') :
+      '<div style="color:var(--muted);font-size:12px;padding:16px 2px">Nothing is sitting on a volume-backed level with the volume to turn off it. Rare by design — the momentum list below is not filtered by levels.</div>';
+  }
+
   // Top 10 Spotlight Cards (Always top 10 highest swing_score stocks overall, strictly sorted #1 to #10)
   const spotlight = document.getElementById('swingSpotlight');
   if (spotlight) {
-    const top10 = [...allMtf].sort((a, b) => 
+    // A level with real volume behind it outranks a high score with nothing under
+    // it. Within each group the existing ordering is untouched.
+    const top10 = [...allMtf].sort((a, b) =>
+      ((swingSrOf(b) ? 1 : 0) - (swingSrOf(a) ? 1 : 0)) ||
       (b.swing_score || 0) - (a.swing_score || 0) || 
       (b.total_score || 0) - (a.total_score || 0) || 
       (b.rs_rating || 0) - (a.rs_rating || 0) || 
@@ -520,7 +562,11 @@ function renderSwingRadar() {
             </div>
           </div>
           <div style="display:flex;gap:6px;margin-top:8px;border-top:1px solid var(--border);padding-top:6px;align-items:center;justify-content:space-between">
-            <div style="font-size:10px;color:var(--muted)">${s.swing_reason||''}</div>
+            <div style="font-size:10px;color:var(--muted)">${(() => {
+              const sr = swingSrOf(s);
+              if (sr) return `◆ at ${sr.srv_level_kind || 'support'} ₹${sr.srv_support ?? '–'} · level built on ${sr.srv_level_vol ?? '–'}× volume · R:R ${sr.srv_rr ?? '–'}`;
+              return `<span style="color:#f59e0b">⚠ no volume-backed level</span> · ${s.swing_reason || ''}`;
+            })()}</div>
             <div style="display:flex;gap:4px">
               <button class="btn-add" onclick="event.stopPropagation();openSwingCalcModal('${s.symbol}')" style="padding:3px 8px;font-size:10px;background:var(--card2)">🧮 Calc</button>
               <button class="btn-add" onclick="event.stopPropagation();addToWatchlist('${s.symbol}')" style="padding:3px 8px;font-size:10px;background:linear-gradient(135deg,#00d4aa,#10b981);color:#06060f;font-weight:700">⭐ +WL</button>
