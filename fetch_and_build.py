@@ -95,10 +95,36 @@ WWW_JSON_FILE = os.path.join(BASE_DIR, "www", "screener_data.json")
 BUNDLE_WEB_ASSETS = os.environ.get("SCREENER_BUNDLE_WEB_ASSETS", "").strip().lower() in ("1", "true", "yes")
 
 
+SCAN_META_FILE = os.path.join(BASE_DIR, "scan_meta.json")
+
+
+def read_scan_completed_at() -> str:
+    """When the data on disk was actually scanned, as an IST string, or ''."""
+    try:
+        with open(SCAN_META_FILE, encoding="utf-8") as f:
+            return json.load(f).get("completed_at_ist", "")
+    except Exception:
+        return ""
+
+
 def write_scan_json(clean_results) -> None:
-    """Write screener_data.json, and the www/ copy only when bundling is enabled."""
+    """Write screener_data.json, its scan stamp, and the www/ copy when bundling.
+
+    The stamp travels with the data because the page needs to report when the scan
+    ran, not when the page was built. Those are the same thing on the laptop and
+    wildly different on Render, which rebuilds from committed data at boot and was
+    therefore stamping every deploy as a fresh scan.
+    """
     with open(OUT_JSON_FILE, "w", encoding="utf-8") as f:
         json.dump(clean_results, f, default=json_serializer)
+    try:
+        atomic_write_file(SCAN_META_FILE, json.dumps({
+            "completed_at_ist": datetime.datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
+            "completed_at_iso": datetime.datetime.now(IST).isoformat(),
+            "rows": len(clean_results),
+        }, indent=2))
+    except Exception as e:
+        log(f"  ⚠ Could not write scan stamp: {e}")
     if BUNDLE_WEB_ASSETS:
         with open(WWW_JSON_FILE, "w", encoding="utf-8") as f:
             json.dump(clean_results, f, default=json_serializer)
@@ -419,7 +445,7 @@ def publish_mobile_html(screener_results: list, lt_watchlist: list, mkt_info: di
         penny = get_or_refresh_monthly_penny_picks(screener_results, top_n=20, monthly_sip=200.0)["picks"]
         payload, symbols, per_tab = mobile_view.build_mobile_payload(
             intraday, swing, penny, lt_watchlist, mkt_info,
-            datetime.datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
+            read_scan_completed_at() or datetime.datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
             swing_sr=swing_sr,
         )
         over = {k: v for k, v in per_tab.items() if v > mobile_view.TAB_SYMBOL_BUDGET}
@@ -8977,7 +9003,11 @@ def get_or_refresh_monthly_lt_picks(screener_results: list[dict], lt_watchlist: 
 
 
 def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist: list[dict], commodity_signals: dict, mkt_info: dict, fno_data: list[dict] | None = None) -> str:
-    run_time = datetime.datetime.now(IST).strftime("%d %b %Y, %I:%M %p")
+    # When the scan ran, not when this page was built. Render rebuilds from
+    # committed data on every deploy, so building-time stamped a two-hour-old
+    # dataset as "Last scan: 11:58 AM" -- the page looked fresh precisely when it
+    # was not. Falls back to build time only when no stamp exists at all.
+    run_time = read_scan_completed_at() or datetime.datetime.now(IST).strftime("%d %b %Y, %I:%M %p")
 
     penny_monthly = get_or_refresh_monthly_penny_picks(screener_results, top_n=20, monthly_sip=200.0)
     penny_stocks_data = penny_monthly["picks"]
