@@ -388,7 +388,7 @@ def publish_mobile_html(screener_results: list, lt_watchlist: list, mkt_info: di
     both are written from the same in-memory results in the same pass.
     """
     try:
-        intraday = compute_intraday_picks(screener_results, top_n=5)
+        intraday = intraday_picks_with_1h_sr(screener_results, top_n=5)
         swing = compute_swing_picks(screener_results, top_n=MOBILE_SWING_TOP_N)
         penny = get_or_refresh_monthly_penny_picks(screener_results, top_n=20, monthly_sip=200.0)["picks"]
         payload, symbols, per_tab = mobile_view.build_mobile_payload(
@@ -8215,6 +8215,78 @@ def fetch_1h_history_cffi(ticker: str, days: int = 60) -> pd.DataFrame:
     return pd.DataFrame()
 
 
+# 1h ChartPrime boxes, cached per ticker. Both the desktop page and the mobile view
+# build their own intraday picks, so without this the same ten tickers get fetched
+# twice per publish; the TTL also spans the hourly rebuild, where 1h candles cannot
+# have changed more than once anyway.
+_SR1H_CACHE: dict = {}
+_SR1H_TTL_SEC = 900.0
+
+
+def one_hour_sr_boxes(ticker: str) -> dict:
+    """ChartPrime high-volume S/R boxes computed on 1-hour candles.
+
+    The daily boxes already ride along on every scored row (score_stock calls the
+    same function on daily history). Intraday needs the levels the hour is actually
+    trading against, which are genuinely different -- on HAVELLS the 1h boxes show a
+    support bounce the daily boxes do not.
+
+    Namespaced sr1h_* so it cannot collide with the daily box fields or with
+    detect_sr_breaks_and_retests' sr_* fields, which are a separate model.
+    """
+    now = time.time()
+    hit = _SR1H_CACHE.get(ticker)
+    if hit and (now - hit[0]) < _SR1H_TTL_SEC:
+        return hit[1]
+
+    out = {"sr1h_available": False}
+    try:
+        from screener_engine import calc_chartprime_sr_high_volume_boxes
+        df_1h = fetch_1h_history_cffi(ticker, days=60)
+        if df_1h is not None and not df_1h.empty and len(df_1h) >= 30:
+            cp = calc_chartprime_sr_high_volume_boxes(df_1h)
+            if cp.get("support_level") is not None:
+                out = {
+                    "sr1h_available": True,
+                    "sr1h_support": cp.get("support_level"),
+                    "sr1h_support_low": cp.get("support_level_1"),
+                    "sr1h_resistance": cp.get("resistance_level"),
+                    "sr1h_resistance_high": cp.get("resistance_level_1"),
+                    "sr1h_sup_holds": bool(cp.get("sup_holds")),
+                    "sr1h_brekout_res": bool(cp.get("brekout_res")),
+                    "sr1h_buy_diamond": bool(cp.get("has_buy_diamond")),
+                }
+    except Exception as e:
+        log(f"  ⚠ 1h S/R failed for {ticker}: {e}")
+
+    _SR1H_CACHE[ticker] = (now, out)
+    return out
+
+
+def intraday_picks_with_1h_sr(screener_results: list, top_n: int = 5) -> dict:
+    """Intraday picks with the hour's own S/R levels attached.
+
+    Distances are signed from the trade's point of view: how far price has travelled
+    above support, and how much room is left to resistance. A long with 0.3% of room
+    is a different proposition from one with 4%, and that is invisible without the
+    1h levels -- the daily box is often hours of range away.
+    """
+    picks = compute_intraday_picks(screener_results, top_n=top_n)
+    for side in ("buy", "sell"):
+        for row in picks.get(side) or []:
+            ticker = row.get("ticker") or f"{row.get('symbol', '')}.NS"
+            info = one_hour_sr_boxes(ticker)
+            row.update(info)
+            ltp = row.get("ltp")
+            if info.get("sr1h_available") and ltp:
+                sup, res = info.get("sr1h_support"), info.get("sr1h_resistance")
+                if sup and sup > 0:
+                    row["sr1h_dist_support_pct"] = round((ltp - sup) / sup * 100, 2)
+                if res and res > 0:
+                    row["sr1h_room_to_res_pct"] = round((res - ltp) / ltp * 100, 2)
+    return picks
+
+
 def apply_1h_sr_overlay(scored: dict, ticker: str) -> dict:
     """
     Overlays 1-Hour S/R Breakout detection onto a scored stock dict.
@@ -8587,7 +8659,7 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
 
     penny_monthly = get_or_refresh_monthly_penny_picks(screener_results, top_n=20, monthly_sip=200.0)
     penny_stocks_data = penny_monthly["picks"]
-    intraday_data = compute_intraday_picks(screener_results, top_n=5)
+    intraday_data = intraday_picks_with_1h_sr(screener_results, top_n=5)
     monthly_lt_data = get_or_refresh_monthly_lt_picks(screener_results, lt_watchlist)
     lt_summary = get_lt_portfolio_summary(screener_results)
 

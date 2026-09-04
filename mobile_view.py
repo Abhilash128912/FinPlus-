@@ -33,6 +33,10 @@ SLIM_FIELDS = {
         "symbol", "ticker", "name", "ltp", "prev_close", "day_chg_pct", "direction",
         "stop_loss", "stop_loss_pct", "target1", "target1_pct", "target2",
         "target2_pct", "rsi", "volume_spike", "rs_rating", "rationale", "sector",
+        # 1h ChartPrime boxes -- the levels the hour is actually trading against.
+        "sr1h_available", "sr1h_support", "sr1h_resistance", "sr1h_sup_holds",
+        "sr1h_brekout_res", "sr1h_buy_diamond", "sr1h_dist_support_pct",
+        "sr1h_room_to_res_pct",
     ),
     "swing": (
         "symbol", "ticker", "name", "ltp", "swing_score", "setup_score", "swing_sl",
@@ -233,11 +237,25 @@ function kv(items) {
 }
 
 function cardIntraday(row) {
-  return '<div class="card">' + head(row) +
+  // A 1h support bounce or resistance flip is the diamond the indicator prints;
+  // worth its own mark rather than being buried among the numbers.
+  var dia = row.sr1h_buy_diamond
+    ? '<span class="badge g">' + (row.sr1h_sup_holds ? '◆ 1H SUP' : '◆ 1H FLIP') + '</span>'
+    : '';
+  var sr = '';
+  if (row.sr1h_available) {
+    sr = kv([['1H Sup', '₹' + n(row.sr1h_support)],
+             ['1H Res', '₹' + n(row.sr1h_resistance)],
+             ['Above sup', row.sr1h_dist_support_pct != null ? n(row.sr1h_dist_support_pct, 1) + '%' : '—'],
+             ['Room to res', row.sr1h_room_to_res_pct != null ? n(row.sr1h_room_to_res_pct, 1) + '%' : '—']]);
+  }
+  return '<div class="card">' + head(row, dia) +
     kv([['Stop', '₹' + n(row.stop_loss)], ['T1', '₹' + n(row.target1)],
         ['T2', '₹' + n(row.target2)], ['RSI', n(row.rsi, 1)],
         ['Vol×', n(row.volume_spike, 2)], ['RS', row.rs_rating != null ? row.rs_rating : '—']]) +
+    sr +
     (row.rationale ? '<div class="why">' + esc(row.rationale) + '</div>' : '') +
+    (row.sr1h_available ? '' : '<div class="why">1H S/R unavailable for this symbol.</div>') +
     '</div>';
 }
 
