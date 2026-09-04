@@ -1,5 +1,90 @@
 {
-  "positions": [],
+  "positions": [
+    {
+      "id": "pos_1788548077313_0_panamapet",
+      "ticker": "PANAMAPET",
+      "name": "Panama Petrochem Ltd",
+      "segment": "LT",
+      "shares": 1,
+      "buyPrice": 485.35,
+      "buyDate": "2026-09-04",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": "Imported from INDmoney holdings"
+    },
+    {
+      "id": "pos_1788548077313_1_drcsystems",
+      "ticker": "DRCSYSTEMS",
+      "name": "DRC Systems India Ltd",
+      "segment": "LT",
+      "shares": 11,
+      "buyPrice": 13.69,
+      "buyDate": "2026-09-04",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": "Imported from INDmoney holdings"
+    },
+    {
+      "id": "pos_1788548077313_2_sigma",
+      "ticker": "SIGMA",
+      "name": "Sigma Solve Ltd",
+      "segment": "LT",
+      "shares": 4,
+      "buyPrice": 47.2,
+      "buyDate": "2026-09-04",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": "Imported from INDmoney holdings"
+    },
+    {
+      "id": "pos_1788548077313_3_uyfincorp",
+      "ticker": "UYFINCORP",
+      "name": "U. Y. Fincorp Ltd",
+      "segment": "LT",
+      "shares": 10,
+      "buyPrice": 20.0,
+      "buyDate": "2026-09-04",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": "Imported from INDmoney holdings"
+    },
+    {
+      "id": "pos_1788548077313_4_ashokley",
+      "ticker": "ASHOKLEY",
+      "name": "Ashok Leyland Ltd",
+      "segment": "LT",
+      "shares": 1,
+      "buyPrice": 171.73,
+      "buyDate": "2026-09-04",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": "Imported from INDmoney holdings"
+    },
+    {
+      "id": "pos_1788548077313_5_bel",
+      "ticker": "BEL",
+      "name": "Bharat Electronics Ltd",
+      "segment": "LT",
+      "shares": 1,
+      "buyPrice": 409.0,
+      "buyDate": "2026-09-04",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": "Imported from INDmoney holdings"
+    },
+    {
+      "id": "pos_1788548077313_6_federalbnk",
+      "ticker": "FEDERALBNK",
+      "name": "Federal Bank Ltd",
+      "segment": "LT",
+      "shares": 1,
+      "buyPrice": 356.45,
+      "buyDate": "2026-09-04",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": "Imported from INDmoney holdings"
+    }
+  ],
   "capitalLedger": [],
   "soldHistory": [],
   "brokerAdjustments": [],
@@ -16,5 +101,5 @@
     "penny": 10
   },
   "isFreshStart": true,
-  "savedAt": 1788530903144
+  "savedAt": 1788548077313
 }
