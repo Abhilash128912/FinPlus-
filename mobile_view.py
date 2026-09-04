@@ -37,12 +37,18 @@ SLIM_FIELDS = {
         "sr1h_available", "sr1h_support", "sr1h_resistance", "sr1h_sup_holds",
         "sr1h_brekout_res", "sr1h_buy_diamond", "sr1h_dist_support_pct",
         "sr1h_room_to_res_pct",
+        "srv_signal", "srv_strength", "srv_support", "srv_resistance", "srv_entry",
+        "srv_stop", "srv_target1", "srv_level_target", "srv_risk_pct",
+        "srv_reward_pct", "srv_rr", "srv_reason", "srv_vol_ratio",
     ),
     "swing": (
         "symbol", "ticker", "name", "ltp", "swing_score", "setup_score", "swing_sl",
         "swing_sl_pct", "swing_t1", "swing_t1_pct", "swing_t2", "swing_t2_pct",
         "swing_badge", "swing_class", "swing_reason", "rs_rating", "trend",
         "trend_class", "cap_category", "sector",
+        "srv_signal", "srv_strength", "srv_support", "srv_resistance", "srv_entry",
+        "srv_stop", "srv_target1", "srv_level_target", "srv_risk_pct",
+        "srv_reward_pct", "srv_rr", "srv_reason", "srv_vol_ratio",
     ),
     "penny": (
         "symbol", "ticker", "name", "ltp", "status", "status_badge",
@@ -71,7 +77,8 @@ def _slim(rows, kind):
     return [{k: r.get(k) for k in fields if r.get(k) is not None} for r in (rows or [])]
 
 
-def build_mobile_payload(intraday, swing, penny, lt_watchlist, mkt_info, run_time):
+def build_mobile_payload(intraday, swing, penny, lt_watchlist, mkt_info, run_time,
+                         swing_sr=None):
     """Slim the four suggestion sets into what the mobile page renders.
 
     Returns (payload, symbols, per_tab). `symbols` is every unique ticker the page
@@ -89,8 +96,10 @@ def build_mobile_payload(intraday, swing, penny, lt_watchlist, mkt_info, run_tim
             "intraday": {
                 "buy": _slim((intraday or {}).get("buy"), "intraday"),
                 "sell": _slim((intraday or {}).get("sell"), "intraday"),
+                "sr": _slim((intraday or {}).get("sr"), "intraday"),
             },
             "swing": _slim(swing, "swing"),
+            "swing_sr": _slim(swing_sr, "swing"),
             "penny": _slim(penny, "penny"),
             "lt": _slim(lt_watchlist, "lt"),
         },
@@ -109,8 +118,10 @@ def build_mobile_payload(intraday, swing, penny, lt_watchlist, mkt_info, run_tim
     # Per tab, because that is the unit a single /api/ltp request is built from.
     per_tab = {
         "intraday": len(set(note(payload["tabs"]["intraday"]["buy"]) +
-                            note(payload["tabs"]["intraday"]["sell"]))),
-        "swing": len(set(note(payload["tabs"]["swing"]))),
+                            note(payload["tabs"]["intraday"]["sell"]) +
+                            note(payload["tabs"]["intraday"]["sr"]))),
+        "swing": len(set(note(payload["tabs"]["swing"]) +
+                         note(payload["tabs"]["swing_sr"]))),
         "penny": len(set(note(payload["tabs"]["penny"]))),
         "lt": len(set(note(payload["tabs"]["lt"]))),
     }
@@ -236,6 +247,22 @@ function kv(items) {
   return out.length ? '<div class="grid">' + out.join('') + '</div>' : '';
 }
 
+function cardSr(row) {
+  var isBuy = row.srv_signal === 'BUY';
+  var tag = '<span class="badge ' + (isBuy ? 'g' : 'r') + '">' + esc(row.srv_signal) + ' ◆</span>';
+  var lvlNote = (row.srv_level_target != null && row.srv_target1 != null
+                 && Math.abs(row.srv_level_target - row.srv_target1) > 0.01)
+    ? '<div class="why">Target capped for the day; the level itself sits at ₹'
+      + n(row.srv_level_target) + '.</div>' : '';
+  return '<div class="card">' + head(row, tag) +
+    kv([['Entry', '₹' + n(row.srv_entry)], ['Stop', '₹' + n(row.srv_stop)],
+        ['Target', '₹' + n(row.srv_target1)],
+        ['Risk', n(row.srv_risk_pct, 2) + '%'], ['Reward', n(row.srv_reward_pct, 2) + '%'],
+        ['R:R', n(row.srv_rr, 2)]]) +
+    (row.srv_reason ? '<div class="why">' + esc(row.srv_reason) + '</div>' : '') +
+    lvlNote + '</div>';
+}
+
 function cardIntraday(row) {
   // A 1h support bounce or resistance flip is the diamond the indicator prints;
   // worth its own mark rather than being buried among the numbers.
@@ -262,11 +289,14 @@ function cardIntraday(row) {
 function cardSwing(row) {
   var b = row.swing_badge ? '<span class="badge ' + badgeClass(row.swing_class || row.swing_badge) +
     '">' + esc(row.swing_badge) + '</span>' : '';
+  // Swing is buy-only by design: no sell-and-hold in the cash segment.
+  if (row.srv_signal === 'BUY') b += ' <span class="badge g">◆ AT SUPPORT</span>';
   return '<div class="card">' + head(row, b) +
     kv([['Setup', n(row.setup_score, 0)], ['Swing', n(row.swing_score, 0)],
         ['Stop', '₹' + n(row.swing_sl)], ['T1', '₹' + n(row.swing_t1)],
         ['T2', '₹' + n(row.swing_t2)], ['RS', row.rs_rating != null ? row.rs_rating : '—']]) +
     (row.swing_reason ? '<div class="why">' + esc(row.swing_reason) + '</div>' : '') +
+    (row.srv_signal === 'BUY' && row.srv_reason ? '<div class="why">' + esc(row.srv_reason) + '</div>' : '') +
     '</div>';
 }
 
@@ -295,7 +325,8 @@ function cardLt(row) {
 
 function tabCount(key) {
   var t = DATA.tabs[key];
-  if (key === 'intraday') return (t.buy || []).length + (t.sell || []).length;
+  if (key === 'intraday') return (t.buy || []).length + (t.sell || []).length + (t.sr || []).length;
+  if (key === 'swing') return (t || []).length + (DATA.tabs.swing_sr || []).length;
   return (t || []).length;
 }
 
@@ -315,9 +346,22 @@ function render() {
       (buy.length ? buy.map(cardIntraday).join('') : '<div class="empty">No long setups cleared the gates today.</div>');
     html += '<div class="sub">Sell · short</div>' +
       (sell.length ? sell.map(cardIntraday).join('') : '<div class="empty">No short setups cleared the gates today.</div>');
+    var sr = t.sr || [];
+    html += '<div class="sub">Volume S/R setups</div>' +
+      (sr.length ? sr.map(cardSr).join('')
+                 : '<div class="empty">No stock is sitting on a volume-backed level with the '
+                   + 'volume to turn off it and a worthwhile risk/reward. Rare by design.</div>');
+  } else if (active === 'swing') {
+    var srb = DATA.tabs.swing_sr || [];
+    html += '<div class="sub">At a volume-backed support · buy only</div>' +
+      (srb.length ? srb.map(cardSr).join('')
+                  : '<div class="empty">Nothing is sitting on a volume-backed support with the '
+                    + 'volume to turn off it. Rare by design.</div>');
+    html += '<div class="sub">Ranked swing candidates</div>' +
+      ((t || []).length ? t.map(cardSwing).join('') : '<div class="empty">Nothing here right now.</div>');
   } else {
     var rows = t || [];
-    var card = active === 'swing' ? cardSwing : active === 'penny' ? cardPenny : cardLt;
+    var card = active === 'penny' ? cardPenny : cardLt;
     html = rows.length ? rows.map(card).join('') : '<div class="empty">Nothing here right now.</div>';
   }
   document.getElementById('view').innerHTML = html;

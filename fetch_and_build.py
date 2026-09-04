@@ -390,10 +390,37 @@ def publish_mobile_html(screener_results: list, lt_watchlist: list, mkt_info: di
     try:
         intraday = intraday_picks_with_1h_sr(screener_results, top_n=5)
         swing = compute_swing_picks(screener_results, top_n=MOBILE_SWING_TOP_N)
+
+        # Volume-backed S/R setups, scanned once and shared by both tabs.
+        sr_intra = scan_sr_volume_signals(screener_results, gates=SR_PROFILES["intraday"])
+        sr_swing = scan_sr_volume_signals(screener_results, gates=SR_PROFILES["swing"])
+        by_symbol = {s.get("symbol"): s for s in screener_results}
+
+        sr_rows = []
+        for sym, sig in sorted(sr_intra.items(), key=lambda kv: -kv[1]["srv_strength"]):
+            if sig["srv_signal"] not in INTRADAY_SR_SIDES:
+                continue
+            row = dict(by_symbol.get(sym) or {"symbol": sym})
+            row.update(sig)
+            sr_rows.append(row)
+        intraday["sr"] = sr_rows
+
+        # Swing carries the signal on the row it belongs to, buy-only.
+        # A dedicated group rather than annotations on the ranked list: the swing
+        # top-40 is ordered by swing_score, and today none of its members happened
+        # to be sitting on a level, so annotation alone would have shown nothing.
+        swing_sr = []
+        for sym, sig in sorted(sr_swing.items(), key=lambda kv: -kv[1]["srv_strength"]):
+            if sig["srv_signal"] not in SWING_SR_SIDES:
+                continue
+            row = dict(by_symbol.get(sym) or {"symbol": sym})
+            row.update(sig)
+            swing_sr.append(row)
         penny = get_or_refresh_monthly_penny_picks(screener_results, top_n=20, monthly_sip=200.0)["picks"]
         payload, symbols, per_tab = mobile_view.build_mobile_payload(
             intraday, swing, penny, lt_watchlist, mkt_info,
             datetime.datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
+            swing_sr=swing_sr,
         )
         over = {k: v for k, v in per_tab.items() if v > mobile_view.TAB_SYMBOL_BUDGET}
         if over:
@@ -8260,6 +8287,69 @@ def one_hour_sr_boxes(ticker: str) -> dict:
         log(f"  ⚠ 1h S/R failed for {ticker}: {e}")
 
     _SR1H_CACHE[ticker] = (now, out)
+    return out
+
+
+# Trade geometry per horizon. The model is the same; what differs is what each
+# horizon can absorb. Intraday must square off the same day, so the stop stays
+# tight and the target is capped at a distance a day can actually travel. Swing
+# holds for days, so it can wear a wider stop and run to the level itself.
+#
+# Swing is buy-only: Indian cash-segment delivery has no sell-and-hold, so a short
+# signal there would be untradeable however good the setup.
+SR_PROFILES: dict = {
+    "intraday": {"max_stop_pct": 2.5, "min_reward_risk": 1.5, "max_target_pct": 3.0},
+    "swing": {"max_stop_pct": 8.0, "min_reward_risk": 1.5},
+}
+SWING_SR_SIDES = ("BUY",)
+INTRADAY_SR_SIDES = ("BUY", "SELL")
+
+
+def scan_sr_volume_signals(screener_results: list, max_symbols: int = 500,
+                           workers: int = 16, gates: dict = None) -> dict:
+    """Run the volume-backed S/R model over the intraday-qualifying universe on 1h.
+
+    Scanning a shortlist is not enough: the setup is rare by construction. Across
+    100 of the most liquid names, 69 had a volume-backed support beneath them but
+    only 8 had touched it recently, and 25 carried the volume to confirm a turn --
+    an intersection of one or two. The signal density is real, so the way to fill
+    an intraday list is to look at the whole qualifying universe rather than to
+    loosen the model until a shortlist produces enough.
+
+    Bounded by max_symbols on traded value, and fetched in parallel; the per-ticker
+    1h cache means a rebuild inside the TTL costs nothing.
+
+    Returns {symbol: signal_dict} for symbols that produced a BUY or SELL.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    import sr_volume
+    from screener_engine import intraday_candidate_gates_pass
+
+    universe = [s for s in screener_results if intraday_candidate_gates_pass(s)]
+    universe.sort(key=lambda s: -((s.get("ltp") or 0) * (s.get("avg_volume_10d") or 0)))
+    universe = universe[:max_symbols]
+
+    out = {}
+
+    def probe(row):
+        ticker = row.get("ticker") or f"{row.get('symbol', '')}.NS"
+        try:
+            df = fetch_1h_history_cffi(ticker, days=60)
+            sig = sr_volume.compute_signal(df, gates)
+            if sig.get("srv_signal") in ("BUY", "SELL"):
+                return row.get("symbol"), sig
+        except Exception:
+            pass
+        return None
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        for res in ex.map(probe, universe):
+            if res:
+                out[res[0]] = res[1]
+
+    buys = sum(1 for v in out.values() if v["srv_signal"] == "BUY")
+    log(f"  📐 S/R volume scan: {len(universe)} qualifying symbols -> "
+        f"{buys} BUY, {len(out) - buys} SELL")
     return out
 
 

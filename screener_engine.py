@@ -2722,6 +2722,37 @@ def compute_swing_picks(screener_results: list[dict], top_n: int = 40) -> list[d
     return qualifying[:top_n]
 
 
+# ─── Intraday candidate gates ────────────────────────────────────────────────
+# An MIS position must be exitable the same day, which these thresholds encode.
+# Exported so the volume-S/R scan and pick selection share one definition rather
+# than restating the numbers; see intraday_candidate_gates_pass.
+INTRADAY_GATES: dict = {
+    # Rupees traded, not share count: a share floor is blind to price. PRIMO clears
+    # 214,198 shares/day that come to just Rs 0.45 Cr -- a position that size cannot
+    # be exited without moving the price against you.
+    "min_traded_value": 5_00_00_000,
+    "min_price": 20.0,
+}
+
+
+def intraday_candidate_gates_pass(s: dict) -> bool:
+    """True when a scan row can carry an intraday position.
+
+    Circuit exposure is treated as a property of the stock rather than of today's
+    move: MTF-approved names are ones a broker funds margin against, and large/mid
+    caps get dynamic rather than hard bands. A small cap outside both carries fixed
+    5/10/20% bands and can lock with no exit at any price.
+    """
+    g = INTRADAY_GATES
+    ltp = s.get("ltp") or 0
+    if ltp < g["min_price"]:
+        return False
+    if not (s.get("is_mtf") or s.get("is_large_cap") or s.get("is_mid_cap")):
+        return False
+    shares = s.get("avg_volume_10d") or s.get("today_volume") or 0
+    return (ltp * shares) >= g["min_traded_value"]
+
+
 def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict:
     """
     Selects intraday MIS buy (long) and sell (short) candidates for same-day
@@ -2759,14 +2790,6 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
     # floor exists to prevent. ₹5 Cr/day sits near the 10th percentile of names
     # that cleared the old gate, so this tightens the thin tail without gutting
     # the candidate pool.
-    MIN_TRADED_VALUE = 5_00_00_000
-    MIN_PRICE = 20.0
-
-    # NSE circuit bands cluster at 5 / 10 / 20%. A stock pinned just under a band
-    # is about to lock, and a locked stock cannot be exited at any price — the
-    # trap this gate exists to avoid. A move that has already gone *past* a band
-    # is evidence the stock does not have that band, so only the approach zone is
-    # rejected, not everything above it.
     CIRCUIT_BANDS = (5.0, 10.0, 20.0)
     CIRCUIT_APPROACH_PCT = 0.5
 
@@ -2775,39 +2798,14 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
         m = abs(move_pct)
         return any(band - CIRCUIT_APPROACH_PCT <= m <= band for band in CIRCUIT_BANDS)
 
-    def is_circuit_safe_class(s: dict) -> bool:
-        """True for stocks that are not prone to locking at a circuit in the first place.
-
-        Gating on today's move alone was the wrong instrument: it treats a symptom
-        and lets a stock through the moment it moves past a band. BODALCHEM is the
-        worked example -- a ₹1,249 Cr small cap, not MTF-approved, which the
-        day-move rule admitted at +5.31% simply because 5.31 > 5.0, even though its
-        circuit exposure had not changed at all. Its ₹50 Cr turnover that day was
-        also a 4.15x volume spike, not its normal ~₹12 Cr.
-
-        Stock class is the durable signal:
-          - MTF-approved: the broker funds margin against it, which they do not do
-            for names that gap and lock.
-          - Large/mid cap: institutional depth, and dynamic rather than hard bands.
-        A small cap outside both carries fixed 5/10/20% bands and can lock with no
-        exit at any price -- precisely the trap an MIS position cannot survive.
-        """
-        return bool(s.get("is_mtf") or s.get("is_large_cap") or s.get("is_mid_cap"))
-
     buy_candidates = []
     sell_candidates = []
 
     for s in screener_results:
         ltp = s.get("ltp") or 0
-        if ltp < MIN_PRICE:
-            continue
-
-        # Circuit exposure is a property of the stock, not of today's move.
-        if not is_circuit_safe_class(s):
-            continue
-
-        liquidity_shares = s.get("avg_volume_10d") or s.get("today_volume") or 0
-        if ltp * liquidity_shares < MIN_TRADED_VALUE:
+        # Price, circuit class and traded value now live in INTRADAY_GATES so the
+        # S/R scan applies exactly the same bar.
+        if not intraday_candidate_gates_pass(s):
             continue
 
         # prev_close comes from yfinance's `.info` dict upstream (score_stock），
