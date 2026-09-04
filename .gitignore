@@ -18,3 +18,6 @@ backtest_intraday_trades.csv
 nse_list_sync_state.json
 lt_monthly_picks.json
 
+
+# Laptop-local commodity bar history; see MCX_BARS_FILE in fetch_and_build.py
+mcx_bars.json
