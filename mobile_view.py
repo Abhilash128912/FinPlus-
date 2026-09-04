@@ -37,7 +37,7 @@ SLIM_FIELDS = {
         "sr1h_available", "sr1h_support", "sr1h_resistance", "sr1h_sup_holds",
         "sr1h_brekout_res", "sr1h_buy_diamond", "sr1h_dist_support_pct",
         "sr1h_room_to_res_pct",
-        "srv_setup", "srv_pdh", "srv_pdl", "srv_signal", "srv_strength", "srv_support", "srv_resistance", "srv_entry",
+        "srv_setup", "srv_pdh", "srv_pdl", "srv_break_vol_ratio", "srv_signal", "srv_strength", "srv_support", "srv_resistance", "srv_entry",
         "srv_stop", "srv_target1", "srv_level_target", "srv_risk_pct",
         "srv_reward_pct", "srv_rr", "srv_reason", "srv_vol_ratio",
     ),
@@ -46,7 +46,7 @@ SLIM_FIELDS = {
         "swing_sl_pct", "swing_t1", "swing_t1_pct", "swing_t2", "swing_t2_pct",
         "swing_badge", "swing_class", "swing_reason", "rs_rating", "trend",
         "trend_class", "cap_category", "sector",
-        "srv_setup", "srv_pdh", "srv_pdl", "srv_signal", "srv_strength", "srv_support", "srv_resistance", "srv_entry",
+        "srv_setup", "srv_pdh", "srv_pdl", "srv_break_vol_ratio", "srv_signal", "srv_strength", "srv_support", "srv_resistance", "srv_entry",
         "srv_stop", "srv_target1", "srv_level_target", "srv_risk_pct",
         "srv_reward_pct", "srv_rr", "srv_reason", "srv_vol_ratio",
     ),
@@ -262,7 +262,8 @@ function cardSr(row) {
     kv([['Entry', '₹' + n(row.srv_entry)], ['Stop', '₹' + n(row.srv_stop)],
         ['Target', '₹' + n(row.srv_target1)],
         ['Risk', n(row.srv_risk_pct, 2) + '%'], ['Reward', n(row.srv_reward_pct, 2) + '%'],
-        ['R:R', n(row.srv_rr, 2)]]) +
+        ['R:R', n(row.srv_rr, 2)],
+        ['Break vol', row.srv_break_vol_ratio != null ? n(row.srv_break_vol_ratio, 1) + '×' : null]]) +
     (row.srv_reason ? '<div class="why">' + esc(row.srv_reason) + '</div>' : '') +
     lvlNote + '</div>';
 }

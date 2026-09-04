@@ -73,6 +73,13 @@ GATES: dict = {
     # and it flatters reward:risk into meaninglessness -- TATACHEM showed 23.0 on a
     # 0.04% risk. The stop belongs beyond the level by a fraction of a box depth.
     "break_stop_atr": 0.5,
+    # A break with no volume behind it is the fake breakout this whole model exists
+    # to avoid: price slips past a level on nothing and snaps back. Bounces were
+    # gated on volume from the start and breaks were not, which was an omission --
+    # breaks are exactly where the trap lives. Measured on the heaviest completed
+    # hour of the session, since the break itself is what needed participation.
+    # TATACHEM broke 630.00 on 303,146 against a 60,929 average: 4.98x.
+    "min_break_vol_ratio": 1.5,
 }
 
 NO_SIGNAL = {
@@ -415,12 +422,21 @@ def compute_signal(df, gates: dict = None) -> dict:
                 today_closes = c[(days == today).values]
             except Exception:
                 today_closes = c[-1:]
+            # Heaviest completed hour of today, relative to a normal hour.
+            try:
+                today_vols = v[(days == today).values] if hasattr(days == today, "values") else v[days == today]
+                break_vol_ratio = float(np.max(today_vols) / vol_avg) if vol_avg > 0 and len(today_vols) else 0.0
+            except Exception:
+                break_vol_ratio = vol_ratio
+            out["srv_break_vol_ratio"] = round(break_vol_ratio, 2)
+            break_has_vol = break_vol_ratio >= float(g["min_break_vol_ratio"])
+
             closed_below = len(today_closes) > 0 and float(today_closes[-1]) < (pdl or 0)
             closed_above = len(today_closes) > 0 and float(today_closes[-1]) > (pdh or float("inf"))
             reclaimed_up = bool((today_closes > pdl).any()) if pdl is not None else True
             reclaimed_down = bool((today_closes < pdh).any()) if pdh is not None else True
 
-            if pdl and price < pdl and closed_below and not reclaimed_up:
+            if pdl and price < pdl and closed_below and not reclaimed_up and break_has_vol:
                 t_level = support["level"] if support else round(price - depth * 2, 2)
                 entry = round(price, 2)
                 stop = round(pdl + float(g["break_stop_atr"]) * depth, 2)
@@ -429,18 +445,20 @@ def compute_signal(df, gates: dict = None) -> dict:
                 if shape_ok(risk, rr):
                     out.update({
                         "srv_signal": "SELL", "srv_setup": "PDL_BREAK",
-                        "srv_strength": round(min(100.0, 45.0 + (pdl - price) / depth * 25.0), 1),
+                        "srv_strength": round(min(100.0, 35.0
+                                                   + min(35.0, (break_vol_ratio - 1.0) * 20.0)
+                                                   + min(30.0, (pdl - price) / depth * 25.0)), 1),
                         "srv_entry": entry, "srv_stop": stop, "srv_target1": t1,
                         "srv_level_target": round(t_level, 2),
                         "srv_risk_pct": risk, "srv_reward_pct": rew, "srv_rr": rr,
                         "srv_reason": (
-                            f"Below the previous day's low {pdl:.2f}, and no hour today has "
-                            f"closed back above it"
+                            f"Broke the previous day's low {pdl:.2f} on {break_vol_ratio:.1f}x volume "
+                            f"and no hour today has closed back above it"
                         ),
                     })
                     return out
 
-            if pdh and price > pdh and closed_above and not reclaimed_down:
+            if pdh and price > pdh and closed_above and not reclaimed_down and break_has_vol:
                 t_level = resistance["level"] if resistance else round(price + depth * 2, 2)
                 entry = round(price, 2)
                 stop = round(pdh - float(g["break_stop_atr"]) * depth, 2)
@@ -449,13 +467,15 @@ def compute_signal(df, gates: dict = None) -> dict:
                 if shape_ok(risk, rr):
                     out.update({
                         "srv_signal": "BUY", "srv_setup": "PDH_BREAK",
-                        "srv_strength": round(min(100.0, 45.0 + (price - pdh) / depth * 25.0), 1),
+                        "srv_strength": round(min(100.0, 35.0
+                                                   + min(35.0, (break_vol_ratio - 1.0) * 20.0)
+                                                   + min(30.0, (price - pdh) / depth * 25.0)), 1),
                         "srv_entry": entry, "srv_stop": stop, "srv_target1": t1,
                         "srv_level_target": round(t_level, 2),
                         "srv_risk_pct": risk, "srv_reward_pct": rew, "srv_rr": rr,
                         "srv_reason": (
-                            f"Above the previous day's high {pdh:.2f}, and no hour today has "
-                            f"closed back below it"
+                            f"Broke the previous day's high {pdh:.2f} on {break_vol_ratio:.1f}x volume "
+                            f"and no hour today has closed back below it"
                         ),
                     })
                     return out
