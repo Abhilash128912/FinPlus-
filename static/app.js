@@ -35,6 +35,9 @@ let currentPage = 1;
 let pageSize = 50;
 let lastLtpSuccessTime = null;
 let lastLtpError = null;
+// Set from /api/ltp. A scan in flight is a deliberate pause, not a failure, and the
+// badge has to tell them apart or a normal hourly scan reads as a broken feed.
+let ltpPaused = { active: false, resumesInSec: null };
 
 function calculateCurrentMarketStatus() {
   const now = new Date();
@@ -1518,6 +1521,21 @@ function updateLtpBadgeStatus(lastTimeStr, polledCount, attemptedCount, staleCou
     return;
   }
 
+  // A scan suppresses live fetches by design, so every price this cycle is a
+  // scan-time fallback. That is indistinguishable from a failure by counting alone
+  // — both show zero fresh prices — which is why the server sends the reason.
+  // Checked before the failure branch so a pause is never reported as a failure.
+  if (ltpPaused.active) {
+    if (dot) { dot.style.background = '#f59e0b'; dot.style.boxShadow = '0 0 8px #f59e0b'; }
+    const secs = ltpPaused.resumesInSec;
+    const when = (secs != null && secs > 0)
+      ? ` — resumes within ${secs >= 60 ? Math.ceil(secs / 60) + 'm' : secs + 's'}`
+      : ' — resumes when it finishes';
+    const showing = staleCount > 0 ? ` (showing ${staleCount} scan-time prices)` : '';
+    txt.textContent = `⏸ Live LTP Paused: scan in progress${when}${showing}`;
+    return;
+  }
+
   // Only treat this as a real failure once we've actually attempted a cycle and it
   // returned zero fresh prices — before the first cycle runs, attemptedCount is undefined.
   const hasFailed = attemptedCount != null && attemptedCount > 0 && (!polledCount || polledCount === 0);
@@ -1716,6 +1734,9 @@ async function refreshLiveLTP(manual = false) {
 
   const fetchedPrices = new Map();
   const stalePrices = new Set();
+  // Cleared each cycle so "paused" only ever reflects what the server said on this
+  // pass. Left sticky, a pause that ended would keep masking a real failure.
+  ltpPaused = { active: false, resumesInSec: null };
   const tickerList = Array.from(symbolsToPoll.values());
   const attempted = symbolsToPoll.size;
 
@@ -1761,6 +1782,9 @@ async function refreshLiveLTP(manual = false) {
         const data = await res.json();
         const pricesObj = data.ltps || data.prices || {};
         const staleObj = data.stale || {};
+        if (typeof data.paused_for_scan === 'boolean') {
+          ltpPaused = { active: data.paused_for_scan, resumesInSec: data.resumes_in_sec };
+        }
         for (const [sym, ticker] of symbolsToPoll.entries()) {
           const cleanSym = sym.replace('.NS', '');
           const cleanTicker = ticker.replace('.NS', '');
