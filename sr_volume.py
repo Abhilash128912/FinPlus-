@@ -63,6 +63,16 @@ GATES: dict = {
     "min_body_range": 0.40,       # doji filter: body as a share of the bar's range
     "min_close_position": 0.60,   # close must sit in the top 40% of the range (buy)
     "min_turn_atr": 0.25,         # and cover real distance, in box depths
+    # Previous day's high and low. Intraday trades against these constantly and a
+    # 60-day pivot scan cannot see them: TATACHEM spent a session under a 630.00
+    # previous-day low, 1.96% down and never reclaiming it, while its nearest
+    # volume pivot sat at 624.00 -- still below price, so the model said nothing.
+    # A break of the level held through the session is the signal, not a poke.
+    "use_prev_day_levels": False,
+    # A stop exactly on the broken level is a 25-paise stop that any tick reclaims,
+    # and it flatters reward:risk into meaninglessness -- TATACHEM showed 23.0 on a
+    # 0.04% risk. The stop belongs beyond the level by a fraction of a box depth.
+    "break_stop_atr": 0.5,
 }
 
 NO_SIGNAL = {
@@ -180,6 +190,19 @@ def find_volume_levels(o, h, l, c, v, g, price):
     support = max(below, key=lambda x: x["level"]) if below else None
     resistance = min(above, key=lambda x: x["level"]) if above else None
     return support, resistance
+
+
+def previous_day_levels(d):
+    """Previous trading day's high and low, from an intraday frame."""
+    try:
+        days = d.index.normalize()
+        uniq = sorted(set(days))
+        if len(uniq) < 2:
+            return None, None
+        mask = days == uniq[-2]
+        return float(d["High"][mask].max()), float(d["Low"][mask].min())
+    except Exception:
+        return None, None
 
 
 def atr_depth(h, l, c, g):
@@ -370,6 +393,72 @@ def compute_signal(df, gates: dict = None) -> dict:
                     ),
                 })
                 return out
+
+        # Previous-day levels, checked after the volume boxes: a break that has held
+        # through the session is a position, and requiring a decisive bar right now
+        # would miss it, because the break may be hours old and price merely
+        # drifting since -- which is the setup, not a disqualification.
+        if g.get("use_prev_day_levels"):
+            pdh, pdl = previous_day_levels(d)
+            out["srv_pdh"] = round(pdh, 2) if pdh else None
+            out["srv_pdl"] = round(pdl, 2) if pdl else None
+
+            # Confirmation is a close beyond the level, not a distance past it: an
+            # arbitrary percentage buffer rejected TATACHEM's genuine break by
+            # 0.04%. "Not reclaimed" is judged on today's closes only -- the
+            # rolling window used first reached back into the previous session and
+            # compared against 646.00, that day's own high, so a break could never
+            # qualify.
+            try:
+                days = d.index.normalize()
+                today = sorted(set(days))[-1]
+                today_closes = c[(days == today).values]
+            except Exception:
+                today_closes = c[-1:]
+            closed_below = len(today_closes) > 0 and float(today_closes[-1]) < (pdl or 0)
+            closed_above = len(today_closes) > 0 and float(today_closes[-1]) > (pdh or float("inf"))
+            reclaimed_up = bool((today_closes > pdl).any()) if pdl is not None else True
+            reclaimed_down = bool((today_closes < pdh).any()) if pdh is not None else True
+
+            if pdl and price < pdl and closed_below and not reclaimed_up:
+                t_level = support["level"] if support else round(price - depth * 2, 2)
+                entry = round(price, 2)
+                stop = round(pdl + float(g["break_stop_atr"]) * depth, 2)
+                t1 = cap_target(entry, round(t_level, 2), False)
+                risk, rew, rr = trade_shape(entry, stop, t1)
+                if shape_ok(risk, rr):
+                    out.update({
+                        "srv_signal": "SELL", "srv_setup": "PDL_BREAK",
+                        "srv_strength": round(min(100.0, 45.0 + (pdl - price) / depth * 25.0), 1),
+                        "srv_entry": entry, "srv_stop": stop, "srv_target1": t1,
+                        "srv_level_target": round(t_level, 2),
+                        "srv_risk_pct": risk, "srv_reward_pct": rew, "srv_rr": rr,
+                        "srv_reason": (
+                            f"Below the previous day's low {pdl:.2f}, and no hour today has "
+                            f"closed back above it"
+                        ),
+                    })
+                    return out
+
+            if pdh and price > pdh and closed_above and not reclaimed_down:
+                t_level = resistance["level"] if resistance else round(price + depth * 2, 2)
+                entry = round(price, 2)
+                stop = round(pdh - float(g["break_stop_atr"]) * depth, 2)
+                t1 = cap_target(entry, round(t_level, 2), True)
+                risk, rew, rr = trade_shape(entry, stop, t1)
+                if shape_ok(risk, rr):
+                    out.update({
+                        "srv_signal": "BUY", "srv_setup": "PDH_BREAK",
+                        "srv_strength": round(min(100.0, 45.0 + (price - pdh) / depth * 25.0), 1),
+                        "srv_entry": entry, "srv_stop": stop, "srv_target1": t1,
+                        "srv_level_target": round(t_level, 2),
+                        "srv_risk_pct": risk, "srv_reward_pct": rew, "srv_rr": rr,
+                        "srv_reason": (
+                            f"Above the previous day's high {pdh:.2f}, and no hour today has "
+                            f"closed back below it"
+                        ),
+                    })
+                    return out
 
         return out
     except Exception:

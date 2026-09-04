@@ -396,26 +396,26 @@ def publish_mobile_html(screener_results: list, lt_watchlist: list, mkt_info: di
         sr_swing = scan_sr_volume_signals(screener_results, gates=SR_PROFILES["swing"])
         by_symbol = {s.get("symbol"): s for s in screener_results}
 
-        sr_rows = []
-        for sym, sig in sorted(sr_intra.items(), key=lambda kv: -kv[1]["srv_strength"]):
-            if sig["srv_signal"] not in INTRADAY_SR_SIDES:
-                continue
-            row = dict(by_symbol.get(sym) or {"symbol": sym})
-            row.update(sig)
-            sr_rows.append(row)
-        intraday["sr"] = sr_rows
+        def top_sr(signals, sides, per_side=SR_TOP_PER_SIDE):
+            """Strongest `per_side` setups for each side, strongest first."""
+            out = []
+            for side in sides:
+                picked = [(sym, sig) for sym, sig in signals.items() if sig["srv_signal"] == side]
+                picked.sort(key=lambda kv: -kv[1]["srv_strength"])
+                for sym, sig in picked[:per_side]:
+                    row = dict(by_symbol.get(sym) or {"symbol": sym})
+                    row.update(sig)
+                    out.append(row)
+            out.sort(key=lambda r: -r.get("srv_strength", 0))
+            return out
+
+        intraday["sr"] = top_sr(sr_intra, INTRADAY_SR_SIDES)
 
         # Swing carries the signal on the row it belongs to, buy-only.
         # A dedicated group rather than annotations on the ranked list: the swing
         # top-40 is ordered by swing_score, and today none of its members happened
         # to be sitting on a level, so annotation alone would have shown nothing.
-        swing_sr = []
-        for sym, sig in sorted(sr_swing.items(), key=lambda kv: -kv[1]["srv_strength"]):
-            if sig["srv_signal"] not in SWING_SR_SIDES:
-                continue
-            row = dict(by_symbol.get(sym) or {"symbol": sym})
-            row.update(sig)
-            swing_sr.append(row)
+        swing_sr = top_sr(sr_swing, SWING_SR_SIDES)
         penny = get_or_refresh_monthly_penny_picks(screener_results, top_n=20, monthly_sip=200.0)["picks"]
         payload, symbols, per_tab = mobile_view.build_mobile_payload(
             intraday, swing, penny, lt_watchlist, mkt_info,
@@ -8298,11 +8298,18 @@ def one_hour_sr_boxes(ticker: str) -> dict:
 # Swing is buy-only: Indian cash-segment delivery has no sell-and-hold, so a short
 # signal there would be untradeable however good the setup.
 SR_PROFILES: dict = {
-    "intraday": {"max_stop_pct": 2.5, "min_reward_risk": 1.5, "max_target_pct": 3.0},
+    # Previous-day high/low are an intraday frame of reference, so only intraday
+    # trades against them.
+    "intraday": {"max_stop_pct": 2.5, "min_reward_risk": 1.5, "max_target_pct": 3.0,
+                 "use_prev_day_levels": True},
     "swing": {"max_stop_pct": 8.0, "min_reward_risk": 1.5},
 }
 SWING_SR_SIDES = ("BUY",)
 INTRADAY_SR_SIDES = ("BUY", "SELL")
+# Previous-day breaks are ordinary events -- 103 of 500 qualifying symbols on a
+# trending session -- so the tab shows the strongest few per side rather than
+# every one. A list nobody can read is the same as no list.
+SR_TOP_PER_SIDE = 8
 
 
 def scan_sr_volume_signals(screener_results: list, max_symbols: int = 500,
