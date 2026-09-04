@@ -1,6 +1,0 @@
-[16:11:50] Loaded 749 MTF quality equity symbols from mtf_stocks.json
-[16:11:50] ============================================================
-[16:11:50]   Quality Stock Screener — Phase 1 (Port 5050)
-[16:11:50]   Source: Nifty 500 | Scoring: Strength + Value + Momentum
-[16:11:50] ============================================================
-[16:11:50] ⚡ Stock Screener Server is already running at http://localhost:5050

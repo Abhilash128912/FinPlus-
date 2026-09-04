@@ -21,3 +21,5 @@ lt_monthly_picks.json
 
 # Laptop-local commodity bar history; see MCX_BARS_FILE in fetch_and_build.py
 mcx_bars.json
+_server_5050_log.txt
+_server_5050_err.txt
