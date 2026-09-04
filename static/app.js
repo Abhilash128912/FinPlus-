@@ -248,6 +248,27 @@ async function triggerAppScan() {
   }
 }
 
+// Keeps the commodity card in step with the market. Without it the price is
+// whatever it was when the page was built -- frozen, while every stock beside it
+// ticks, which reads as a hardcoded number.
+async function refreshCommodityPrices() {
+  try {
+    const res = await fetch('/api/mcx', { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    let changed = false;
+    for (const id of ['crude', 'gas']) {
+      const live = data[id];
+      if (!live || live.mcx_ltp == null || typeof COMMODITIES_DATA[id] === 'undefined') continue;
+      Object.assign(COMMODITIES_DATA[id], live, { mcx_inr_price: live.mcx_ltp });
+      changed = true;
+    }
+    if (changed) renderCommodityBar();
+  } catch (e) {
+    // Leave the last good price on screen rather than blanking the card.
+  }
+}
+
 // ── Render Commodity Bar ──────────────────────────────────────────────────
 function renderCommodityBar() {
   const container = document.getElementById('commodityCards');
@@ -265,9 +286,16 @@ function renderCommodityBar() {
     // reached the field is simply absent rather than falling back to a number
     // that looks Indian but is not.
     const mcxPriceStr = item.mcx_inr_price
-      ? `MCX ${item.mcx_expiry || ''} ₹${item.mcx_inr_price.toLocaleString('en-IN')}`
+      // Two decimals kept: natural gas trades near Rs 277 where a tenth is a real
+      // move, and the default locale format rounded 277.3 to 277.
+      ? `MCX ${item.mcx_expiry || ''} ₹${Number(item.mcx_inr_price).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
         + (item.mcx_pct != null ? ` (${item.mcx_pct > 0 ? '+' : ''}${item.mcx_pct}%)` : '')
       : 'MCX price unavailable';
+    // Red when the contract is down on the day, green otherwise. Grey when MCX
+    // could not be reached, so "no price" never reads as a flat green quote.
+    const mcxPctNum = (item.mcx_pct == null) ? null : Number(item.mcx_pct);
+    const mcxColor = !item.mcx_inr_price ? 'var(--muted)'
+                   : (mcxPctNum != null && mcxPctNum < 0) ? '#f87171' : '#34d399';
     const srcStr = item.signal_source ? ` — signal from ${item.signal_source}` : '';
     // MCX publishes no intraday history, so the app records its own. Shown while
     // it fills, so an absent S/R read is visibly "not enough history yet" rather
@@ -300,7 +328,7 @@ function renderCommodityBar() {
       <div class="commodity-card">
         <span style="font-size:16px">${item.icon || '⛽'}</span>
         <div>
-          <div class="commodity-card-name">${item.name} <span class="commodity-card-price" style="color:#00d4aa">${mcxPriceStr}</span></div>
+          <div class="commodity-card-name">${item.name} <span class="commodity-card-price" style="color:${mcxColor}">${mcxPriceStr}</span></div>
           <div class="commodity-card-emas">${emaStr}${srcStr}${srStr}</div>
         </div>
         <span class="commodity-badge" style="${badgeStyle}">
@@ -1429,6 +1457,9 @@ function init() {
   renderMarketStatusHeader();
   updateLtpBadgeStatus();
   renderCommodityBar();
+  // MCX quotes move all session; the page build is only the starting value.
+  refreshCommodityPrices();
+  setInterval(refreshCommodityPrices, 60000);
   
   // Clear legacy localStorage cache keys
   localStorage.removeItem('quality_watchlist_v1');
