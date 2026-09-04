@@ -8720,7 +8720,14 @@ def mcx_bars_dataframe(symbol: str, state: dict = None):
 # model needs. This laptop is the only process that runs continuously, which makes
 # it the recorder -- and the file has to reach the repo for the deployment to serve
 # commodity S/R at all.
-MCX_BARS_PUSH_INTERVAL_SEC = 1800.0
+# Four hours, not minutes. Every push to the branch triggers a Render deploy, and
+# a deploy is a ~60s rebuild that throws away the warm LTP cache -- at half-hourly
+# pushes that is roughly 28 needless restarts across a commodity session, degrading
+# the live prices this app exists to show in order to ship a file nothing reads
+# until the next build. Bars are only consumed when a page is built, and the scan
+# already deploys several times a day, so they simply need to be in the repo
+# before one of those.
+MCX_BARS_PUSH_INTERVAL_SEC = 4 * 3600.0
 
 
 def commit_mcx_bars() -> bool:
