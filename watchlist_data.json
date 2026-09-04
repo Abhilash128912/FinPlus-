@@ -16,20 +16,20 @@
     "npm_at_entry": null,
     "current_score": 37.4,
     "current_strength": 0.0,
-    "current_value": 338.72,
+    "current_value": 338.0,
     "current_momentum": 41.0,
-    "ltp": 169.36,
+    "ltp": 169.0,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 47.1,
+    "rsi": 46.5,
     "ma200": 171.24,
-    "wk52_return_pct": 32.3,
-    "volume_spike": 0.87,
-    "today_volume": 11652096,
-    "avg_volume_10d": 15622627.55,
+    "wk52_return_pct": 32.02,
+    "volume_spike": 0.86,
+    "today_volume": 13503494,
+    "avg_volume_10d": 15715197.45,
     "news": [
       {
         "title": "Ashok Leyland Ltd. Share Price Today: Price Rise Review",
@@ -60,11 +60,11 @@
         "summary": "Published: Mon, 15 Jun 2026 07:00:00 GMT"
       },
       {
-        "title": "Ashok Leyland share price target cut by HDFC Securities \u2014 Rationale explained",
-        "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxPVllyTzg3MFpWNE1GTk5wZ0NYU0phUElBcm5KUDRYOWdGNnhnN2FZVmgtbVM2NWRZbUR2WEk4TGhPa2ZnN29iOU9mY2YtdjBZWW5qU01zQUpYbWpoeVFwVDhWd05jbFllMHhYYkhSdVdRa19CeC1GRV96ZUlDS3VYR3lDOTUwMVY4V0FiOF9uNTRJZzBBaERlQm84X2FMRkx3TE5xZjlwZ0hRUGt1eVNBQjdTbmQzQkNJY0trRElwQzVheFo5R1pjdEUwanE3NmpzdFh4cFhRcHdweDTSAeABQVVfeXFMTW84VVh1ZkFrcElnVnRFOXZxTjZnYTBtY3lXRWdIbkYtSUd1aUIwMHlTazk1cE5STmFWT3N6aVk5S0pJMktUNG9DR3dTYkQ1dmdWeWQtNmJkWnFQU3U1a1BoNVZYWU9Nc1Z1R2xhaExONFBfbExYN1RudXRyRDdJTEhsSGhmWGk2aW81Y2pBamowdXVJa0ZkVXVOUzNkT1hHUmRQaERtUkd3b3ZnOEtickl0VXVQWmRYSTFZb1VrZHJYeGl5c1QzRnZVYU90bjQ2NWNNNVJQUW9wejUyNjJIOHA?oc=5",
-        "pubDate": "Fri, 29 May 2026 07:00:00 GMT",
-        "provider": "Business Today",
-        "summary": "Published: Fri, 29 May 2026 07:00:00 GMT"
+        "title": "Ashok Leyland Partners Shriram Automall for Pre-Owned Commercial Vehicles Business",
+        "url": "https://news.google.com/rss/articles/CBMiggFBVV95cUxQZjJRcW84SlFJNFlhSl9pYlhvREFHM1BMUU50b3hMU2FlYUczakNIaVhiTVhTblg1UnB4c1AyUHQ2VzNQUXlBWFV4R1NlVUt5TmFYekdLdTdYOXhWX0hmSWxzQmFNQXd0Q194cndzYUZ4R3M4ZnRxZTZUZnFxVVlaZ21R?oc=5",
+        "pubDate": "Thu, 23 Jul 2026 07:00:00 GMT",
+        "provider": "HDFC Sky",
+        "summary": "Published: Thu, 23 Jul 2026 07:00:00 GMT"
       }
     ],
     "corporate_actions": [],
@@ -77,14 +77,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9169.36 fell below 200-day MA \u20b9171.24"
+        "message": "Trend Broken \u2014 Price \u20b9169.0 fell below 200-day MA \u20b9171.24"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Quality score collapsed to 37.4 (<40)",
-    "unrealised_pnl": 17.66,
-    "unrealised_pct": 5.5
+    "unrealised_pnl": 16.94,
+    "unrealised_pct": 5.28
   },
   {
     "symbol": "BEL",
@@ -94,29 +94,29 @@
     "avg_cost": 403.52,
     "total_invested": 1210.56,
     "added_at": "2026-08-13",
-    "score_at_entry": 43.0,
+    "score_at_entry": 37.0,
     "strength_at_entry": 0.0,
     "value_at_entry": 0.0,
-    "momentum_at_entry": 37.0,
+    "momentum_at_entry": 27.0,
     "roe_at_entry": null,
     "de_at_entry": null,
     "npm_at_entry": null,
-    "current_score": 43.0,
+    "current_score": 37.0,
     "current_strength": 0.0,
-    "current_value": 1224.15,
-    "current_momentum": 37.0,
-    "ltp": 408.05,
+    "current_value": 1216.05,
+    "current_momentum": 27.0,
+    "ltp": 405.35,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 50.0,
-    "ma200": 419.11,
-    "wk52_return_pct": 9.54,
-    "volume_spike": 0.82,
-    "today_volume": 6491533,
-    "avg_volume_10d": 9248982.6,
+    "rsi": 47.1,
+    "ma200": 419.1,
+    "wk52_return_pct": 8.82,
+    "volume_spike": 0.89,
+    "today_volume": 8349405,
+    "avg_volume_10d": 9341876.2,
     "news": [
       {
         "title": "BEL share price: Defence PSU still has room to run; expert sees 20% upside, sets Rs 375 stop loss",
@@ -129,14 +129,14 @@
         "title": "BEL stock falls as oil shock hits Sensex, Q1 FY27 revenue jumps 25 percent",
         "url": "https://news.google.com/rss/articles/CBMizAFBVV95cUxQNHI5SkE3NUJESHJpaDR1N1pWVmZBRjdCOFdXcXlSeGFMekpSNldnSHJrNldZcHN3ZXdvR1FXT3hGU0FoR0hWYlVyV0o2QmVlOTBSNF8tYkdVUHpEQ2pCS3htYkVBQWlRUGRfcmthYXJXb2FDbEpnaXk2NUJBaWNCb2ZGZW1XUk5JQ3BjZ3ZXcEJUOHZpdEpZTGFJSDZ2OHU4WkZMY3NkWW9XbElLUzJZbVA4WXVEbWJIbDVIVjR2VTg5cnFnbFlMcTNCd2U?oc=5",
         "pubDate": "Wed, 02 Sep 2026 17:12:34 GMT",
-        "provider": "ad-hoc-news.de",
+        "provider": "AD HOC NEWS",
         "summary": "Published: Wed, 02 Sep 2026 17:12:34 GMT"
       },
       {
         "title": "BEL Share Price Live: Stock falls 3% on concerning margins",
         "url": "https://news.google.com/rss/articles/CBMiowFBVV95cUxNTFExSEU3LVFuUDZEb2YxM21PVDc2dmN6Q3g5V1I2SVVzbmxjUzhZRW9WYzg1NWEwczlZTlNPMzZXYWZmd3pWLURUZmgyREg5M1pXME80Z2c1Z2ZRaEZhTS1MdVh4Z2wwRTV6eWhpS3pvUEpkZjJLVU1CdlhOOEhpNk1XQW9lM0JFVVpZVmowckp2RlA1VmYzVHBiOElVYTliQjJR?oc=5",
         "pubDate": "Tue, 28 Jul 2026 07:00:00 GMT",
-        "provider": "indiainfoline.com",
+        "provider": "India Infoline",
         "summary": "Published: Tue, 28 Jul 2026 07:00:00 GMT"
       },
       {
@@ -157,16 +157,21 @@
     "corporate_actions": [],
     "alerts": [
       {
+        "level": "SELL",
+        "icon": "\ud83d\udd34",
+        "message": "Quality Gone \u2014 Total score 37.0 (below 40 threshold)"
+      },
+      {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9408.05 fell below 200-day MA \u20b9419.11"
+        "message": "Trend Broken \u2014 Price \u20b9405.35 fell below 200-day MA \u20b9419.1"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Price below 200-day MA (\u20b9419.11) & score <50",
-    "unrealised_pnl": 13.59,
-    "unrealised_pct": 1.12
+    "signal_reason": "Quality score collapsed to 37.0 (<40)",
+    "unrealised_pnl": 5.49,
+    "unrealised_pct": 0.45
   },
   {
     "symbol": "BORANA",
@@ -176,29 +181,29 @@
     "avg_cost": 342.0,
     "total_invested": 342.0,
     "added_at": "2026-08-13",
-    "score_at_entry": 39.6,
+    "score_at_entry": 41.4,
     "strength_at_entry": 62.0,
     "value_at_entry": 35.0,
-    "momentum_at_entry": 25.0,
+    "momentum_at_entry": 31.0,
     "roe_at_entry": 35.0,
     "de_at_entry": 0.25,
     "npm_at_entry": 16.6,
-    "current_score": 39.6,
+    "current_score": 41.4,
     "current_strength": 62.0,
-    "current_value": 306.55,
-    "current_momentum": 25.0,
-    "ltp": 306.55,
+    "current_value": 307.6,
+    "current_momentum": 31.0,
+    "ltp": 307.6,
     "sector": "",
     "pe": 13.33,
     "roe_pct": 35.0,
     "de_ratio": 0.25,
     "npm_pct": 16.6,
-    "rsi": 44.3,
+    "rsi": 45.1,
     "ma200": 328.04,
-    "wk52_return_pct": 44.16,
-    "volume_spike": 0.42,
-    "today_volume": 9147,
-    "avg_volume_10d": 25121.0,
+    "wk52_return_pct": 44.66,
+    "volume_spike": 0.45,
+    "today_volume": 11231,
+    "avg_volume_10d": 25225.2,
     "news": [
       {
         "title": "Borana Weaves Ltd Key Financial Ratios \u2013 Valuation, Profitability & More",
@@ -215,13 +220,6 @@
         "summary": "Published: Mon, 31 Aug 2026 07:07:17 GMT"
       },
       {
-        "title": "Borana Weaves Ltd Financials \u2013 Balance Sheet, Profit & Loss, Cash Flow",
-        "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxOU0pwVDhETjBpUV9Qa3hUUkNoZmdJOUZpcDF0bDhRZzV4TGtOZncwSi0tUE5SMm0xN19VWUIxU3ZVUXRQOWVjM3BQZGdFd0hoUjZxd05xNEN0ckcxMHV2V0wtci1XWmpJblNXdXBiUHJzRExXZ0NZRVlIQlVsOFlFY090OVNYLWRVMFplWGpZcw?oc=5",
-        "pubDate": "Sat, 29 Aug 2026 22:25:08 GMT",
-        "provider": "Value Research",
-        "summary": "Published: Sat, 29 Aug 2026 22:25:08 GMT"
-      },
-      {
         "title": "Market Might Still Lack Some Conviction On Borana Weaves Limited (NSE:BORANA) Even After 28% Share Price Boost",
         "url": "https://news.google.com/rss/articles/CBMi4AFBVV95cUxOSkpjWlNrdkZsTFVDM1N1cG1DQmsxY0JRZXlSSUJaVUV5eGphVTlvM3ktaTJwTjFvSkJReF94bW80bkVFNlFySk9HdG5tbzluYTdfeVM2bWVkUDdYcV95Q0J0c0xNSmZlT3JNMHB1N0V5dHkwbHVnTTQ5UjFfLXZ3d2hwUG9hS2lXZktxa21wUllHb2hSTU1rZVlhb1hDQi1ycjVIcm1XTVFaZ2R5MjZwVUR3R2wxekl5WG9uXzNqSm9HTWc4NmZmaHhFLWZ5YVpxM2pfU3p0Qnp5V2kzaDhxVtIB5gFBVV95cUxNd0ozVDlYVjBBaExxMUJDZ1ZubHp4Y19KTmpuR3Iyajl5TTMtdE00QXNMeE9lOTNaQjFKMmF2UTdRNmpuQTRZWGJlUjdVY1VrMTRyRUNhOGFiWERkZ0hTbm9TOTZGY1ZnZlFVZkFocEF6VGZCQXVTTXJSdmgwX2pMYTZHMVc2MTcwRG1DV3hOZWhWaUVjT2t2c1NZbmpOUzJZTlA4SUt5V1VpQkFla2IxT0VvMWdBMnlVOXRDYklKd3p3NTVaaTdNVUdiUjd6MWtHQ1hXdDB1N1NveThEaUl2SkhKREtuUQ?oc=5",
         "pubDate": "Thu, 29 Jan 2026 08:00:00 GMT",
@@ -234,26 +232,28 @@
         "pubDate": "Tue, 05 May 2026 11:36:15 GMT",
         "provider": "Upstox",
         "summary": "Published: Tue, 05 May 2026 11:36:15 GMT"
+      },
+      {
+        "title": "Borana Weaves FY26 Results: Net profit up 61% to \u20b9646.1 crore",
+        "url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPTXI0ZUNYU0QycDFBNmRtM29RaXRFaUc1OE9jNEZ5Tm82dWw5alF0N2xxQWk0STlrS0tCMnBLQU5kc2xKV3FidUZzeTRMRDRZUkVOOEJYWVlwSnM3emp6MUNDMVIwb0d2ZFlrbTFOX2FtdzJRc3Y4em1RN1dIWGR0RldNR1hrMzJuVXYxNjRGOWMzT3RIT19NQ2pPY3ZNS3NiUDhHejU4ZUhGV1g1bWZPNTh3?oc=5",
+        "pubDate": "Mon, 31 Aug 2026 10:16:48 GMT",
+        "provider": "scanx.trade",
+        "summary": "Published: Mon, 31 Aug 2026 10:16:48 GMT"
       }
     ],
     "corporate_actions": [],
     "alerts": [
       {
-        "level": "SELL",
-        "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 39.6 (below 40 threshold)"
-      },
-      {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9306.55 fell below 200-day MA \u20b9328.04"
+        "message": "Trend Broken \u2014 Price \u20b9307.6 fell below 200-day MA \u20b9328.04"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 39.6 (<40)",
-    "unrealised_pnl": -35.45,
-    "unrealised_pct": -10.37
+    "signal_reason": "Price below 200-day MA (\u20b9328.04) & score <50",
+    "unrealised_pnl": -34.4,
+    "unrealised_pct": -10.06
   },
   {
     "symbol": "FEDERALBNK",
@@ -283,9 +283,9 @@
     "rsi": 44.0,
     "ma200": 297.57,
     "wk52_return_pct": 80.62,
-    "volume_spike": 0.83,
-    "today_volume": 3392933,
-    "avg_volume_10d": 4762939.1,
+    "volume_spike": 0.86,
+    "today_volume": 4115197,
+    "avg_volume_10d": 4799052.3,
     "news": [
       {
         "title": "Federal Bank Shares Rally 7% After Q1 Profit Jumps 36%, NII Surges 26%; Asset Quality Improves",
@@ -345,29 +345,29 @@
     "avg_cost": 275.45,
     "total_invested": 275.45,
     "added_at": "2026-08-13",
-    "score_at_entry": 34.7,
+    "score_at_entry": 33.5,
     "strength_at_entry": 65.0,
     "value_at_entry": 28.0,
-    "momentum_at_entry": 6.0,
+    "momentum_at_entry": 2.0,
     "roe_at_entry": 33.8,
     "de_at_entry": 0.0,
     "npm_at_entry": 28.5,
-    "current_score": 34.7,
+    "current_score": 33.5,
     "current_strength": 65.0,
-    "current_value": 264.2,
-    "current_momentum": 6.0,
-    "ltp": 264.2,
+    "current_value": 264.1,
+    "current_momentum": 2.0,
+    "ltp": 264.1,
     "sector": "",
     "pe": 15.2,
     "roe_pct": 33.8,
     "de_ratio": 0.0,
     "npm_pct": 28.5,
-    "rsi": 40.1,
+    "rsi": 39.9,
     "ma200": 314.87,
-    "wk52_return_pct": -36.48,
-    "volume_spike": 0.6,
-    "today_volume": 7146277,
-    "avg_volume_10d": 13978525.0,
+    "wk52_return_pct": -36.5,
+    "volume_spike": 0.67,
+    "today_volume": 9513896,
+    "avg_volume_10d": 14096905.95,
     "news": [
       {
         "title": "ITC shares jump nearly 3%, among top Nifty gainers after Happiest Minds-ITC Infotech merger deal",
@@ -410,19 +410,19 @@
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 34.7 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 33.5 (below 40 threshold)"
       },
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9264.2 fell below 200-day MA \u20b9314.87"
+        "message": "Trend Broken \u2014 Price \u20b9264.1 fell below 200-day MA \u20b9314.87"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 34.7 (<40)",
-    "unrealised_pnl": -11.25,
-    "unrealised_pct": -4.08
+    "signal_reason": "Quality score collapsed to 33.5 (<40)",
+    "unrealised_pnl": -11.35,
+    "unrealised_pct": -4.12
   },
   {
     "symbol": "NMDC",
@@ -432,29 +432,29 @@
     "avg_cost": 85.21,
     "total_invested": 511.26,
     "added_at": "2026-08-13",
-    "score_at_entry": 52.7,
+    "score_at_entry": 51.7,
     "strength_at_entry": 65.0,
     "value_at_entry": 35.0,
     "momentum_at_entry": 38.0,
     "roe_at_entry": 28.5,
     "de_at_entry": 0.0,
     "npm_at_entry": 32.0,
-    "current_score": 52.7,
+    "current_score": 51.7,
     "current_strength": 65.0,
-    "current_value": 508.86,
+    "current_value": 508.2,
     "current_momentum": 38.0,
-    "ltp": 84.81,
+    "ltp": 84.7,
     "sector": "",
     "pe": 10.8,
     "roe_pct": 28.5,
     "de_ratio": 0.0,
     "npm_pct": 32.0,
-    "rsi": 47.7,
-    "ma200": 83.63,
-    "wk52_return_pct": 15.5,
-    "volume_spike": 0.64,
-    "today_volume": 10189400,
-    "avg_volume_10d": 18407417.15,
+    "rsi": 47.3,
+    "ma200": 83.62,
+    "wk52_return_pct": 15.35,
+    "volume_spike": 0.71,
+    "today_volume": 13213685,
+    "avg_volume_10d": 18558631.4,
     "news": [
       {
         "title": "NMDC Incorporates GIFT City Subsidiary; Shares Rise 0.78%",
@@ -474,14 +474,14 @@
         "title": "NMDC Ltd shares hit 52-week high of \u20b997.24 on Record Iron Ore Production and Strong Q4 Performance",
         "url": "https://news.google.com/rss/articles/CBMi2gFBVV95cUxPc1Z0cXNlWU0xTXd0UnFtckpPWUlxeUhIMnI1VDdBOEhFV3I5YjZIN01uajRldFd6Mmpqb0tXU3Y2TjRZd3ZjNVVnbjFTb2tXWHU5ZWxCYkFVcDFtWlRsV2ZZUGpRdkRHbVlaRkVPMVoycG1YcEpmWXpCSFJjQ3VfVGhCWlFwUXA0aktlRU5QNy1fcWdMUUlza0hLcTMwQmRyeFJYb2ZwQUNoX2FKT2hvOTRaUXo5WlBCSkZuTFNOTlNQMlZNaTlheExMX1p3WHd1Wm5mMTRrZ3VZZw?oc=5",
         "pubDate": "Tue, 02 Jun 2026 07:00:00 GMT",
-        "provider": "indiainfoline.com",
+        "provider": "India Infoline",
         "summary": "Published: Tue, 02 Jun 2026 07:00:00 GMT"
       },
       {
         "title": "NMDC Ltd soars 1.49%, gains for fifth straight session",
         "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxPNGRlYWpqRWFnRVFDczByTGRIelBicEZkTmF4emZMcmNhZ0FGa3VYVm5QMnpxMUxjNlRoQy1VNFFyeGNyUGNGckFqUFJzZkp6bVktNFoxbmRWdFljbXc4Ull5OFRfOUtxZmRjd1JITUhFUWEzWmVrNWZhbE9OMlJUdGdLZldqRDFuQ3BodGNNbDRKbzhFdUJlS25zNk9FaXpnZW96QUZpT1hkbUNvMFhOUUU5REJwNlhXd3U0djU4cGVHX3VHdEdhWFZ2c19zbzTSAdQBQVVfeXFMTXBpT3dzdFdtRGs0TUJKekFMYjMxRVpHUFF0Z3ZNUnRSbHpQWENZc1JMaldoWTJnLTlJMDlodVVDdGhlNE9WYkg5RDBHNzRlaDFtQUJwQnEzaGxjbjFhZlZQLUtROVNwbmtwdW1OVDA4UEpyN1FESWxhNVdOYlRISEVad2szR1NxLVdKOFQ5eGVTX1VLOFdfN1NYWXBGdDdZdWJWV0ZFNFJyNTlCZ3VzUmgtblhKMXg5aWZHWEI4bnFnY0RwbHpta3RXSVhnSzBDc09jY2g?oc=5",
         "pubDate": "Wed, 26 Aug 2026 07:00:00 GMT",
-        "provider": "Business Standard",
+        "provider": "business-standard.com",
         "summary": "Published: Wed, 26 Aug 2026 07:00:00 GMT"
       },
       {
@@ -497,8 +497,8 @@
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": -2.4,
-    "unrealised_pct": -0.47
+    "unrealised_pnl": -3.06,
+    "unrealised_pct": -0.6
   },
   {
     "symbol": "TATAPOWER",
@@ -517,20 +517,20 @@
     "npm_at_entry": null,
     "current_score": 34.4,
     "current_strength": 0.0,
-    "current_value": 368.05,
+    "current_value": 368.0,
     "current_momentum": 18.0,
-    "ltp": 368.05,
+    "ltp": 368.0,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 48.0,
+    "rsi": 47.9,
     "ma200": 388.41,
-    "wk52_return_pct": -3.8,
-    "volume_spike": 0.58,
-    "today_volume": 2767839,
-    "avg_volume_10d": 5539132.55,
+    "wk52_return_pct": -3.82,
+    "volume_spike": 0.68,
+    "today_volume": 3824090,
+    "avg_volume_10d": 5591945.1,
     "news": [
       {
         "title": "TATAPOWER Stock Price and Chart \u2014 NSE:TATAPOWER",
@@ -578,14 +578,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9368.05 fell below 200-day MA \u20b9388.41"
+        "message": "Trend Broken \u2014 Price \u20b9368.0 fell below 200-day MA \u20b9388.41"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Quality score collapsed to 34.4 (<40)",
-    "unrealised_pnl": -14.2,
-    "unrealised_pct": -3.71
+    "unrealised_pnl": -14.25,
+    "unrealised_pct": -3.73
   },
   {
     "symbol": "TATASTEEL",
@@ -595,29 +595,29 @@
     "avg_cost": 182.82,
     "total_invested": 182.82,
     "added_at": "2026-08-13",
-    "score_at_entry": 50.6,
+    "score_at_entry": 53.0,
     "strength_at_entry": 0.0,
     "value_at_entry": 0.0,
-    "momentum_at_entry": 45.0,
+    "momentum_at_entry": 49.0,
     "roe_at_entry": null,
     "de_at_entry": null,
     "npm_at_entry": null,
-    "current_score": 50.6,
+    "current_score": 53.0,
     "current_strength": 0.0,
-    "current_value": 189.46,
-    "current_momentum": 45.0,
-    "ltp": 189.46,
+    "current_value": 188.79,
+    "current_momentum": 49.0,
+    "ltp": 188.79,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 57.3,
+    "rsi": 55.9,
     "ma200": 192.84,
-    "wk52_return_pct": 13.58,
-    "volume_spike": 1.19,
-    "today_volume": 27930653,
-    "avg_volume_10d": 27392934.9,
+    "wk52_return_pct": 13.18,
+    "volume_spike": 1.31,
+    "today_volume": 36492638,
+    "avg_volume_10d": 27821034.15,
     "news": [
       {
         "title": "Tata Steel Share Price Today: 2.26% Rise, Valuation Check",
@@ -660,14 +660,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9189.46 fell below 200-day MA \u20b9192.84"
+        "message": "Trend Broken \u2014 Price \u20b9188.79 fell below 200-day MA \u20b9192.84"
       }
     ],
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": 6.64,
-    "unrealised_pct": 3.63
+    "unrealised_pnl": 5.97,
+    "unrealised_pct": 3.27
   },
   {
     "symbol": "UYFINCORP",
@@ -677,29 +677,29 @@
     "avg_cost": 19.33,
     "total_invested": 231.96,
     "added_at": "2026-08-13",
-    "score_at_entry": 46.0,
+    "score_at_entry": 43.2,
     "strength_at_entry": 0.0,
     "value_at_entry": 0.0,
     "momentum_at_entry": 70.0,
     "roe_at_entry": null,
     "de_at_entry": null,
     "npm_at_entry": null,
-    "current_score": 46.0,
+    "current_score": 43.2,
     "current_strength": 0.0,
-    "current_value": 240.0,
+    "current_value": 236.76,
     "current_momentum": 70.0,
-    "ltp": 20.0,
+    "ltp": 19.73,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 54.7,
+    "rsi": 52.4,
     "ma200": 15.13,
-    "wk52_return_pct": 54.44,
-    "volume_spike": 0.17,
-    "today_volume": 55669,
-    "avg_volume_10d": 384729.6,
+    "wk52_return_pct": 52.36,
+    "volume_spike": 0.32,
+    "today_volume": 122444,
+    "avg_volume_10d": 388068.35,
     "news": [
       {
         "title": "Benign Growth For U. Y. Fincorp Limited (NSE:UYFINCORP) Underpins Its Share Price",
@@ -709,11 +709,11 @@
         "summary": "Published: Fri, 06 Feb 2026 08:00:00 GMT"
       },
       {
-        "title": "U. Y. Fincorp Ltd Gains Nearly 2% as Stock Holds Above Key Support (UYFINCORP.NS) - Ichimoku TK Cross",
-        "url": "https://news.google.com/rss/articles/CBMitwFBVV95cUxONzZONmg3Nkk3Uk4yRXZybWZXZEc3Vi0xWEtlcFUyQWhEb3I3eHJsbHEtVm05V0F0bTA2YWpPUzdoNTdoUmJJa0s1N0VqVmR4eTFaZVVsRDJPUGptaGZ4bGpkbEdlNHVWODh6ZVZyREhmcXp6Qll6Q2t1QTRQYVRMREx4YlEtY0VVZk4tVzM3OFRCMV9wM1RoeFZGencyMTlNNmFVMml1aGFfOUhWZEN6ZHluTHNRZ1E?oc=5",
-        "pubDate": "Wed, 01 Jul 2026 07:00:00 GMT",
+        "title": "U. Y. Fincorp Limited (UYFINCORP): Modest Decline Amid Range-Bound Trading - Retracement Entry",
+        "url": "https://news.google.com/rss/articles/CBMirAFBVV95cUxNMVlmcFpHZl9wOWl2RUZaRVZ4UEJIY3ZkaG1TR1ZsVFptVUc4UXZtQ3UwMUFOTWVTWDZMb2xBa2Nndkl4TE52Z05LSm4ycjF6Mlk0OGM2UzM5b3NpRW5RNVhqRC03eFhjOWNYN2FhMFVDTXdOUUM4T2MzQ0JrdmFnLTlYeWcwa0VZRzBoZGxGSFpKTGdvSEM3SHJTdTNXVTdMek01THNaTnpSR1gy?oc=5",
+        "pubDate": "Wed, 17 Jun 2026 07:00:00 GMT",
         "provider": "vinanet.vn",
-        "summary": "Published: Wed, 01 Jul 2026 07:00:00 GMT"
+        "summary": "Published: Wed, 17 Jun 2026 07:00:00 GMT"
       },
       {
         "title": "UY Fincorp Ltd. Peer Comparison \u2013 Compare with Others",
@@ -723,11 +723,11 @@
         "summary": "Published: Mon, 31 Aug 2026 12:15:48 GMT"
       },
       {
-        "title": "U. Y. Fincorp Limited Inching Higher \u2013 Key Levels in Focus for NSE Traders - Volume Weighted Price",
-        "url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxNMG5oNW5ZSlFSTHZiWVMyY1pPbTVPWkR0dXdzVm93UGVjUHlJbzRSeWZ6OFpUcnRPb2tTdTJ2RUtIaFAtRm40ZEtBcWpVclRrOGk5QlprNnQxbV93SnNtdkNVV2ZRX3UtOUk3X1VLYkpEd3NXTXVLS0Y2Q2VGNHJuZ0FoZTBfd1lhQjZYendMSmFoaENLVjRsdndEOEJuaC1ud1JsWEFPVFR1U05sSWgtU0VR?oc=5",
-        "pubDate": "Sun, 12 Jul 2026 07:00:00 GMT",
+        "title": "U. Y. Fincorp Ltd Gains Nearly 2% as Stock Holds Above Key Support (UYFINCORP.NS) - Ichimoku TK Cross",
+        "url": "https://news.google.com/rss/articles/CBMitwFBVV95cUxONzZONmg3Nkk3Uk4yRXZybWZXZEc3Vi0xWEtlcFUyQWhEb3I3eHJsbHEtVm05V0F0bTA2YWpPUzdoNTdoUmJJa0s1N0VqVmR4eTFaZVVsRDJPUGptaGZ4bGpkbEdlNHVWODh6ZVZyREhmcXp6Qll6Q2t1QTRQYVRMREx4YlEtY0VVZk4tVzM3OFRCMV9wM1RoeFZGencyMTlNNmFVMml1aGFfOUhWZEN6ZHluTHNRZ1E?oc=5",
+        "pubDate": "Wed, 01 Jul 2026 07:00:00 GMT",
         "provider": "vinanet.vn",
-        "summary": "Published: Sun, 12 Jul 2026 07:00:00 GMT"
+        "summary": "Published: Wed, 01 Jul 2026 07:00:00 GMT"
       },
       {
         "title": "AKIKO Stock Price and Chart \u2014 NSE:AKIKO",
@@ -741,8 +741,8 @@
     "alerts": [],
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
-    "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": 8.04,
-    "unrealised_pct": 3.47
+    "signal_reason": "Consolidating price & fundamentals",
+    "unrealised_pnl": 4.8,
+    "unrealised_pct": 2.07
   }
 ]
