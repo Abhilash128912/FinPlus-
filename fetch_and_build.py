@@ -1521,6 +1521,9 @@ def is_eligible_for_stock_of_the_day(r: dict) -> bool:
 
 
 # ─── Step 3: Main scan loop ───────────────────────────────────────────────────
+SCAN_WORKERS = max(1, int(os.environ.get("SCREENER_SCAN_WORKERS", "16")))
+
+
 def run_scan(tickers: list[str]) -> list[dict]:
     total = len(tickers)
     results = []
@@ -1639,7 +1642,12 @@ def run_scan(tickers: list[str]) -> list[dict]:
 
     log(f"\nMultithreaded scanning {total} stocks (16 parallel workers, ultra-fast cache processing)...")
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=16) as executor:
+    # Sixteen parallel fetches is right on a laptop with a warm cache. CI starts
+    # cold every run -- cache/ is gitignored -- so the same setting throws ~2,400
+    # fresh requests at Yahoo from a cloud IP, which it throttles; the scan then
+    # returns nothing and aborts about twenty seconds in. Lowered there via
+    # SCREENER_SCAN_WORKERS rather than for everyone.
+    with ThreadPoolExecutor(max_workers=SCAN_WORKERS) as executor:
         scan_items = list(enumerate(tickers, 1))
         futures = [executor.submit(process_single_ticker, item) for item in scan_items]
         for f in futures:
