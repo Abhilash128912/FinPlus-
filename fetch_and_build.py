@@ -41,6 +41,8 @@ logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 from screener_engine import score_stock, check_quality_alerts, compute_signal, check_top_pick_status, compute_trend_classification, compute_fno_signal, compute_nifty_market_regime, compute_relative_strength_ratings, get_lt_watchlist_status, compute_quality_penny_stocks, find_best_swing_candidate, compute_sector_aware_lt_quality, run_lt_universe_discovery_pipeline, compute_intraday_picks, select_monthly_lt_watchlist_additions
 from screener_engine import TREND_STATES, UPTREND_STATES, TREND_DOWNTREND, sane_metric
 from mobile_api import get_screener_data, get_lt_watchlist, get_holdings, search_stocks, get_stock_detail, get_app_status
+from screener_engine import compute_swing_picks
+import mobile_view
 
 # ─── Time ─────────────────────────────────────────────────────────────────────
 # Every market rule in this file -- session windows, trading-day rollover, cache
@@ -61,6 +63,12 @@ LT_WL_FILE = os.path.join(BASE_DIR, "lt_watchlist.json")
 LT_MONTHLY_PICKS_FILE = os.path.join(BASE_DIR, "lt_monthly_picks.json")
 PENNY_MONTHLY_PICKS_FILE = os.path.join(BASE_DIR, "penny_monthly_picks.json")
 OUT_HTML   = os.path.join(BASE_DIR, "screener.html")
+MOBILE_HTML = os.path.join(BASE_DIR, "mobile.html")
+# How many swing candidates the mobile view carries. The desktop page filters the
+# full scan in the browser and shows every qualifier (441 on the 03 Sep scan);
+# the phone gets the strongest few, because the point of that view is to stay
+# inside a live-price budget rather than to be browsable.
+MOBILE_SWING_TOP_N = 40
 OUT_WWW_HTML = os.path.join(BASE_DIR, "www", "screener.html")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 APP_CSS_FILE = os.path.join(STATIC_DIR, "app.css")
@@ -371,6 +379,34 @@ def publish_html(html: str) -> None:
     """Write the built page to every copy this build ships."""
     for path in published_html_paths():
         atomic_write_file(path, html)
+
+
+def publish_mobile_html(screener_results: list, lt_watchlist: list, mkt_info: dict) -> None:
+    """Build and write the suggestions-only page the Capacitor app loads.
+
+    Kept beside publish_html so the two views can never describe different scans:
+    both are written from the same in-memory results in the same pass.
+    """
+    try:
+        intraday = compute_intraday_picks(screener_results, top_n=5)
+        swing = compute_swing_picks(screener_results, top_n=MOBILE_SWING_TOP_N)
+        penny = get_or_refresh_monthly_penny_picks(screener_results, top_n=20, monthly_sip=200.0)["picks"]
+        payload, symbols = mobile_view.build_mobile_payload(
+            intraday, swing, penny, lt_watchlist, mkt_info,
+            datetime.datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
+        )
+        if len(symbols) > mobile_view.SYMBOL_BUDGET:
+            # Not fatal -- a page that loads with too many symbols still works, it
+            # just polls worse. Loud, because the cause is always an upstream top_n
+            # that grew and nobody re-checked the total.
+            log(f"⚠ Mobile view references {len(symbols)} symbols, over the "
+                f"{mobile_view.SYMBOL_BUDGET} budget — live prices will degrade")
+        atomic_write_file(MOBILE_HTML, mobile_view.render_mobile_html(payload))
+        log(f"  📱 Mobile suggestions page: {len(symbols)} symbols "
+            f"(intraday {len(intraday.get('buy', [])) + len(intraday.get('sell', []))}, "
+            f"swing {len(swing)}, penny {len(penny)}, LT {len(lt_watchlist or [])})")
+    except Exception as e:
+        log(f"⚠ Could not build mobile view: {e}")
 
 
 def json_serializer(o):
@@ -9056,6 +9092,33 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
             return
 
+        elif parsed.path in ('/mobile', '/mobile.html'):
+            # The Capacitor app's entry point. Served from disk like the desktop
+            # page; if it has not been built yet, fall through to a clear message
+            # rather than the static handler's bare 404.
+            if os.path.exists(MOBILE_HTML):
+                with open(MOBILE_HTML, 'rb') as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                self.send_header('Pragma', 'no-cache')
+                self.send_header('Expires', '0')
+                self.send_header('Content-Length', str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                try: self.wfile.flush()
+                except Exception: pass
+            else:
+                msg = b'<!doctype html><meta charset="utf-8"><body style="font:15px system-ui;padding:24px">Mobile view has not been built yet. It is written on the next scan or server start.</body>'
+                self.send_response(503)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Length', str(len(msg)))
+                self.end_headers()
+                self.wfile.write(msg)
+            return
+
         elif parsed.path == '/api/ltp':
             self.handle_ltp_request()
             return
@@ -9199,6 +9262,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 fno_data = process_fno_stocks(screener_results)
                 html = build_html(screener_results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
                 publish_html(html)
+                publish_mobile_html(screener_results, lt_wl_data, mkt_info)
                 LAST_SCAN_COMPLETED_AT = datetime.datetime.now().isoformat()
                 log("⚡ [API Request] Live Scan complete & index.html updated successfully!")
                 res = {"status": "ok", "message": "Scan completed successfully", "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
@@ -9593,6 +9657,7 @@ def background_initial_scan():
         log("Building HTML report...")
         html = build_html(screener_results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
         publish_html(html)
+        publish_mobile_html(screener_results, lt_wl_data, mkt_info)
         LAST_SCAN_COMPLETED_AT = datetime.datetime.now().isoformat()
 
         log(f"\n✅ Scan complete! Report saved: {OUT_HTML}")
@@ -9677,6 +9742,7 @@ if __name__ == "__main__":
                 fno_data = process_fno_stocks(LATEST_SCREENER_RESULTS)
                 html = build_html(LATEST_SCREENER_RESULTS, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
                 publish_html(html)
+                publish_mobile_html(LATEST_SCREENER_RESULTS, lt_wl_data, mkt_info)
             except Exception as e:
                 log(f"  ⚠ Startup HTML build skipped: {e}")
 

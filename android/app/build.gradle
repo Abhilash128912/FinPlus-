@@ -22,6 +22,29 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+
+    // Two apps from one project, installable side by side because Android keys an
+    // installed app on applicationId. `full` keeps the original id so it upgrades
+    // the copy already on the phone rather than appearing as a second icon; `picks`
+    // takes a new id and loads the suggestions-only view.
+    //
+    // Each flavor supplies its own assets/capacitor.config.json (server.url differs)
+    // and its own strings.xml. Flavor source sets outrank main during asset and
+    // resource merging, so src/picks/... replaces the copies `npx cap sync` writes
+    // into src/main/... without either build editing the other's files.
+    flavorDimensions "view"
+    productFlavors {
+        full {
+            dimension "view"
+            applicationId "com.stockscreener.app"
+        }
+        picks {
+            dimension "view"
+            applicationId "com.stockscreener.picks"
+            versionCode 1
+            versionName "1.0"
+        }
+    }
 }
 
 repositories {

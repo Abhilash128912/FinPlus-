@@ -1,0 +1,10 @@
+{
+	"appId": "com.stockscreener.picks",
+	"appName": "Screener Picks",
+	"webDir": "www",
+	"server": {
+		"url": "https://finplus-g0b5.onrender.com/mobile",
+		"androidScheme": "https",
+		"cleartext": true
+	}
+}

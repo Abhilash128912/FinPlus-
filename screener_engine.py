@@ -2647,6 +2647,81 @@ def find_best_swing_candidate(screener_results: list[dict]) -> dict:
     }
 
 
+# ─── Swing candidate gates ───────────────────────────────────────────────────
+# The one definition of what makes a stock a swing candidate. The desktop page
+# filters the full scan client-side and the mobile view consumes a precomputed
+# top-N; both must agree on the gates, so the thresholds live here and are handed
+# to the browser as SWING_GATES rather than restated in JavaScript.
+SWING_GATES: dict = {
+    # No penny stocks: a swing hold needs a price that can absorb a stop without
+    # the tick size itself being a meaningful fraction of the move.
+    "min_ltp": 50.0,
+    # Large/mid cap, or a small cap on Zerodha's MTF quality list -- the set that
+    # can be held with margin and exited without hunting for a counterparty.
+    "min_market_cap": 50_000_000_000,
+    "quality_cap_categories": ("Large Cap", "Mid Cap"),
+    # Either a genuine swing setup or a strong overall score gets a stock through;
+    # a stock needs one of the two, not both.
+    "min_swing_score": 40.0,
+    "min_total_score": 45.0,
+}
+
+
+def swing_candidate_gates_pass(s: dict) -> bool:
+    """True when a scan row clears every swing gate in SWING_GATES."""
+    g = SWING_GATES
+    ltp = sane_metric(s, "ltp")
+    if ltp is None:
+        ltp = sane_metric(s, "current_ltp")
+    if ltp is None or ltp < g["min_ltp"]:
+        return False
+
+    mcap = sane_metric(s, "market_cap") or 0.0
+    is_quality_cap = (
+        s.get("cap_category") in g["quality_cap_categories"]
+        or bool(s.get("is_large_cap"))
+        or bool(s.get("is_mid_cap"))
+        or mcap >= g["min_market_cap"]
+    )
+    is_mtf_quality = s.get("is_mtf") in (True, "true")
+    if not is_quality_cap and not is_mtf_quality:
+        return False
+
+    swing_score = sane_metric(s, "swing_score") or 0.0
+    total_score = sane_metric(s, "total_score") or 0.0
+    if swing_score < g["min_swing_score"] and total_score < g["min_total_score"]:
+        return False
+
+    # A setup with no computable stop is not a tradeable setup.
+    return (sane_metric(s, "swing_sl") or 0.0) > 0
+
+
+def compute_swing_picks(screener_results: list[dict], top_n: int = 40) -> list[dict]:
+    """Rank swing candidates and return the strongest top_n.
+
+    The desktop page can afford to filter all ~2,500 scan rows in the browser and
+    offer presets over the full qualifying set (441 stocks on the 03 Sep scan).
+    The mobile view cannot: it exists so the app never downloads the ~10MB scan
+    payload, so the candidate set has to arrive already chosen and already small.
+
+    Ranked by swing_score, falling back to total_score where the swing model did
+    not produce a score, so a row is never ordered ahead of a better setup purely
+    for lacking a field.
+    """
+    if not screener_results:
+        return []
+
+    qualifying = [s for s in screener_results if swing_candidate_gates_pass(s)]
+    qualifying.sort(
+        key=lambda s: (
+            sane_metric(s, "swing_score") or 0.0,
+            sane_metric(s, "total_score") or 0.0,
+        ),
+        reverse=True,
+    )
+    return qualifying[:top_n]
+
+
 def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict:
     """
     Selects intraday MIS buy (long) and sell (short) candidates for same-day
