@@ -37,7 +37,8 @@ SLIM_FIELDS = {
         "sr1h_available", "sr1h_support", "sr1h_resistance", "sr1h_sup_holds",
         "sr1h_brekout_res", "sr1h_buy_diamond", "sr1h_dist_support_pct",
         "sr1h_room_to_res_pct",
-        "srv_setup", "srv_pdh", "srv_pdl", "srv_break_vol_ratio", "srv_signal", "srv_strength", "srv_support", "srv_resistance", "srv_entry",
+        "srv_setup", "srv_pdh", "srv_pdl", "srv_break_vol_ratio",
+        "srv_level_kind", "srv_level_vol", "srv_signal", "srv_strength", "srv_support", "srv_resistance", "srv_entry",
         "srv_stop", "srv_target1", "srv_level_target", "srv_risk_pct",
         "srv_reward_pct", "srv_rr", "srv_reason", "srv_vol_ratio",
     ),
@@ -46,7 +47,8 @@ SLIM_FIELDS = {
         "swing_sl_pct", "swing_t1", "swing_t1_pct", "swing_t2", "swing_t2_pct",
         "swing_badge", "swing_class", "swing_reason", "rs_rating", "trend",
         "trend_class", "cap_category", "sector",
-        "srv_setup", "srv_pdh", "srv_pdl", "srv_break_vol_ratio", "srv_signal", "srv_strength", "srv_support", "srv_resistance", "srv_entry",
+        "srv_setup", "srv_pdh", "srv_pdl", "srv_break_vol_ratio",
+        "srv_level_kind", "srv_level_vol", "srv_signal", "srv_strength", "srv_support", "srv_resistance", "srv_entry",
         "srv_stop", "srv_target1", "srv_level_target", "srv_risk_pct",
         "srv_reward_pct", "srv_rr", "srv_reason", "srv_vol_ratio",
     ),
@@ -249,8 +251,13 @@ function kv(items) {
 
 function cardSr(row) {
   var isBuy = row.srv_signal === 'BUY';
+  // A level's role is which side price is on, not where it was carved out: a
+  // broken resistance is support. Worth naming on the card, since a flipped level
+  // is the stronger read.
+  var kind = (row.srv_level_kind || '').toUpperCase();
   var setup = row.srv_setup === 'PDL_BREAK' ? 'BELOW PDL'
             : row.srv_setup === 'PDH_BREAK' ? 'ABOVE PDH'
+            : kind ? 'AT ' + kind
             : (isBuy ? 'AT SUPPORT' : 'AT RESISTANCE');
   var tag = '<span class="badge ' + (isBuy ? 'g' : 'r') + '">' + esc(row.srv_signal) + ' · '
           + setup + '</span>';
@@ -263,7 +270,8 @@ function cardSr(row) {
         ['Target', '₹' + n(row.srv_target1)],
         ['Risk', n(row.srv_risk_pct, 2) + '%'], ['Reward', n(row.srv_reward_pct, 2) + '%'],
         ['R:R', n(row.srv_rr, 2)],
-        ['Break vol', row.srv_break_vol_ratio != null ? n(row.srv_break_vol_ratio, 1) + '×' : null]]) +
+        ['Break vol', row.srv_break_vol_ratio != null ? n(row.srv_break_vol_ratio, 1) + '×' : null],
+        ['Level vol', row.srv_level_vol != null ? n(row.srv_level_vol, 1) + '×' : null]]) +
     (row.srv_reason ? '<div class="why">' + esc(row.srv_reason) + '</div>' : '') +
     lvlNote + '</div>';
 }

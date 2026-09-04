@@ -80,6 +80,12 @@ GATES: dict = {
     # hour of the session, since the break itself is what needed participation.
     # TATACHEM broke 630.00 on 303,146 against a 60,929 average: 4.98x.
     "min_break_vol_ratio": 1.5,
+    # Bars price must hold beyond a level before the break counts as confirmed and
+    # the level changes polarity. A broken resistance acts as support and a broken
+    # support as resistance -- most supports are former resistance -- so a level's
+    # role is decided by which side price is on now, not by whether it was carved
+    # out at a high or a low.
+    "flip_confirm_bars": 3,
 }
 
 NO_SIGNAL = {
@@ -192,8 +198,33 @@ def find_volume_levels(o, h, l, c, v, g, price):
         if h[i] == h[i - lb:i + lb + 1].max() and dv[i] < vol_lo[i]:
             highs.append({"level": float(h[i]), "dv": float(dv[i]), "age": n - 1 - i})
 
-    below = [x for x in lows if x["level"] <= price]
-    above = [x for x in highs if x["level"] >= price]
+    for x in lows:
+        x["kind"] = "support"
+    for x in highs:
+        x["kind"] = "resistance"
+
+    confirm = int(g.get("flip_confirm_bars", 3))
+
+    def held_beyond(level, above_level):
+        """True when price broke the level and has stayed beyond it since."""
+        wrong = np.where(c < level)[0] if above_level else np.where(c > level)[0]
+        if len(wrong) == 0:
+            return True
+        return (n - 1 - wrong[-1]) >= confirm
+
+    # A resistance price has broken above, and held above, is now support; a
+    # support broken below and held below is now resistance.
+    flipped_support = [
+        dict(x, kind="broken resistance") for x in highs
+        if x["level"] <= price and held_beyond(x["level"], True)
+    ]
+    flipped_resistance = [
+        dict(x, kind="broken support") for x in lows
+        if x["level"] >= price and held_beyond(x["level"], False)
+    ]
+
+    below = [x for x in lows if x["level"] <= price] + flipped_support
+    above = [x for x in highs if x["level"] >= price] + flipped_resistance
     support = max(below, key=lambda x: x["level"]) if below else None
     resistance = min(above, key=lambda x: x["level"]) if above else None
     return support, resistance
@@ -365,8 +396,10 @@ def compute_signal(df, gates: dict = None) -> dict:
                     "srv_target1": b_t1,
                     "srv_target2": round(res + depth, 2) if res else round(price + depth * 3, 2),
                     "srv_target_is_level": bool(res),
+                    "srv_level_kind": support.get("kind", "support"),
+                    "srv_level_vol": round(abs(support["dv"]) / vol_avg, 2) if vol_avg else None,
                     "srv_reason": (
-                        f"Turned up off support {support['level']:.2f} built on buying volume, "
+                        f"Turned up off {support.get('kind', 'support')} {support['level']:.2f}, "
                         f"on {vol_ratio:.1f}x volume"
                     ),
                 })
@@ -394,8 +427,10 @@ def compute_signal(df, gates: dict = None) -> dict:
                     "srv_target1": s_t1,
                     "srv_target2": round(sup - depth, 2) if sup else round(price - depth * 3, 2),
                     "srv_target_is_level": bool(sup),
+                    "srv_level_kind": resistance.get("kind", "resistance"),
+                    "srv_level_vol": round(abs(resistance["dv"]) / vol_avg, 2) if vol_avg else None,
                     "srv_reason": (
-                        f"Turned down off resistance {resistance['level']:.2f} built on selling volume, "
+                        f"Turned down off {resistance.get('kind', 'resistance')} {resistance['level']:.2f}, "
                         f"on {vol_ratio:.1f}x volume"
                     ),
                 })
