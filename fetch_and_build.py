@@ -5928,17 +5928,39 @@ async function refreshLiveLTP(manual = false) {
   updateLtpBadgeStatus(nowStr, freshCount, attempted, stalePrices.size);
 
   saveWatchlist();
+
+  // Every poll used to rebuild all eleven tabs, hidden ones included, each by
+  // replacing its container's innerHTML. That is what makes the page jump: for a
+  // frame the container is empty, the document shrinks, the browser clamps the
+  // scroll position to the shorter page, and the restored content leaves the
+  // reader somewhere else. Ten seconds later it happens again.
+  //
+  // Only the tab actually on screen is rebuilt now -- rendering a display:none tab
+  // changed nothing a reader could see -- and the scroll offset is carried across
+  // the rebuild so a height blip cannot move the page.
+  const tabVisible = (id) => {
+    const el = document.getElementById(id);
+    return !!el && el.style.display !== 'none';
+  };
+  const scrollBefore = window.scrollY;
+
+  // Always on screen: the header stats, the top pick and the regime banner.
   renderStats();
-  renderTable();
-  renderWatchlist();
-  if (typeof renderLtWatchlist === 'function') renderLtWatchlist();
-  if (typeof renderFnoTab === 'function') renderFnoTab();
-  if (typeof renderIntradayTab === 'function') renderIntradayTab();
   if (typeof renderTopPick === 'function') renderTopPick();
-  if (typeof renderSwingRadar === 'function') renderSwingRadar();
-  if (typeof renderSrBreakouts === 'function') renderSrBreakouts();
+
+  if (tabVisible('tab-screener')) { renderTable(); renderWatchlist(); }
+  if (tabVisible('tab-watchlist') && typeof renderLtWatchlist === 'function') renderLtWatchlist();
+  if (tabVisible('tab-fno') && typeof renderFnoTab === 'function') renderFnoTab();
+  if (tabVisible('tab-intraday') && typeof renderIntradayTab === 'function') renderIntradayTab();
+  if (tabVisible('tab-swing')) {
+    if (typeof renderSwingRadar === 'function') renderSwingRadar();
+    if (typeof renderSrBreakouts === 'function') renderSrBreakouts();
+  }
   if (typeof renderNiftyRegimeBanner === 'function') renderNiftyRegimeBanner();
-  if (typeof renderPennyStocksTab === 'function') renderPennyStocksTab();
+  if (tabVisible('tab-penny') && typeof renderPennyStocksTab === 'function') renderPennyStocksTab();
+
+  // Restore before the browser paints, so the correction is never visible.
+  if (window.scrollY !== scrollBefore) window.scrollTo({ top: scrollBefore, behavior: 'instant' });
 
   if (priceChanged || manual) {
     flashUpdatedPrices();
