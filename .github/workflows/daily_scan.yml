@@ -95,25 +95,24 @@ jobs:
           mkt_info = fb.get_market_status()
           mkt_info['nifty'] = nifty_regime
 
+          # Write the scan data FIRST: write_scan_json also stamps scan_meta.json
+          # with the completion time, and build_html reads that stamp for the page's
+          # 'Last scan' line. Built the other way round the stamp is missing and the
+          # page falls back to render time, which is what made a stale deploy read as
+          # freshly scanned.
+          clean_results = fb.sanitize_for_strict_json(results)
+          fb.write_scan_json(clean_results)
+
           print('Building HTML report (also writes static/app.css, static/app.js)...')
           html = fb.build_html(results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
+          fb.publish_html(html)
 
-          with open(fb.OUT_HTML, 'w', encoding='utf-8') as f:
-              f.write(html)
-          os.makedirs(os.path.dirname(fb.OUT_WWW_HTML), exist_ok=True)
-          with open(fb.OUT_WWW_HTML, 'w', encoding='utf-8') as f:
-              f.write(html)
+          # The phone app loads /mobile, a separate page built from the same results.
+          # Without this an automated scan refreshes the desktop page and leaves the
+          # app on whatever it had at the last deploy.
+          fb.publish_mobile_html(results, lt_wl_data, mkt_info)
 
-          # screener.html now fetches its data from screener_data.json instead of
-          # inlining it, so this file must be committed alongside screener.html for
-          # the same reason index.html always was: it's what a freshly-restarted
-          # Heroku dyno serves instantly while its own background rescan is still
-          # running (see fetch_and_build.py's startup_bg_tasks / background_initial_scan).
-          clean_results = fb.sanitize_for_strict_json(results)
-          with open(fb.OUT_JSON_FILE, 'w', encoding='utf-8') as f:
-              json.dump(clean_results, f, default=fb.json_serializer)
-
-          print(f'Scan complete! screener.html ({len(html):,} bytes), screener_data.json, static/app.css & static/app.js updated')
+          print(f'Scan complete! screener.html ({len(html):,} bytes), mobile.html, screener_data.json, scan_meta.json, static/app.css & static/app.js updated')
           "
 
       - name: Commit and push updated report
@@ -125,7 +124,11 @@ jobs:
           # mobile API serves. Without it the phone falls back to the static config,
           # which has no status/badge/ltp at all, so an automated scan would refresh
           # the desktop page while leaving the app's signals frozen.
-          git add screener.html screener_data.json static/app.css static/app.js \
+          # mobile.html is the phone app's page and scan_meta.json carries the scan
+          # time both pages display; omitting either leaves the app frozen or the
+          # timestamp claiming a freshness the data does not have.
+          git add screener.html mobile.html scan_meta.json \
+                  screener_data.json static/app.css static/app.js \
                   daily_picks_history.json watchlist_data.json \
                   lt_watchlist_enriched.json lt_discovery_pipeline.json \
                   penny_monthly_picks.json || true
