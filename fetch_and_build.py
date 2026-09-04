@@ -8714,6 +8714,73 @@ def mcx_bars_dataframe(symbol: str, state: dict = None):
     return frame
 
 
+# How often the accumulated bars are pushed to the repo. Render's filesystem is
+# rebuilt on every deploy and there is now a deploy after every scan, so bars
+# recorded there are wiped several times a day and can never reach the 60 the
+# model needs. This laptop is the only process that runs continuously, which makes
+# it the recorder -- and the file has to reach the repo for the deployment to serve
+# commodity S/R at all.
+MCX_BARS_PUSH_INTERVAL_SEC = 1800.0
+
+
+def commit_mcx_bars() -> bool:
+    """Commit and push mcx_bars.json, if it changed. True when something was pushed.
+
+    Deliberately narrow: it stages that one path and nothing else, so a working
+    tree mid-edit cannot be swept into a commit. It rebases before pushing because
+    the scan bot commits to the same branch several times a day, and it swallows
+    every failure -- a recorder that cannot push should keep recording, not take
+    the server down.
+    """
+    if os.environ.get("RENDER"):
+        return False
+    try:
+        import subprocess
+        def git(*args, **kw):
+            return subprocess.run(("git",) + args, cwd=BASE_DIR, capture_output=True,
+                                  text=True, timeout=kw.get("timeout", 120))
+
+        if not git("status", "--porcelain", "--", MCX_BARS_FILE).stdout.strip():
+            return False
+
+        # Only when nothing else tracked is modified. The rebase below refuses to
+        # run against unstaged changes, which is the normal state of this machine
+        # while it is being worked on -- and quietly stashing someone's edits from
+        # a background thread to push a price file is not a trade worth making.
+        # Untracked files are ignored; they block nothing.
+        dirty = [
+            line[3:] for line in git("status", "--porcelain").stdout.splitlines()
+            if line[:2] != "??" and os.path.basename(line[3:].strip()) != os.path.basename(MCX_BARS_FILE)
+        ]
+        if dirty:
+            log(f"  ⏭  MCX bars: {len(dirty)} other file(s) modified, deferring the commit")
+            return False
+
+        git("add", "--", MCX_BARS_FILE)
+        stamp = datetime.datetime.now(IST).strftime("%d %b %Y, %I:%M %p")
+        msg = f"auto: MCX hourly bars up to {stamp} [skip ci]"
+        if git("commit", "-m", msg).returncode != 0:
+            git("reset", "HEAD", "--", MCX_BARS_FILE)
+            return False
+
+        # The bot pushes to this branch too; rebase rather than force.
+        git("fetch", "origin", "screener", timeout=180)
+        if git("rebase", "origin/screener", timeout=180).returncode != 0:
+            git("rebase", "--abort")
+            log("  ⚠ MCX bars: rebase failed, will retry next cycle")
+            return False
+
+        pushed = git("push", "origin", "HEAD:screener", timeout=300)
+        if pushed.returncode != 0:
+            log(f"  ⚠ MCX bars: push failed ({pushed.stderr.strip()[:120]})")
+            return False
+        log(f"  📈 MCX bars committed and pushed ({stamp})")
+        return True
+    except Exception as e:
+        log(f"  ⚠ MCX bars: commit skipped ({e})")
+        return False
+
+
 def mcx_bar_recorder():
     """Sample MCX on a fixed cadence while the commodity session is open.
 
@@ -8721,6 +8788,7 @@ def mcx_bar_recorder():
     file, and any failure is logged and slept off rather than propagated, so a
     commodity feed problem cannot disturb the equity side.
     """
+    last_push = time.time()
     while True:
         try:
             time.sleep(MCX_SAMPLE_INTERVAL_SEC)
@@ -8728,6 +8796,10 @@ def mcx_bar_recorder():
                 continue
             state = record_mcx_sample(load_mcx_bars())
             save_mcx_bars(state)
+
+            if time.time() - last_push >= MCX_BARS_PUSH_INTERVAL_SEC:
+                last_push = time.time()
+                commit_mcx_bars()
         except Exception as e:
             log(f"  ⚠ MCX bar recorder cycle failed: {e}")
 
