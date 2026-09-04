@@ -256,15 +256,18 @@ function renderCommodityBar() {
   let html = '';
   for (const [key, item] of Object.entries(COMMODITIES_DATA)) {
     if (!item) continue;
-    const usdPriceStr = item.curr_price ? `${item.unit}${item.curr_price}` : 'N/A';
+    // The dollar quote is deliberately not shown. The price beside it is the
+    // traded MCX contract in rupees, and displaying WTI's dollar price next to it
+    // read as though the rupee figure were derived from it -- which is exactly what
+    // this panel used to do and no longer does.
     // The MCX figure is the traded contract now, not a dollar price times an FX
     // rate, so it is no longer labelled an estimate -- and when MCX cannot be
     // reached the field is simply absent rather than falling back to a number
     // that looks Indian but is not.
     const mcxPriceStr = item.mcx_inr_price
-      ? ` · MCX ${item.mcx_expiry || ''} ₹${item.mcx_inr_price.toLocaleString('en-IN')}`
+      ? `MCX ${item.mcx_expiry || ''} ₹${item.mcx_inr_price.toLocaleString('en-IN')}`
         + (item.mcx_pct != null ? ` (${item.mcx_pct > 0 ? '+' : ''}${item.mcx_pct}%)` : '')
-      : ' · MCX price unavailable';
+      : 'MCX price unavailable';
     const srcStr = item.signal_source ? ` — signal from ${item.signal_source}` : '';
     // MCX publishes no intraday history, so the app records its own. Shown while
     // it fills, so an absent S/R read is visibly "not enough history yet" rather
@@ -274,7 +277,13 @@ function renderCommodityBar() {
       : (item.srv_bars_needed
           ? ` · S/R history ${item.srv_bars_recorded || 0}/${item.srv_bars_needed} hrs`
           : '');
-    const emaStr = (item.ema15 && item.ema20) ? `15EMA: ${item.ema15} · 20EMA: ${item.ema20} (${item.diff_pct > 0 ? '+' : ''}${item.diff_pct}%)` : '';
+    // Only the EMA relationship, never the levels. The levels are WTI and Henry Hub
+    // in dollars, and printing 90.89 beside a rupee price is the same confusion the
+    // dollar quote caused -- the gap between the two averages is what the signal
+    // actually reads, and it is scale-free.
+    const emaStr = (item.ema15 && item.ema20)
+      ? `15/20 EMA ${item.diff_pct > 0 ? '+' : ''}${item.diff_pct}%`
+      : '';
 
     let badgeStyle = 'background: rgba(255,255,255,0.08); color:#ccc; border: 1px solid rgba(255,255,255,0.1);';
     if (item.signal === 'BUY') {
@@ -291,7 +300,7 @@ function renderCommodityBar() {
       <div class="commodity-card">
         <span style="font-size:16px">${item.icon || '⛽'}</span>
         <div>
-          <div class="commodity-card-name">${item.name} <span class="commodity-card-price">${usdPriceStr}</span><span style="color:#00d4aa;font-size:12px;font-weight:600">${mcxPriceStr}</span></div>
+          <div class="commodity-card-name">${item.name} <span class="commodity-card-price" style="color:#00d4aa">${mcxPriceStr}</span></div>
           <div class="commodity-card-emas">${emaStr}${srcStr}${srStr}</div>
         </div>
         <span class="commodity-badge" style="${badgeStyle}">
