@@ -1,420 +1,132 @@
 {
   "capital_settings": {
-    "start_date": "2026-08-17",
-    "initial_capital": 3477.97,
-    "daily_rate": 200
+    "start_date": "2026-09-07",
+    "initial_capital": 0.0,
+    "daily_rate": 200.0
   },
   "UYFINCORP.NS": {
     "name": "U. Y. Fincorp Limited",
     "category": "Core",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-08-06",
-        "price": 19.33,
-        "shares": 12
-      },
-      {
-        "date": "2026-08-21",
-        "price": 19.87,
-        "shares": -12,
-        "type": "SELL"
-      }
-    ],
+    "transactions": [],
     "date_added": "2026-08-06"
   },
   "ASHOKLEY.NS": {
     "name": "Ashok Leyland Limited",
     "category": "Core",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-07-13",
-        "price": 160.53,
-        "shares": 2
-      },
-      {
-        "date": "2026-08-17",
-        "price": 177.54,
-        "shares": -2,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 179.33,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-07-03",
-    "initial_reference_price": 160.53
+    "initial_reference_price": 0.0
   },
   "BEL.NS": {
     "name": "Bharat Electronics Limited",
     "category": "Core",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-07-29",
-        "price": 403.52,
-        "shares": 3
-      },
-      {
-        "date": "2026-08-17",
-        "price": 411.6,
-        "shares": -3,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 414,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-07-03",
-    "initial_reference_price": 403.52
+    "initial_reference_price": 0.0
   },
   "BORANA.NS": {
     "name": "BORANA",
     "category": "Growth",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-08-06",
-        "price": 342,
-        "shares": 1
-      },
-      {
-        "date": "2026-08-17",
-        "price": 324.4,
-        "shares": -1,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 353.95,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-08-06",
-    "initial_reference_price": 351
+    "initial_reference_price": 0.0
   },
   "EMMVEE.NS": {
     "name": "Emmvee Photovoltaic Power Limited",
     "category": "Growth",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-08-11",
-        "price": 330.98,
-        "shares": 2
-      },
-      {
-        "date": "2026-08-12",
-        "price": 314.1,
-        "shares": -2,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 330.98,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-08-11",
-    "initial_reference_price": 314.15
+    "initial_reference_price": 0.0
   },
   "FEDERALBNK.NS": {
     "name": "The Federal Bank Limited",
     "category": "Core",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-08-03",
-        "price": 359.1,
-        "shares": 1
-      },
-      {
-        "date": "2026-08-11",
-        "price": 353.1,
-        "shares": 1
-      },
-      {
-        "date": "2026-08-17",
-        "price": 352.65,
-        "shares": -2,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 361,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-07-03",
-    "initial_reference_price": 355.75
+    "initial_reference_price": 0.0
   },
   "ITC.NS": {
     "name": "ITC Limited",
     "category": "Core",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-07-14",
-        "price": 275.45,
-        "shares": 1
-      },
-      {
-        "date": "2026-08-17",
-        "price": 277.5,
-        "shares": -1,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 286.25,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-07-03",
-    "initial_reference_price": 275.45
+    "initial_reference_price": 0.0
   },
   "NMDC.NS": {
     "name": "NMDC Limited",
     "category": "Core",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-08-03",
-        "price": 84.8,
-        "shares": 1
-      },
-      {
-        "date": "2026-08-11",
-        "price": 85.29,
-        "shares": 5
-      },
-      {
-        "date": "2026-08-17",
-        "price": 84.77,
-        "shares": -6,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 85.49,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-07-03",
-    "initial_reference_price": 84.8
+    "initial_reference_price": 0.0
   },
   "PANAMAPET.NS": {
     "name": "Panama Petrochem Limited",
     "category": "Growth",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-08-11",
-        "price": 544.95,
-        "shares": 3
-      },
-      {
-        "date": "2026-08-12",
-        "price": 567.65,
-        "shares": -3,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 598.7,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-08-11",
-    "initial_reference_price": 506.15
+    "initial_reference_price": 0.0
   },
   "TATAPOWER.NS": {
     "name": "Tata Power Company Limited",
     "category": "Core",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-07-10",
-        "price": 382.25,
-        "shares": 1
-      },
-      {
-        "date": "2026-08-17",
-        "price": 381.3,
-        "shares": -1,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 390.4,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-07-03",
-    "initial_reference_price": 382.25
+    "initial_reference_price": 0.0
   },
   "TATASTEEL.NS": {
     "name": "Tata Steel Limited",
     "category": "Growth",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-07-27",
-        "price": 182.82,
-        "shares": 1
-      },
-      {
-        "date": "2026-08-14",
-        "price": 181.45,
-        "shares": 1
-      },
-      {
-        "date": "2026-08-17",
-        "price": 184.24,
-        "shares": -2,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 191.53,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-07-05",
-    "initial_reference_price": 182.82
+    "initial_reference_price": 0.0
   },
   "NIFTYBEES.NS": {
     "name": "Nippon India Nifty 50 BeES ETF",
     "category": "Park",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-08-12",
-        "price": 277.4,
-        "shares": 3
-      },
-      {
-        "date": "2026-08-13",
-        "price": 278.05,
-        "shares": 3
-      },
-      {
-        "date": "2026-08-14",
-        "price": 277.75,
-        "shares": -1,
-        "type": "SELL"
-      },
-      {
-        "date": "2026-08-14",
-        "price": 277.25,
-        "shares": -5,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 286.5,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-08-11",
-    "initial_reference_price": 286.5
+    "initial_reference_price": 0.0
   },
   "GOLDBEES.NS": {
     "name": "Nippon India Gold BeES ETF",
     "category": "Park",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-08-12",
-        "price": 126.25,
-        "shares": 6
-      },
-      {
-        "date": "2026-08-13",
-        "price": 125.84,
-        "shares": 4
-      },
-      {
-        "date": "2026-08-14",
-        "price": 123.9,
-        "shares": -10,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 131.32,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-08-11",
-    "initial_reference_price": 74.2
+    "initial_reference_price": 0.0
   },
   "MARKSANS.NS": {
     "name": "Marksans Pharma Limited",
     "category": "Park",
     "in_watchlist": false,
-    "transactions": [
-      {
-        "date": "2026-08-14",
-        "price": 317.35,
-        "shares": 5
-      },
-      {
-        "date": "2026-08-17",
-        "price": 328.93,
-        "shares": -1,
-        "type": "SELL"
-      },
-      {
-        "date": "2026-08-17",
-        "price": 328.93,
-        "shares": -4,
-        "type": "SELL"
-      }
-    ],
-    "local_peak": 335.45,
+    "transactions": [],
+    "local_peak": 0.0,
     "date_added": "2026-08-14",
-    "initial_reference_price": 316.8
+    "initial_reference_price": 0.0
   },
-  "mtf_trading": [
-    {
-      "id": 4,
-      "ticker": "CLEAN.NS",
-      "buy_date": "2026-08-11",
-      "buy_price": 812.3,
-      "shares": 11,
-      "broker_funding_pct": 72,
-      "margin_ratio": 0.28,
-      "margin_paid": 2501.884,
-      "broker_funding": 6433.415999999999,
-      "status": "Closed",
-      "sell_date": "2026-08-11",
-      "sell_price": 810
-    },
-    {
-      "id": 3,
-      "ticker": "THELEELA.NS",
-      "buy_date": "2026-08-11",
-      "buy_price": 513,
-      "shares": 19,
-      "broker_funding_pct": 72,
-      "margin_ratio": 0.28,
-      "margin_paid": 2729.16,
-      "broker_funding": 7017.84,
-      "status": "Closed",
-      "sell_date": "2026-08-11",
-      "sell_price": 512.7
-    },
-    {
-      "id": 2,
-      "ticker": "TATATECH.NS",
-      "buy_date": "2026-08-07",
-      "buy_price": 859,
-      "shares": 15,
-      "broker_funding_pct": 70,
-      "margin_ratio": 0.3,
-      "margin_paid": 3865.5,
-      "broker_funding": 9019.5,
-      "status": "Closed",
-      "sell_date": "2026-08-10",
-      "sell_price": 872.4
-    },
-    {
-      "id": 1,
-      "ticker": "SAILIFE.NS",
-      "buy_date": "2026-08-07",
-      "buy_price": 1374.98,
-      "shares": 9,
-      "broker_funding_pct": 69,
-      "margin_ratio": 0.31,
-      "margin_paid": 3836.1942,
-      "broker_funding": 8538.6258,
-      "status": "Closed",
-      "sell_date": "2026-08-07",
-      "sell_price": 1373.7
-    },
-    {
-      "id": 0,
-      "ticker": "GESHIP.NS",
-      "buy_date": "2026-08-03",
-      "buy_price": 1401,
-      "shares": 10,
-      "broker_funding_pct": 68,
-      "margin_ratio": 0.32,
-      "margin_paid": 4483.199999999999,
-      "broker_funding": 9526.800000000001,
-      "status": "Closed",
-      "sell_date": "2026-08-06",
-      "sell_price": 1348.67
-    },
-    {
-      "id": 5,
-      "ticker": "CYIENTDLM.NS",
-      "buy_date": "2026-08-17",
-      "buy_price": 727.3,
-      "shares": 15,
-      "broker_funding_pct": 72,
-      "margin_ratio": 0.28,
-      "margin_paid": 3054.66,
-      "broker_funding": 7854.84,
-      "status": "Active"
-    }
-  ]
+  "mtf_trading": []
 }

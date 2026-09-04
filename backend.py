@@ -6,6 +6,7 @@ import requests
 import sqlite3
 import threading
 import socket
+from datetime import datetime
 from typing import Dict, List, Any, Optional
 from fastapi import FastAPI, Request, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,31 +29,13 @@ PULLBACK_FILE = os.path.join(BASE_DIR, "pullback_data.json")
 JOURNAL_FILE = os.path.join(BASE_DIR, "finplus_journal_data.json")
 SETTINGS_FILE = os.path.join(BASE_DIR, "finplus_settings.json")
 DB_FILE = os.path.join(BASE_DIR, "trades_backup.db")
+RISK_FILE = os.path.join(BASE_DIR, "finplus_risk_desk.json")
 
 # Thread lock for file operations
 file_lock = threading.Lock()
 
 # Price cache: { symbol: { "ltp": float, "change": float, "prev_close": float, "high": float, "low": float, "timestamp": float } }
-PRICE_CACHE: Dict[str, Dict[str, Any]] = {
-    "ASHOKLEY.NS": { "ltp": 177.54, "change": 0.48, "change_percent": 0.27, "prev_close": 177.06, "high": 178.00, "low": 176.50, "timestamp": time.time() },
-    "BEL.NS": { "ltp": 410.40, "change": 1.16, "change_percent": 0.28, "prev_close": 409.24, "high": 412.00, "low": 408.00, "timestamp": time.time() },
-    "BORANA.NS": { "ltp": 324.40, "change": -1.83, "change_percent": -0.56, "prev_close": 326.23, "high": 330.00, "low": 322.00, "timestamp": time.time() },
-    "EMMVEE.NS": { "ltp": 314.15, "change": -4.55, "change_percent": -1.43, "prev_close": 318.70, "high": 322.00, "low": 312.00, "timestamp": time.time() },
-    "FEDERALBNK.NS": { "ltp": 352.65, "change": -1.18, "change_percent": -0.33, "prev_close": 353.83, "high": 356.00, "low": 351.00, "timestamp": time.time() },
-    "ITC.NS": { "ltp": 277.50, "change": 0.29, "change_percent": 0.10, "prev_close": 277.21, "high": 279.00, "low": 276.00, "timestamp": time.time() },
-    "NMDC.NS": { "ltp": 84.77, "change": -1.32, "change_percent": -1.53, "prev_close": 86.09, "high": 86.50, "low": 84.50, "timestamp": time.time() },
-    "PANAMAPET.NS": { "ltp": 507.25, "change": -38.25, "change_percent": -7.01, "prev_close": 545.50, "high": 548.00, "low": 505.00, "timestamp": time.time() },
-    "TATAPOWER.NS": { "ltp": 381.30, "change": 0.49, "change_percent": 0.13, "prev_close": 380.81, "high": 384.00, "low": 379.00, "timestamp": time.time() },
-    "TATASTEEL.NS": { "ltp": 184.24, "change": -1.05, "change_percent": -0.57, "prev_close": 185.29, "high": 186.00, "low": 183.00, "timestamp": time.time() },
-    "UYFINCORP.NS": { "ltp": 20.17, "change": 5.00, "change_percent": 5.00, "prev_close": 19.17, "high": 20.17, "low": 19.10, "timestamp": time.time() },
-    "GOLDBEES.NS": { "ltp": 124.98, "change": -0.68, "change_percent": -0.54, "prev_close": 125.66, "high": 126.50, "low": 124.80, "timestamp": time.time() },
-    "NIFTYBEES.NS": { "ltp": 278.40, "change": 0.13, "change_percent": 0.05, "prev_close": 278.27, "high": 279.50, "low": 277.50, "timestamp": time.time() },
-    "MIDHANI.NS": { "ltp": 423.95, "change": 3.45, "change_percent": 0.82, "prev_close": 420.50, "high": 426.00, "low": 418.00, "timestamp": time.time() },
-    "CUPID.NS": { "ltp": 284.65, "change": 2.15, "change_percent": 0.76, "prev_close": 282.50, "high": 286.00, "low": 280.00, "timestamp": time.time() },
-    "KIRIINDUS.NS": { "ltp": 477.90, "change": 16.60, "change_percent": 3.60, "prev_close": 461.30, "high": 482.00, "low": 460.00, "timestamp": time.time() },
-    "RVNL.NS": { "ltp": 225.30, "change": -2.10, "change_percent": -0.92, "prev_close": 227.40, "high": 230.00, "low": 224.00, "timestamp": time.time() },
-    "SIGMA.NS": { "ltp": 47.20, "change": 0.0, "change_percent": 0.0, "prev_close": 47.20, "high": 47.20, "low": 47.20, "timestamp": time.time() }
-}
+PRICE_CACHE: Dict[str, Dict[str, Any]] = {}
 CACHE_TTL_SECONDS = 20.0
 
 SYMBOL_MAP = {
@@ -72,20 +55,20 @@ SYMBOL_MAP = {
 }
 
 DEFAULT_PULLBACK_DATA = {
-    "capital_settings": { "start_date": "2026-07-03", "initial_capital": 3477.97, "daily_rate": 200.0 },
-    "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "transactions": [{ "date": "2026-07-13", "price": 160.53, "shares": 2 }], "local_peak": 177.85, "date_added": "2026-07-03", "initial_reference_price": 160.53 },
-    "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "transactions": [{ "date": "2026-07-29", "price": 403.52, "shares": 3 }], "local_peak": 410.45, "date_added": "2026-07-03", "initial_reference_price": 403.52 },
-    "BORANA.NS": { "name": "BORANA", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 342.0, "shares": 1 }], "local_peak": 353.95, "date_added": "2026-08-06", "initial_reference_price": 342.00 },
-    "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "in_watchlist": False, "transactions": [{ "date": "2026-08-03", "price": 330.98, "shares": 2 }, { "date": "2026-08-12", "price": 314.10, "shares": -2, "type": "SELL" }], "local_peak": 330.98, "date_added": "2026-07-03", "initial_reference_price": 314.10 },
-    "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 359.10, "shares": 1 }, { "date": "2026-08-11", "price": 353.10, "shares": 1 }], "local_peak": 359.10, "date_added": "2026-07-03", "initial_reference_price": 355.75 },
-    "ITC.NS": { "name": "ITC Limited", "category": "Core", "transactions": [{ "date": "2026-07-14", "price": 275.45, "shares": 1 }], "local_peak": 286.25, "date_added": "2026-07-03", "initial_reference_price": 275.45 },
-    "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [{ "date": "2026-08-03", "price": 84.80, "shares": 1 }, { "date": "2026-08-11", "price": 85.29, "shares": 5 }], "local_peak": 85.49, "date_added": "2026-07-03", "initial_reference_price": 84.80 },
-    "PANAMAPET.NS": { "name": "Panama Petrochem Limited", "category": "Growth", "in_watchlist": False, "transactions": [{ "date": "2026-08-11", "price": 544.95, "shares": 3 }, { "date": "2026-08-12", "price": 567.65, "shares": -3, "type": "SELL" }], "local_peak": 598.70, "date_added": "2026-08-11", "initial_reference_price": 506.15 },
-    "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [{ "date": "2026-07-10", "price": 382.25, "shares": 1 }], "local_peak": 382.25, "date_added": "2026-07-03", "initial_reference_price": 382.25 },
-    "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [{ "date": "2026-07-27", "price": 182.82, "shares": 1 }], "local_peak": 191.53, "date_added": "2026-07-05", "initial_reference_price": 182.82 },
-    "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "transactions": [{ "date": "2026-08-06", "price": 19.33, "shares": 12 }], "local_peak": 22.34, "date_added": "2026-08-06", "initial_reference_price": 19.33 },
-    "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 277.40, "shares": 3 }, { "date": "2026-08-13", "price": 278.05, "shares": 3 }], "local_peak": 286.50, "date_added": "2026-08-11", "initial_reference_price": 277.40 },
-    "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "transactions": [{ "date": "2026-08-12", "price": 126.25, "shares": 6 }, { "date": "2026-08-13", "price": 125.84, "shares": 4 }], "local_peak": 126.39, "date_added": "2026-08-11", "initial_reference_price": 126.25 },
+    "capital_settings": { "start_date": "2026-09-07", "initial_capital": 0.0, "daily_rate": 200.0 },
+    "ASHOKLEY.NS": { "name": "Ashok Leyland Limited", "category": "Core", "transactions": [] },
+    "BEL.NS": { "name": "Bharat Electronics Limited", "category": "Core", "transactions": [] },
+    "BORANA.NS": { "name": "BORANA", "category": "Core", "transactions": [] },
+    "EMMVEE.NS": { "name": "Emmvee Photovoltaic Power Limited", "category": "Growth", "in_watchlist": False, "transactions": [] },
+    "FEDERALBNK.NS": { "name": "The Federal Bank Limited", "category": "Core", "transactions": [] },
+    "ITC.NS": { "name": "ITC Limited", "category": "Core", "transactions": [] },
+    "NMDC.NS": { "name": "NMDC Limited", "category": "Core", "transactions": [] },
+    "PANAMAPET.NS": { "name": "Panama Petrochem Limited", "category": "Growth", "in_watchlist": False, "transactions": [] },
+    "TATAPOWER.NS": { "name": "Tata Power Company Limited", "category": "Core", "transactions": [] },
+    "TATASTEEL.NS": { "name": "Tata Steel Limited", "category": "Growth", "transactions": [] },
+    "UYFINCORP.NS": { "name": "UYFINCORP", "category": "Core", "transactions": [] },
+    "NIFTYBEES.NS": { "name": "Nippon India Nifty 50 BeES ETF", "category": "Park", "transactions": [] },
+    "GOLDBEES.NS": { "name": "Nippon India Gold BeES ETF", "category": "Park", "transactions": [] },
     "mtf_trading": []
 }
 
@@ -605,6 +588,264 @@ async def sync_trades(request: Request):
         "settings_saved": bool(settings_data)
     }
 
+# ==============================================================================
+# RISK DESK - opportunity-based fund & risk manager (server-side authority)
+#
+# The client computes locally so the Android build works offline. The server is
+# the source of truth for the audit log and re-validates every recorded trade.
+# ==============================================================================
+
+RISK_COLLECTIONS = [
+    "months", "trade_setups", "trades", "daily_risk_snapshots",
+    "opportunity_reserve_transfers", "broker_charge_profiles",
+    "broker_cash_ledger", "growth_reserve_ledger", "audit_log",
+]
+
+def _empty_risk_store() -> Dict[str, Any]:
+    store: Dict[str, Any] = {"schema_version": 1, "config": {}, "updated_at": None}
+    for c in RISK_COLLECTIONS:
+        store[c] = []
+    return store
+
+def load_risk_file() -> Dict[str, Any]:
+    with file_lock:
+        if not os.path.exists(RISK_FILE):
+            load_from_github(RISK_FILE, "finplus_risk_desk.json")
+        if not os.path.exists(RISK_FILE):
+            return _empty_risk_store()
+        try:
+            with open(RISK_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            base = _empty_risk_store()
+            base.update(data if isinstance(data, dict) else {})
+            for c in RISK_COLLECTIONS:
+                if not isinstance(base.get(c), list):
+                    base[c] = []
+            return base
+        except Exception:
+            return _empty_risk_store()
+
+def _risk_tables(conn: sqlite3.Connection):
+    """One table per entity in the brief. Rows are stored as JSON documents so the
+    schema can evolve with the client without a migration for every field."""
+    for name in RISK_COLLECTIONS:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS risk_" + name + " ("
+            "id TEXT PRIMARY KEY, month_key TEXT, updated_at TEXT, data TEXT NOT NULL)"
+        )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS risk_config ("
+        "id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL, updated_at TEXT)"
+    )
+
+def save_risk_file(store: Dict[str, Any]):
+    with file_lock:
+        with open(RISK_FILE, "w", encoding="utf-8") as f:
+            json.dump(store, f, indent=2)
+    push_to_github(RISK_FILE, "finplus_risk_desk.json")
+
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        _risk_tables(conn)
+        for name in RISK_COLLECTIONS:
+            for row in store.get(name, []) or []:
+                if not isinstance(row, dict):
+                    continue
+                rid = str(row.get("id") or row.get("month_key") or "")
+                if not rid:
+                    continue
+                conn.execute(
+                    "INSERT OR REPLACE INTO risk_" + name +
+                    " (id, month_key, updated_at, data) VALUES (?, ?, ?, ?)",
+                    (rid, row.get("month_key"), row.get("updated_at") or row.get("at"), json.dumps(row)),
+                )
+        conn.execute(
+            "INSERT OR REPLACE INTO risk_config (id, data, updated_at) VALUES (1, ?, ?)",
+            (json.dumps(store.get("config") or {}), store.get("updated_at")),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("[Risk Desk] SQLite sync failed: " + str(e))
+
+def _num(v, default=0.0) -> float:
+    try:
+        if v is None or v == "":
+            return default
+        return float(v)
+    except Exception:
+        return default
+
+def _blk(code: str, message: str) -> Dict[str, str]:
+    return {"code": code, "message": message, "severity": "BLOCK"}
+
+def _revalidate_trade(trade: Dict[str, Any], store: Dict[str, Any], month_key: Optional[str]) -> Dict[str, Any]:
+    """Independent server-side re-check of the hard limits. Deliberately does not
+    trust the risk figures sent by the client - it recomputes from stored state."""
+    blocked: List[Dict[str, str]] = []
+    warnings: List[Dict[str, str]] = []
+
+    config = store.get("config") or {}
+    mkey = month_key or str(trade.get("entry_date") or "")[:7]
+    month = next((m for m in store.get("months", []) if m.get("month_key") == mkey), None)
+
+    if not config.get("configured"):
+        blocked.append(_blk("NOT_CONFIGURED", "Risk Desk setup is not complete on the server."))
+    if month is None:
+        blocked.append(_blk("NO_MONTH", "No month record for " + str(mkey) + "."))
+
+    seg = trade.get("segment")
+    risk = _num(trade.get("planned_total_risk"))
+    if risk <= 0:
+        blocked.append(_blk("NO_RISK", "Planned total risk is missing or zero."))
+    if not _num(trade.get("stop_loss_price")):
+        blocked.append(_blk("NO_SL", "Stop-loss is required."))
+    if trade.get("trade_intent") == "RECOVERY":
+        blocked.append(_blk("REVENGE_INTENT", "Recovery / revenge trading is blocked."))
+    if str(trade.get("grade") or "") not in ("A", "A_PLUS"):
+        blocked.append(_blk("GRADE", "Only A and A+ setups are tradeable."))
+
+    others = [t for t in store.get("trades", [])
+              if str(t.get("entry_date") or "")[:7] == mkey and t.get("id") != trade.get("id")]
+    committed = sum(_num(t.get("planned_total_risk")) for t in others)
+
+    if month:
+        budget = _num(month.get("monthly_risk_budget"))
+        pre = _num(month.get("preexisting_usage"))
+        remaining = budget - pre - committed
+        if risk > remaining + 0.001:
+            blocked.append(_blk("MONTHLY_LIMIT",
+                "Monthly risk remaining is %.2f; this trade commits %.2f." % (remaining, risk)))
+
+        if month.get("enforce_segment_quotas", True):
+            bucket = (month.get("buckets") or {}).get(seg) or {}
+            initial = bucket.get("initial_allocation")
+            if initial is not None:
+                seg_committed = sum(_num(t.get("planned_total_risk")) for t in others if t.get("segment") == seg)
+                reserve_in = sum(_num(x.get("amount")) for x in store.get("opportunity_reserve_transfers", [])
+                                 if x.get("month_key") == mkey and x.get("to_segment") == seg
+                                 and x.get("trade_id") != trade.get("id"))
+                seg_remaining = _num(initial) + reserve_in - seg_committed
+                from_bucket = risk - _num(trade.get("reserve_risk_used"))
+                if from_bucket > seg_remaining + 0.001:
+                    blocked.append(_blk("SEGMENT_CAPACITY",
+                        "%s has %.2f risk capacity left; this trade needs %.2f." % (seg, seg_remaining, from_bucket)))
+
+    day = str(trade.get("entry_date") or "")[:10]
+    todays = [t for t in store.get("trades", [])
+              if str(t.get("entry_date") or "")[:10] == day and t.get("id") != trade.get("id")]
+    day_risk = sum(_num(t.get("planned_total_risk")) for t in todays)
+    limit = _num(config.get("dailyRiskLimit"))
+    if limit > 0 and day_risk + risk > limit + 0.001:
+        blocked.append(_blk("DAILY_LIMIT",
+            "Daily planned risk would be %.2f against a %.2f limit." % (day_risk + risk, limit)))
+
+    max_exceptional = int(_num(config.get("maxPositionsExceptional"), 2))
+    max_default = int(_num(config.get("maxPositionsPerDay"), 1))
+    if len(todays) >= max_exceptional:
+        blocked.append(_blk("POSITION_LIMIT",
+            "Maximum " + str(max_exceptional) + " new positions per day already reached."))
+    elif len(todays) >= max_default:
+        if not trade.get("independence_confirmed"):
+            blocked.append(_blk("SECOND_TRADE_INDEPENDENCE", "A second position requires independence confirmation."))
+        if not str(trade.get("second_trade_rationale") or "").strip():
+            blocked.append(_blk("SECOND_TRADE_RATIONALE", "A second position requires a recorded rationale."))
+
+    reserve_used = _num(trade.get("reserve_risk_used"))
+    if reserve_used > 0:
+        if str(trade.get("grade") or "") != "A_PLUS":
+            blocked.append(_blk("RESERVE_GRADE", "Opportunity Reserve is for A+ setups only."))
+        if not str(trade.get("reserve_reason") or "").strip():
+            blocked.append(_blk("RESERVE_REASON", "A written reason is required for reserve use."))
+        if month:
+            res_initial = _num((month.get("reserve") or {}).get("initial_allocation"))
+            res_out = sum(_num(x.get("amount")) for x in store.get("opportunity_reserve_transfers", [])
+                          if x.get("month_key") == mkey and x.get("trade_id") != trade.get("id"))
+            if reserve_used > res_initial - res_out + 0.001:
+                blocked.append(_blk("RESERVE_CAPACITY",
+                    "Opportunity Reserve has %.2f left; %.2f requested." % (res_initial - res_out, reserve_used)))
+
+    return {"agrees": len(blocked) == 0, "blocked": blocked, "warnings": warnings}
+
+@app.get("/api/risk/sync")
+def risk_sync_get():
+    return load_risk_file()
+
+@app.post("/api/risk/sync")
+async def risk_sync_post(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return {"status": "error", "message": "Invalid JSON"}
+    if not isinstance(payload, dict):
+        return {"status": "error", "message": "Expected an object"}
+
+    store = load_risk_file()
+    for c in RISK_COLLECTIONS:
+        if isinstance(payload.get(c), list):
+            store[c] = payload[c]
+    if isinstance(payload.get("config"), dict):
+        store["config"] = payload["config"]
+    store["schema_version"] = payload.get("schema_version", store.get("schema_version", 1))
+    store["updated_at"] = payload.get("updated_at") or datetime.now().isoformat()
+
+    save_risk_file(store)
+    return {
+        "status": "success",
+        "updated_at": store["updated_at"],
+        "counts": dict((c, len(store.get(c, []))) for c in RISK_COLLECTIONS),
+    }
+
+@app.post("/api/risk/validate")
+async def risk_validate(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return {"agrees": False, "blocked": [_blk("BAD_REQUEST", "Invalid JSON")], "warnings": []}
+
+    trade = payload.get("trade") or {}
+    store = load_risk_file()
+    result = _revalidate_trade(trade, store, payload.get("month_key"))
+
+    # Record the server's own verdict so the audit trail is not client-controlled.
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        _risk_tables(conn)
+        entry = {
+            "id": "srv_" + str(trade.get("id")) + "_" + str(int(time.time() * 1000)),
+            "at": datetime.now().isoformat(),
+            "action": payload.get("action") or "SERVER_VALIDATION",
+            "entity": "trades",
+            "entity_id": trade.get("id"),
+            "month_key": payload.get("month_key"),
+            "detail": {"agrees": result["agrees"], "blocked": [b["code"] for b in result["blocked"]]},
+            "server_confirmed": True,
+        }
+        conn.execute(
+            "INSERT OR REPLACE INTO risk_audit_log (id, month_key, updated_at, data) VALUES (?, ?, ?, ?)",
+            (entry["id"], entry["month_key"], entry["at"], json.dumps(entry)),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("[Risk Desk] audit write failed: " + str(e))
+
+    return result
+
+@app.get("/api/risk/audit")
+def risk_audit(limit: int = Query(200)):
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        _risk_tables(conn)
+        rows = conn.execute(
+            "SELECT data FROM risk_audit_log ORDER BY updated_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+        conn.close()
+        return {"status": "success", "entries": [json.loads(r[0]) for r in rows]}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "entries": []}
+
+
 @app.get("/api/sync/all")
 def get_all_sync_data():
     return {
@@ -645,12 +886,16 @@ async def save_portfolio_backup(request: Request):
             incoming_saved_at = int(data.get("savedAt") or time.time() * 1000)
             data["savedAt"] = incoming_saved_at
 
-            if os.path.exists(PORTFOLIO_FILE):
+            is_reset = bool(data.get("reset") or data.get("force_reset") or data.get("isFreshStart"))
+
+            if not is_reset and os.path.exists(PORTFOLIO_FILE):
                 try:
                     with file_lock:
                         with open(PORTFOLIO_FILE, "r", encoding="utf-8") as existing_f:
                             existing = json.load(existing_f)
                     
+                    existing_saved_at = int(existing.get("savedAt", 0))
+
                     # Merge soldHistory by ID to prevent lost closed trades
                     existing_sold = existing.get("soldHistory", [])
                     incoming_sold = data.get("soldHistory", [])
@@ -668,13 +913,21 @@ async def save_portfolio_backup(request: Request):
                             if s.get("id"): sold_keys.add(s.get("id"))
                             if s.get("ticker"): sold_keys.add(s.get("ticker"))
 
-                    # Incoming active positions payload is authoritative, filtered against sold history
+                    # Merge active positions
                     incoming_pos = data.get("positions", [])
-                    if isinstance(incoming_pos, list):
-                        data["positions"] = [
-                            p for p in incoming_pos
-                            if isinstance(p, dict) and p.get("id") not in sold_keys and p.get("ticker") not in sold_keys
-                        ]
+                    existing_pos = existing.get("positions", [])
+                    if existing_saved_at > incoming_saved_at and isinstance(existing_pos, list):
+                        pos_map = { p.get("id"): p for p in existing_pos if isinstance(p, dict) and p.get("id") }
+                        for p in (incoming_pos if isinstance(incoming_pos, list) else []):
+                            if isinstance(p, dict) and p.get("id") and p.get("id") not in pos_map:
+                                pos_map[p.get("id")] = p
+                        data["positions"] = [p for p in pos_map.values() if p.get("id") not in sold_keys and p.get("ticker") not in sold_keys]
+                    else:
+                        if isinstance(incoming_pos, list):
+                            data["positions"] = [
+                                p for p in incoming_pos
+                                if isinstance(p, dict) and p.get("id") not in sold_keys and p.get("ticker") not in sold_keys
+                            ]
 
                     # Merge brokerAdjustments by ID
                     existing_adj = existing.get("brokerAdjustments", [])
@@ -696,11 +949,19 @@ async def save_portfolio_backup(request: Request):
                             opt_map[key] = o
                     data["optionsTrades"] = list(opt_map.values())
 
-                    # Preserve capitalLedger / freeCash if incoming is missing them
-                    if existing.get("capitalLedger") and not data.get("capitalLedger"):
-                        data["capitalLedger"] = existing["capitalLedger"]
-                    if existing.get("freeCash") and not data.get("freeCash"):
-                        data["freeCash"] = existing["freeCash"]
+                    # Preserve capitalLedger / freeCash / budget / split if existing is newer or incoming is missing
+                    if existing_saved_at > incoming_saved_at:
+                        if existing.get("freeCash"): data["freeCash"] = existing["freeCash"]
+                        if existing.get("budget"): data["budget"] = existing["budget"]
+                        if existing.get("split"): data["split"] = existing["split"]
+                        if existing.get("capitalLedger"): data["capitalLedger"] = existing["capitalLedger"]
+                    else:
+                        if existing.get("capitalLedger") and not data.get("capitalLedger"):
+                            data["capitalLedger"] = existing["capitalLedger"]
+                        if existing.get("freeCash") and not data.get("freeCash"):
+                            data["freeCash"] = existing["freeCash"]
+
+                    data["savedAt"] = max(existing_saved_at, incoming_saved_at)
                 except Exception as ex:
                     print(f"[Backup] Merge warning: {ex}")
 
@@ -711,6 +972,34 @@ async def save_portfolio_backup(request: Request):
         return { "status": "success" }
     except Exception as e:
         return { "status": "error", "message": str(e) }
+
+@app.post("/api/backup/reset")
+async def reset_portfolio_backup():
+    try:
+        now_ts = int(time.time() * 1000)
+        fresh_data = {
+            "positions": [],
+            "capitalLedger": [],
+            "soldHistory": [],
+            "brokerAdjustments": [],
+            "optionsTrades": [],
+            "freeCash": { "swing": "0", "lt": "0", "penny": "0" },
+            "budget": "0",
+            "split": { "swing": 60, "lt": 30, "penny": 10 },
+            "isFreshStart": True,
+            "savedAt": now_ts
+        }
+        with file_lock:
+            with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
+                json.dump(fresh_data, f, indent=2)
+            with open(JOURNAL_FILE, "w", encoding="utf-8") as jf:
+                json.dump([], jf, indent=2)
+        push_to_github(PORTFOLIO_FILE, "finplus_portfolio_backup.json")
+        push_to_github(JOURNAL_FILE, "finplus_journal_data.json")
+        return { "status": "success", "message": "Clean slate reset successful", "data": fresh_data }
+    except Exception as e:
+        return { "status": "error", "message": str(e) }
+
 
 @app.get("/api/backup/load")
 def load_portfolio_backup():

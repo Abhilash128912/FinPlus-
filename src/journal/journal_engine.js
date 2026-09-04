@@ -4,7 +4,7 @@
  */
 
 const STORAGE_KEY = 'finplus_pnl_v4_fresh';
-const DATA_VERSION = '20260817_fresh_start';
+const DATA_VERSION = '20260907_fresh_start_v2';
 const VERSION_KEY = 'finplus_data_version';
 
 /**
