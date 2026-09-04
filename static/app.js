@@ -256,6 +256,14 @@ function renderCommodityBar() {
         + (item.mcx_pct != null ? ` (${item.mcx_pct > 0 ? '+' : ''}${item.mcx_pct}%)` : '')
       : ' · MCX price unavailable';
     const srcStr = item.signal_source ? ` — signal from ${item.signal_source}` : '';
+    // MCX publishes no intraday history, so the app records its own. Shown while
+    // it fills, so an absent S/R read is visibly "not enough history yet" rather
+    // than looking like a broken feature.
+    const srStr = item.srv_signal
+      ? ` · S/R ${item.srv_signal}${item.srv_reason ? ': ' + item.srv_reason : ''}`
+      : (item.srv_bars_needed
+          ? ` · S/R history ${item.srv_bars_recorded || 0}/${item.srv_bars_needed} hrs`
+          : '');
     const emaStr = (item.ema15 && item.ema20) ? `15EMA: ${item.ema15} · 20EMA: ${item.ema20} (${item.diff_pct > 0 ? '+' : ''}${item.diff_pct}%)` : '';
 
     let badgeStyle = 'background: rgba(255,255,255,0.08); color:#ccc; border: 1px solid rgba(255,255,255,0.1);';
@@ -274,7 +282,7 @@ function renderCommodityBar() {
         <span style="font-size:16px">${item.icon || '⛽'}</span>
         <div>
           <div class="commodity-card-name">${item.name} <span class="commodity-card-price">${usdPriceStr}</span><span style="color:#00d4aa;font-size:12px;font-weight:600">${mcxPriceStr}</span></div>
-          <div class="commodity-card-emas">${emaStr}${srcStr}</div>
+          <div class="commodity-card-emas">${emaStr}${srcStr}${srStr}</div>
         </div>
         <span class="commodity-badge" style="${badgeStyle}">
           ${item.badge}

@@ -4061,6 +4061,14 @@ function renderCommodityBar() {
         + (item.mcx_pct != null ? ` (${item.mcx_pct > 0 ? '+' : ''}${item.mcx_pct}%)` : '')
       : ' · MCX price unavailable';
     const srcStr = item.signal_source ? ` — signal from ${item.signal_source}` : '';
+    // MCX publishes no intraday history, so the app records its own. Shown while
+    // it fills, so an absent S/R read is visibly "not enough history yet" rather
+    // than looking like a broken feature.
+    const srStr = item.srv_signal
+      ? ` · S/R ${item.srv_signal}${item.srv_reason ? ': ' + item.srv_reason : ''}`
+      : (item.srv_bars_needed
+          ? ` · S/R history ${item.srv_bars_recorded || 0}/${item.srv_bars_needed} hrs`
+          : '');
     const emaStr = (item.ema15 && item.ema20) ? `15EMA: ${item.ema15} · 20EMA: ${item.ema20} (${item.diff_pct > 0 ? '+' : ''}${item.diff_pct}%)` : '';
 
     let badgeStyle = 'background: rgba(255,255,255,0.08); color:#ccc; border: 1px solid rgba(255,255,255,0.1);';
@@ -4079,7 +4087,7 @@ function renderCommodityBar() {
         <span style="font-size:16px">${item.icon || '⛽'}</span>
         <div>
           <div class="commodity-card-name">${item.name} <span class="commodity-card-price">${usdPriceStr}</span><span style="color:#00d4aa;font-size:12px;font-weight:600">${mcxPriceStr}</span></div>
-          <div class="commodity-card-emas">${emaStr}${srcStr}</div>
+          <div class="commodity-card-emas">${emaStr}${srcStr}${srStr}</div>
         </div>
         <span class="commodity-badge" style="${badgeStyle}">
           ${item.badge}
@@ -8522,6 +8530,117 @@ def fetch_mcx_futures(symbol: str) -> dict:
     }
 
 
+# Hourly candles for MCX, built here because nobody publishes them. MCX's market
+# watch is a snapshot -- today's open/high/low and a previous close -- with no
+# intraday history and no previous-day high or low, which is exactly what the
+# volume S/R model needs. Sampling that snapshot and folding it into bars is the
+# only route to running the same model on commodities that runs on equities.
+#
+# The file is the accumulated history, so it is written atomically and never
+# rewritten from scratch. On Render the filesystem is ephemeral and resets each
+# deploy; the laptop is where this actually accumulates, alongside the scan data
+# it already commits.
+MCX_BARS_FILE = os.path.join(BASE_DIR, "mcx_bars.json")
+MCX_SAMPLE_INTERVAL_SEC = 180.0
+MCX_MAX_BARS = 1500          # ~100 sessions; enough history, bounded file
+MCX_SYMBOLS = ("CRUDEOIL", "NATURALGAS")
+
+
+def sr_volume_gates_min_bars() -> int:
+    """Bars the S/R model needs, read from the model rather than restated here."""
+    try:
+        import sr_volume
+        return int(sr_volume.GATES["min_bars"])
+    except Exception:
+        return 60
+
+
+def load_mcx_bars() -> dict:
+    try:
+        with open(MCX_BARS_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_mcx_bars(state: dict) -> None:
+    try:
+        atomic_write_file(MCX_BARS_FILE, json.dumps(state, separators=(",", ":")))
+    except Exception as e:
+        log(f"  ⚠ Could not persist MCX bars: {e}")
+
+
+def record_mcx_sample(state: dict, now_ist=None) -> dict:
+    """Fold one market-watch snapshot into the current hourly bar.
+
+    Volume arrives cumulative for the session, so a bar's volume is the increase
+    since the previous sample; it resets when the trading date changes, and a
+    negative delta is read as a reset rather than trusted.
+    """
+    now_ist = now_ist or datetime.datetime.now(IST)
+    bucket = now_ist.replace(minute=0, second=0, microsecond=0).isoformat()
+    today = now_ist.date().isoformat()
+
+    for symbol in MCX_SYMBOLS:
+        quote = fetch_mcx_futures(symbol)
+        ltp = quote.get("mcx_ltp")
+        if not ltp:
+            continue
+
+        entry = state.setdefault(symbol, {"bars": [], "cum_volume": None, "date": today})
+        cum = quote.get("mcx_volume") or 0
+        if entry.get("date") != today or entry.get("cum_volume") is None or cum < entry["cum_volume"]:
+            delta = 0.0                      # new session, or the counter reset
+        else:
+            delta = float(cum - entry["cum_volume"])
+        entry["cum_volume"] = cum
+        entry["date"] = today
+
+        bars = entry["bars"]
+        if bars and bars[-1]["t"] == bucket:
+            bar = bars[-1]
+            bar["h"] = max(bar["h"], ltp)
+            bar["l"] = min(bar["l"], ltp)
+            bar["c"] = ltp
+            bar["v"] += delta
+        else:
+            bars.append({"t": bucket, "o": ltp, "h": ltp, "l": ltp, "c": ltp, "v": delta,
+                         "expiry": quote.get("mcx_expiry")})
+            if len(bars) > MCX_MAX_BARS:
+                del bars[:-MCX_MAX_BARS]
+    return state
+
+
+def mcx_bars_dataframe(symbol: str, state: dict = None):
+    """Recorded bars as an OHLCV frame the S/R model can read."""
+    state = state if state is not None else load_mcx_bars()
+    bars = (state.get(symbol) or {}).get("bars") or []
+    if not bars:
+        return None
+    frame = pd.DataFrame([{"Open": b["o"], "High": b["h"], "Low": b["l"],
+                           "Close": b["c"], "Volume": b["v"]} for b in bars],
+                         index=pd.to_datetime([b["t"] for b in bars]))
+    return frame
+
+
+def mcx_bar_recorder():
+    """Sample MCX on a fixed cadence while the commodity session is open.
+
+    Isolated from everything else on purpose: it only ever appends to its own
+    file, and any failure is logged and slept off rather than propagated, so a
+    commodity feed problem cannot disturb the equity side.
+    """
+    while True:
+        try:
+            time.sleep(MCX_SAMPLE_INTERVAL_SEC)
+            if not get_market_status().get("is_commodity_open"):
+                continue
+            state = record_mcx_sample(load_mcx_bars())
+            save_mcx_bars(state)
+        except Exception as e:
+            log(f"  ⚠ MCX bar recorder cycle failed: {e}")
+
+
 def fetch_commodity_signals() -> dict:
     log("Fetching 15m intraday commodity data (Crude Oil & Natural Gas)...")
     from screener_engine import calculate_ema_crossover_15m
@@ -8571,6 +8690,21 @@ def fetch_commodity_signals() -> dict:
                 **mcx,
                 **calc
             }
+
+            # The same volume S/R model the equities use, once enough recorded
+            # hours exist. Until then the field simply says how far along it is,
+            # rather than running the model on too little history.
+            try:
+                bars_df = mcx_bars_dataframe(c["mcx"])
+                have = 0 if bars_df is None else len(bars_df)
+                need = int(sr_volume_gates_min_bars())
+                if have >= need:
+                    import sr_volume
+                    results[c["id"]].update(sr_volume.compute_signal(bars_df, SR_PROFILES["intraday"]))
+                results[c["id"]]["srv_bars_recorded"] = have
+                results[c["id"]]["srv_bars_needed"] = need
+            except Exception as e:
+                log(f"  ⚠ Could not apply S/R to {c['name']}: {e}")
             if mcx:
                 log(f"  ✓ {c['name']}: MCX {mcx['mcx_symbol']} {mcx['mcx_expiry']} "
                     f"₹{mcx['mcx_ltp']} ({mcx['mcx_pct']}%) vol={mcx['mcx_volume']} "
@@ -10058,6 +10192,10 @@ if __name__ == "__main__":
     # Owns all live-price fetching so /api/ltp never blocks on the network.
     warmer_t = threading.Thread(target=background_ltp_warmer, daemon=True)
     warmer_t.start()
+
+    # Accumulates the MCX history nobody publishes; see mcx_bar_recorder.
+    mcx_t = threading.Thread(target=mcx_bar_recorder, daemon=True)
+    mcx_t.start()
 
     # Run the HTTP server immediately in main thread
     run_server(port)
