@@ -1,17 +1,9 @@
 {
-  "finplus_opening_capital": "8200",
+  "finplus_opening_capital": "0",
   "finplus_broker_adjustment": "0",
   "finplus_deposits": "0",
   "finplus_withdrawals": "0",
-  "finplus_daily_risk_limit": "250",
-  "finplus_challenge_start_date": "2026-07-23",
-  "finplus_total_challenge_days": "1000",
-  "finplus_alloc_intraday": "45",
-  "finplus_alloc_natgas": "22.5",
-  "finplus_alloc_nifty": "17.5",
-  "finplus_alloc_crude": "10",
-  "finplus_msl_intraday": "5",
-  "finplus_msl_natgas": "10",
-  "finplus_msl_nifty": "15",
-  "finplus_msl_crude": "10"
+  "finplus_daily_risk_limit": "0",
+  "finplus_challenge_start_date": "2026-09-07",
+  "finplus_total_challenge_days": "1000"
 }

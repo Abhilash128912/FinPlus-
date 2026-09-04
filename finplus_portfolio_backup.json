@@ -1,228 +1,97 @@
 {
   "positions": [
     {
-      "id": "pos_1787824550705_djx10",
-      "ticker": "UYFINCORP",
-      "name": "U. Y. Fincorp Limited",
-      "segment": "PENNY",
-      "shares": 10,
-      "buyPrice": 20,
-      "buyDate": "2026-08-27",
-      "target1": 0,
-      "stopLoss": 0,
-      "notes": ""
-    },
-    {
-      "id": "pos_1787824201399_knk4c",
-      "ticker": "VRLLOG",
-      "name": "VRL Logistics Limited",
-      "segment": "SWING",
-      "shares": 6,
-      "buyPrice": 293.95,
-      "buyDate": "2026-08-27",
-      "target1": 317.466,
-      "stopLoss": 282.19199999999995,
-      "notes": ""
-    },
-    {
-      "id": "pos_1787637387007_ilcwq",
-      "ticker": "BEL",
-      "name": "Bharat Electronics Limited",
+      "id": "pos_1788548077313_0_panamapet",
+      "ticker": "PANAMAPET",
+      "name": "Panama Petrochem Ltd",
       "segment": "LT",
       "shares": 1,
-      "buyPrice": 409,
-      "buyDate": "2026-08-25",
+      "buyPrice": 485.35,
+      "buyDate": "2026-09-04",
       "target1": 0,
       "stopLoss": 0,
-      "notes": ""
+      "notes": "Imported from INDmoney holdings"
     },
     {
-      "id": "pos_gujalkali_kite",
-      "ticker": "GUJALKALI",
-      "name": "Gujarat Alkalies and Chemicals Limited",
-      "segment": "SWING",
-      "shares": 2,
-      "buyPrice": 729.67,
-      "buyDate": "2026-08-26",
+      "id": "pos_1788548077313_1_drcsystems",
+      "ticker": "DRCSYSTEMS",
+      "name": "DRC Systems India Ltd",
+      "segment": "LT",
+      "shares": 11,
+      "buyPrice": 13.69,
+      "buyDate": "2026-09-04",
       "target1": 0,
       "stopLoss": 0,
-      "notes": "Zerodha Kite Swing Position"
+      "notes": "Imported from INDmoney holdings"
     },
     {
-      "id": "pos_1787561640021_prqkv",
+      "id": "pos_1788548077313_2_sigma",
+      "ticker": "SIGMA",
+      "name": "Sigma Solve Ltd",
+      "segment": "LT",
+      "shares": 4,
+      "buyPrice": 47.2,
+      "buyDate": "2026-09-04",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": "Imported from INDmoney holdings"
+    },
+    {
+      "id": "pos_1788548077313_3_uyfincorp",
+      "ticker": "UYFINCORP",
+      "name": "U. Y. Fincorp Ltd",
+      "segment": "LT",
+      "shares": 10,
+      "buyPrice": 20.0,
+      "buyDate": "2026-09-04",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": "Imported from INDmoney holdings"
+    },
+    {
+      "id": "pos_1788548077313_4_ashokley",
       "ticker": "ASHOKLEY",
       "name": "Ashok Leyland Ltd",
       "segment": "LT",
       "shares": 1,
       "buyPrice": 171.73,
-      "buyDate": "2026-08-24",
+      "buyDate": "2026-09-04",
       "target1": 0,
       "stopLoss": 0,
-      "notes": ""
+      "notes": "Imported from INDmoney holdings"
     },
     {
-      "id": "pos_1787561614341_zs9o0",
+      "id": "pos_1788548077313_5_bel",
+      "ticker": "BEL",
+      "name": "Bharat Electronics Ltd",
+      "segment": "LT",
+      "shares": 1,
+      "buyPrice": 409.0,
+      "buyDate": "2026-09-04",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": "Imported from INDmoney holdings"
+    },
+    {
+      "id": "pos_1788548077313_6_federalbnk",
       "ticker": "FEDERALBNK",
       "name": "Federal Bank Ltd",
       "segment": "LT",
       "shares": 1,
       "buyPrice": 356.45,
-      "buyDate": "2026-08-24",
+      "buyDate": "2026-09-04",
       "target1": 0,
       "stopLoss": 0,
-      "notes": ""
-    },
-    {
-      "id": "pos_1787561091408_kx6l8",
-      "ticker": "SIGMA",
-      "name": "Sigma Solve Ltd",
-      "segment": "PENNY",
-      "shares": 4,
-      "buyPrice": 47.2,
-      "buyDate": "2026-08-24",
-      "target1": 0,
-      "stopLoss": 0,
-      "notes": "Quality Penny SIP Position (LTP < Rs 75)"
-    },
-    {
-      "id": "pos_rvnl_indmoney",
-      "ticker": "RVNL",
-      "name": "Rail Vikas Nigam Limited",
-      "segment": "LT",
-      "shares": 1,
-      "buyPrice": 229.9,
-      "buyDate": "2026-08-23",
-      "target1": 287.38,
-      "stopLoss": 0,
-      "notes": "INDmoney Long-Term Core Position"
+      "notes": "Imported from INDmoney holdings"
     }
   ],
-  "capitalLedger": [
-    {
-      "id": "cap_initial_kite",
-      "date": "2026-08-23",
-      "type": "INJECTION",
-      "amount": 5136.1,
-      "segment": "SWING",
-      "notes": "Zerodha Kite Capital (Invested + Free Cash)"
-    },
-    {
-      "id": "cap_initial_indmoney",
-      "date": "2026-08-23",
-      "type": "INJECTION",
-      "amount": 283.94,
-      "segment": "LT",
-      "notes": "INDmoney Long-Term Capital (Invested + Free Cash)"
-    }
-  ],
-  "soldHistory": [
-    {
-      "id": "sold_1787555336839",
-      "ticker": "KIRIINDUS",
-      "name": "Kiri Industries Limited",
-      "segment": "SWING",
-      "shares": 4,
-      "buyPrice": 462,
-      "sellPrice": 513.35,
-      "buyDate": "2026-08-23",
-      "sellDate": "2026-08-24",
-      "holdingDays": 1,
-      "broker": "Zerodha Kite",
-      "turnover": 2053.4,
-      "grossPnl": 205.4000000000001,
-      "taxes": 19.6599321164,
-      "netPnl": 185.7400678836001,
-      "returnPct": 11.11471861471862
-    },
-    {
-      "id": "sold_1787324151435",
-      "ticker": "MANALIPETC",
-      "name": "Manali Petrochemicals Limited",
-      "segment": "SWING",
-      "shares": 27,
-      "buyPrice": 73.09,
-      "sellPrice": 76.81,
-      "buyDate": "2026-08-19",
-      "sellDate": "2026-08-21",
-      "holdingDays": 2,
-      "grossPnl": 100.43999999999997,
-      "taxes": 19.8299319898,
-      "netPnl": 80.61006801019997,
-      "returnPct": 4.084769564169997,
-      "broker": "Zerodha Kite",
-      "notes": "Recorded Past Closed Trade"
-    },
-    {
-      "id": "sold_lancorhol_replaced",
-      "ticker": "LANCORHOL",
-      "name": "Lancor Holdings Limited",
-      "segment": "SWING",
-      "shares": 46,
-      "buyPrice": 33.36,
-      "sellPrice": 32.97,
-      "buyDate": "2026-08-25",
-      "sellDate": "2026-08-26",
-      "holdingDays": 1,
-      "broker": "Zerodha Kite",
-      "turnover": 1516.62,
-      "grossPnl": -17.94,
-      "taxes": 18.73,
-      "netPnl": -36.67,
-      "returnPct": -1.169,
-      "notes": "Exited at loss, replaced by GUJALKALI on 2026-08-26"
-    },
-    {
-      "id": "sold_1787825028732",
-      "ticker": "PARAGMILK",
-      "name": "Parag Milk Foods Limited",
-      "segment": "SWING",
-      "shares": 8,
-      "buyPrice": 244.48,
-      "sellPrice": 240.5,
-      "buyDate": "2026-08-25",
-      "sellDate": "2026-08-27",
-      "holdingDays": 2,
-      "broker": "Zerodha Kite",
-      "turnover": 1924,
-      "grossPnl": -31.839999999999918,
-      "taxes": 19.653767083840002,
-      "netPnl": -51.49376708383992,
-      "returnPct": -1.6279450261780064
-    },
-    {
-      "id": "sold_1787824155119",
-      "ticker": "CUPID",
-      "name": "Cupid Limited",
-      "segment": "SWING",
-      "shares": 6,
-      "buyPrice": 289.95,
-      "sellPrice": 278.92,
-      "buyDate": "2026-08-23",
-      "sellDate": "2026-08-27",
-      "holdingDays": 4,
-      "broker": "Zerodha Kite",
-      "turnover": 1673.52,
-      "grossPnl": -66.17999999999984,
-      "taxes": 19.13782230772,
-      "netPnl": -85.31782230771984,
-      "returnPct": -3.804104155888937
-    }
-  ],
-  "brokerAdjustments": [
-    {
-      "id": "adj_corr_1787832920897",
-      "date": "2026-08-27",
-      "broker": "Zerodha Kite",
-      "segment": "SWING",
-      "type": "CORRECTION",
-      "amount": -1873.9411205022404,
-      "notes": "EOD Variance reconciliation vs Zerodha Kite statement as of 2026-08-27"
-    }
-  ],
+  "capitalLedger": [],
+  "soldHistory": [],
+  "brokerAdjustments": [],
   "optionsTrades": [],
   "freeCash": {
-    "swing": "128.3",
-    "lt": "164.99",
+    "swing": "0",
+    "lt": "0",
     "penny": "0"
   },
   "budget": "0",
@@ -231,5 +100,6 @@
     "lt": 30,
     "penny": 10
   },
-  "savedAt": 1787836943846
+  "isFreshStart": true,
+  "savedAt": 1788548077313
 }

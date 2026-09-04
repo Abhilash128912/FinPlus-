@@ -46,7 +46,7 @@ echo  Done purging local cache.
 echo.
 
 echo  [3/4] Fetching latest live portfolio dataset from Render Cloud...
-python sync_from_cloud.py
+python sync_from_cloud.py 2>nul || py sync_from_cloud.py 2>nul
 
 echo.
 echo  [4/4] Launching fresh web server with --force flag (bypasses all browser cache)...
@@ -58,5 +58,14 @@ echo   If you still see old cached UI, press Ctrl + Shift + R on your browser.
 echo  ============================================================
 echo.
 
+:: Open browser explicitly after launching Vite server
+start "" "http://localhost:3000"
+
 call npm.cmd run dev -- --force
+if %errorlevel% neq 0 (
+    echo.
+    echo  [ERROR] Failed to start application server.
+    pause
+)
+
 

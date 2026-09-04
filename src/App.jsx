@@ -9,6 +9,7 @@ import {
   exportMasterJsonBackup, 
   importMasterJsonBackup
 } from './journal/journal_engine';
+import RiskDesk from './journal/risk/RiskDesk.jsx';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -44,6 +45,29 @@ const LEDGER_KEY = 'finplus_capital_ledger_v5';
 const FREE_CASH_SWING_KEY = 'finplus_free_cash_swing_v5';
 const FREE_CASH_LT_KEY = 'finplus_free_cash_lt_v5';
 const SAVED_AT_KEY = 'finplus_saved_at_v1';
+const FRESH_START_TAG = 'finplus_fresh_start_20260907_v2';
+
+// Auto-purge stale trade caches on fresh start while retaining user settings
+if (typeof window !== 'undefined') {
+  try {
+    if (localStorage.getItem('finplus_fresh_start_tag') !== FRESH_START_TAG) {
+      localStorage.setItem('finplus_fresh_start_tag', FRESH_START_TAG);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      localStorage.setItem(LEDGER_KEY, JSON.stringify([]));
+      localStorage.setItem('finplus_sold_history_v1', JSON.stringify([]));
+      localStorage.setItem('finplus_broker_adjustments_v1', JSON.stringify([]));
+      localStorage.setItem('finplus_options_trades_v1', JSON.stringify([]));
+      localStorage.setItem(FREE_CASH_SWING_KEY, '0');
+      localStorage.setItem('finplus_free_cash_swing_v5', '0');
+      localStorage.setItem(FREE_CASH_LT_KEY, '0');
+      localStorage.setItem('finplus_free_cash_penny_v4', '0');
+      localStorage.setItem('finplus_monthly_income_budget', '0');
+      localStorage.setItem('finplus_pnl_v4_fresh', JSON.stringify([]));
+      localStorage.setItem('finplus_opening_capital', '0');
+      localStorage.setItem(SAVED_AT_KEY, String(Date.now()));
+    }
+  } catch(e) {}
+}
 
 // No hardcoded fallback positions or ledger entries.
 // The app is 100% server-driven: all data comes from Render /api/backup/load on mount.
@@ -180,17 +204,8 @@ export default function App() {
   const [reconSegment, setReconSegment] = useState('SWING');
   const [reconActualCash, setReconActualCash] = useState('');
 
-  // Live LTP Polling State — initialized with verified live terminal prices
-  const [liveLtps, setLiveLtps] = useState({
-    'ASHOKLEY': 177.40,
-    'BEL': 411.00,
-    'SIGMA': 47.54,
-    'FEDERALBNK': 344.80,
-    'RVNL': 216.00,
-    'UYFINCORP': 20.10,
-    'VRLLOG': 293.90,
-    'GUJALKALI': 710.75
-  });
+  // Live LTP Polling State — initialized fresh
+  const [liveLtps, setLiveLtps] = useState({});
   const [lastLtpUpdate, setLastLtpUpdate] = useState(() => new Date().toLocaleTimeString());
   const [isLtpLoading, setIsLtpLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -276,17 +291,20 @@ export default function App() {
     const localSavedAt = Number(localStorage.getItem(SAVED_AT_KEY)) || 0;
     let bestSavedAt = localSavedAt;
 
-    const unionMerge = (localList, serverList) => {
+    const mergeLists = (localList, serverList, preferServer = false) => {
       const map = new Map();
-      (localList || []).forEach(item => {
+      const primary = preferServer ? (serverList || []) : (localList || []);
+      const secondary = preferServer ? (localList || []) : (serverList || []);
+
+      primary.forEach(item => {
         if (item) {
-          const key = item.id || `${item.ticker}_${item.buyDate || item.sellDate}`;
+          const key = item.id || `${item.ticker || item.symbol}_${item.buyDate || item.sellDate || item.date || item.entryDate}`;
           map.set(key, item);
         }
       });
-      (serverList || []).forEach(item => {
+      secondary.forEach(item => {
         if (item) {
-          const key = item.id || `${item.ticker}_${item.buyDate || item.sellDate}`;
+          const key = item.id || `${item.ticker || item.symbol}_${item.buyDate || item.sellDate || item.date || item.entryDate}`;
           if (!map.has(key)) map.set(key, item);
         }
       });
@@ -296,34 +314,44 @@ export default function App() {
     const applyDataset = (res) => {
       if (!res || res.status !== 'success' || !res.data) return;
       const incomingSavedAt = Number(res.data.savedAt) || 0;
+      const preferServer = incomingSavedAt >= localSavedAt;
+
       const { positions: diskPos, capitalLedger: diskLedger, soldHistory: diskSold, brokerAdjustments: diskAdj, optionsTrades: diskOpt, budget, split, freeCash } = res.data;
 
-      // Merge soldHistory and build a lookup set of all sold trade IDs and tickers
-      let mergedSold = [];
-      setSoldHistory(prev => {
-        mergedSold = unionMerge(prev, diskSold);
-        return mergedSold;
-      });
+      const isCleanSlate = Boolean(res.data.isFreshStart || incomingSavedAt >= 1788500000000);
+      if (isCleanSlate && preferServer) {
+        setSoldHistory(diskSold || []);
+        setPositions(diskPos || []);
+        setBrokerAdjustments(diskAdj || []);
+        setOptionsTrades(diskOpt || []);
+      } else {
+        // Merge soldHistory and build a lookup set of all sold trade IDs and tickers
+        let mergedSold = [];
+        setSoldHistory(prev => {
+          mergedSold = mergeLists(prev, diskSold, preferServer);
+          return mergedSold;
+        });
 
-      const soldKeys = new Set();
-      (mergedSold.length > 0 ? mergedSold : diskSold || []).forEach(s => {
-        if (s && s.id) soldKeys.add(s.id);
-        if (s && s.ticker) soldKeys.add(s.ticker);
-      });
+        const soldKeys = new Set();
+        (mergedSold.length > 0 ? mergedSold : diskSold || []).forEach(s => {
+          if (s && s.id) soldKeys.add(s.id);
+          if (s && s.ticker) soldKeys.add(s.ticker);
+        });
 
-      // Filter positions to ensure no sold stock is ever added back to active positions
-      const validDiskPos = (diskPos || []).filter(p => p && !soldKeys.has(p.id) && !soldKeys.has(p.ticker));
-      setPositions(prev => {
-        const filteredPrev = (prev || []).filter(p => p && !soldKeys.has(p.id) && !soldKeys.has(p.ticker));
-        return unionMerge(filteredPrev, validDiskPos);
-      });
-      if (Array.isArray(diskAdj)) setBrokerAdjustments(prev => unionMerge(prev, diskAdj));
-      if (Array.isArray(diskOpt)) setOptionsTrades(prev => unionMerge(prev, diskOpt));
+        // Filter positions to ensure no sold stock is ever added back to active positions
+        const validDiskPos = (diskPos || []).filter(p => p && !soldKeys.has(p.id) && !soldKeys.has(p.ticker));
+        setPositions(prev => {
+          const filteredPrev = (prev || []).filter(p => p && !soldKeys.has(p.id) && !soldKeys.has(p.ticker));
+          return mergeLists(filteredPrev, validDiskPos, preferServer);
+        });
+        if (Array.isArray(diskAdj)) setBrokerAdjustments(prev => mergeLists(prev, diskAdj, preferServer));
+        if (Array.isArray(diskOpt)) setOptionsTrades(prev => mergeLists(prev, diskOpt, preferServer));
+      }
 
-      if (incomingSavedAt > bestSavedAt) {
+      if (preferServer || incomingSavedAt > bestSavedAt) {
         bestSavedAt = incomingSavedAt;
-        if (Array.isArray(diskLedger) && diskLedger.length > 0) setCapitalLedger(diskLedger);
-        if (budget) setMonthlyBudgetInput(budget);
+        if (Array.isArray(diskLedger)) setCapitalLedger(diskLedger);
+        if (budget !== undefined && budget !== null) setMonthlyBudgetInput(String(budget));
         if (split) {
           if (split.swing !== undefined) setSwingPct(split.swing);
           if (split.lt !== undefined) setLtPct(split.lt);
@@ -1593,7 +1621,7 @@ export default function App() {
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px' }}>
 
         {/* Navigation Tabs */}
-        <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '14px', marginBottom: '24px', overflowX: 'auto' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '14px', marginBottom: '24px' }}>
           {[
             { id: 'capital', label: '📊 3-Pillar Capital Engine', badge: `₹${(segmentLedgers?.grandTotalNetWorth || portfolioSummary?.totalAccountCapital || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` },
             { id: 'swing', label: '⚡ Swing Trading (Kite)', badge: positions.filter(p => p.segment === 'SWING').length },
@@ -1602,6 +1630,7 @@ export default function App() {
             { id: 'options', label: '⚡ Options & F&O Log', badge: optionsTrades.length },
             { id: 'adjustments', label: '📜 Broker Adjustments', badge: brokerAdjustments.length },
             { id: 'history', label: '📜 Realized P&L Ledger', badge: soldHistory.length },
+            { id: 'riskdesk', label: '🎯 Risk Desk' },
             { id: 'settings', label: '⚙️ Backup & Settings' }
           ].map(t => (
             <button
@@ -2045,6 +2074,11 @@ export default function App() {
         )}
 
         {/* ── TAB 6: BACKUP & SETTINGS ── */}
+        {/* ── TAB: RISK DESK — opportunity-based fund & risk manager ── */}
+        {activeTab === 'riskdesk' && (
+          <RiskDesk externalLtps={liveLtps} />
+        )}
+
         {activeTab === 'settings' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '700px' }}>
             <div style={{ fontSize: '20px', fontWeight: 900, color: '#ffffff' }}>⚙️ Master JSON Backups &amp; Data Integrity</div>
@@ -2125,6 +2159,92 @@ export default function App() {
                   />
                 </label>
               </div>
+            </div>
+
+            {/* ── DANGER ZONE: START AFRESH / RESET ── */}
+            <div style={{ background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '16px', padding: '20px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 800, color: '#f87171', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <RotateCcw size={16} color="#f87171" />
+                Start Afresh / Reset All Numbers
+              </div>
+              <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '14px', lineHeight: '1.5' }}>
+                Removes all active holdings, past closed trades, options contracts, ledger entries, and resets free cash balances to ₹0 for starting afresh. Your capital splits (Swing/LT/Penny), formulas, and risk limits remain completely intact.
+              </div>
+              <button
+                onClick={async () => {
+                  if (!window.confirm("⚠️ START AFRESH CONFIRMATION\n\nAre you sure you want to remove all positions, closed trades, options trades, ledger events, and set cash to ₹0?\n\nAll your configuration, split ratios, and risk rules will remain intact.")) {
+                    return;
+                  }
+                  const freshTimestamp = Date.now();
+                  setPositions([]);
+                  setSoldHistory([]);
+                  setOptionsTrades([]);
+                  setCapitalLedger([]);
+                  setBrokerAdjustments([]);
+                  setSwingFreeCashInput('0');
+                  setLtFreeCashInput('0');
+                  setPennyFreeCashInput('0');
+                  setMonthlyBudgetInput('0');
+                  setLiveLtps({});
+
+                  localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+                  localStorage.setItem(LEDGER_KEY, JSON.stringify([]));
+                  localStorage.setItem('finplus_sold_history_v1', JSON.stringify([]));
+                  localStorage.setItem('finplus_broker_adjustments_v1', JSON.stringify([]));
+                  localStorage.setItem('finplus_options_trades_v1', JSON.stringify([]));
+                  localStorage.setItem(FREE_CASH_SWING_KEY, '0');
+                  localStorage.setItem('finplus_free_cash_swing_v5', '0');
+                  localStorage.setItem(FREE_CASH_LT_KEY, '0');
+                  localStorage.setItem('finplus_free_cash_penny_v4', '0');
+                  localStorage.setItem('finplus_monthly_income_budget', '0');
+                  localStorage.setItem('finplus_pnl_v4_fresh', JSON.stringify([]));
+                  localStorage.setItem(SAVED_AT_KEY, String(freshTimestamp));
+
+                  const cleanPayload = {
+                    positions: [],
+                    capitalLedger: [],
+                    soldHistory: [],
+                    brokerAdjustments: [],
+                    optionsTrades: [],
+                    freeCash: { swing: '0', lt: '0', penny: '0' },
+                    budget: '0',
+                    split: { swing: swingPct, lt: ltPct, penny: pennyPct },
+                    savedAt: freshTimestamp,
+                    force_reset: true,
+                    reset: true,
+                    isFreshStart: true
+                  };
+
+                  const endpoints = Array.from(new Set([API_BASE_URL, RENDER_BACKEND_URL].filter(Boolean)));
+                  for (const ep of endpoints) {
+                    try {
+                      await fetch(`${ep}/api/backup/save`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(cleanPayload)
+                      });
+                    } catch(e) {}
+                  }
+                  showToast('✨ Clean slate established! App ready for fresh start.');
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #dc2626, #ef4444)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  fontWeight: 900,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 14px rgba(239, 68, 68, 0.3)'
+                }}
+              >
+                <RotateCcw size={14} />
+                Start Afresh (Reset Numbers to 0)
+              </button>
             </div>
           </div>
         )}
