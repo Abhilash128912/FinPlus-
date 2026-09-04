@@ -10,18 +10,21 @@ built.
 
 So this view ships the picks and nothing else: four tabs, every row slimmed to
 the fields actually rendered, no scan payload, and live polling scoped to the
-active tab. The whole page knows fewer than SYMBOL_BUDGET symbols, which is what
-keeps /api/ltp responsive -- the server warms recently-requested symbols in one
-bounded batch, so a page that asks for hundreds pushes the rows on screen out of
-that batch and shows stale prices instead.
+active tab -- so no single price request exceeds TAB_SYMBOL_BUDGET, which is what
+keeps /api/ltp responsive.
 """
 
 import json
 
-# Upper bound on the symbols this page may reference, across all four tabs.
-# Enforced at build time rather than trusted: a change to any top_n upstream
-# would otherwise quietly reintroduce the wide-request problem.
-SYMBOL_BUDGET = 100
+# The server warms recently-requested symbols in one bounded batch, so a request
+# wide enough to overflow it pushes the rows on screen out of the warm set and
+# serves them stale. Polling is scoped to the visible tab, so the number that
+# actually reaches /api/ltp is the largest single tab -- not the page total, which
+# is only ever spread across four separate requests.
+#
+# Enforced at build time rather than trusted: an upstream top_n that grows would
+# otherwise quietly reintroduce the wide-request problem.
+TAB_SYMBOL_BUDGET = 50
 
 # Only what the cards render. Penny rows in particular arrive as full scan rows
 # of ~130 fields; shipping those whole would undo the point of this page.
@@ -67,8 +70,9 @@ def _slim(rows, kind):
 def build_mobile_payload(intraday, swing, penny, lt_watchlist, mkt_info, run_time):
     """Slim the four suggestion sets into what the mobile page renders.
 
-    Returns (payload, symbols). `symbols` is every unique ticker the page can
-    ask /api/ltp about, so the caller can log or assert the budget.
+    Returns (payload, symbols, per_tab). `symbols` is every unique ticker the page
+    can ask /api/ltp about; `per_tab` is the count each tab would request on its
+    own, which is what the budget is actually about.
     """
     payload = {
         "run_time": run_time,
@@ -90,18 +94,25 @@ def build_mobile_payload(intraday, swing, penny, lt_watchlist, mkt_info, run_tim
 
     symbols = {}
     def note(rows):
+        out = []
         for r in rows:
             sym = r.get("symbol")
             if sym:
                 symbols[sym] = r.get("ticker") or (sym + ".NS")
-    note(payload["tabs"]["intraday"]["buy"])
-    note(payload["tabs"]["intraday"]["sell"])
-    note(payload["tabs"]["swing"])
-    note(payload["tabs"]["penny"])
-    note(payload["tabs"]["lt"])
+                out.append(sym)
+        return out
+
+    # Per tab, because that is the unit a single /api/ltp request is built from.
+    per_tab = {
+        "intraday": len(set(note(payload["tabs"]["intraday"]["buy"]) +
+                            note(payload["tabs"]["intraday"]["sell"]))),
+        "swing": len(set(note(payload["tabs"]["swing"]))),
+        "penny": len(set(note(payload["tabs"]["penny"]))),
+        "lt": len(set(note(payload["tabs"]["lt"]))),
+    }
 
     payload["symbols"] = symbols
-    return payload, symbols
+    return payload, symbols, per_tab
 
 
 _PAGE = """<!doctype html>

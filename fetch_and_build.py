@@ -391,20 +391,19 @@ def publish_mobile_html(screener_results: list, lt_watchlist: list, mkt_info: di
         intraday = compute_intraday_picks(screener_results, top_n=5)
         swing = compute_swing_picks(screener_results, top_n=MOBILE_SWING_TOP_N)
         penny = get_or_refresh_monthly_penny_picks(screener_results, top_n=20, monthly_sip=200.0)["picks"]
-        payload, symbols = mobile_view.build_mobile_payload(
+        payload, symbols, per_tab = mobile_view.build_mobile_payload(
             intraday, swing, penny, lt_watchlist, mkt_info,
             datetime.datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
         )
-        if len(symbols) > mobile_view.SYMBOL_BUDGET:
-            # Not fatal -- a page that loads with too many symbols still works, it
-            # just polls worse. Loud, because the cause is always an upstream top_n
-            # that grew and nobody re-checked the total.
-            log(f"⚠ Mobile view references {len(symbols)} symbols, over the "
-                f"{mobile_view.SYMBOL_BUDGET} budget — live prices will degrade")
+        over = {k: v for k, v in per_tab.items() if v > mobile_view.TAB_SYMBOL_BUDGET}
+        if over:
+            # Not fatal -- the page still loads, it just polls worse. Loud, because
+            # the cause is always a set that grew and nobody re-checked it.
+            log(f"⚠ Mobile view: {over} over the {mobile_view.TAB_SYMBOL_BUDGET}"
+                f"-symbol per-tab budget — those tabs will show stale prices")
         atomic_write_file(MOBILE_HTML, mobile_view.render_mobile_html(payload))
-        log(f"  📱 Mobile suggestions page: {len(symbols)} symbols "
-            f"(intraday {len(intraday.get('buy', [])) + len(intraday.get('sell', []))}, "
-            f"swing {len(swing)}, penny {len(penny)}, LT {len(lt_watchlist or [])})")
+        log(f"  📱 Mobile suggestions page: {len(symbols)} symbols total, "
+            f"per tab {per_tab} (budget {mobile_view.TAB_SYMBOL_BUDGET}/tab)")
     except Exception as e:
         log(f"⚠ Could not build mobile view: {e}")
 
