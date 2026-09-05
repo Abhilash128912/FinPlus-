@@ -105,7 +105,9 @@ export function calculateZerodhaCharges(trade) {
     const buyB = Math.min(20, buyTurnover * 0.0003);
     const sellB = exit > 0 ? Math.min(20, sellTurnover * 0.0003) : 0;
     brokerage = buyB + sellB;
-    stt = sellTurnover * 0.0005;
+    // STT on equity futures is 0.02% of sell turnover (Finance Act 2024, in force
+    // from 1 Oct 2024). The previous 0.05% here overstated the charge 2.5x.
+    stt = sellTurnover * 0.0002;
     exchangeTxn = totalTurnover * 0.0000183;
     stampDuty = buyTurnover * 0.00002;
 

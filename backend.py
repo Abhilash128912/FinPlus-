@@ -338,11 +338,54 @@ def push_to_github(filepath: str, repo_path: str):
     threading.Thread(target=_push, daemon=True).start()
 
 def load_from_github(filepath: str, repo_path: str) -> bool:
-    raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{repo_path}"
+    """Restore a data file from GitHub after an ephemeral disk is wiped.
+
+    raw.githubusercontent.com sits behind a CDN that caches anonymous responses
+    for roughly five minutes and ignores request-side Cache-Control, so a restart
+    shortly after a save could read back stale data and silently revert trades.
+
+    The authenticated Contents API is not CDN-cached, so it is tried first when a
+    token is configured. The raw host stays as a fallback, with a unique query
+    string to force a cache miss.
+    """
+    def _store(text: str) -> bool:
+        text = (text or "").strip()
+        if not text.startswith(("{", "[")):
+            return False
+        atomic_write_json(filepath, json.loads(text))
+        return True
+
+    if GITHUB_TOKEN:
+        try:
+            api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{repo_path}?ref={GITHUB_BRANCH}"
+            res = requests.get(
+                api_url,
+                headers={
+                    "Authorization": f"Bearer {GITHUB_TOKEN}",
+                    "Accept": "application/vnd.github.raw+json",
+                    "Cache-Control": "no-cache",
+                },
+                timeout=8,
+            )
+            if res.status_code == 200 and _store(res.text):
+                print(f"[GitHub Load] {repo_path} restored via Contents API (uncached)")
+                return True
+            print(f"[GitHub Load] Contents API returned {res.status_code} for {repo_path}; trying raw host")
+        except Exception as e:
+            print(f"[GitHub Load] Contents API failed for {repo_path}: {e}; trying raw host")
+
+    # Fallback: the raw host, cache-busted so the CDN cannot serve a stale copy.
+    raw_url = (
+        f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{repo_path}"
+        f"?cb={int(time.time() * 1000)}"
+    )
     try:
-        res = requests.get(raw_url, headers={"Cache-Control": "no-cache", "Pragma": "no-cache"}, timeout=5)
-        if res.status_code == 200:
-            atomic_write_json(filepath, res.json() if res.text.strip().startswith(("{", "[")) else json.loads(res.text))
+        res = requests.get(
+            raw_url,
+            headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+            timeout=8,
+        )
+        if res.status_code == 200 and _store(res.text):
             return True
     except Exception as e:
         print(f"[GitHub Load Error] Failed to fetch {repo_path}: {e}")
