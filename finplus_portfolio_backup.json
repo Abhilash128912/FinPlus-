@@ -42,7 +42,7 @@
       "name": "U. Y. Fincorp Ltd",
       "segment": "PENNY",
       "shares": 10,
-      "buyPrice": 20.0,
+      "buyPrice": 20,
       "buyDate": "2026-09-04",
       "target1": 0,
       "stopLoss": 0,
@@ -66,7 +66,7 @@
       "name": "Bharat Electronics Ltd",
       "segment": "LT",
       "shares": 1,
-      "buyPrice": 409.0,
+      "buyPrice": 409,
       "buyDate": "2026-09-04",
       "target1": 0,
       "stopLoss": 0,
@@ -100,6 +100,5 @@
     "lt": 30,
     "penny": 10
   },
-  "isFreshStart": true,
-  "savedAt": 1788570923145
+  "savedAt": 1788574457196
 }
