@@ -1521,6 +1521,12 @@ export default function App() {
               >
                 ⚖️ EOD Daily Reconciliation
               </button>
+              <button
+                onClick={() => { setCapEventType('INJECTION'); setShowCapModal(true); }}
+                style={{ background: 'rgba(16, 185, 129, 0.18)', border: '1px solid #10b981', color: '#10b981', padding: '8px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '12px', cursor: 'pointer' }}
+              >
+                💰 + Add / Withdraw Capital
+              </button>
               <button 
                 onClick={() => setShowLogAdjModal(true)}
                 style={{ background: 'rgba(245, 158, 11, 0.18)', border: '1px solid #f59e0b', color: '#f59e0b', padding: '8px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
