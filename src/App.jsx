@@ -51,6 +51,30 @@ const FRESH_START_TAG = 'finplus_fresh_start_20260907_v2';
 // INDmoney classification rule: a buy price under this is a Penny SIP holding,
 // at or above it is Long-Term Core. Swing (Zerodha) is a separate broker and is
 // never reclassified by price.
+// Instruments recordable in the F&O / short-term trade log, with contract sizes.
+// Exchanges revise lot sizes periodically, so every value here is a starting
+// point the user can edit in the form; the override is saved per device.
+const LOT_SIZE_KEY = 'finplus_lot_sizes';
+const DEFAULT_INSTRUMENTS = [
+  { id: 'NIFTY',        label: 'NIFTY Options',        lot: 65,   hint: 'e.g. NIFTY 24500 CE' },
+  { id: 'BANKNIFTY',    label: 'BANK NIFTY Options',   lot: 35,   hint: 'e.g. BANKNIFTY 52000 PE' },
+  { id: 'FINNIFTY',     label: 'FIN NIFTY Options',    lot: 65,   hint: 'e.g. FINNIFTY 23000 CE' },
+  { id: 'STOCK_OPTION', label: 'Stock Options',        lot: 1,    hint: 'e.g. RELIANCE 1400 CE' },
+  { id: 'CRUDEOIL',     label: 'Crude Oil (MCX)',      lot: 100,  hint: 'e.g. CRUDEOIL SEP FUT' },
+  { id: 'CRUDEOILM',    label: 'Crude Oil Mini (MCX)', lot: 10,   hint: 'e.g. CRUDEOILM SEP FUT' },
+  { id: 'NATURALGAS',   label: 'Natural Gas (MCX)',    lot: 1250, hint: 'e.g. NATURALGAS SEP FUT' },
+  { id: 'NATGASMINI',   label: 'Natural Gas Mini',     lot: 250,  hint: 'e.g. NATGASMINI SEP FUT' },
+  { id: 'INTRADAY_EQ',  label: 'Intraday Equity',      lot: 1,    hint: 'e.g. SBIN' },
+];
+const readLotSizes = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOT_SIZE_KEY) || '{}');
+    return DEFAULT_INSTRUMENTS.map(i => ({ ...i, lot: Number(saved[i.id]) > 0 ? Number(saved[i.id]) : i.lot }));
+  } catch (e) {
+    return DEFAULT_INSTRUMENTS.map(i => ({ ...i }));
+  }
+};
+
 const PENNY_PRICE_KEY = 'finplus_penny_max_price';
 const DEFAULT_PENNY_MAX_PRICE = 75;
 const readPennyMaxPrice = () => {
@@ -210,9 +234,12 @@ export default function App() {
   const [showAddOptionModal, setShowAddOptionModal] = useState(false);
   const [optEntryDate, setOptEntryDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [optInstrument, setOptInstrument] = useState('');
-  const [optQty, setOptQty] = useState('50');
+  const [optQty, setOptQty] = useState(() => String(readLotSizes().find(i => i.id === 'NIFTY')?.lot || 65));
   const [optEntryPrice, setOptEntryPrice] = useState('');
   const [optFundedBy, setOptFundedBy] = useState('SWING'); // Mandatory: 'SWING', 'LT', 'PENNY', 'GENERAL'
+  const [instruments, setInstruments] = useState(readLotSizes);
+  const [optInstrumentType, setOptInstrumentType] = useState('NIFTY');
+  const [optLots, setOptLots] = useState('1');
   const [optStatus, setOptStatus] = useState('OPEN'); // 'OPEN', 'CLOSED'
   const [optExitDate, setOptExitDate] = useState('');
   const [optExitPrice, setOptExitPrice] = useState('');
@@ -1501,7 +1528,11 @@ export default function App() {
                 📜 + Log Broker Adjustment
               </button>
               <button 
-                onClick={() => setShowAddOptionModal(true)}
+                onClick={() => {
+                  const inst = instruments.find(i => i.id === optInstrumentType);
+                  if (inst) setOptQty(String(inst.lot * (parseInt(optLots, 10) || 1)));
+                  setShowAddOptionModal(true);
+                }}
                 style={{ background: 'rgba(192, 132, 252, 0.18)', border: '1px solid #c084fc', color: '#c084fc', padding: '8px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 ⚡ + Record Options Trade
@@ -3129,6 +3160,9 @@ export default function App() {
                 id: `opt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 entryDate: optEntryDate,
                 instrument: optInstrument.toUpperCase(),
+                instrumentType: optInstrumentType,
+                lots: parseInt(optLots, 10) || 1,
+                lotSize: instruments.find(i => i.id === optInstrumentType)?.lot || 1,
                 qty,
                 entryPrice: entryP,
                 capitalUsed: qty * entryP,
@@ -3156,19 +3190,75 @@ export default function App() {
                 </div>
                 <div>
                   <label style={{ fontSize: '11px', color: '#c084fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>INSTRUMENT SYMBOL</label>
-                  <input type="text" placeholder="e.g. NIFTY 24500 CE" value={optInstrument} onChange={e => setOptInstrument(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid #c084fc', color: '#c084fc', padding: '10px', borderRadius: '8px', fontWeight: 900 }} />
+                  <input type="text" placeholder={instruments.find(i => i.id === optInstrumentType)?.hint || 'e.g. NIFTY 24500 CE'} value={optInstrument} onChange={e => setOptInstrument(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid #c084fc', color: '#c084fc', padding: '10px', borderRadius: '8px', fontWeight: 900 }} />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: '#c084fc', fontWeight: 800, display: 'block', marginBottom: '4px' }}>INSTRUMENT TYPE</label>
+                <select
+                  value={optInstrumentType}
+                  onChange={e => {
+                    const id = e.target.value;
+                    setOptInstrumentType(id);
+                    const inst = instruments.find(i => i.id === id);
+                    if (inst) setOptQty(String(inst.lot * (parseInt(optLots, 10) || 1)));
+                  }}
+                  style={{ width: '100%', background: '#090d16', border: '1.5px solid #c084fc', color: '#c084fc', padding: '10px', borderRadius: '8px', fontWeight: 900 }}
+                >
+                  {instruments.map(i => (
+                    <option key={i.id} value={i.id}>{i.label} — lot {i.lot}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>QTY / LOTS</label>
-                  <input type="number" value={optQty} onChange={e => setOptQty(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }} />
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>LOTS</label>
+                  <input
+                    type="number" min="1" value={optLots}
+                    onChange={e => {
+                      setOptLots(e.target.value);
+                      const inst = instruments.find(i => i.id === optInstrumentType);
+                      if (inst) setOptQty(String(inst.lot * (parseInt(e.target.value, 10) || 0)));
+                    }}
+                    required style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
+                  />
                 </div>
                 <div>
-                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>ENTRY PRICE (₹)</label>
-                  <input type="number" step="any" placeholder="e.g. 125.50" value={optEntryPrice} onChange={e => setOptEntryPrice(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }} />
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>LOT SIZE</label>
+                  <input
+                    type="number" min="1"
+                    value={instruments.find(i => i.id === optInstrumentType)?.lot || 1}
+                    onChange={e => {
+                      const lot = Number(e.target.value) || 1;
+                      setInstruments(prev => {
+                        const next = prev.map(i => (i.id === optInstrumentType ? { ...i, lot } : i));
+                        try {
+                          localStorage.setItem(LOT_SIZE_KEY, JSON.stringify(next.reduce((a, i) => ({ ...a, [i.id]: i.lot }), {})));
+                        } catch (err) {}
+                        return next;
+                      });
+                      setOptQty(String(lot * (parseInt(optLots, 10) || 1)));
+                    }}
+                    style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#38bdf8', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
+                  />
                 </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>TOTAL QTY</label>
+                  <input
+                    type="number" value={optQty} onChange={e => setOptQty(e.target.value)} required
+                    style={{ width: '100%', background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.35)', color: '#38bdf8', padding: '10px', borderRadius: '8px', fontWeight: 900 }}
+                  />
+                </div>
+              </div>
+              <div style={{ fontSize: '10px', color: '#64748b', marginTop: '-8px' }}>
+                Lot size is editable and saved for next time. Verify against your broker &mdash; exchanges revise contract sizes.
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>ENTRY PRICE (₹)</label>
+                <input type="number" step="any" placeholder="e.g. 125.50" value={optEntryPrice} onChange={e => setOptEntryPrice(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }} />
               </div>
 
               <div>

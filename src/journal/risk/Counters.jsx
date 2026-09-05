@@ -54,16 +54,16 @@ export default function Counters({ accrualState, monthView }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
         {lanes.map(l => {
           const segView = monthView?.segments?.find(s => s.id === l.id);
-          const locked = l.unlocked === false;
           const noThreshold = l.threshold === null && !l.slPercent && !l.isReserve;
 
+          const locked = !l.isReserve && l.unlocked === false;
           const accent = l.isReserve
             ? 'rgba(167,139,250,0.35)'
             : l.unlocked
-              ? 'rgba(16,185,129,0.4)'
+              ? 'rgba(16,185,129,0.45)'
               : noThreshold
-                ? 'rgba(245,158,11,0.35)'
-                : C.border;
+                ? 'rgba(245,158,11,0.4)'
+                : 'rgba(239,68,68,0.45)';
 
           return (
             <Panel key={l.id} accent={accent}>
@@ -77,22 +77,42 @@ export default function Counters({ accrualState, monthView }) {
                 </div>
                 {l.isReserve ? (
                   <Chip tone="violet">reserve</Chip>
-                ) : l.slPercent && l.threshold === null ? (
-                  <Chip tone={l.unlocked ? 'good' : 'muted'}>{l.slPercent}% SL{l.unlocked ? ' · ready' : ''}</Chip>
                 ) : noThreshold ? (
-                  <Chip tone="warn">no SL set</Chip>
+                  <Chip tone="warn">⚠ NO SL SET</Chip>
                 ) : l.unlocked ? (
-                  <Chip tone="good">✓ UNLOCKED</Chip>
+                  <Chip tone="good">✓ READY TO TRADE</Chip>
                 ) : (
-                  <Chip tone="muted">{l.daysToUnlock} trading day{l.daysToUnlock === 1 ? '' : 's'}</Chip>
+                  <Chip tone="bad">🔒 LOCKED</Chip>
                 )}
               </div>
+
+              {/* Unmistakable trading state - a day count alone reads as neutral */}
+              {!l.isReserve && (
+                <div style={{
+                  background: noThreshold ? 'rgba(245,158,11,0.14)' : l.unlocked ? 'rgba(16,185,129,0.14)' : 'rgba(239,68,68,0.14)',
+                  border: `1px solid ${noThreshold ? 'rgba(245,158,11,0.4)' : l.unlocked ? 'rgba(16,185,129,0.45)' : 'rgba(239,68,68,0.45)'}`,
+                  borderRadius: '8px',
+                  padding: '8px 11px',
+                  marginBottom: '13px',
+                  fontSize: '11px',
+                  fontWeight: 900,
+                  letterSpacing: '0.3px',
+                  color: noThreshold ? C.amber : l.unlocked ? C.green : '#fca5a5',
+                  textAlign: 'center'
+                }}>
+                  {noThreshold
+                    ? '⚠ CANNOT TRADE — NO STOP-LOSS SET'
+                    : l.unlocked
+                      ? '✓ TRADING UNLOCKED'
+                      : `🔒 LOCKED FOR TRADING — ${l.daysToUnlock} TRADING DAY${l.daysToUnlock === 1 ? '' : 'S'} TO GO`}
+                </div>
+              )}
 
               {/* Counter progress toward the stop-loss */}
               {!l.isReserve && (
                 <div style={{ marginBottom: '14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '21px', fontWeight: 900, color: l.unlocked ? C.green : '#fff' }}>
+                    <span style={{ fontSize: '21px', fontWeight: 900, color: l.unlocked ? C.green : locked ? '#94a3b8' : '#fff' }}>
                       {inr(l.counter)}
                     </span>
                     <span style={{ fontSize: '11px', color: C.muted, fontWeight: 700 }}>
@@ -104,7 +124,7 @@ export default function Counters({ accrualState, monthView }) {
                   <Bar
                     used={l.counter}
                     total={l.threshold || (l.slPercent ? l.counter || 1 : 1)}
-                    color={l.unlocked ? C.green : C.accent}
+                    color={l.unlocked ? C.green : locked ? C.red : C.accent}
                     height={9}
                   />
                   <div style={{ fontSize: '10px', color: C.dim, marginTop: '6px' }}>
