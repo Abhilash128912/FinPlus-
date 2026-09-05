@@ -16,7 +16,7 @@
       "id": "pos_1788548077313_1_drcsystems",
       "ticker": "DRCSYSTEMS",
       "name": "DRC Systems India Ltd",
-      "segment": "LT",
+      "segment": "PENNY",
       "shares": 11,
       "buyPrice": 13.69,
       "buyDate": "2026-09-04",
@@ -28,7 +28,7 @@
       "id": "pos_1788548077313_2_sigma",
       "ticker": "SIGMA",
       "name": "Sigma Solve Ltd",
-      "segment": "LT",
+      "segment": "PENNY",
       "shares": 4,
       "buyPrice": 47.2,
       "buyDate": "2026-09-04",
@@ -40,7 +40,7 @@
       "id": "pos_1788548077313_3_uyfincorp",
       "ticker": "UYFINCORP",
       "name": "U. Y. Fincorp Ltd",
-      "segment": "LT",
+      "segment": "PENNY",
       "shares": 10,
       "buyPrice": 20.0,
       "buyDate": "2026-09-04",
@@ -101,5 +101,5 @@
     "penny": 10
   },
   "isFreshStart": true,
-  "savedAt": 1788569041981
+  "savedAt": 1788570923145
 }
