@@ -51,6 +51,8 @@ jobs:
           # run because cache/ is gitignored, so the whole universe is fetched
           # fresh. Fewer parallel requests survive that; the laptop keeps 16.
           SCREENER_SCAN_WORKERS: '6'
+          SCREENER_RENDER_URL: 'https://finplus-g0b5.onrender.com'
+          SCREENER_SYNC_TOKEN: ${{ secrets.SCREENER_SYNC_TOKEN || 'finplus_secure_sync_2026' }}
         run: |
           echo "Starting full Nifty 500 scan at $(date '+%Y-%m-%d %H:%M:%S UTC')"
           # Retried rather than failed outright: ten of the first twenty-four

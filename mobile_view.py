@@ -174,7 +174,9 @@ _PAGE = """<!doctype html>
   .sym { font-weight:700; font-size:15px; }
   .nm { color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis;
         white-space:nowrap; flex:1; min-width:0; }
-  .px { margin-left:auto; font-weight:700; font-variant-numeric:tabular-nums; }
+  .px { margin-left:auto; font-weight:700; font-variant-numeric:tabular-nums; transition: color 0.3s ease, background 0.3s ease; border-radius:4px; padding:0 4px; }
+  .px.flash-green { color:var(--green); background:rgba(52,211,153,.15); }
+  .px.flash-red { color:var(--red); background:rgba(248,113,113,.15); }
   .chg { font-size:11px; font-variant-numeric:tabular-nums; }
   .up { color:var(--green); } .dn { color:var(--red); }
   .badge { display:inline-block; font-size:10px; font-weight:700; padding:2px 6px;
@@ -265,7 +267,7 @@ function cardSr(row) {
                  && Math.abs(row.srv_level_target - row.srv_target1) > 0.01)
     ? '<div class="why">Target capped for the day; the level itself sits at ₹'
       + n(row.srv_level_target) + '.</div>' : '';
-  return '<div class="card">' + head(row, tag) +
+  return '<div class="card" data-sym="' + esc(row.symbol) + '">' + head(row, tag) +
     kv([['Entry', '₹' + n(row.srv_entry)], ['Stop', '₹' + n(row.srv_stop)],
         ['Target', '₹' + n(row.srv_target1)],
         ['Risk', n(row.srv_risk_pct, 2) + '%'], ['Reward', n(row.srv_reward_pct, 2) + '%'],
@@ -289,7 +291,7 @@ function cardIntraday(row) {
              ['Above sup', row.sr1h_dist_support_pct != null ? n(row.sr1h_dist_support_pct, 1) + '%' : '—'],
              ['Room to res', row.sr1h_room_to_res_pct != null ? n(row.sr1h_room_to_res_pct, 1) + '%' : '—']]);
   }
-  return '<div class="card">' + head(row, dia) +
+  return '<div class="card" data-sym="' + esc(row.symbol) + '">' + head(row, dia) +
     kv([['Stop', '₹' + n(row.stop_loss)], ['T1', '₹' + n(row.target1)],
         ['T2', '₹' + n(row.target2)], ['RSI', n(row.rsi, 1)],
         ['Vol×', n(row.volume_spike, 2)], ['RS', row.rs_rating != null ? row.rs_rating : '—']]) +
@@ -304,7 +306,7 @@ function cardSwing(row) {
     '">' + esc(row.swing_badge) + '</span>' : '';
   // Swing is buy-only by design: no sell-and-hold in the cash segment.
   if (row.srv_signal === 'BUY') b += ' <span class="badge g">◆ AT SUPPORT</span>';
-  return '<div class="card">' + head(row, b) +
+  return '<div class="card" data-sym="' + esc(row.symbol) + '">' + head(row, b) +
     kv([['Setup', n(row.setup_score, 0)], ['Swing', n(row.swing_score, 0)],
         ['Stop', '₹' + n(row.swing_sl)], ['T1', '₹' + n(row.swing_t1)],
         ['T2', '₹' + n(row.swing_t2)], ['RS', row.rs_rating != null ? row.rs_rating : '—']]) +
@@ -316,7 +318,7 @@ function cardSwing(row) {
 function cardPenny(row) {
   var b = row.status_badge ? '<span class="badge ' + badgeClass(row.status_badge_class || row.status) +
     '">' + esc(row.status_badge) + '</span>' : '';
-  return '<div class="card">' + head(row, b) +
+  return '<div class="card" data-sym="' + esc(row.symbol) + '">' + head(row, b) +
     kv([['Quality', n(row.penny_quality_score, 0)], ['Entry', n(row.penny_entry_score, 0)],
         ['GTT', '₹' + n(row.auto_gtt)], ['From GTT', n(row.dist_from_gtt_pct, 1) + '%'],
         ['SIP qty', row.monthly_sip_qty != null ? row.monthly_sip_qty : '—']]) +
@@ -328,7 +330,7 @@ function cardLt(row) {
   var b = row.status_badge ? '<span class="badge ' + badgeClass(row.status_badge_class || row.status) +
     '">' + esc(row.status_badge) + '</span>' : '';
   var gtt = row.auto_gtt != null ? row.auto_gtt : row.gtt_level;
-  return '<div class="card">' + head(row, b) +
+  return '<div class="card" data-sym="' + esc(row.symbol) + '">' + head(row, b) +
     kv([['Quality', n(row.lt_quality_score, 0)], ['Entry', n(row.lt_entry_score, 0)],
         ['GTT', '₹' + n(gtt)], ['From GTT', n(row.dist_from_gtt_pct, 1) + '%'],
         ['Trend', esc(row.trend || '—')]]) +
@@ -395,6 +397,24 @@ function setStatus(txt, kind) {
   d.className = 'dot' + (kind ? ' ' + kind : '');
 }
 
+function updateMobilePrices(changedMap, staleMap) {
+  var cards = document.querySelectorAll('.card[data-sym]');
+  cards.forEach(function (card) {
+    var sym = card.getAttribute('data-sym');
+    if (!sym || !changedMap.hasOwnProperty(sym)) return;
+    var item = changedMap[sym];
+    var newP = item.newPrice;
+    var pxEl = card.querySelector('.px');
+    if (pxEl) {
+      var mark = staleMap && staleMap[sym] ? ' <span class="stale" title="price not fresh">·</span>' : '';
+      pxEl.innerHTML = '₹' + n(newP) + mark;
+      pxEl.classList.remove('flash-green', 'flash-red');
+      pxEl.classList.add(item.isUp ? 'flash-green' : 'flash-red');
+      setTimeout(function() { pxEl.classList.remove('flash-green', 'flash-red'); }, 1200);
+    }
+  });
+}
+
 async function poll() {
   var tickers = activeSymbols();
   if (!tickers.length) { setStatus('No rows to price'); return; }
@@ -409,13 +429,23 @@ async function poll() {
     var j = await res.json();
     var map = j.ltps || j.prices || {};
     var got = 0;
+    var changedMap = {};
     Object.keys(DATA.symbols).forEach(function (sym) {
       var tk = DATA.symbols[sym];
       var p = map[tk] != null ? map[tk] : map[sym];
-      if (p != null) { live[sym] = p; got++; }
+      if (p != null) {
+        var oldP = live[sym];
+        if (oldP != null && Math.abs(oldP - p) > 0.01) {
+          changedMap[sym] = { oldPrice: oldP, newPrice: p, isUp: p >= oldP };
+        }
+        live[sym] = p;
+        got++;
+      }
       if (j.stale) staleSet[sym] = !!(j.stale[tk] || j.stale[sym]);
     });
-    render();
+    if (Object.keys(changedMap).length > 0) {
+      updateMobilePrices(changedMap, staleSet);
+    }
     setStatus(got + ' live · ' + new Date().toLocaleTimeString('en-IN', { hour12: true }),
       got ? 'live' : 'err');
   } catch (e) {

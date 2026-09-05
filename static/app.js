@@ -197,8 +197,11 @@ async function triggerAppScan() {
   if (barInner) barInner.style.width = '15%';
   if (btnLog) btnLog.textContent = 'Connecting to local scan engine server...';
 
-  const scanUrl = 'http://localhost:' + (window.location.port || '8080') + '/api/scan';
-  const statusUrl = 'http://localhost:' + (window.location.port || '8080') + '/api/scan/status';
+  const baseUrl = (window.location.origin && window.location.origin.startsWith('http'))
+    ? window.location.origin
+    : ('http://localhost:' + (window.location.port || '5050'));
+  const scanUrl = baseUrl + '/api/scan';
+  const statusUrl = baseUrl + '/api/scan/status';
 
   try {
     const res = await fetch(scanUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
@@ -216,7 +219,8 @@ async function triggerAppScan() {
           const sResp = await fetch(statusUrl);
           if (sResp.ok) {
             const sData = await sResp.json();
-            if (!sData.scan_in_progress) {
+            const scanning = sData.is_scanning || sData.scan_in_progress;
+            if (!scanning) {
               clearInterval(pollTimer);
               if (barInner) barInner.style.width = '100%';
               if (btnText) btnText.textContent = 'Scan complete!';
@@ -520,12 +524,25 @@ function renderSwingRadar() {
       '<div style="color:var(--muted);font-size:12px;padding:16px 2px">Nothing is sitting on a volume-backed level with the volume to turn off it. Rare by design — the momentum list below is not filtered by levels.</div>';
   }
 
-  // Top 10 Spotlight Cards (Always top 10 highest swing_score stocks overall, strictly sorted #1 to #10)
+  // Update spotlight subtitle with the active preset name
+  const presetLabelMap = {
+    'all': 'All MTF',
+    'rs': 'RS Leaders (RS ≥ 80)',
+    'blast': 'Volume Blast',
+    'inflow': 'Institutional Inflow',
+    'momentum': 'High Momentum',
+    'pullback': 'Pullback Buy',
+    'quality': 'Quality + Momentum'
+  };
+  const subEl = document.getElementById('swingSpotlightSubtitle');
+  if (subEl) subEl.textContent = `(${presetLabelMap[swingPreset] || 'current preset'} · top 10)`;
+
+  // Top 10 Spotlight Cards (Top 10 highest swing_score stocks for current preset)
   const spotlight = document.getElementById('swingSpotlight');
   if (spotlight) {
     // A level with real volume behind it outranks a high score with nothing under
     // it. Within each group the existing ordering is untouched.
-    const top10 = [...allMtf].sort((a, b) =>
+    const top10 = [...sorted].sort((a, b) =>
       ((swingSrOf(b) ? 1 : 0) - (swingSrOf(a) ? 1 : 0)) ||
       (b.swing_score || 0) - (a.swing_score || 0) || 
       (b.total_score || 0) - (a.total_score || 0) || 
@@ -549,7 +566,7 @@ function renderSwingRadar() {
         const slPct = s.swing_sl_pct ? `${s.swing_sl_pct}%` : '';
         const t1Pct = s.swing_t1_pct ? `+${s.swing_t1_pct}%` : '';
         return `
-        <div class="swing-card ${cardClass}" onclick="document.getElementById('fSearch').value='${s.symbol}';switchTab('screener');applyFilters()">
+        <div class="swing-card ${cardClass}" data-symbol="${s.symbol}" onclick="document.getElementById('fSearch').value='${s.symbol}';switchTab('screener');applyFilters()">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
             <div>
               <div style="font-size:15px;font-weight:700;color:#fff">${i+1}. ${s.symbol}</div>
@@ -568,8 +585,8 @@ function renderSwingRadar() {
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;font-size:11px;margin-bottom:10px">
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
               <div style="color:var(--muted);font-size:10px;display:flex;align-items:center;justify-content:center;gap:3px">LTP <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#10b981;box-shadow:0 0 4px #10b981"></span></div>
-              <div style="font-weight:700;color:#fff;font-size:12px">₹${(s.ltp||0).toFixed(2)}</div>
-              ${s.day_chg_pct !== undefined ? `<div style="font-size:9px;font-weight:700;color:${s.day_chg_pct>=0?'#34d399':'#f87171'}">${s.day_chg_pct>=0?'+':''}${s.day_chg_pct.toFixed(2)}%</div>` : ''}
+              <div class="swing-ltp-val price" data-field="swing-ltp" style="font-weight:700;color:#fff;font-size:12px">₹${(s.ltp||0).toFixed(2)}</div>
+              ${s.day_chg_pct !== undefined ? `<div data-field="swing-day-chg" style="font-size:9px;font-weight:700;color:${s.day_chg_pct>=0?'#34d399':'#f87171'}">${s.day_chg_pct>=0?'+':''}${s.day_chg_pct.toFixed(2)}%</div>` : ''}
             </div>
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
               <div style="color:var(--muted);font-size:10px">RS</div>
@@ -628,13 +645,13 @@ function renderSwingRadar() {
     const cmfStr = s.cmf !== undefined ? (s.cmf >= 0 ? '+' : '') + s.cmf.toFixed(2) : '–';
     const cmfColor = (s.cmf||0) >= 0.05 ? '#10b981' : (s.cmf||0) <= -0.05 ? '#ef4444' : '#94a3b8';
     const volColor = (s.volume_spike||0) >= 2.0 ? '#10b981' : (s.volume_spike||0) >= 1.5 ? '#fbbf24' : '#94a3b8';
-    return `<tr>
+    return `<tr data-symbol="${s.symbol}">
       <td>${i+1}</td>
       <td><strong style="color:#e2e8f0">${s.symbol}</strong><br><span style="font-size:10px;color:var(--muted)">${(s.cap_category||'')}</span></td>
       <td><span style="font-weight:700;color:#a78bfa;font-size:15px">${s.swing_score||0}</span></td>
       <td><span class="badge ${rsVal>=80?'badge-green':rsVal>=60?'badge-green':rsVal>=40?'badge-gray':'badge-red'}" style="font-size:11px;font-weight:700">RS ${rsVal}</span></td>
       <td><span style="font-size:11px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:10px;padding:3px 8px;white-space:nowrap">${s.swing_badge||'–'}</span></td>
-      <td>₹${(s.ltp||0).toFixed(2)}</td>
+      <td><span class="price">₹${(s.ltp||0).toFixed(2)}</span></td>
       <td style="color:${volColor};font-weight:600">${volStr}</td>
       <td>${rsiStr}</td>
       <td>${(s.momentum||0).toFixed(0)}</td>
@@ -1619,7 +1636,8 @@ function updateLtpBadgeStatus(lastTimeStr, polledCount, attemptedCount, staleCou
 
   if (pollIntervalMs === 0) {
     if (dot) { dot.style.background = '#6b7280'; dot.style.boxShadow = 'none'; }
-    txt.textContent = 'Live LTP Polling: Off';
+    txt.textContent = 'Live LTP: Off';
+    if (txt.parentElement) txt.parentElement.setAttribute('title', 'Live LTP Polling is turned off');
     return;
   }
 
@@ -1634,7 +1652,8 @@ function updateLtpBadgeStatus(lastTimeStr, polledCount, attemptedCount, staleCou
       ? ` — resumes within ${secs >= 60 ? Math.ceil(secs / 60) + 'm' : secs + 's'}`
       : ' — resumes when it finishes';
     const showing = staleCount > 0 ? ` (showing ${staleCount} scan-time prices)` : '';
-    txt.textContent = `⏸ Live LTP Paused: scan in progress${when}${showing}`;
+    txt.textContent = 'Live LTP: Paused';
+    if (txt.parentElement) txt.parentElement.setAttribute('title', `⏸ Live LTP Paused: scan in progress${when}${showing}`);
     return;
   }
 
@@ -1645,15 +1664,17 @@ function updateLtpBadgeStatus(lastTimeStr, polledCount, attemptedCount, staleCou
   if (hasFailed) {
     if (dot) { dot.style.background = '#ef4444'; dot.style.boxShadow = '0 0 8px #ef4444'; }
     const sinceOk = lastLtpSuccessTime ? formatAgo(Date.now() - lastLtpSuccessTime) : 'never this session';
-    const staleTag = staleCount > 0 ? ` (showing ${staleCount} stale scan-time prices)` : '';
-    txt.textContent = `🔴 Live LTP Polling: Failed — last success ${sinceOk}${staleTag}`;
+    const staleTag = staleCount > 0 ? ` (${staleCount} stale prices)` : '';
+    txt.textContent = 'Live LTP: Retry';
+    if (txt.parentElement) txt.parentElement.setAttribute('title', `🔴 Live LTP Polling: Failed — last success ${sinceOk}${staleTag}`);
     return;
   }
 
   if (dot) { dot.style.background = '#10b981'; dot.style.boxShadow = '0 0 8px #10b981'; }
   const timeTag = lastTimeStr ? ` @ ${lastTimeStr}` : '';
-  const countTag = (polledCount != null && polledCount > 0) ? ` — ${polledCount} prices synced${timeTag}` : (lastTimeStr ? ` — Last Sync: ${lastTimeStr}` : '');
-  txt.textContent = `🟢 Live LTP Polling: Active (${pollIntervalMs / 1000}s)${countTag}`;
+  const countTag = (polledCount != null && polledCount > 0) ? `${polledCount} prices synced${timeTag}` : (lastTimeStr ? `Last Sync: ${lastTimeStr}` : 'Active');
+  txt.textContent = `Live LTP (${pollIntervalMs / 1000}s)`;
+  if (txt.parentElement) txt.parentElement.setAttribute('title', `🟢 Live LTP Polling: Active (${pollIntervalMs / 1000}s) — ${countTag}`);
 }
 
 async function fetchLiveLTPForSymbol(ticker) {
@@ -1766,13 +1787,142 @@ function visibleRowSymbols(marginPx = 1200) {
   return found;
 }
 
+// In-place DOM price updater — updates existing elements without DOM destruction/reflow
+function updateDomPricesInPlace(changedMap) {
+  if (!changedMap || changedMap.size === 0) return;
+
+  changedMap.forEach((info, sym) => {
+    const cleanSym = sym.replace('.NS', '');
+    const newPrice = info.newPrice;
+    const flashCls = info.isUp ? 'price-up' : 'price-down';
+
+    const triggerFlash = (el) => {
+      if (!el) return;
+      el.classList.remove('price-up', 'price-down');
+      void el.offsetWidth;
+      el.classList.add(flashCls);
+    };
+
+    // 1. Screener & general table rows with data-symbol
+    document.querySelectorAll(`tr[data-symbol="${sym}"], tr[data-symbol="${cleanSym}"]`).forEach(tr => {
+      const priceEl = tr.querySelector('.price') || tr.querySelector('.lt-ltp');
+      if (priceEl) {
+        priceEl.textContent = '₹' + newPrice.toFixed(2);
+        triggerFlash(priceEl);
+      }
+    });
+
+    // 2. Swing Spotlight Cards
+    document.querySelectorAll(`.swing-card[data-symbol="${sym}"], .swing-card[data-symbol="${cleanSym}"]`).forEach(card => {
+      const pEl = card.querySelector('.swing-ltp-val, .price');
+      if (pEl) {
+        pEl.textContent = '₹' + newPrice.toFixed(2);
+        triggerFlash(pEl);
+      }
+      const chgEl = card.querySelector('[data-field="swing-day-chg"]');
+      const sc = (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA))
+        ? SCREENER_DATA.find(s => s.symbol === sym || s.symbol === cleanSym)
+        : null;
+      if (chgEl && sc && sc.prev_close && sc.prev_close > 0) {
+        const chg = ((newPrice - sc.prev_close) / sc.prev_close) * 100;
+        chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+        chgEl.style.color = chg >= 0 ? '#34d399' : '#f87171';
+      }
+    });
+
+    // 3. Intraday & F&O Cards
+    document.querySelectorAll(`.fno-card[data-symbol="${sym}"], .fno-card[data-symbol="${cleanSym}"]`).forEach(card => {
+      const ltpEl = card.querySelector('.fno-card-ltp');
+      if (ltpEl) {
+        ltpEl.textContent = '₹' + Number(newPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        triggerFlash(ltpEl);
+      }
+      const chgEl = card.querySelector('.fno-card-chg, .fno-card-price > span');
+      if (chgEl) {
+        let prevClose = null;
+        if (typeof INTRADAY_DATA !== 'undefined' && INTRADAY_DATA) {
+          const idp = [...(INTRADAY_DATA.buy || []), ...(INTRADAY_DATA.sell || [])].find(s => s.symbol === sym || s.symbol === cleanSym);
+          if (idp) prevClose = idp.prev_close;
+        }
+        if (!prevClose && typeof FNO_DATA !== 'undefined' && Array.isArray(FNO_DATA)) {
+          const fnp = FNO_DATA.find(f => f.symbol === sym || f.symbol === cleanSym);
+          if (fnp) prevClose = fnp.prev_close;
+        }
+        if (prevClose && prevClose > 0) {
+          const chg = ((newPrice - prevClose) / prevClose) * 100;
+          chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+          chgEl.className = (chgEl.className || '').replace(/pos|neg/g, '').trim() + ' ' + (chg >= 0 ? 'pos' : 'neg');
+        }
+      }
+    });
+
+    // 4. Watchlist cards & summary
+    document.querySelectorAll(`.wl-card[data-symbol="${sym}"], .wl-card[data-symbol="${cleanSym}"]`).forEach(card => {
+      const ltpEl = card.querySelector('.wl-ltp');
+      if (ltpEl) {
+        ltpEl.textContent = '₹' + newPrice.toFixed(2);
+        triggerFlash(ltpEl);
+      }
+      const wl = (typeof watchlist !== 'undefined' && Array.isArray(watchlist))
+        ? watchlist.find(w => w.symbol === sym || w.symbol === cleanSym)
+        : null;
+      if (wl && wl.avg_cost && wl.qty > 0) {
+        const pnl = (newPrice - wl.avg_cost) * wl.qty;
+        const pnlPct = ((newPrice - wl.avg_cost) / wl.avg_cost) * 100;
+        const pnlEl = card.querySelector('.wl-pnl');
+        if (pnlEl) {
+          pnlEl.innerHTML = `<span class="${pnl >= 0 ? 'pos' : 'neg'}">${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)} (${pnl >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)</span>`;
+        }
+      }
+    });
+
+    // 5. Nifty Index Banner
+    if (sym === 'NIFTY_INDEX' || sym === '^NSEI') {
+      const nLtp = document.getElementById('niftyRegimeLtp');
+      if (nLtp) {
+        nLtp.textContent = '₹' + newPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        triggerFlash(nLtp);
+      }
+    }
+
+    // 6. Top Pick Spotlight
+    if (typeof TOP_PICK !== 'undefined' && TOP_PICK && (TOP_PICK.symbol === sym || TOP_PICK.symbol === cleanSym)) {
+      const heroPrice = document.querySelector('.hero-spotlight .price');
+      if (heroPrice) {
+        heroPrice.textContent = '₹' + newPrice.toFixed(2);
+        triggerFlash(heroPrice);
+      }
+    }
+  });
+
+  // Update watchlist total P&L banner without rebuilding HTML
+  if (typeof watchlist !== 'undefined' && Array.isArray(watchlist)) {
+    let totPnl = 0, totCost = 0;
+    watchlist.forEach(w => {
+      if (w.avg_cost && w.ltp && w.qty > 0) {
+        totPnl += (w.ltp - w.avg_cost) * w.qty;
+        totCost += w.avg_cost * w.qty;
+      }
+    });
+    const pnlEl = document.getElementById('wlPortfolioPnl');
+    const pnlPctEl = document.getElementById('wlPortfolioPnlPct');
+    if (pnlEl) pnlEl.innerHTML = `<span class="${totPnl >= 0 ? 'pos' : 'neg'}">${totPnl >= 0 ? '+' : ''}₹${totPnl.toFixed(2)}</span>`;
+    if (pnlPctEl) {
+      const pct = totCost > 0 ? (totPnl / totCost) * 100 : 0;
+      pnlPctEl.innerHTML = `<span class="${totPnl >= 0 ? 'pos' : 'neg'}">${totPnl >= 0 ? '+' : ''}${pct.toFixed(2)}%</span>`;
+    }
+  }
+}
+
 async function refreshLiveLTP(manual = false) {
   const dot = document.getElementById('ltpStatusDot');
   const txt = document.getElementById('ltpStatusText');
   if (dot) dot.classList.add('updating');
-  if (txt) txt.textContent = manual ? 'Refreshing prices...' : 'Polling LTP...';
+  if (txt && manual) txt.textContent = 'Refreshing...';
 
   let priceChanged = false;
+  let statusChanged = false;
+  const changedPriceMap = new Map();
 
   // Poll what is on screen, not everything the page knows about.
   //
@@ -1935,19 +2085,22 @@ async function refreshLiveLTP(manual = false) {
     if (sym === 'NIFTY_INDEX' || sym === '^NSEI' || (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.nifty && MARKET_INFO.nifty.symbol === sym)) {
       if (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.nifty) {
         if (Math.abs((MARKET_INFO.nifty.ltp || 0) - newPrice) > 0.01) {
-          MARKET_INFO.nifty.old_ltp = MARKET_INFO.nifty.ltp;
+          const oldP = MARKET_INFO.nifty.ltp || 0;
+          MARKET_INFO.nifty.old_ltp = oldP;
           MARKET_INFO.nifty.ltp = newPrice;
           if (MARKET_INFO.nifty.prev_close && MARKET_INFO.nifty.prev_close > 0) {
             MARKET_INFO.nifty.change_pct = Math.round(((newPrice - MARKET_INFO.nifty.prev_close) / MARKET_INFO.nifty.prev_close) * 10000) / 100;
           }
           priceChanged = true;
+          changedPriceMap.set('NIFTY_INDEX', { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
         }
       }
     }
 
     if (typeof TOP_PICK !== 'undefined' && TOP_PICK && (TOP_PICK.symbol === sym || TOP_PICK.symbol === cleanSym)) {
       if (Math.abs((TOP_PICK.ltp || TOP_PICK.current_ltp || 0) - newPrice) > 0.01) {
-        TOP_PICK.old_ltp = TOP_PICK.ltp;
+        const oldP = TOP_PICK.ltp || TOP_PICK.current_ltp || 0;
+        TOP_PICK.old_ltp = oldP;
         TOP_PICK.ltp = newPrice;
         TOP_PICK.current_ltp = newPrice;
         if (TOP_PICK.ma50) TOP_PICK.dist_ma50_pct = Math.round(((newPrice - TOP_PICK.ma50)/TOP_PICK.ma50)*1000)/10;
@@ -1955,19 +2108,22 @@ async function refreshLiveLTP(manual = false) {
         if (TOP_PICK.week_high_52) TOP_PICK.dist_52w_high_pct = Math.round(((newPrice - TOP_PICK.week_high_52)/TOP_PICK.week_high_52)*1000)/10;
         if (TOP_PICK.week_low_52) TOP_PICK.dist_52w_low_pct = Math.round(((newPrice - TOP_PICK.week_low_52)/TOP_PICK.week_low_52)*1000)/10;
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
     if (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA)) {
       const sc = SCREENER_DATA.find(s => s.symbol === sym || s.symbol === cleanSym);
       if (sc && Math.abs((sc.ltp || 0) - newPrice) > 0.01) {
-        sc.old_ltp = sc.ltp;
+        const oldP = sc.ltp || 0;
+        sc.old_ltp = oldP;
         sc.ltp = newPrice;
         if (sc.gtt_breakout_level && sc.gtt_breakout_level > 0) {
           sc.dist_to_gtt_pct = Math.round(((sc.ltp - sc.gtt_breakout_level) / sc.gtt_breakout_level) * 10000) / 100;
           if (sc.ltp >= sc.gtt_breakout_level && (sc.status === 'WAIT' || sc.swing_action === 'WAIT FOR BREAKOUT')) {
             sc.status = 'BUY_NOW';
             sc.swing_action = 'BUY NOW';
+            statusChanged = true;
           }
         }
         if (sc.target_price && sc.target_price > 0) {
@@ -1977,13 +2133,15 @@ async function refreshLiveLTP(manual = false) {
           sc.dist_to_sl_pct = Math.round(((sc.ltp - sc.stop_loss) / sc.ltp) * 10000) / 100;
         }
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
     if (typeof watchlist !== 'undefined' && Array.isArray(watchlist)) {
       const wl = watchlist.find(w => w.symbol === sym || w.symbol === cleanSym);
       if (wl && Math.abs(wl.ltp - newPrice) > 0.01) {
-        wl.old_ltp = wl.ltp;
+        const oldP = wl.ltp || 0;
+        wl.old_ltp = oldP;
         wl.ltp = newPrice;
         if (wl.avg_cost && wl.qty > 0) {
           wl.unrealised_pnl = Math.round((wl.ltp - wl.avg_cost) * wl.qty * 100) / 100;
@@ -1991,49 +2149,58 @@ async function refreshLiveLTP(manual = false) {
           wl.current_value = Math.round(wl.ltp * wl.qty * 100) / 100;
         }
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
     if (typeof ltWatchlist !== 'undefined' && Array.isArray(ltWatchlist)) {
       const lt = ltWatchlist.find(w => w.symbol === sym || w.symbol === cleanSym);
       if (lt && Math.abs((lt.ltp || 0) - newPrice) > 0.01) {
-        lt.old_ltp = lt.ltp;
+        const oldP = lt.ltp || 0;
+        lt.old_ltp = oldP;
         lt.ltp = newPrice;
         if (lt.gtt_breakout_level && lt.gtt_breakout_level > 0) {
           lt.dist_to_gtt_pct = Math.round(((lt.ltp - lt.gtt_breakout_level) / lt.gtt_breakout_level) * 10000) / 100;
           if (lt.ltp >= lt.gtt_breakout_level && lt.status === 'WAIT') {
             lt.status = 'BUY_NOW';
+            statusChanged = true;
           }
         }
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
     if (typeof LT_WATCHLIST !== 'undefined' && Array.isArray(LT_WATCHLIST)) {
       const lt = LT_WATCHLIST.find(w => w.symbol === sym || w.symbol === cleanSym);
       if (lt && Math.abs((lt.ltp || 0) - newPrice) > 0.01) {
-        lt.old_ltp = lt.ltp;
+        const oldP = lt.ltp || 0;
+        lt.old_ltp = oldP;
         lt.ltp = newPrice;
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
     if (typeof FNO_DATA !== 'undefined' && Array.isArray(FNO_DATA)) {
       const fn = FNO_DATA.find(f => f.symbol === sym || f.symbol === cleanSym);
       if (fn && Math.abs(fn.ltp - newPrice) > 0.01) {
-        fn.old_ltp = fn.ltp;
+        const oldP = fn.ltp || 0;
+        fn.old_ltp = oldP;
         fn.ltp = newPrice;
         if (fn.prev_close && fn.prev_close > 0) {
           fn.day_chg_pct = Math.round(((newPrice - fn.prev_close) / fn.prev_close) * 10000) / 100;
         }
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
     if (typeof PENNY_STOCKS_DATA !== 'undefined' && Array.isArray(PENNY_STOCKS_DATA)) {
       const ps = PENNY_STOCKS_DATA.find(p => p.symbol === sym || p.symbol === cleanSym);
       if (ps && Math.abs((ps.ltp || 0) - newPrice) > 0.01) {
-        ps.old_ltp = ps.ltp;
+        const oldP = ps.ltp || 0;
+        ps.old_ltp = oldP;
         ps.ltp = newPrice;
         if (ps.target_price && ps.target_price > 0) {
           ps.dist_to_target_pct = Math.round(((ps.target_price - ps.ltp) / ps.ltp) * 10000) / 100;
@@ -2042,6 +2209,7 @@ async function refreshLiveLTP(manual = false) {
           ps.dist_to_sl_pct = Math.round(((ps.ltp - ps.stop_loss) / ps.ltp) * 10000) / 100;
         }
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
@@ -2049,13 +2217,15 @@ async function refreshLiveLTP(manual = false) {
       const idPick = [...(INTRADAY_DATA.buy || []), ...(INTRADAY_DATA.sell || [])]
         .find(s => s.symbol === sym || s.symbol === cleanSym);
       if (idPick && Math.abs((idPick.ltp || 0) - newPrice) > 0.01) {
-        idPick.old_ltp = idPick.ltp;
+        const oldP = idPick.ltp || 0;
+        idPick.old_ltp = oldP;
         idPick.ltp = newPrice;
         if (idPick.prev_close && idPick.prev_close > 0) {
           idPick.day_chg_pct = Number((((newPrice - idPick.prev_close) / idPick.prev_close) * 100).toFixed(2));
           idPick.has_day_move = true;
         }
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
   }
@@ -2079,50 +2249,58 @@ async function refreshLiveLTP(manual = false) {
 
   saveWatchlist();
 
-  // Every poll used to rebuild all eleven tabs, hidden ones included, each by
-  // replacing its container's innerHTML. That is what makes the page jump: for a
-  // frame the container is empty, the document shrinks, the browser clamps the
-  // scroll position to the shorter page, and the restored content leaves the
-  // reader somewhere else. Ten seconds later it happens again.
-  //
-  // Only the tab actually on screen is rebuilt now -- rendering a display:none tab
-  // changed nothing a reader could see -- and the scroll offset is carried across
-  // the rebuild so a height blip cannot move the page.
+  // 1. If no prices changed and not a manual/status change, DO NOT TOUCH DOM AT ALL!
+  if (!priceChanged && !manual && !statusChanged) {
+    return;
+  }
+
+  // 2. If prices changed without a structural status change, update DOM elements in-place!
+  // This updates numbers and adds subtle green/red flashes WITHOUT tearing down or
+  // resetting any DOM containers, preventing any scroll clamp or jumping effect.
+  if (!statusChanged && !manual && changedPriceMap.size > 0) {
+    updateDomPricesInPlace(changedPriceMap);
+    return;
+  }
+
+  // 3. Only if there is an actual structural change (e.g. status transition WAIT -> BUY_NOW)
+  // or a manual user-triggered refresh, do a structural tab update with container
+  // min-height locking to guarantee zero scroll jumping:
   const tabVisible = (id) => {
     const el = document.getElementById(id);
     return !!el && el.style.display !== 'none';
   };
-  const scrollBefore = window.scrollY;
 
-  // Always on screen: the header stats, the top pick and the regime banner.
-  renderStats();
-  if (typeof renderTopPick === 'function') renderTopPick();
+  const safeRebuild = (id, fn) => {
+    const el = document.getElementById(id);
+    if (!el || typeof fn !== 'function') return;
+    const h = el.offsetHeight;
+    if (h > 0) el.style.minHeight = h + 'px';
+    try { fn(); } finally {
+      requestAnimationFrame(() => { el.style.minHeight = ''; });
+    }
+  };
 
-  if (tabVisible('tab-screener')) { renderTable(); renderWatchlist(); }
-  if (tabVisible('tab-watchlist') && typeof renderLtWatchlist === 'function') renderLtWatchlist();
-  if (tabVisible('tab-fno') && typeof renderFnoTab === 'function') renderFnoTab();
-  if (tabVisible('tab-intraday') && typeof renderIntradayTab === 'function') renderIntradayTab();
-  if (tabVisible('tab-swing')) {
-    if (typeof renderSwingRadar === 'function') renderSwingRadar();
-    if (typeof renderSrBreakouts === 'function') renderSrBreakouts();
+  if (tabVisible('tab-screener')) {
+    safeRebuild('tab-screener', () => { renderTable(); renderWatchlist(); });
   }
+  if (tabVisible('tab-watchlist') && typeof renderLtWatchlist === 'function') safeRebuild('tab-watchlist', renderLtWatchlist);
+  if (tabVisible('tab-fno') && typeof renderFnoTab === 'function') safeRebuild('tab-fno', renderFnoTab);
+  if (tabVisible('tab-intraday') && typeof renderIntradayTab === 'function') safeRebuild('tab-intraday', renderIntradayTab);
+  if (tabVisible('tab-swing')) {
+    if (typeof renderSwingRadar === 'function') safeRebuild('tab-swing', renderSwingRadar);
+    if (typeof renderSrBreakouts === 'function') safeRebuild('srBreakoutsGrid', renderSrBreakouts);
+  }
+  if (tabVisible('tab-penny') && typeof renderPennyStocksTab === 'function') safeRebuild('tab-penny', renderPennyStocksTab);
   if (typeof renderNiftyRegimeBanner === 'function') renderNiftyRegimeBanner();
-  if (tabVisible('tab-penny') && typeof renderPennyStocksTab === 'function') renderPennyStocksTab();
 
-  // Restore before the browser paints, so the correction is never visible.
-  if (window.scrollY !== scrollBefore) window.scrollTo({ top: scrollBefore, behavior: 'instant' });
-
-  if (priceChanged || manual) {
-    flashUpdatedPrices();
+  if (changedPriceMap.size > 0) {
+    updateDomPricesInPlace(changedPriceMap);
   }
 }
 
 function flashUpdatedPrices() {
-  document.querySelectorAll('.price, .wl-ltp, .swing-card').forEach(el => {
-    el.classList.remove('price-up', 'price-down');
-    void el.offsetWidth;
-    el.classList.add('price-up');
-    setTimeout(() => el.classList.remove('price-up'), 1500);
+  document.querySelectorAll('.price.price-up, .price.price-down, .wl-ltp.price-up, .wl-ltp.price-down').forEach(el => {
+    setTimeout(() => el.classList.remove('price-up', 'price-down'), 1200);
   });
 }
 
@@ -2332,7 +2510,7 @@ function renderFnoTab() {
     const slCls= dir === 'PE' ? 'pos' : 'neg';
     const tCls = dir === 'PE' ? 'neg' : 'pos';
     return `
-    <div class="fno-card">
+    <div class="fno-card" data-symbol="${s.symbol}">
       <div class="fno-card-header">
         <div>
           <div class="fno-card-sym">${s.symbol}</div>
@@ -2475,7 +2653,7 @@ function renderIntradayTab() {
     const rsiCls = pillColor(isBuy ? s.rsi : (100 - s.rsi), 55);
     const volCls = pillColor(s.volume_spike, 1.5);
     return `
-    <div class="fno-card">
+    <div class="fno-card" data-symbol="${s.symbol}">
       <div class="fno-card-header">
         <div>
           <div class="fno-card-sym">${s.symbol}</div>
@@ -3943,7 +4121,7 @@ function renderWatchlist() {
           `<div class="alert-row alert-${a.level}"><span>${a.icon}</span><span>${a.message}</span></div>`
         ).join('');
 
-        return `<div class="wl-card ${hasAlert?'has-alert':''}" style="padding:18px">
+        return `<div class="wl-card ${hasAlert?'has-alert':''}" data-symbol="${w.symbol}" style="padding:18px">
           <div class="wl-header" style="margin-bottom:12px">
             <div>
               <div style="display:flex;align-items:center;gap:8px">
@@ -4043,7 +4221,7 @@ function renderWatchlist() {
         const sigBadge = activeSig === 'BUY' ? '🟢 BUY' : activeSig === 'SELL' ? '🔴 SELL' : '🟡 HOLD';
         const sigClass = activeSig === 'BUY' ? 'badge-green' : activeSig === 'SELL' ? 'badge-red' : 'badge-yellow';
 
-        return `<tr>
+        return `<tr data-symbol="${w.symbol}">
           <td>
             <div style="font-weight:700">${w.symbol}</div>
             <div style="font-size:11px;color:var(--muted)">${w.name||''}</div>

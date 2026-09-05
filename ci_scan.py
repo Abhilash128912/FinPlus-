@@ -88,6 +88,13 @@ def main() -> int:
 
     print(f"Scan complete! screener.html ({len(html):,} bytes), mobile.html, "
           f"screener_data.json, scan_meta.json, static/app.css & static/app.js updated")
+
+    print("Syncing fresh scan results directly to Render cloud instance...")
+    try:
+        fb.sync_to_render_cloud(async_mode=False)
+    except Exception as e:
+        print(f"  ⚠ Direct Render sync skipped: {e}")
+
     return 0
 
 

@@ -60,8 +60,10 @@ CACHE_DIR  = os.path.join(BASE_DIR, "cache")
 WL_SEED    = os.path.join(BASE_DIR, "watchlist_seed.json")
 WL_FILE    = os.path.join(BASE_DIR, "watchlist_data.json")
 LT_WL_FILE = os.path.join(BASE_DIR, "lt_watchlist.json")
+LT_ENRICHED_FILE = os.path.join(BASE_DIR, "lt_watchlist_enriched.json")
 LT_MONTHLY_PICKS_FILE = os.path.join(BASE_DIR, "lt_monthly_picks.json")
 PENNY_MONTHLY_PICKS_FILE = os.path.join(BASE_DIR, "penny_monthly_picks.json")
+OUT_JSON_FILE = os.path.join(BASE_DIR, "screener_data.json")
 OUT_HTML   = os.path.join(BASE_DIR, "screener.html")
 MOBILE_HTML = os.path.join(BASE_DIR, "mobile.html")
 # How many swing candidates the mobile view carries. The desktop page filters the
@@ -115,8 +117,8 @@ def write_scan_json(clean_results) -> None:
     wildly different on Render, which rebuilds from committed data at boot and was
     therefore stamping every deploy as a fresh scan.
     """
-    with open(OUT_JSON_FILE, "w", encoding="utf-8") as f:
-        json.dump(clean_results, f, default=json_serializer)
+    json_str = json.dumps(clean_results, default=json_serializer)
+    atomic_write_file(OUT_JSON_FILE, json_str)
     try:
         atomic_write_file(SCAN_META_FILE, json.dumps({
             "completed_at_ist": datetime.datetime.now(IST).strftime("%d %b %Y, %I:%M %p"),
@@ -126,8 +128,7 @@ def write_scan_json(clean_results) -> None:
     except Exception as e:
         log(f"  ⚠ Could not write scan stamp: {e}")
     if BUNDLE_WEB_ASSETS:
-        with open(WWW_JSON_FILE, "w", encoding="utf-8") as f:
-            json.dump(clean_results, f, default=json_serializer)
+        atomic_write_file(WWW_JSON_FILE, json_str)
 # The Capacitor CLI (`npx cap sync`) hard-requires an index.html at the webDir root
 # as the app's entry point — it has no config option to point at a differently named
 # file. With bundling on it is a copy of the built page; with bundling off it is a
@@ -398,6 +399,10 @@ def published_html_paths() -> list:
     paths = [OUT_HTML]
     if BUNDLE_WEB_ASSETS:
         paths += [OUT_WWW_HTML, WWW_INDEX_HTML]
+    else:
+        for p in (OUT_WWW_HTML, WWW_INDEX_HTML):
+            if os.path.exists(p) and p not in paths:
+                paths.append(p)
     return paths
 
 
@@ -461,6 +466,83 @@ def publish_mobile_html(screener_results: list, lt_watchlist: list, mkt_info: di
         log(f"⚠ Could not build mobile view: {e}")
 
 
+def sync_to_render_cloud(payload: dict = None, async_mode: bool = True) -> bool:
+    """Send latest scan data to Render cloud instance without redeployment.
+
+    Compresses the payload using gzip and sends an authenticated POST request to
+    <RENDER_CLOUD_URL>/api/sync/scan-data.
+    """
+    if os.environ.get("RENDER"):
+        return True
+
+    cloud_url = globals().get("RENDER_CLOUD_URL", "")
+    token = globals().get("SYNC_TOKEN", "")
+    if not cloud_url or not token:
+        log("ℹ Cloud sync skipped: RENDER_CLOUD_URL or SYNC_TOKEN not set")
+        return False
+
+    def _do_sync():
+        try:
+            p = payload
+            if p is None:
+                p = {}
+                if os.path.exists(OUT_JSON_FILE):
+                    with open(OUT_JSON_FILE, "r", encoding="utf-8") as f:
+                        p["screener_data"] = json.load(f)
+                if os.path.exists(OUT_HTML):
+                    with open(OUT_HTML, "r", encoding="utf-8") as f:
+                        p["screener_html"] = f.read()
+                if os.path.exists(MOBILE_HTML):
+                    with open(MOBILE_HTML, "r", encoding="utf-8") as f:
+                        p["mobile_html"] = f.read()
+                if os.path.exists(LT_ENRICHED_FILE):
+                    with open(LT_ENRICHED_FILE, "r", encoding="utf-8") as f:
+                        p["lt_watchlist_enriched"] = json.load(f)
+                if os.path.exists(SCAN_META_FILE):
+                    with open(SCAN_META_FILE, "r", encoding="utf-8") as f:
+                        p["scan_meta"] = json.load(f)
+                hist_file = os.path.join(BASE_DIR, "daily_picks_history.json")
+                if os.path.exists(hist_file):
+                    with open(hist_file, "r", encoding="utf-8") as f:
+                        p["daily_picks_history"] = json.load(f)
+
+            if not p or "screener_data" not in p:
+                log("⚠ Cloud sync skipped: no screener_data to send")
+                return False
+
+            raw_bytes = json.dumps(p, default=json_serializer).encode("utf-8")
+            import gzip
+            compressed = gzip.compress(raw_bytes)
+            url = f"{cloud_url.rstrip('/')}/api/sync/scan-data"
+
+            req = urllib.request.Request(
+                url,
+                data=compressed,
+                headers={
+                    "Content-Type": "application/json",
+                    "Content-Encoding": "gzip",
+                    "Authorization": f"Bearer {token}",
+                    "User-Agent": "FinPlus-SyncClient/1.0",
+                },
+                method="POST"
+            )
+            log(f"☁️ Syncing scan data to Render ({len(compressed)/1024:.1f} KB gzip)...")
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                res_body = json.loads(resp.read().decode("utf-8"))
+                log(f"✅ Cloud sync successful: {res_body.get('message', 'Data reloaded on Render')}")
+                return True
+        except Exception as e:
+            log(f"⚠ Cloud sync failed: {e}")
+            return False
+
+    if async_mode:
+        t = threading.Thread(target=_do_sync, name="RenderSyncThread", daemon=True)
+        t.start()
+        return True
+    else:
+        return _do_sync()
+
+
 def json_serializer(o):
     if hasattr(o, 'item'):
         return o.item()
@@ -501,6 +583,8 @@ CACHE_TTL_HRS   = cfg["cache_ttl_hours"]        # 24
 PHASE_BUDGET    = cfg["phase_budget_per_stock"] # 5000
 PHASE_LABEL     = cfg["phase_label"]
 MAX_STOCKS      = cfg["max_stocks"]             # 20
+RENDER_CLOUD_URL = os.environ.get("SCREENER_RENDER_URL") or cfg.get("render_cloud_url", "https://finplus-g0b5.onrender.com")
+SYNC_TOKEN       = os.environ.get("SCREENER_SYNC_TOKEN") or cfg.get("sync_token", "finplus_secure_sync_2026")
 
 FORCE_REFRESH = "--refresh" in sys.argv or "--force-refresh" in sys.argv
 
@@ -2162,7 +2246,7 @@ def get_lt_portfolio_summary(screener_results: list[dict] = None) -> dict:
     start_date_str = "2026-08-19"
     try:
         s_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
-        today_date = datetime.datetime.now().date()
+        today_date = datetime.datetime.now(IST).date()
         cur_date = s_date
         days_active = 0
         while cur_date <= today_date:
@@ -2399,7 +2483,7 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
         else:
             eligible_res = [r for r in screener_results if is_eligible_for_stock_of_the_day(r)]
             qualified = [r for r in eligible_res if r.get("qualified")]
-            top = qualified[0] if qualified else (eligible_res[0] if eligible_res else screener_results[0])
+            top = qualified[0] if qualified else (eligible_res[0] if eligible_res else (screener_results[0] if screener_results else {}))
             top_pick = {
                 "date": today_str,
                 "display_date": display_date,
@@ -2469,12 +2553,15 @@ def process_daily_top_pick(screener_results: list[dict]) -> tuple[dict, list[dic
         if r.get("symbol") not in overused_symbols
     ]
     
+    all_eligible = [r for r in screener_results if is_eligible_for_stock_of_the_day(r)]
     if qualified_eligible:
         top = qualified_eligible[0]
     elif eligible_screener_results:
         top = eligible_screener_results[0]
+    elif all_eligible:
+        top = all_eligible[0]
     else:
-        top = screener_results[0]
+        top = screener_results[0] if screener_results else {}
 
     streak_days = 1
     top_open = top.get("open") or top.get("regularMarketOpen")
@@ -2713,10 +2800,10 @@ html, body { background: #06060f !important; color: #e2e8f0; font-family: var(--
 *{box-sizing:border-box;margin:0;padding:0}
 
 /* ── Layout ── */
-.app-header{background:linear-gradient(135deg,#0a0a1a,#12123a);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.app-header{background:linear-gradient(135deg,#0a0a1a,#12123a);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;min-height:68px;box-sizing:border-box}
 .app-title{font-size:22px;font-weight:700;background:linear-gradient(90deg,#6c63ff,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.phase-badge{background:linear-gradient(135deg,#6c63ff22,#00d4aa22);border:1px solid #6c63ff55;color:#a5b4fc;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}
-.run-info{margin-left:auto;color:var(--muted);font-size:12px}
+.phase-badge{background:linear-gradient(135deg,#6c63ff22,#00d4aa22);border:1px solid #6c63ff55;color:#a5b4fc;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;flex-shrink:0}
+.run-info{margin-left:auto;color:var(--muted);font-size:12px;flex-shrink:0}
 
 /* ── Commodity Intraday Bar ── */
 .commodity-bar{background:linear-gradient(90deg,rgba(15,23,42,0.95),rgba(30,41,59,0.95));border-bottom:1px solid var(--border);padding:10px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
@@ -3112,8 +3199,14 @@ details[open] summary::before {
   0% { background-color: rgba(239, 68, 68, 0.4); color: #ef4444; }
   100% { background-color: transparent; }
 }
-.price-up { animation: priceUpPulse 1.5s ease-out; }
-.price-down { animation: priceDownPulse 1.5s ease-out; }
+.price-up { animation: priceUpPulse 1.2s ease-out; }
+.price-down { animation: priceDownPulse 1.2s ease-out; }
+
+.price, .wl-ltp, .fno-card-ltp, .swing-ltp-val {
+  transition: background-color 0.25s ease, color 0.25s ease;
+  border-radius: 4px;
+  display: inline-block;
+}
 
 .ltp-badge {
   display: inline-flex;
@@ -3124,6 +3217,9 @@ details[open] summary::before {
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
 }
 .ltp-dot {
   width: 8px;
@@ -3132,6 +3228,7 @@ details[open] summary::before {
   background: var(--green);
   display: inline-block;
   box-shadow: 0 0 8px var(--green);
+  flex-shrink: 0;
 }
 .ltp-dot.updating {
   animation: blink 0.5s infinite alternate;
@@ -3436,6 +3533,17 @@ __TREND_OPTIONS_HTML__
       </div>
     </div>
 
+    <!-- Volume-backed S/R setups, the same model the intraday tab runs. Buy only:
+         the cash segment has no sell-and-hold, so a short signal is untradeable. -->
+    <div style="margin-bottom:24px">
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:8px">
+        <span style="background:linear-gradient(135deg,#10b981,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent">◆ At a volume-backed level</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400">buy only · price is at a level real volume built</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Ranked by setup strength, not by momentum score.</div>
+      <div id="swingSrSetups" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
+    </div>
+
     <!-- Preset Filter Pills -->
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;align-items:center">
       <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-right:4px">Quick Filters:</span>
@@ -3448,22 +3556,11 @@ __TREND_OPTIONS_HTML__
       <button id="swingPill-quality" class="swing-pill" onclick="setSwingPreset('quality')">🏆 Quality + Momentum</button>
     </div>
 
-    <!-- Top 10 Swing Spotlight -->
-    <!-- Volume-backed S/R setups, the same model the intraday tab runs. Buy only:
-         the cash segment has no sell-and-hold, so a short signal is untradeable. -->
-    <div style="margin-bottom:24px">
-      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:8px">
-        <span style="background:linear-gradient(135deg,#10b981,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent">◆ At a volume-backed level</span>
-        <span style="font-size:11px;color:var(--muted);font-weight:400">buy only · price is at a level real volume built</span>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Ranked by setup strength, not by momentum score.</div>
-      <div id="swingSrSetups" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
-    </div>
-
+    <!-- Top 10 Swing Spotlight for Selected Preset -->
     <div style="margin-bottom:24px">
       <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:8px">
         <span style="background:linear-gradient(135deg,#6c63ff,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent">⚡ Top 10 Swing Picks</span>
-        <span style="font-size:11px;color:var(--muted);font-weight:400">(momentum score · current preset)</span>
+        <span id="swingSpotlightSubtitle" style="font-size:11px;color:var(--muted);font-weight:400">(All MTF · top 10)</span>
       </div>
       <div id="swingSpotlight" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
     </div>
@@ -4047,8 +4144,11 @@ async function triggerAppScan() {
   if (barInner) barInner.style.width = '15%';
   if (btnLog) btnLog.textContent = 'Connecting to local scan engine server...';
 
-  const scanUrl = 'http://localhost:' + (window.location.port || '8080') + '/api/scan';
-  const statusUrl = 'http://localhost:' + (window.location.port || '8080') + '/api/scan/status';
+  const baseUrl = (window.location.origin && window.location.origin.startsWith('http'))
+    ? window.location.origin
+    : ('http://localhost:' + (window.location.port || '5050'));
+  const scanUrl = baseUrl + '/api/scan';
+  const statusUrl = baseUrl + '/api/scan/status';
 
   try {
     const res = await fetch(scanUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
@@ -4066,7 +4166,8 @@ async function triggerAppScan() {
           const sResp = await fetch(statusUrl);
           if (sResp.ok) {
             const sData = await sResp.json();
-            if (!sData.scan_in_progress) {
+            const scanning = sData.is_scanning || sData.scan_in_progress;
+            if (!scanning) {
               clearInterval(pollTimer);
               if (barInner) barInner.style.width = '100%';
               if (btnText) btnText.textContent = 'Scan complete!';
@@ -4370,12 +4471,25 @@ function renderSwingRadar() {
       '<div style="color:var(--muted);font-size:12px;padding:16px 2px">Nothing is sitting on a volume-backed level with the volume to turn off it. Rare by design — the momentum list below is not filtered by levels.</div>';
   }
 
-  // Top 10 Spotlight Cards (Always top 10 highest swing_score stocks overall, strictly sorted #1 to #10)
+  // Update spotlight subtitle with the active preset name
+  const presetLabelMap = {
+    'all': 'All MTF',
+    'rs': 'RS Leaders (RS ≥ 80)',
+    'blast': 'Volume Blast',
+    'inflow': 'Institutional Inflow',
+    'momentum': 'High Momentum',
+    'pullback': 'Pullback Buy',
+    'quality': 'Quality + Momentum'
+  };
+  const subEl = document.getElementById('swingSpotlightSubtitle');
+  if (subEl) subEl.textContent = `(${presetLabelMap[swingPreset] || 'current preset'} · top 10)`;
+
+  // Top 10 Spotlight Cards (Top 10 highest swing_score stocks for current preset)
   const spotlight = document.getElementById('swingSpotlight');
   if (spotlight) {
     // A level with real volume behind it outranks a high score with nothing under
     // it. Within each group the existing ordering is untouched.
-    const top10 = [...allMtf].sort((a, b) =>
+    const top10 = [...sorted].sort((a, b) =>
       ((swingSrOf(b) ? 1 : 0) - (swingSrOf(a) ? 1 : 0)) ||
       (b.swing_score || 0) - (a.swing_score || 0) || 
       (b.total_score || 0) - (a.total_score || 0) || 
@@ -4399,7 +4513,7 @@ function renderSwingRadar() {
         const slPct = s.swing_sl_pct ? `${s.swing_sl_pct}%` : '';
         const t1Pct = s.swing_t1_pct ? `+${s.swing_t1_pct}%` : '';
         return `
-        <div class="swing-card ${cardClass}" onclick="document.getElementById('fSearch').value='${s.symbol}';switchTab('screener');applyFilters()">
+        <div class="swing-card ${cardClass}" data-symbol="${s.symbol}" onclick="document.getElementById('fSearch').value='${s.symbol}';switchTab('screener');applyFilters()">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
             <div>
               <div style="font-size:15px;font-weight:700;color:#fff">${i+1}. ${s.symbol}</div>
@@ -4418,8 +4532,8 @@ function renderSwingRadar() {
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;font-size:11px;margin-bottom:10px">
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
               <div style="color:var(--muted);font-size:10px;display:flex;align-items:center;justify-content:center;gap:3px">LTP <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#10b981;box-shadow:0 0 4px #10b981"></span></div>
-              <div style="font-weight:700;color:#fff;font-size:12px">₹${(s.ltp||0).toFixed(2)}</div>
-              ${s.day_chg_pct !== undefined ? `<div style="font-size:9px;font-weight:700;color:${s.day_chg_pct>=0?'#34d399':'#f87171'}">${s.day_chg_pct>=0?'+':''}${s.day_chg_pct.toFixed(2)}%</div>` : ''}
+              <div class="swing-ltp-val price" data-field="swing-ltp" style="font-weight:700;color:#fff;font-size:12px">₹${(s.ltp||0).toFixed(2)}</div>
+              ${s.day_chg_pct !== undefined ? `<div data-field="swing-day-chg" style="font-size:9px;font-weight:700;color:${s.day_chg_pct>=0?'#34d399':'#f87171'}">${s.day_chg_pct>=0?'+':''}${s.day_chg_pct.toFixed(2)}%</div>` : ''}
             </div>
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
               <div style="color:var(--muted);font-size:10px">RS</div>
@@ -4478,13 +4592,13 @@ function renderSwingRadar() {
     const cmfStr = s.cmf !== undefined ? (s.cmf >= 0 ? '+' : '') + s.cmf.toFixed(2) : '–';
     const cmfColor = (s.cmf||0) >= 0.05 ? '#10b981' : (s.cmf||0) <= -0.05 ? '#ef4444' : '#94a3b8';
     const volColor = (s.volume_spike||0) >= 2.0 ? '#10b981' : (s.volume_spike||0) >= 1.5 ? '#fbbf24' : '#94a3b8';
-    return `<tr>
+    return `<tr data-symbol="${s.symbol}">
       <td>${i+1}</td>
       <td><strong style="color:#e2e8f0">${s.symbol}</strong><br><span style="font-size:10px;color:var(--muted)">${(s.cap_category||'')}</span></td>
       <td><span style="font-weight:700;color:#a78bfa;font-size:15px">${s.swing_score||0}</span></td>
       <td><span class="badge ${rsVal>=80?'badge-green':rsVal>=60?'badge-green':rsVal>=40?'badge-gray':'badge-red'}" style="font-size:11px;font-weight:700">RS ${rsVal}</span></td>
       <td><span style="font-size:11px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:10px;padding:3px 8px;white-space:nowrap">${s.swing_badge||'–'}</span></td>
-      <td>₹${(s.ltp||0).toFixed(2)}</td>
+      <td><span class="price">₹${(s.ltp||0).toFixed(2)}</span></td>
       <td style="color:${volColor};font-weight:600">${volStr}</td>
       <td>${rsiStr}</td>
       <td>${(s.momentum||0).toFixed(0)}</td>
@@ -5469,7 +5583,8 @@ function updateLtpBadgeStatus(lastTimeStr, polledCount, attemptedCount, staleCou
 
   if (pollIntervalMs === 0) {
     if (dot) { dot.style.background = '#6b7280'; dot.style.boxShadow = 'none'; }
-    txt.textContent = 'Live LTP Polling: Off';
+    txt.textContent = 'Live LTP: Off';
+    if (txt.parentElement) txt.parentElement.setAttribute('title', 'Live LTP Polling is turned off');
     return;
   }
 
@@ -5484,7 +5599,8 @@ function updateLtpBadgeStatus(lastTimeStr, polledCount, attemptedCount, staleCou
       ? ` — resumes within ${secs >= 60 ? Math.ceil(secs / 60) + 'm' : secs + 's'}`
       : ' — resumes when it finishes';
     const showing = staleCount > 0 ? ` (showing ${staleCount} scan-time prices)` : '';
-    txt.textContent = `⏸ Live LTP Paused: scan in progress${when}${showing}`;
+    txt.textContent = 'Live LTP: Paused';
+    if (txt.parentElement) txt.parentElement.setAttribute('title', `⏸ Live LTP Paused: scan in progress${when}${showing}`);
     return;
   }
 
@@ -5495,15 +5611,17 @@ function updateLtpBadgeStatus(lastTimeStr, polledCount, attemptedCount, staleCou
   if (hasFailed) {
     if (dot) { dot.style.background = '#ef4444'; dot.style.boxShadow = '0 0 8px #ef4444'; }
     const sinceOk = lastLtpSuccessTime ? formatAgo(Date.now() - lastLtpSuccessTime) : 'never this session';
-    const staleTag = staleCount > 0 ? ` (showing ${staleCount} stale scan-time prices)` : '';
-    txt.textContent = `🔴 Live LTP Polling: Failed — last success ${sinceOk}${staleTag}`;
+    const staleTag = staleCount > 0 ? ` (${staleCount} stale prices)` : '';
+    txt.textContent = 'Live LTP: Retry';
+    if (txt.parentElement) txt.parentElement.setAttribute('title', `🔴 Live LTP Polling: Failed — last success ${sinceOk}${staleTag}`);
     return;
   }
 
   if (dot) { dot.style.background = '#10b981'; dot.style.boxShadow = '0 0 8px #10b981'; }
   const timeTag = lastTimeStr ? ` @ ${lastTimeStr}` : '';
-  const countTag = (polledCount != null && polledCount > 0) ? ` — ${polledCount} prices synced${timeTag}` : (lastTimeStr ? ` — Last Sync: ${lastTimeStr}` : '');
-  txt.textContent = `🟢 Live LTP Polling: Active (${pollIntervalMs / 1000}s)${countTag}`;
+  const countTag = (polledCount != null && polledCount > 0) ? `${polledCount} prices synced${timeTag}` : (lastTimeStr ? `Last Sync: ${lastTimeStr}` : 'Active');
+  txt.textContent = `Live LTP (${pollIntervalMs / 1000}s)`;
+  if (txt.parentElement) txt.parentElement.setAttribute('title', `🟢 Live LTP Polling: Active (${pollIntervalMs / 1000}s) — ${countTag}`);
 }
 
 async function fetchLiveLTPForSymbol(ticker) {
@@ -5616,13 +5734,142 @@ function visibleRowSymbols(marginPx = 1200) {
   return found;
 }
 
+// In-place DOM price updater — updates existing elements without DOM destruction/reflow
+function updateDomPricesInPlace(changedMap) {
+  if (!changedMap || changedMap.size === 0) return;
+
+  changedMap.forEach((info, sym) => {
+    const cleanSym = sym.replace('.NS', '');
+    const newPrice = info.newPrice;
+    const flashCls = info.isUp ? 'price-up' : 'price-down';
+
+    const triggerFlash = (el) => {
+      if (!el) return;
+      el.classList.remove('price-up', 'price-down');
+      void el.offsetWidth;
+      el.classList.add(flashCls);
+    };
+
+    // 1. Screener & general table rows with data-symbol
+    document.querySelectorAll(`tr[data-symbol="${sym}"], tr[data-symbol="${cleanSym}"]`).forEach(tr => {
+      const priceEl = tr.querySelector('.price') || tr.querySelector('.lt-ltp');
+      if (priceEl) {
+        priceEl.textContent = '₹' + newPrice.toFixed(2);
+        triggerFlash(priceEl);
+      }
+    });
+
+    // 2. Swing Spotlight Cards
+    document.querySelectorAll(`.swing-card[data-symbol="${sym}"], .swing-card[data-symbol="${cleanSym}"]`).forEach(card => {
+      const pEl = card.querySelector('.swing-ltp-val, .price');
+      if (pEl) {
+        pEl.textContent = '₹' + newPrice.toFixed(2);
+        triggerFlash(pEl);
+      }
+      const chgEl = card.querySelector('[data-field="swing-day-chg"]');
+      const sc = (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA))
+        ? SCREENER_DATA.find(s => s.symbol === sym || s.symbol === cleanSym)
+        : null;
+      if (chgEl && sc && sc.prev_close && sc.prev_close > 0) {
+        const chg = ((newPrice - sc.prev_close) / sc.prev_close) * 100;
+        chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+        chgEl.style.color = chg >= 0 ? '#34d399' : '#f87171';
+      }
+    });
+
+    // 3. Intraday & F&O Cards
+    document.querySelectorAll(`.fno-card[data-symbol="${sym}"], .fno-card[data-symbol="${cleanSym}"]`).forEach(card => {
+      const ltpEl = card.querySelector('.fno-card-ltp');
+      if (ltpEl) {
+        ltpEl.textContent = '₹' + Number(newPrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        triggerFlash(ltpEl);
+      }
+      const chgEl = card.querySelector('.fno-card-chg, .fno-card-price > span');
+      if (chgEl) {
+        let prevClose = null;
+        if (typeof INTRADAY_DATA !== 'undefined' && INTRADAY_DATA) {
+          const idp = [...(INTRADAY_DATA.buy || []), ...(INTRADAY_DATA.sell || [])].find(s => s.symbol === sym || s.symbol === cleanSym);
+          if (idp) prevClose = idp.prev_close;
+        }
+        if (!prevClose && typeof FNO_DATA !== 'undefined' && Array.isArray(FNO_DATA)) {
+          const fnp = FNO_DATA.find(f => f.symbol === sym || f.symbol === cleanSym);
+          if (fnp) prevClose = fnp.prev_close;
+        }
+        if (prevClose && prevClose > 0) {
+          const chg = ((newPrice - prevClose) / prevClose) * 100;
+          chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+          chgEl.className = (chgEl.className || '').replace(/pos|neg/g, '').trim() + ' ' + (chg >= 0 ? 'pos' : 'neg');
+        }
+      }
+    });
+
+    // 4. Watchlist cards & summary
+    document.querySelectorAll(`.wl-card[data-symbol="${sym}"], .wl-card[data-symbol="${cleanSym}"]`).forEach(card => {
+      const ltpEl = card.querySelector('.wl-ltp');
+      if (ltpEl) {
+        ltpEl.textContent = '₹' + newPrice.toFixed(2);
+        triggerFlash(ltpEl);
+      }
+      const wl = (typeof watchlist !== 'undefined' && Array.isArray(watchlist))
+        ? watchlist.find(w => w.symbol === sym || w.symbol === cleanSym)
+        : null;
+      if (wl && wl.avg_cost && wl.qty > 0) {
+        const pnl = (newPrice - wl.avg_cost) * wl.qty;
+        const pnlPct = ((newPrice - wl.avg_cost) / wl.avg_cost) * 100;
+        const pnlEl = card.querySelector('.wl-pnl');
+        if (pnlEl) {
+          pnlEl.innerHTML = `<span class="${pnl >= 0 ? 'pos' : 'neg'}">${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)} (${pnl >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)</span>`;
+        }
+      }
+    });
+
+    // 5. Nifty Index Banner
+    if (sym === 'NIFTY_INDEX' || sym === '^NSEI') {
+      const nLtp = document.getElementById('niftyRegimeLtp');
+      if (nLtp) {
+        nLtp.textContent = '₹' + newPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        triggerFlash(nLtp);
+      }
+    }
+
+    // 6. Top Pick Spotlight
+    if (typeof TOP_PICK !== 'undefined' && TOP_PICK && (TOP_PICK.symbol === sym || TOP_PICK.symbol === cleanSym)) {
+      const heroPrice = document.querySelector('.hero-spotlight .price');
+      if (heroPrice) {
+        heroPrice.textContent = '₹' + newPrice.toFixed(2);
+        triggerFlash(heroPrice);
+      }
+    }
+  });
+
+  // Update watchlist total P&L banner without rebuilding HTML
+  if (typeof watchlist !== 'undefined' && Array.isArray(watchlist)) {
+    let totPnl = 0, totCost = 0;
+    watchlist.forEach(w => {
+      if (w.avg_cost && w.ltp && w.qty > 0) {
+        totPnl += (w.ltp - w.avg_cost) * w.qty;
+        totCost += w.avg_cost * w.qty;
+      }
+    });
+    const pnlEl = document.getElementById('wlPortfolioPnl');
+    const pnlPctEl = document.getElementById('wlPortfolioPnlPct');
+    if (pnlEl) pnlEl.innerHTML = `<span class="${totPnl >= 0 ? 'pos' : 'neg'}">${totPnl >= 0 ? '+' : ''}₹${totPnl.toFixed(2)}</span>`;
+    if (pnlPctEl) {
+      const pct = totCost > 0 ? (totPnl / totCost) * 100 : 0;
+      pnlPctEl.innerHTML = `<span class="${totPnl >= 0 ? 'pos' : 'neg'}">${totPnl >= 0 ? '+' : ''}${pct.toFixed(2)}%</span>`;
+    }
+  }
+}
+
 async function refreshLiveLTP(manual = false) {
   const dot = document.getElementById('ltpStatusDot');
   const txt = document.getElementById('ltpStatusText');
   if (dot) dot.classList.add('updating');
-  if (txt) txt.textContent = manual ? 'Refreshing prices...' : 'Polling LTP...';
+  if (txt && manual) txt.textContent = 'Refreshing...';
 
   let priceChanged = false;
+  let statusChanged = false;
+  const changedPriceMap = new Map();
 
   // Poll what is on screen, not everything the page knows about.
   //
@@ -5785,19 +6032,22 @@ async function refreshLiveLTP(manual = false) {
     if (sym === 'NIFTY_INDEX' || sym === '^NSEI' || (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.nifty && MARKET_INFO.nifty.symbol === sym)) {
       if (typeof MARKET_INFO !== 'undefined' && MARKET_INFO && MARKET_INFO.nifty) {
         if (Math.abs((MARKET_INFO.nifty.ltp || 0) - newPrice) > 0.01) {
-          MARKET_INFO.nifty.old_ltp = MARKET_INFO.nifty.ltp;
+          const oldP = MARKET_INFO.nifty.ltp || 0;
+          MARKET_INFO.nifty.old_ltp = oldP;
           MARKET_INFO.nifty.ltp = newPrice;
           if (MARKET_INFO.nifty.prev_close && MARKET_INFO.nifty.prev_close > 0) {
             MARKET_INFO.nifty.change_pct = Math.round(((newPrice - MARKET_INFO.nifty.prev_close) / MARKET_INFO.nifty.prev_close) * 10000) / 100;
           }
           priceChanged = true;
+          changedPriceMap.set('NIFTY_INDEX', { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
         }
       }
     }
 
     if (typeof TOP_PICK !== 'undefined' && TOP_PICK && (TOP_PICK.symbol === sym || TOP_PICK.symbol === cleanSym)) {
       if (Math.abs((TOP_PICK.ltp || TOP_PICK.current_ltp || 0) - newPrice) > 0.01) {
-        TOP_PICK.old_ltp = TOP_PICK.ltp;
+        const oldP = TOP_PICK.ltp || TOP_PICK.current_ltp || 0;
+        TOP_PICK.old_ltp = oldP;
         TOP_PICK.ltp = newPrice;
         TOP_PICK.current_ltp = newPrice;
         if (TOP_PICK.ma50) TOP_PICK.dist_ma50_pct = Math.round(((newPrice - TOP_PICK.ma50)/TOP_PICK.ma50)*1000)/10;
@@ -5805,19 +6055,22 @@ async function refreshLiveLTP(manual = false) {
         if (TOP_PICK.week_high_52) TOP_PICK.dist_52w_high_pct = Math.round(((newPrice - TOP_PICK.week_high_52)/TOP_PICK.week_high_52)*1000)/10;
         if (TOP_PICK.week_low_52) TOP_PICK.dist_52w_low_pct = Math.round(((newPrice - TOP_PICK.week_low_52)/TOP_PICK.week_low_52)*1000)/10;
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
     if (typeof SCREENER_DATA !== 'undefined' && Array.isArray(SCREENER_DATA)) {
       const sc = SCREENER_DATA.find(s => s.symbol === sym || s.symbol === cleanSym);
       if (sc && Math.abs((sc.ltp || 0) - newPrice) > 0.01) {
-        sc.old_ltp = sc.ltp;
+        const oldP = sc.ltp || 0;
+        sc.old_ltp = oldP;
         sc.ltp = newPrice;
         if (sc.gtt_breakout_level && sc.gtt_breakout_level > 0) {
           sc.dist_to_gtt_pct = Math.round(((sc.ltp - sc.gtt_breakout_level) / sc.gtt_breakout_level) * 10000) / 100;
           if (sc.ltp >= sc.gtt_breakout_level && (sc.status === 'WAIT' || sc.swing_action === 'WAIT FOR BREAKOUT')) {
             sc.status = 'BUY_NOW';
             sc.swing_action = 'BUY NOW';
+            statusChanged = true;
           }
         }
         if (sc.target_price && sc.target_price > 0) {
@@ -5827,13 +6080,15 @@ async function refreshLiveLTP(manual = false) {
           sc.dist_to_sl_pct = Math.round(((sc.ltp - sc.stop_loss) / sc.ltp) * 10000) / 100;
         }
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
     if (typeof watchlist !== 'undefined' && Array.isArray(watchlist)) {
       const wl = watchlist.find(w => w.symbol === sym || w.symbol === cleanSym);
       if (wl && Math.abs(wl.ltp - newPrice) > 0.01) {
-        wl.old_ltp = wl.ltp;
+        const oldP = wl.ltp || 0;
+        wl.old_ltp = oldP;
         wl.ltp = newPrice;
         if (wl.avg_cost && wl.qty > 0) {
           wl.unrealised_pnl = Math.round((wl.ltp - wl.avg_cost) * wl.qty * 100) / 100;
@@ -5841,49 +6096,58 @@ async function refreshLiveLTP(manual = false) {
           wl.current_value = Math.round(wl.ltp * wl.qty * 100) / 100;
         }
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
     if (typeof ltWatchlist !== 'undefined' && Array.isArray(ltWatchlist)) {
       const lt = ltWatchlist.find(w => w.symbol === sym || w.symbol === cleanSym);
       if (lt && Math.abs((lt.ltp || 0) - newPrice) > 0.01) {
-        lt.old_ltp = lt.ltp;
+        const oldP = lt.ltp || 0;
+        lt.old_ltp = oldP;
         lt.ltp = newPrice;
         if (lt.gtt_breakout_level && lt.gtt_breakout_level > 0) {
           lt.dist_to_gtt_pct = Math.round(((lt.ltp - lt.gtt_breakout_level) / lt.gtt_breakout_level) * 10000) / 100;
           if (lt.ltp >= lt.gtt_breakout_level && lt.status === 'WAIT') {
             lt.status = 'BUY_NOW';
+            statusChanged = true;
           }
         }
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
     if (typeof LT_WATCHLIST !== 'undefined' && Array.isArray(LT_WATCHLIST)) {
       const lt = LT_WATCHLIST.find(w => w.symbol === sym || w.symbol === cleanSym);
       if (lt && Math.abs((lt.ltp || 0) - newPrice) > 0.01) {
-        lt.old_ltp = lt.ltp;
+        const oldP = lt.ltp || 0;
+        lt.old_ltp = oldP;
         lt.ltp = newPrice;
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
     if (typeof FNO_DATA !== 'undefined' && Array.isArray(FNO_DATA)) {
       const fn = FNO_DATA.find(f => f.symbol === sym || f.symbol === cleanSym);
       if (fn && Math.abs(fn.ltp - newPrice) > 0.01) {
-        fn.old_ltp = fn.ltp;
+        const oldP = fn.ltp || 0;
+        fn.old_ltp = oldP;
         fn.ltp = newPrice;
         if (fn.prev_close && fn.prev_close > 0) {
           fn.day_chg_pct = Math.round(((newPrice - fn.prev_close) / fn.prev_close) * 10000) / 100;
         }
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
     if (typeof PENNY_STOCKS_DATA !== 'undefined' && Array.isArray(PENNY_STOCKS_DATA)) {
       const ps = PENNY_STOCKS_DATA.find(p => p.symbol === sym || p.symbol === cleanSym);
       if (ps && Math.abs((ps.ltp || 0) - newPrice) > 0.01) {
-        ps.old_ltp = ps.ltp;
+        const oldP = ps.ltp || 0;
+        ps.old_ltp = oldP;
         ps.ltp = newPrice;
         if (ps.target_price && ps.target_price > 0) {
           ps.dist_to_target_pct = Math.round(((ps.target_price - ps.ltp) / ps.ltp) * 10000) / 100;
@@ -5892,6 +6156,7 @@ async function refreshLiveLTP(manual = false) {
           ps.dist_to_sl_pct = Math.round(((ps.ltp - ps.stop_loss) / ps.ltp) * 10000) / 100;
         }
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
 
@@ -5899,13 +6164,15 @@ async function refreshLiveLTP(manual = false) {
       const idPick = [...(INTRADAY_DATA.buy || []), ...(INTRADAY_DATA.sell || [])]
         .find(s => s.symbol === sym || s.symbol === cleanSym);
       if (idPick && Math.abs((idPick.ltp || 0) - newPrice) > 0.01) {
-        idPick.old_ltp = idPick.ltp;
+        const oldP = idPick.ltp || 0;
+        idPick.old_ltp = oldP;
         idPick.ltp = newPrice;
         if (idPick.prev_close && idPick.prev_close > 0) {
           idPick.day_chg_pct = Number((((newPrice - idPick.prev_close) / idPick.prev_close) * 100).toFixed(2));
           idPick.has_day_move = true;
         }
         priceChanged = true;
+        changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
       }
     }
   }
@@ -5929,50 +6196,58 @@ async function refreshLiveLTP(manual = false) {
 
   saveWatchlist();
 
-  // Every poll used to rebuild all eleven tabs, hidden ones included, each by
-  // replacing its container's innerHTML. That is what makes the page jump: for a
-  // frame the container is empty, the document shrinks, the browser clamps the
-  // scroll position to the shorter page, and the restored content leaves the
-  // reader somewhere else. Ten seconds later it happens again.
-  //
-  // Only the tab actually on screen is rebuilt now -- rendering a display:none tab
-  // changed nothing a reader could see -- and the scroll offset is carried across
-  // the rebuild so a height blip cannot move the page.
+  // 1. If no prices changed and not a manual/status change, DO NOT TOUCH DOM AT ALL!
+  if (!priceChanged && !manual && !statusChanged) {
+    return;
+  }
+
+  // 2. If prices changed without a structural status change, update DOM elements in-place!
+  // This updates numbers and adds subtle green/red flashes WITHOUT tearing down or
+  // resetting any DOM containers, preventing any scroll clamp or jumping effect.
+  if (!statusChanged && !manual && changedPriceMap.size > 0) {
+    updateDomPricesInPlace(changedPriceMap);
+    return;
+  }
+
+  // 3. Only if there is an actual structural change (e.g. status transition WAIT -> BUY_NOW)
+  // or a manual user-triggered refresh, do a structural tab update with container
+  // min-height locking to guarantee zero scroll jumping:
   const tabVisible = (id) => {
     const el = document.getElementById(id);
     return !!el && el.style.display !== 'none';
   };
-  const scrollBefore = window.scrollY;
 
-  // Always on screen: the header stats, the top pick and the regime banner.
-  renderStats();
-  if (typeof renderTopPick === 'function') renderTopPick();
+  const safeRebuild = (id, fn) => {
+    const el = document.getElementById(id);
+    if (!el || typeof fn !== 'function') return;
+    const h = el.offsetHeight;
+    if (h > 0) el.style.minHeight = h + 'px';
+    try { fn(); } finally {
+      requestAnimationFrame(() => { el.style.minHeight = ''; });
+    }
+  };
 
-  if (tabVisible('tab-screener')) { renderTable(); renderWatchlist(); }
-  if (tabVisible('tab-watchlist') && typeof renderLtWatchlist === 'function') renderLtWatchlist();
-  if (tabVisible('tab-fno') && typeof renderFnoTab === 'function') renderFnoTab();
-  if (tabVisible('tab-intraday') && typeof renderIntradayTab === 'function') renderIntradayTab();
-  if (tabVisible('tab-swing')) {
-    if (typeof renderSwingRadar === 'function') renderSwingRadar();
-    if (typeof renderSrBreakouts === 'function') renderSrBreakouts();
+  if (tabVisible('tab-screener')) {
+    safeRebuild('tab-screener', () => { renderTable(); renderWatchlist(); });
   }
+  if (tabVisible('tab-watchlist') && typeof renderLtWatchlist === 'function') safeRebuild('tab-watchlist', renderLtWatchlist);
+  if (tabVisible('tab-fno') && typeof renderFnoTab === 'function') safeRebuild('tab-fno', renderFnoTab);
+  if (tabVisible('tab-intraday') && typeof renderIntradayTab === 'function') safeRebuild('tab-intraday', renderIntradayTab);
+  if (tabVisible('tab-swing')) {
+    if (typeof renderSwingRadar === 'function') safeRebuild('tab-swing', renderSwingRadar);
+    if (typeof renderSrBreakouts === 'function') safeRebuild('srBreakoutsGrid', renderSrBreakouts);
+  }
+  if (tabVisible('tab-penny') && typeof renderPennyStocksTab === 'function') safeRebuild('tab-penny', renderPennyStocksTab);
   if (typeof renderNiftyRegimeBanner === 'function') renderNiftyRegimeBanner();
-  if (tabVisible('tab-penny') && typeof renderPennyStocksTab === 'function') renderPennyStocksTab();
 
-  // Restore before the browser paints, so the correction is never visible.
-  if (window.scrollY !== scrollBefore) window.scrollTo({ top: scrollBefore, behavior: 'instant' });
-
-  if (priceChanged || manual) {
-    flashUpdatedPrices();
+  if (changedPriceMap.size > 0) {
+    updateDomPricesInPlace(changedPriceMap);
   }
 }
 
 function flashUpdatedPrices() {
-  document.querySelectorAll('.price, .wl-ltp, .swing-card').forEach(el => {
-    el.classList.remove('price-up', 'price-down');
-    void el.offsetWidth;
-    el.classList.add('price-up');
-    setTimeout(() => el.classList.remove('price-up'), 1500);
+  document.querySelectorAll('.price.price-up, .price.price-down, .wl-ltp.price-up, .wl-ltp.price-down').forEach(el => {
+    setTimeout(() => el.classList.remove('price-up', 'price-down'), 1200);
   });
 }
 
@@ -6182,7 +6457,7 @@ function renderFnoTab() {
     const slCls= dir === 'PE' ? 'pos' : 'neg';
     const tCls = dir === 'PE' ? 'neg' : 'pos';
     return `
-    <div class="fno-card">
+    <div class="fno-card" data-symbol="${s.symbol}">
       <div class="fno-card-header">
         <div>
           <div class="fno-card-sym">${s.symbol}</div>
@@ -6325,7 +6600,7 @@ function renderIntradayTab() {
     const rsiCls = pillColor(isBuy ? s.rsi : (100 - s.rsi), 55);
     const volCls = pillColor(s.volume_spike, 1.5);
     return `
-    <div class="fno-card">
+    <div class="fno-card" data-symbol="${s.symbol}">
       <div class="fno-card-header">
         <div>
           <div class="fno-card-sym">${s.symbol}</div>
@@ -7793,7 +8068,7 @@ function renderWatchlist() {
           `<div class="alert-row alert-${a.level}"><span>${a.icon}</span><span>${a.message}</span></div>`
         ).join('');
 
-        return `<div class="wl-card ${hasAlert?'has-alert':''}" style="padding:18px">
+        return `<div class="wl-card ${hasAlert?'has-alert':''}" data-symbol="${w.symbol}" style="padding:18px">
           <div class="wl-header" style="margin-bottom:12px">
             <div>
               <div style="display:flex;align-items:center;gap:8px">
@@ -7893,7 +8168,7 @@ function renderWatchlist() {
         const sigBadge = activeSig === 'BUY' ? '🟢 BUY' : activeSig === 'SELL' ? '🔴 SELL' : '🟡 HOLD';
         const sigClass = activeSig === 'BUY' ? 'badge-green' : activeSig === 'SELL' ? 'badge-red' : 'badge-yellow';
 
-        return `<tr>
+        return `<tr data-symbol="${w.symbol}">
           <td>
             <div style="font-weight:700">${w.symbol}</div>
             <div style="font-size:11px;color:var(--muted)">${w.name||''}</div>
@@ -9033,7 +9308,7 @@ def get_or_refresh_monthly_penny_picks(screener_results: list[dict], top_n: int 
     on every scan -- freezing those would defeat the purpose, which is to catch
     the entry moment on a stable set of names.
     """
-    today = datetime.datetime.now().date()
+    today = datetime.datetime.now(IST).date()
 
     state = {}
     if os.path.exists(PENNY_MONTHLY_PICKS_FILE):
@@ -9699,14 +9974,27 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 with open(OUT_JSON_FILE, 'rb') as f:
                     content = f.read()
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json; charset=utf-8')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                # Regenerated on every scan — never let the browser reuse a cached copy.
-                self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
-                self.send_header('Content-Length', str(len(content)))
-                self.end_headers()
-                self.wfile.write(content)
+                accept_encoding = self.headers.get('Accept-Encoding', '')
+                if 'gzip' in accept_encoding:
+                    import gzip
+                    compressed = gzip.compress(content)
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json; charset=utf-8')
+                    self.send_header('Content-Encoding', 'gzip')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                    self.send_header('Content-Length', str(len(compressed)))
+                    self.end_headers()
+                    self.wfile.write(compressed)
+                else:
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json; charset=utf-8')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    # Regenerated on every scan — never let the browser reuse a cached copy.
+                    self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+                    self.send_header('Content-Length', str(len(content)))
+                    self.end_headers()
+                    self.wfile.write(content)
                 try: self.wfile.flush()
                 except Exception: pass
             except Exception:
@@ -9792,14 +10080,15 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             try: self.wfile.flush()
             except Exception: pass
             return
-        elif parsed.path == '/api/status':
+        elif parsed.path in ('/api/status', '/api/scan/status'):
             mkt_info = get_market_status()
             res = {
                 "server": "running",
                 "market_info": mkt_info,
                 "out_html": OUT_HTML,
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": datetime.datetime.now(IST).isoformat(),
                 "is_scanning": IS_INITIAL_SCANNING,
+                "scan_in_progress": IS_INITIAL_SCANNING,
                 "last_scan_completed_at": LAST_SCAN_COMPLETED_AT
             }
             resp_bytes = json.dumps(res).encode('utf-8')
@@ -9830,12 +10119,109 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             try: self.wfile.flush()
             except Exception: pass
             return
+        elif parsed.path == '/api/mobile/screener':
+            self.send_json_response(get_screener_data())
+            return
+        elif parsed.path == '/api/mobile/watchlist':
+            self.send_json_response(get_lt_watchlist())
+            return
+        elif parsed.path == '/api/mobile/holdings':
+            self.send_json_response(get_holdings())
+            return
+        elif parsed.path == '/api/mobile/status':
+            self.send_json_response(get_app_status())
+            return
+        elif parsed.path.startswith('/api/mobile/search'):
+            query = urllib.parse.parse_qs(parsed.query).get('q', [''])[0]
+            self.send_json_response(search_stocks(query))
+            return
+        elif parsed.path.startswith('/api/mobile/stock'):
+            symbol = urllib.parse.parse_qs(parsed.query).get('symbol', [''])[0]
+            self.send_json_response(get_stock_detail(symbol))
+            return
+        elif parsed.path == '/api/settings':
+            settings_file = os.path.join(BASE_DIR, "screener_settings.json")
+            cur_settings = {}
+            if os.path.exists(settings_file):
+                try:
+                    with open(settings_file, "r", encoding="utf-8") as f:
+                        cur_settings = json.load(f)
+                except Exception: pass
+            self.send_json_response(cur_settings)
+            return
+        elif parsed.path == '/api/sync/scan-data':
+            self.send_json_response({"status": "ready", "endpoint": "/api/sync/scan-data", "method": "POST"})
+            return
         else:
             super().do_GET()
 
     def do_POST(self):
         global LATEST_SCREENER_RESULTS, LAST_SCAN_COMPLETED_AT
         parsed = urllib.parse.urlparse(self.path)
+
+        # Cloud Data Sync endpoint (Upload fresh scan results directly without redeployment)
+        if parsed.path == '/api/sync/scan-data':
+            auth = self.headers.get('Authorization', '')
+            token = ''
+            if auth.startswith('Bearer '):
+                token = auth[7:].strip()
+            if not token:
+                token = self.headers.get('X-Sync-Token', '').strip()
+
+            if not SYNC_TOKEN or token != SYNC_TOKEN:
+                self.send_json_response({"status": "error", "message": "Unauthorized: invalid sync token"}, 401)
+                return
+
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length) if length > 0 else b''
+                if self.headers.get('Content-Encoding', '') == 'gzip':
+                    import gzip
+                    body = gzip.decompress(body)
+
+                payload = json.loads(body.decode('utf-8'))
+
+                # 1. Update screener_data.json
+                if 'screener_data' in payload and payload['screener_data']:
+                    clean_results = sanitize_for_strict_json(payload['screener_data'])
+                    write_scan_json(clean_results)
+                    LATEST_SCREENER_RESULTS = clean_results
+
+                # 2. Update screener.html
+                if 'screener_html' in payload and payload['screener_html']:
+                    publish_html(payload['screener_html'])
+
+                # 3. Update mobile.html
+                if 'mobile_html' in payload and payload['mobile_html']:
+                    atomic_write_file(MOBILE_HTML, payload['mobile_html'])
+
+                # 4. Update lt_watchlist_enriched.json
+                if 'lt_watchlist_enriched' in payload and payload['lt_watchlist_enriched']:
+                    enriched_clean = sanitize_for_strict_json(payload['lt_watchlist_enriched'])
+                    atomic_write_file(LT_ENRICHED_FILE, json.dumps(enriched_clean, indent=2, default=json_serializer))
+
+                # 5. Update scan_meta.json
+                if 'scan_meta' in payload and payload['scan_meta']:
+                    atomic_write_file(SCAN_META_FILE, json.dumps(payload['scan_meta'], indent=2, default=json_serializer))
+                    LAST_SCAN_COMPLETED_AT = payload['scan_meta'].get('completed_at_ist', '')
+
+                # 6. Update daily_picks_history.json
+                if 'daily_picks_history' in payload and payload['daily_picks_history']:
+                    hist_file = os.path.join(BASE_DIR, "daily_picks_history.json")
+                    atomic_write_file(hist_file, json.dumps(payload['daily_picks_history'], indent=2, default=json_serializer))
+
+                num_stocks = len(payload.get('screener_data', [])) if isinstance(payload.get('screener_data'), list) else 0
+                log(f"☁️ [API Sync] Successfully received and reloaded scan data from client ({num_stocks} stocks)")
+                self.send_json_response({
+                    "status": "success",
+                    "message": "Scan data synced and reloaded successfully",
+                    "received_stocks": num_stocks,
+                    "completed_at_ist": read_scan_completed_at()
+                })
+            except Exception as e:
+                log(f"⚠ [API Sync] Error processing sync payload: {e}")
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
+            return
 
         # Mobile API endpoints
         if parsed.path == '/api/mobile/screener':
@@ -9863,65 +10249,22 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_ltp_request()
             return
         if parsed.path == '/api/scan':
+            global IS_INITIAL_SCANNING
+            if IS_INITIAL_SCANNING:
+                self.send_json_response({"status": "busy", "message": "A scan is already in progress"}, 409)
+                return
             log("\n⚡ [API Request] Received Scan Now trigger from web app...")
             try:
-                nifty_df, nifty_regime = fetch_nifty_history()
-                log(f"  Market Regime: {nifty_regime.get('badge')}")
-
-                tickers = read_stock_list()
-                screener_results = run_scan(tickers)
-                if not screener_results or len(screener_results) < 10:
-                    log("⚠️ WARNING: API scan returned less than 10 stocks. Preserving existing database.")
-                    if LATEST_SCREENER_RESULTS and len(LATEST_SCREENER_RESULTS) >= 10:
-                        screener_results = LATEST_SCREENER_RESULTS
-                    elif os.path.exists(OUT_JSON_FILE):
-                        try:
-                            with open(OUT_JSON_FILE, encoding="utf-8") as f:
-                                cached = json.load(f)
-                                if cached and len(cached) >= 10:
-                                    screener_results = cached
-                        except Exception:
-                            pass
-
-                LATEST_SCREENER_RESULTS = screener_results
-
-                log("Computing Mansfield Relative Strength (RS Rating 1-99) vs Nifty...")
-                screener_results = compute_relative_strength_ratings(
-                    screener_results, nifty_df,
-                    nifty_regime_status=nifty_regime.get("status", "NEUTRAL")
-                )
-                LATEST_SCREENER_RESULTS = screener_results
-                try:
-                    clean_results = sanitize_for_strict_json(screener_results)
-                    write_scan_json(clean_results)
-                except Exception as e:
-                    log(f"  ⚠ Could not save screener_data.json: {e}")
-
-                log("Processing LT Watchlist stocks...")
-                lt_wl_data = process_lt_watchlist(screener_results)
-                wl_data = process_watchlist(screener_results)
-
-                mkt_info = get_market_status()
-                mkt_info["nifty"] = nifty_regime
-
-                commodity_signals = fetch_commodity_signals()
-                fno_data = process_fno_stocks(screener_results)
-                html = build_html(screener_results, wl_data, lt_wl_data, commodity_signals, mkt_info, fno_data)
-                publish_html(html)
-                publish_mobile_html(screener_results, lt_wl_data, mkt_info)
-                LAST_SCAN_COMPLETED_AT = datetime.datetime.now().isoformat()
-                log("⚡ [API Request] Live Scan complete & index.html updated successfully!")
-                res = {"status": "ok", "message": "Scan completed successfully", "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-                self.send_response(200)
+                background_initial_scan()
+                res = {
+                    "status": "ok",
+                    "message": "Scan completed successfully",
+                    "timestamp": datetime.datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+                }
+                self.send_json_response(res, 200)
             except Exception as e:
                 log(f"❌ Error during API scan: {e}")
-                res = {"status": "error", "message": str(e)}
-                self.send_response(500)
-
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps(res).encode('utf-8'))
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
             return
 
         elif parsed.path in ('/api/lt-watchlist/delete', '/api/lt-watchlist/hard-remove'):
@@ -10326,6 +10669,12 @@ def background_initial_scan():
             log(f"  ✅ Pre-seeded GLOBAL_LTP_CACHE with {populated} scan prices for instant post-reload polling.")
         except Exception as e:
             log(f"  ⚠ Could not pre-seed LTP cache: {e}")
+
+        # Automatically sync fresh scan data to Render cloud instance so mobile app updates
+        try:
+            sync_to_render_cloud(async_mode=True)
+        except Exception as e:
+            log(f"  ⚠ Cloud sync initiation skipped: {e}")
 
     finally:
         IS_INITIAL_SCANNING = False

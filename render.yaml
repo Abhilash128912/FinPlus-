@@ -17,6 +17,8 @@ services:
       # lt_watchlist_enriched.json are committed, so each deploy ships fresh output.
       - key: SCREENER_ENABLE_SCAN
         value: "0"
+      - key: SCREENER_SYNC_TOKEN
+        value: "finplus_secure_sync_2026"
     routes:
       - path: /
         destination: http://localhost:10000

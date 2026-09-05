@@ -9,10 +9,10 @@ html, body { background: #06060f !important; color: #e2e8f0; font-family: var(--
 *{box-sizing:border-box;margin:0;padding:0}
 
 /* ── Layout ── */
-.app-header{background:linear-gradient(135deg,#0a0a1a,#12123a);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.app-header{background:linear-gradient(135deg,#0a0a1a,#12123a);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;min-height:68px;box-sizing:border-box}
 .app-title{font-size:22px;font-weight:700;background:linear-gradient(90deg,#6c63ff,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.phase-badge{background:linear-gradient(135deg,#6c63ff22,#00d4aa22);border:1px solid #6c63ff55;color:#a5b4fc;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}
-.run-info{margin-left:auto;color:var(--muted);font-size:12px}
+.phase-badge{background:linear-gradient(135deg,#6c63ff22,#00d4aa22);border:1px solid #6c63ff55;color:#a5b4fc;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;flex-shrink:0}
+.run-info{margin-left:auto;color:var(--muted);font-size:12px;flex-shrink:0}
 
 /* ── Commodity Intraday Bar ── */
 .commodity-bar{background:linear-gradient(90deg,rgba(15,23,42,0.95),rgba(30,41,59,0.95));border-bottom:1px solid var(--border);padding:10px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
@@ -408,8 +408,14 @@ details[open] summary::before {
   0% { background-color: rgba(239, 68, 68, 0.4); color: #ef4444; }
   100% { background-color: transparent; }
 }
-.price-up { animation: priceUpPulse 1.5s ease-out; }
-.price-down { animation: priceDownPulse 1.5s ease-out; }
+.price-up { animation: priceUpPulse 1.2s ease-out; }
+.price-down { animation: priceDownPulse 1.2s ease-out; }
+
+.price, .wl-ltp, .fno-card-ltp, .swing-ltp-val {
+  transition: background-color 0.25s ease, color 0.25s ease;
+  border-radius: 4px;
+  display: inline-block;
+}
 
 .ltp-badge {
   display: inline-flex;
@@ -420,6 +426,9 @@ details[open] summary::before {
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
 }
 .ltp-dot {
   width: 8px;
@@ -428,6 +437,7 @@ details[open] summary::before {
   background: var(--green);
   display: inline-block;
   box-shadow: 0 0 8px var(--green);
+  flex-shrink: 0;
 }
 .ltp-dot.updating {
   animation: blink 0.5s infinite alternate;

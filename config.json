@@ -18,5 +18,7 @@
     { "symbol": "ULTRACEMCO","ticker": "ULTRACEMCO.NS","name": "UltraTech Cement",        "lot_size": 50,  "strike_interval": 100 },
     { "symbol": "APOLLOHOSP","ticker": "APOLLOHOSP.NS","name": "Apollo Hospitals",        "lot_size": 125, "strike_interval": 50  },
     { "symbol": "TCS",       "ticker": "TCS.NS",       "name": "Tata Consultancy Services","lot_size": 225, "strike_interval": 50  }
-  ]
+  ],
+  "render_cloud_url": "https://finplus-g0b5.onrender.com",
+  "sync_token": "finplus_secure_sync_2026"
 }
