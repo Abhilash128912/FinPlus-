@@ -47,6 +47,26 @@ const FREE_CASH_LT_KEY = 'finplus_free_cash_lt_v5';
 const SAVED_AT_KEY = 'finplus_saved_at_v1';
 const FRESH_START_TAG = 'finplus_fresh_start_20260907_v2';
 
+// INDmoney classification rule: a buy price under this is a Penny SIP holding,
+// at or above it is Long-Term Core. Swing (Zerodha) is a separate broker and is
+// never reclassified by price.
+const PENNY_PRICE_KEY = 'finplus_penny_max_price';
+const DEFAULT_PENNY_MAX_PRICE = 75;
+const readPennyMaxPrice = () => {
+  try {
+    const v = Number(localStorage.getItem(PENNY_PRICE_KEY));
+    return v > 0 ? v : DEFAULT_PENNY_MAX_PRICE;
+  } catch (e) {
+    return DEFAULT_PENNY_MAX_PRICE;
+  }
+};
+/** LT or PENNY based on buy price. Returns null when the rule does not apply. */
+const classifyIndmoneySegment = (buyPrice, maxPrice) => {
+  const price = Number(buyPrice);
+  if (!(price > 0)) return null;
+  return price < (Number(maxPrice) || DEFAULT_PENNY_MAX_PRICE) ? 'PENNY' : 'LT';
+};
+
 // Auto-purge stale trade caches on fresh start while retaining user settings
 if (typeof window !== 'undefined') {
   try {
@@ -210,6 +230,8 @@ export default function App() {
   const [isLtpLoading, setIsLtpLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addSegment, setAddSegment] = useState('SWING'); // 'SWING', 'LT', 'PENNY'
+  const [pennyMaxPrice, setPennyMaxPrice] = useState(readPennyMaxPrice);
+  const [segmentAutoSet, setSegmentAutoSet] = useState(false); // true when the price rule moved it
   const [formTicker, setFormTicker] = useState('');
   const [formName, setFormName] = useState('');
   const [formShares, setFormShares] = useState('1');
@@ -1025,6 +1047,12 @@ export default function App() {
   }, [holdingCards, swingFreeCash, ltFreeCash, pennyFreeCash, capitalMath, swingFreeCashInput, ltFreeCashInput, pennyFreeCashInput]);
 
   // ── Handle Add Position ──
+  /** Final safety net: classify on submit too, in case the price never changed. */
+  const resolveSegmentForSave = (segment, buyPrice) => {
+    if (segment !== 'LT' && segment !== 'PENNY') return segment;
+    return classifyIndmoneySegment(buyPrice, pennyMaxPrice) || segment;
+  };
+
   const handleAddPositionSubmit = (e) => {
     e.preventDefault();
     const ticker = formTicker.trim().toUpperCase();
@@ -1039,25 +1067,29 @@ export default function App() {
 
     // Seamless baseline capital allocation - no popup blockers for initial portfolio setup
 
+    // The INDmoney price rule is final here, so a buy saved without touching the
+    // price field still lands in the right pillar.
+    const finalSegment = resolveSegmentForSave(addSegment, buyPrice);
+
     const newPos = {
       id: `pos_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       ticker,
       name: formName.trim() || ticker,
-      segment: addSegment,
+      segment: finalSegment,
       shares,
       buyPrice,
       buyDate: formBuyDate,
-      target1: Number(formTarget1) || (addSegment === 'SWING' ? buyPrice * 1.08 : 0),
-      stopLoss: Number(formStopLoss) || (addSegment === 'SWING' ? buyPrice * 0.96 : 0),
+      target1: Number(formTarget1) || (finalSegment === 'SWING' ? buyPrice * 1.08 : 0),
+      stopLoss: Number(formStopLoss) || (finalSegment === 'SWING' ? buyPrice * 0.96 : 0),
       notes: formNotes.trim()
     };
 
     // Deduct buy capital from the segment's broker free cash
-    if (addSegment === 'SWING') {
+    if (finalSegment === 'SWING') {
       setSwingFreeCashInput(prev => Math.max(0, (parseFloat(prev || '0') || 0) - requiredCapital).toFixed(2));
-    } else if (addSegment === 'LT') {
+    } else if (finalSegment === 'LT') {
       setLtFreeCashInput(prev => Math.max(0, (parseFloat(prev || '0') || 0) - requiredCapital).toFixed(2));
-    } else if (addSegment === 'PENNY') {
+    } else if (finalSegment === 'PENNY') {
       setPennyFreeCashInput(prev => Math.max(0, (parseFloat(prev || '0') || 0) - requiredCapital).toFixed(2));
     }
 
@@ -1070,7 +1102,11 @@ export default function App() {
     setFormTarget1('');
     setFormStopLoss('');
     setFormNotes('');
-    showToast(`✅ Recorded purchase of ${shares} sh ${ticker} in ${addSegment}! ₹${requiredCapital.toFixed(2)} deducted from Free Cash.`);
+    showToast(
+      finalSegment !== addSegment
+        ? `✅ ${shares} sh ${ticker} recorded in ${finalSegment} (auto-classified: ₹${buyPrice} ${buyPrice < pennyMaxPrice ? 'below' : 'at/above'} ₹${pennyMaxPrice}). ₹${requiredCapital.toFixed(2)} deducted.`
+        : `✅ Recorded purchase of ${shares} sh ${ticker} in ${finalSegment}! ₹${requiredCapital.toFixed(2)} deducted from Free Cash.`
+    );
   };
 
   // ── Handle Sell / Realize Trade ──
@@ -1704,7 +1740,7 @@ export default function App() {
                 </div>
 
                 <button 
-                  onClick={() => { setAddSegment('SWING'); setShowAddModal(true); }}
+                  onClick={() => { setAddSegment('SWING'); setSegmentAutoSet(false); setShowAddModal(true); }}
                   style={{ width: '100%', background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#090d16', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 900, fontSize: '13px', cursor: 'pointer' }}
                 >
                   + Record Swing Buy
@@ -1745,7 +1781,7 @@ export default function App() {
                 </div>
 
                 <button 
-                  onClick={() => { setAddSegment('LT'); setShowAddModal(true); }}
+                  onClick={() => { setAddSegment('LT'); setSegmentAutoSet(false); setShowAddModal(true); }}
                   style={{ width: '100%', background: 'linear-gradient(135deg, #059669, #10b981)', color: '#090d16', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 900, fontSize: '13px', cursor: 'pointer' }}
                 >
                   + Record LT Quality Buy
@@ -1786,7 +1822,7 @@ export default function App() {
                 </div>
 
                 <button 
-                  onClick={() => { setAddSegment('PENNY'); setShowAddModal(true); }}
+                  onClick={() => { setAddSegment('PENNY'); setSegmentAutoSet(false); setShowAddModal(true); }}
                   style={{ width: '100%', background: 'linear-gradient(135deg, #7c3aed, #c084fc)', color: '#090d16', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 900, fontSize: '13px', cursor: 'pointer' }}
                 >
                   + Record Penny SIP Buy
@@ -1818,7 +1854,7 @@ export default function App() {
                 </div>
 
                 <button 
-                  onClick={() => { setAddSegment(activeTab.toUpperCase()); setShowAddModal(true); }}
+                  onClick={() => { setAddSegment(activeTab.toUpperCase()); setSegmentAutoSet(false); setShowAddModal(true); }}
                   style={{ background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#090d16', border: 'none', padding: '10px 18px', borderRadius: '8px', fontWeight: 900, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   <PlusCircle size={15} />
@@ -1882,7 +1918,7 @@ export default function App() {
                   You currently own zero shares in this segment. Capital is safely held as cash reserve.
                 </div>
                 <button 
-                  onClick={() => { setAddSegment(activeTab.toUpperCase()); setShowAddModal(true); }}
+                  onClick={() => { setAddSegment(activeTab.toUpperCase()); setSegmentAutoSet(false); setShowAddModal(true); }}
                   style={{ background: 'rgba(56, 189, 248, 0.15)', border: '1px solid #38bdf8', color: '#38bdf8', padding: '8px 18px', borderRadius: '8px', fontWeight: 800, fontSize: '12px', cursor: 'pointer' }}
                 >
                   + Add Your First Purchase
@@ -2082,6 +2118,32 @@ export default function App() {
         {activeTab === 'settings' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '700px' }}>
             <div style={{ fontSize: '20px', fontWeight: 900, color: '#ffffff' }}>⚙️ Master JSON Backups &amp; Data Integrity</div>
+
+            {/* INDmoney classification rule used by the Record Buy form */}
+            <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 800, color: '#ffffff', marginBottom: '8px' }}>💎 Penny Stock Threshold</div>
+              <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '14px' }}>
+                Any INDmoney buy below this price is recorded as Quality Penny SIP; at or above it, Long-Term Core.
+                Swing runs on Zerodha and is never reclassified by price. Existing holdings are not moved when you change this.
+              </div>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={pennyMaxPrice}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setPennyMaxPrice(v);
+                    try { localStorage.setItem(PENNY_PRICE_KEY, String(Number(v) || DEFAULT_PENNY_MAX_PRICE)); } catch (err) {}
+                  }}
+                  style={{ width: '140px', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
+                />
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 700 }}>
+                  Under ₹{Number(pennyMaxPrice) || DEFAULT_PENNY_MAX_PRICE} → Penny SIP &nbsp;·&nbsp; ₹{Number(pennyMaxPrice) || DEFAULT_PENNY_MAX_PRICE} and above → Long-Term Core
+                </span>
+              </div>
+            </div>
             
             <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
               <div style={{ fontSize: '14px', fontWeight: 800, color: '#ffffff', marginBottom: '8px' }}>Export Master Portfolio Backup</div>
@@ -2447,6 +2509,13 @@ export default function App() {
                   <option value="LT">🛡️ Long-Term Core (INDMONEY) — Free Cash: ₹{(segmentLedgers?.lt?.freeCash || 0).toLocaleString('en-IN')}</option>
                   <option value="PENNY">💎 Quality Penny SIP (INDmoney) — Free Cash: ₹{(segmentLedgers?.penny?.freeCash || 0).toLocaleString('en-IN')}</option>
                 </select>
+                {(addSegment === 'LT' || addSegment === 'PENNY') && (
+                  <div style={{ fontSize: '10px', color: segmentAutoSet ? '#38bdf8' : '#64748b', marginTop: '5px', fontWeight: 600 }}>
+                    {segmentAutoSet
+                      ? `Auto-set to ${addSegment === 'PENNY' ? 'Quality Penny SIP' : 'Long-Term Core'} — buy price ${addSegment === 'PENNY' ? 'below' : 'at or above'} ₹${pennyMaxPrice}.`
+                      : `INDmoney rule: under ₹${pennyMaxPrice} is Penny SIP, ₹${pennyMaxPrice} and above is Long-Term Core.`}
+                  </div>
+                )}
               </div>
 
               <div style={{ position: 'relative' }}>
@@ -2547,7 +2616,20 @@ export default function App() {
                     step="any" 
                     placeholder="e.g. 19.33" 
                     value={formBuyPrice} 
-                    onChange={e => setFormBuyPrice(e.target.value)}
+                    onChange={e => {
+                      setFormBuyPrice(e.target.value);
+                      // Only reclassify between the two INDmoney pillars; Swing is
+                      // a different broker and is left alone.
+                      if (addSegment === 'LT' || addSegment === 'PENNY') {
+                        const want = classifyIndmoneySegment(e.target.value, pennyMaxPrice);
+                        if (want && want !== addSegment) {
+                          setAddSegment(want);
+                          setSegmentAutoSet(true);
+                        } else if (want) {
+                          setSegmentAutoSet(false);
+                        }
+                      }
+                    }}
                     required
                     style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 800 }}
                   />
