@@ -25,7 +25,8 @@ export const SEGMENTS = [
   { id: 'NATURAL_GAS',   label: 'Natural Gas (NATU)', icon: '🔥', product: PRODUCTS.MCX_FUTURE,   lotBased: true,  livePnlEligible: true },
   { id: 'STOCK_OPTIONS', label: 'Stock Options',      icon: '🎯', product: PRODUCTS.STOCK_OPTION, lotBased: true,  livePnlEligible: true },
   { id: 'SWING',         label: 'Swing',              icon: '🌊', product: PRODUCTS.EQ_DELIVERY,  lotBased: false, livePnlEligible: true },
-  { id: 'CRUDE',         label: 'Crude Oil',          icon: '🛢️', product: PRODUCTS.MCX_FUTURE,   lotBased: true,  livePnlEligible: true }
+  { id: 'CRUDE',         label: 'Crude Oil',          icon: '🛢️', product: PRODUCTS.MCX_FUTURE,   lotBased: true,  livePnlEligible: true },
+  { id: 'PENNY',         label: 'Quality Penny SIP',  icon: '💎', product: PRODUCTS.EQ_DELIVERY,  lotBased: false, livePnlEligible: true }
 ];
 
 export const OPPORTUNITY_RESERVE = { id: 'OPPORTUNITY_RESERVE', label: 'Opportunity Reserve', icon: '💠' };
@@ -75,6 +76,7 @@ export const DEFAULT_CONFIG = {
     STOCK_OPTIONS: true,
     SWING: true,
     CRUDE: true,
+    PENNY: true,
     OPPORTUNITY_RESERVE: true
   },
   chargesWarnRatio: 0.25,
@@ -87,12 +89,13 @@ export const BRIEF_DEFAULTS = {
   monthlyRiskBudget: 7500,
   allocations: {
     INTRADAY: 750,
-    LONG_TERM: 1500,
+    LONG_TERM: 1150,   // 1,500 less the 350 carved out for Penny
     INDEX_OPTIONS: 1250,
     NATURAL_GAS: 1000,
     STOCK_OPTIONS: 1000,
     SWING: 1000,
-    CRUDE: 500          // funded by halving the Opportunity Reserve
+    CRUDE: 500,         // funded by halving the Opportunity Reserve
+    PENNY: 350          // deliberately small - highest risk per rupee
   },
   reserveAllocation: 500,
   segmentSL: {
@@ -102,7 +105,8 @@ export const BRIEF_DEFAULTS = {
     NATURAL_GAS: 250,
     STOCK_OPTIONS: 250,
     SWING: 100,  // same per-trade risk as Intraday; the 5% below sets the stop PRICE
-    CRUDE: 250
+    CRUDE: 250,
+    PENNY: 100   // small stop keeps penny position sizes contained
   },
   segmentSLPercent: {
     INTRADAY: null,
@@ -111,7 +115,8 @@ export const BRIEF_DEFAULTS = {
     NATURAL_GAS: null,
     STOCK_OPTIONS: null,
     SWING: 5,
-    CRUDE: null
+    CRUDE: null,
+    PENNY: null
   },
   segmentTargetPercent: {
     INTRADAY: null,
@@ -120,7 +125,8 @@ export const BRIEF_DEFAULTS = {
     NATURAL_GAS: null,
     STOCK_OPTIONS: null,
     SWING: 5,
-    CRUDE: null
+    CRUDE: null,
+    PENNY: null
   },
   segmentBroker: {
     INTRADAY: 'INDMONEY',
@@ -129,7 +135,8 @@ export const BRIEF_DEFAULTS = {
     NATURAL_GAS: 'INDMONEY',
     STOCK_OPTIONS: 'INDMONEY',
     SWING: 'ZERODHA',
-    CRUDE: 'INDMONEY'
+    CRUDE: 'INDMONEY',
+    PENNY: 'INDMONEY'
   },
   // The 2,000 already committed to Long Term before the counters began.
   openingDeductions: {
@@ -139,7 +146,8 @@ export const BRIEF_DEFAULTS = {
     NATURAL_GAS: 0,
     STOCK_OPTIONS: 0,
     SWING: 0,
-    CRUDE: 0
+    CRUDE: 0,
+    PENNY: 0
   },
   dailyRiskLimit: 300,
   maxPositionsPerDay: 1,
@@ -155,6 +163,7 @@ export const BRIEF_DEFAULTS = {
     STOCK_OPTIONS: true,
     SWING: true,
     CRUDE: true,
+    PENNY: true,
     OPPORTUNITY_RESERVE: true
   }
 };

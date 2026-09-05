@@ -42,11 +42,12 @@ ok('September has normal buckets', standard[0].buckets.INTRADAY.initial_allocati
 console.log('\n=== 3. Allocations balance to 7500, CRUDE gone, Swing present ===');
 const bal = allocationBalance(cfg);
 ok('allocations + reserve = 7500', bal.balanced, `sum=${bal.sum}`);
-ok('seven segments (CRUDE re-added)', SEGMENTS.length === 7, `got ${SEGMENTS.length}`);
+ok('eight segments (CRUDE + PENNY)', SEGMENTS.length === 8, `got ${SEGMENTS.length}`);
 ok('CRUDE segment present', SEGMENTS.some(s => s.id === 'CRUDE'));
 ok('SWING present', SEGMENTS.some(s => s.id === 'SWING'));
 ok('Intraday alloc 750', cfg.allocations.INTRADAY === 750);
-ok('Long Term alloc 1500', cfg.allocations.LONG_TERM === 1500);
+ok('Long Term alloc 1150 after Penny carve-out', cfg.allocations.LONG_TERM === 1150);
+ok('Penny alloc 350', cfg.allocations.PENNY === 350);
 ok('reserve halved to 500 to fund CRUDE', cfg.reserveAllocation === 500);
 ok('CRUDE alloc 500', cfg.allocations.CRUDE === 500);
 ok('Swing risk matches Intraday at 100', cfg.segmentSL.SWING === 100);

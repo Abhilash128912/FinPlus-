@@ -11,7 +11,7 @@ const near = (a, b, t = 0.02) => Math.abs(a - b) <= t;
 
 const cfg = { ...DEFAULT_CONFIG, ...BRIEF_DEFAULTS, configured: true, accrualStartDate: '2026-09-07',
   accrualDivisor: 30, accrualBasis: 'CALENDAR',
-  allocations: { ...BRIEF_DEFAULTS.allocations, CRUDE: 1000 }, reserveAllocation: 1000,
+  allocations: { ...BRIEF_DEFAULTS.allocations, LONG_TERM: 1500, CRUDE: 1000 }, reserveAllocation: 1000,
   openingDeductions: { INTRADAY: 0, LONG_TERM: 0, INDEX_OPTIONS: 0, NATURAL_GAS: 0, STOCK_OPTIONS: 0, SWING: 0, CRUDE: 0 } };
 const trade = (o) => ({ status: 'CLOSED', exit_price: 1, ...o });
 const loss = (seg, date, amt) => trade({ id: `L${seg}${date}`, segment: seg, exit_date: date, entry_date: date, _pnl: { net: -amt } });
@@ -24,9 +24,9 @@ ok('Index Options 1250/30 = 41.67', near(dailyRateFor('INDEX_OPTIONS', cfg), 41.
 ok('Natural Gas 1000/30 = 33.33', near(dailyRateFor('NATURAL_GAS', cfg), 33.33));
 ok('Swing 1000/30 = 33.33', near(dailyRateFor('SWING', cfg), 33.33));
 ok('Reserve 1000/30 = 33.33', near(dailyRateFor('OPPORTUNITY_RESERVE', cfg), 33.33));
-ok('8 lanes total (CRUDE added)', ACCRUAL_LANES.length === 8, String(ACCRUAL_LANES.length));
+ok('9 lanes total (CRUDE + PENNY)', ACCRUAL_LANES.length === 9, String(ACCRUAL_LANES.length));
 const dailyPot = ACCRUAL_LANES.reduce((s, id) => s + dailyRateFor(id, cfg), 0);
-ok('pinned drip = 283.33/day', near(dailyPot, 8500/30, 0.05), String(dailyPot));
+ok('pinned drip = 295/day', near(dailyPot, 8850 / 30, 0.05), String(dailyPot));
 
 console.log('\n=== 2. Date maths ===');
 ok('same day inclusive = 1', accrualDays('2026-09-07', '2026-09-07', true) === 1);
@@ -157,7 +157,8 @@ ok('accrued still positive', deep.byId.INTRADAY.totalAccrued === 100);
 console.log('');
 console.log('=== 12. Opening deduction (the old September 2,000) ===');
 const briefCfg = { ...DEFAULT_CONFIG, ...BRIEF_DEFAULTS, configured: true, accrualStartDate: '2026-09-07',
-  accrualDivisor: 30, accrualBasis: 'CALENDAR' };
+  accrualDivisor: 30, accrualBasis: 'CALENDAR',
+  allocations: { ...BRIEF_DEFAULTS.allocations, LONG_TERM: 1500 } };
 ok('brief puts 2000 on Long Term', openingDeductionFor('LONG_TERM', briefCfg) === 2000);
 ok('other segments have none', openingDeductionFor('INTRADAY', briefCfg) === 0);
 
@@ -215,7 +216,7 @@ ok('CRUDE books losses', liveCfg.booksLosses.CRUDE === true);
 const liveTotal = ACCRUAL_LANES.reduce((s2, id) => s2 + dailyRateFor(id, liveCfg), 0);
 ok('daily drip 340.91 (7500/22)', near(liveTotal, 7500 / 22, 0.01), String(liveTotal));
 ok('Intraday 34.09/day', near(dailyRateFor('INTRADAY', liveCfg), 34.09));
-ok('Long Term 68.18/day', near(dailyRateFor('LONG_TERM', liveCfg), 68.18));
+ok('Long Term 52.27/day after the Penny carve-out', near(dailyRateFor('LONG_TERM', liveCfg), 52.27));
 ok('CRUDE 22.73/day', near(dailyRateFor('CRUDE', liveCfg), 22.73));
 
 const L = (d) => buildAccrualState({ trades: [], config: liveCfg, asOf: d });
@@ -223,8 +224,13 @@ ok('Fri 04 Sep: Intraday locked', L('2026-09-04').byId.INTRADAY.unlocked === fal
 ok('Mon 07 Sep: still locked (68.18)', L('2026-09-07').byId.INTRADAY.unlocked === false, String(L('2026-09-07').byId.INTRADAY.counter));
 ok('Tue 08 Sep: Intraday UNLOCKS (102.27)', L('2026-09-08').byId.INTRADAY.unlocked === true, String(L('2026-09-08').byId.INTRADAY.counter));
 ok('Intraday needs 3 trading days', Math.ceil(100 / dailyRateFor('INTRADAY', liveCfg)) === 3);
-ok('Long Term needs 4', Math.ceil(250 / dailyRateFor('LONG_TERM', liveCfg)) === 4);
+ok('Long Term needs 5', Math.ceil(250 / dailyRateFor('LONG_TERM', liveCfg)) === 5);
 ok('Index Options needs 5', Math.ceil(250 / dailyRateFor('INDEX_OPTIONS', liveCfg)) === 5);
+ok('Penny allocation is 350', liveCfg.allocations.PENNY === 350);
+ok('Penny accrues 15.91/day', near(dailyRateFor('PENNY', liveCfg), 15.91));
+ok('Penny needs 7 trading days', Math.ceil(100 / dailyRateFor('PENNY', liveCfg)) === 7);
+ok('Penny books its losses', liveCfg.booksLosses.PENNY === true);
+ok('Penny is on INDmoney', liveCfg.segmentBroker.PENNY === 'INDMONEY');
 ok('Natural Gas needs 6', Math.ceil(250 / dailyRateFor('NATURAL_GAS', liveCfg)) === 6);
 ok('CRUDE needs 11', Math.ceil(250 / dailyRateFor('CRUDE', liveCfg)) === 11);
 ok('CRUDE lane exists in state', !!L('2026-09-08').byId.CRUDE);
