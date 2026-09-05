@@ -279,6 +279,24 @@ def fetch_yfinance_batch(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 GITHUB_REPO = "Abhilash128912/FinPlus-"
 GITHUB_BRANCH = "main"
+github_lock = threading.Lock()
+
+def atomic_write_json(filepath: str, data: Any):
+    """Atomically write JSON data using a temporary file and atomic replace."""
+    tmp_path = f"{filepath}.tmp_{os.getpid()}_{int(time.time() * 1000)}"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, filepath)
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        raise e
 
 def push_to_github(filepath: str, repo_path: str):
     """Push file to GitHub in a background thread so it never blocks the API response."""
@@ -286,48 +304,45 @@ def push_to_github(filepath: str, repo_path: str):
         if not GITHUB_TOKEN:
             print(f"[GitHub Sync] GITHUB_TOKEN not set. Local save only for {repo_path}")
             return
-        try:
-            url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{repo_path}?ref={GITHUB_BRANCH}"
-            headers = {
-                "Authorization": f"Bearer {GITHUB_TOKEN}",
-                "Accept": "application/vnd.github+json"
-            }
-            res = requests.get(url, headers=headers, timeout=10)
-            sha = None
-            if res.status_code == 200:
-                sha = res.json().get("sha")
+        with github_lock:
+            try:
+                url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{repo_path}?ref={GITHUB_BRANCH}"
+                headers = {
+                    "Authorization": f"Bearer {GITHUB_TOKEN}",
+                    "Accept": "application/vnd.github+json"
+                }
+                res = requests.get(url, headers=headers, timeout=10)
+                sha = None
+                if res.status_code == 200:
+                    sha = res.json().get("sha")
 
-            with open(filepath, "rb") as f:
-                content_bytes = f.read()
-            content_b64 = base64.b64encode(content_bytes).decode("utf-8")
+                with open(filepath, "rb") as f:
+                    content_bytes = f.read()
+                content_b64 = base64.b64encode(content_bytes).decode("utf-8")
 
-            payload = {
-                # "[skip render]" stops Render auto-deploying on data-only commits. Without
-                # it every save would push a commit, trigger a redeploy and restart
-                # the service - a loop, since the restart can itself trigger a save.
-                "message": f"sync: update {repo_path} from backend [skip render]",
-                "content": content_b64,
-                "branch": GITHUB_BRANCH
-            }
-            if sha:
-                payload["sha"] = sha
+                payload = {
+                    "message": f"sync: update {repo_path} from backend [skip render]",
+                    "content": content_b64,
+                    "branch": GITHUB_BRANCH
+                }
+                if sha:
+                    payload["sha"] = sha
 
-            put_res = requests.put(f"https://api.github.com/repos/{GITHUB_REPO}/contents/{repo_path}", json=payload, headers=headers, timeout=15)
-            if put_res.status_code in [200, 201]:
-                print(f"[GitHub Sync] Successfully pushed {repo_path} to GitHub!")
-            else:
-                print(f"[GitHub Sync] Failed to push {repo_path}: {put_res.status_code} - {put_res.text}")
-        except Exception as e:
-            print(f"[GitHub Sync Error] Failed to sync {repo_path}: {e}")
+                put_res = requests.put(f"https://api.github.com/repos/{GITHUB_REPO}/contents/{repo_path}", json=payload, headers=headers, timeout=15)
+                if put_res.status_code in [200, 201]:
+                    print(f"[GitHub Sync] Successfully pushed {repo_path} to GitHub!")
+                else:
+                    print(f"[GitHub Sync] Failed to push {repo_path}: {put_res.status_code} - {put_res.text}")
+            except Exception as e:
+                print(f"[GitHub Sync Error] Failed to sync {repo_path}: {e}")
     threading.Thread(target=_push, daemon=True).start()
 
 def load_from_github(filepath: str, repo_path: str) -> bool:
     raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{repo_path}"
     try:
-        res = requests.get(raw_url, timeout=5)
+        res = requests.get(raw_url, headers={"Cache-Control": "no-cache", "Pragma": "no-cache"}, timeout=5)
         if res.status_code == 200:
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(res.text)
+            atomic_write_json(filepath, res.json() if res.text.strip().startswith(("{", "[")) else json.loads(res.text))
             return True
     except Exception as e:
         print(f"[GitHub Load Error] Failed to fetch {repo_path}: {e}")
@@ -338,8 +353,7 @@ def load_pullback_file() -> Dict[str, Any]:
         if not os.path.exists(PULLBACK_FILE):
             load_from_github(PULLBACK_FILE, "pullback_data.json")
         if not os.path.exists(PULLBACK_FILE):
-            with open(PULLBACK_FILE, "w", encoding="utf-8") as f:
-                json.dump(DEFAULT_PULLBACK_DATA, f, indent=2)
+            atomic_write_json(PULLBACK_FILE, DEFAULT_PULLBACK_DATA)
             return DEFAULT_PULLBACK_DATA
         try:
             with open(PULLBACK_FILE, "r", encoding="utf-8") as f:
@@ -349,8 +363,7 @@ def load_pullback_file() -> Dict[str, Any]:
 
 def save_pullback_file(data: Dict[str, Any]):
     with file_lock:
-        with open(PULLBACK_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        atomic_write_json(PULLBACK_FILE, data)
     push_to_github(PULLBACK_FILE, "pullback_data.json")
 
 def load_journal_file() -> List[Dict[str, Any]]:
@@ -367,8 +380,7 @@ def load_journal_file() -> List[Dict[str, Any]]:
 
 def save_journal_file(trades: List[Dict[str, Any]]):
     with file_lock:
-        with open(JOURNAL_FILE, "w", encoding="utf-8") as f:
-            json.dump(trades, f, indent=2)
+        atomic_write_json(JOURNAL_FILE, trades)
             
     push_to_github(JOURNAL_FILE, "finplus_journal_data.json")
             
@@ -450,8 +462,7 @@ def load_settings_file() -> Dict[str, Any]:
 
 def save_settings_file(settings: Dict[str, Any]):
     with file_lock:
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
+        atomic_write_json(SETTINGS_FILE, settings)
     push_to_github(SETTINGS_FILE, "finplus_settings.json")
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -674,8 +685,7 @@ def _risk_tables(conn: sqlite3.Connection):
 
 def save_risk_file(store: Dict[str, Any]):
     with file_lock:
-        with open(RISK_FILE, "w", encoding="utf-8") as f:
-            json.dump(store, f, indent=2)
+        atomic_write_json(RISK_FILE, store)
     push_to_github(RISK_FILE, "finplus_risk_desk.json")
 
     try:
@@ -940,14 +950,13 @@ async def save_portfolio_backup(request: Request, _auth: None = Depends(require_
                             sold_map[key] = s
                     data["soldHistory"] = list(sold_map.values())
 
-                    # Build set of all sold IDs and tickers to prevent resurrected sold trades
+                    # Build set of all sold IDs strictly to prevent resurrected sold trades (NEVER by ticker)
                     sold_keys = set()
                     for s in data["soldHistory"]:
-                        if isinstance(s, dict):
-                            if s.get("id"): sold_keys.add(s.get("id"))
-                            if s.get("ticker"): sold_keys.add(s.get("ticker"))
+                        if isinstance(s, dict) and s.get("id"):
+                            sold_keys.add(s.get("id"))
 
-                    # Merge active positions
+                    # Merge active positions strictly by position ID
                     incoming_pos = data.get("positions", [])
                     existing_pos = existing.get("positions", [])
                     if existing_saved_at > incoming_saved_at and isinstance(existing_pos, list):
@@ -955,12 +964,12 @@ async def save_portfolio_backup(request: Request, _auth: None = Depends(require_
                         for p in (incoming_pos if isinstance(incoming_pos, list) else []):
                             if isinstance(p, dict) and p.get("id") and p.get("id") not in pos_map:
                                 pos_map[p.get("id")] = p
-                        data["positions"] = [p for p in pos_map.values() if p.get("id") not in sold_keys and p.get("ticker") not in sold_keys]
+                        data["positions"] = [p for p in pos_map.values() if p.get("id") not in sold_keys]
                     else:
                         if isinstance(incoming_pos, list):
                             data["positions"] = [
                                 p for p in incoming_pos
-                                if isinstance(p, dict) and p.get("id") not in sold_keys and p.get("ticker") not in sold_keys
+                                if isinstance(p, dict) and p.get("id") and p.get("id") not in sold_keys
                             ]
 
                     # Merge brokerAdjustments by ID
@@ -1000,8 +1009,7 @@ async def save_portfolio_backup(request: Request, _auth: None = Depends(require_
                     print(f"[Backup] Merge warning: {ex}")
 
             with file_lock:
-                with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2)
+                atomic_write_json(PORTFOLIO_FILE, data)
             push_to_github(PORTFOLIO_FILE, "finplus_portfolio_backup.json")
         return { "status": "success" }
     except Exception as e:
@@ -1024,10 +1032,8 @@ async def reset_portfolio_backup(_auth: None = Depends(require_key)):
             "savedAt": now_ts
         }
         with file_lock:
-            with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
-                json.dump(fresh_data, f, indent=2)
-            with open(JOURNAL_FILE, "w", encoding="utf-8") as jf:
-                json.dump([], jf, indent=2)
+            atomic_write_json(PORTFOLIO_FILE, fresh_data)
+            atomic_write_json(JOURNAL_FILE, [])
         push_to_github(PORTFOLIO_FILE, "finplus_portfolio_backup.json")
         push_to_github(JOURNAL_FILE, "finplus_journal_data.json")
         return { "status": "success", "message": "Clean slate reset successful", "data": fresh_data }

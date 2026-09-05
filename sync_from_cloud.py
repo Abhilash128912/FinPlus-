@@ -91,18 +91,17 @@ def sync():
             "savedAt": int(time.time() * 1000)
         }
 
-    # CRITICAL AUDIT PURGE: Filter out any active position whose ID or ticker exists in soldHistory
+    # Filter out active positions whose ID exists in soldHistory (strictly by ID, NEVER by ticker)
     sold_history = master_data.get("soldHistory", [])
     sold_keys = set()
     for s in sold_history:
-        if isinstance(s, dict):
-            if s.get("id"): sold_keys.add(s.get("id"))
-            if s.get("ticker"): sold_keys.add(s.get("ticker"))
+        if isinstance(s, dict) and s.get("id"):
+            sold_keys.add(s.get("id"))
 
     raw_pos = master_data.get("positions", [])
     cleaned_pos = [
         p for p in raw_pos
-        if isinstance(p, dict) and p.get("id") not in sold_keys and p.get("ticker") not in sold_keys
+        if isinstance(p, dict) and p.get("id") and p.get("id") not in sold_keys
     ]
     master_data["positions"] = cleaned_pos
     master_data["savedAt"] = max(local_saved_at, cloud_saved_at, int(time.time() * 1000))
@@ -124,7 +123,7 @@ def sync():
     except Exception as e:
         print(f" -> Cloud sync notice: {e}")
 
-    # Write journal file
+    # Write journal file (preserving both active positions and closed trades)
     with open(JOURNAL_FILE, "w", encoding="utf-8") as jf:
         journal_trades = [
             {
@@ -139,7 +138,22 @@ def sync():
                 "created_at": p.get("buyDate", "2026-08-23")
             }
             for p in master_data.get("positions", [])
+            if isinstance(p, dict) and p.get("id")
         ]
+        for s in master_data.get("soldHistory", []):
+            if isinstance(s, dict) and s.get("id"):
+                journal_trades.append({
+                    "uuid": s["id"],
+                    "symbol": s.get("ticker", ""),
+                    "entry_price": s.get("buyPrice", 0),
+                    "quantity": s.get("shares", 0),
+                    "exit_price": s.get("sellPrice", 0),
+                    "target_price": 0,
+                    "stop_loss": 0,
+                    "instrument_type": "Delivery",
+                    "status": "CLOSED",
+                    "created_at": s.get("buyDate") or s.get("sellDate", "2026-08-23")
+                })
         json.dump(journal_trades, jf, indent=2)
 
 if __name__ == "__main__":

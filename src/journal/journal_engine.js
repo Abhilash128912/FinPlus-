@@ -247,7 +247,7 @@ export function saveJournalEngine(trades) {
       for (const url of candidateUrls) {
         fetch(`${url}/api/trades/sync`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ trades })
         }).catch(() => {});
       }

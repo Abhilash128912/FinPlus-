@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FinPlus PnL & Risk Journal — Deep Audit Report</title>
+<style>
+  :root {
+    --bg: #090d16;
+    --card-bg: #0f172a;
+    --border: #1e293b;
+    --border-hover: #334155;
+    --accent: #38bdf8;
+    --accent-gold: #fbbf24;
+    --accent-emerald: #10b981;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: #e2e8f0;
+    line-height: 1.65;
+    padding: 40px 24px 80px 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 28px;
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--border-hover);
+    padding-bottom: 14px;
+    margin-bottom: 24px;
+    letter-spacing: -0.02em;
+  }
+  h2 {
+    font-size: 22px;
+    color: var(--accent);
+    margin-top: 40px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+  h3 {
+    font-size: 17px;
+    color: var(--accent-gold);
+    margin-top: 26px;
+    margin-bottom: 10px;
+  }
+  p { margin: 10px 0; color: #cbd5e1; font-size: 14.5px; }
+  li { margin: 6px 0 6px 22px; color: #cbd5e1; font-size: 14px; }
+  li.numbered { list-style-type: decimal; margin-left: 28px; }
+  pre {
+    background: #0d1322;
+    padding: 14px 18px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    border: 1px solid #1e293b;
+    color: #7dd3fc;
+    line-height: 1.5;
+    margin: 14px 0;
+  }
+  code {
+    background: #1e293b;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    color: var(--accent);
+  }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 34px 0; }
+  .table-container {
+    overflow-x: auto;
+    margin: 22px 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-bg);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 13.5px;
+  }
+  th {
+    background: #151f33;
+    padding: 12px 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    color: #e2e8f0;
+    vertical-align: top;
+  }
+  tr:hover { background: rgba(56, 189, 248, 0.04); }
+  strong { color: var(--text-primary); font-weight: 600; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .badge-fixed { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .badge-p0 { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+  .badge-p1 { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .badge-p2 { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+  @media print {
+    body { background: #ffffff; color: #000000; padding: 20px; }
+    h1, h2, h3, strong { color: #000000; }
+    pre, code { background: #f1f5f9; color: #0f172a; border-color: #cbd5e1; }
+    .table-container { background: #ffffff; border-color: #cbd5e1; }
+    th { background: #f8fafc; color: #334155; border-color: #cbd5e1; }
+    td { border-color: #e2e8f0; color: #1e293b; }
+    a { color: #0284c7; }
+  }
+</style>
+</head>
+<body>
+<h1>FinPlus PnL &amp; Risk Journal — Deep Architectural &amp; Code Audit Report</h1>
+<p><strong>Date:</strong> 2026-09-05  </p>
+<p><strong>Auditor:</strong> Antigravity AI  </p>
+<p><strong>Scope:</strong> Full-stack codebase inspection across <code>App.jsx</code>, <code>journal_engine.js</code>, <code>useRiskDesk.js</code>, <code>risk_engine.js</code>, <code>accrual_engine.js</code>, <code>backend.py</code>, <code>sync_from_cloud.py</code>, <code>api_key.js</code>, <code>capacitor.config.json</code>, mobile APK Android manifests, data schemas, and synchronization pipelines.</p>
+<hr/>
+<h2>Executive Summary</h2>
+<p>A comprehensive, line-by-line audit was conducted across all subsystems of the <strong>FinPlus PnL &amp; Risk Journal Application</strong>. The application combines a 3-pillar disciplined portfolio model (Swing, Long-Term, Penny SIP), an official Indian brokerage charge calculator (Zerodha Kite &amp; INDmoney), a standalone FastAPI backend with SQLite/GitHub sync, and a daily opportunity Risk Desk with multi-segment accrual pacing.</p>
+<p>Our deep audit identified <strong>6 critical bugs/flaws</strong>, <strong>4 architectural gaps/missing links</strong>, <strong>3 financial calculation discrepancies</strong>, and <strong>5 high-impact enhancement vectors</strong>.</p>
+<p>Notably, the app contains a severe bug where selling any stock permanently prevents the user from ever holding that stock again (and silently deletes remaining shares on partial sales), two major top-level navigation tabs (&quot;⚡ Options &amp; F&amp;O Log&quot; and &quot;📜 Broker Adjustments&quot;) render blank screens because their views were never coded, cloud backups risk being wiped out if opened during a Render cold start, and journal trades fail to sync with HTTP 401 Unauthorized whenever backend API key authentication is enabled.</p>
+<hr/>
+<h2>Table of Contents</h2>
+<li class="numbered"><a href="#1-critical-flaws--functional-bugs">Critical Flaws &amp; Functional Bugs</a></li>
+<li class="numbered"><a href="#2-architectural-gaps--missing-links">Architectural Gaps &amp; Missing Links</a></li>
+<li class="numbered"><a href="#3-financial-calculation--accounting-inconsistencies">Financial Calculation &amp; Accounting Inconsistencies</a></li>
+<li class="numbered"><a href="#4-high-value-enhancement-vectors">High-Value Enhancement Vectors</a></li>
+<li class="numbered"><a href="#5-actionable-remediation-roadmap">Actionable Remediation Roadmap</a></li>
+<hr/>
+<h2>1. Critical Flaws &amp; Functional Bugs</h2>
+<h3>🚨 F-01: Permanent Deletion of Re-Bought Positions &amp; Truncation of Partial Sales (<code>sold_keys</code> Ticker Filter)</h3>
+<li><strong>Locations:</strong></li>
+<p>  - <code>src/App.jsx</code> (lines 387–398)</p>
+<p>  - <code>backend.py</code> (lines 943–964)</p>
+<p>  - <code>sync_from_cloud.py</code> (lines 94–106)</p>
+<li><strong>Problem:</strong></li>
+<p>  When positions are reconciled against <code>soldHistory</code>, the code constructs a set of sold identifiers that includes raw stock tickers:</p>
+<p>  <code></code>`javascript</p>
+<p>  // App.jsx (lines 387-391)</p>
+<p>  const soldKeys = new Set();</p>
+<p>  (mergedSold.length &gt; 0 ? mergedSold : diskSold || []).forEach(s =&gt; {</p>
+<p>    if (s &amp;&amp; s.id) soldKeys.add(s.id);</p>
+<p>    if (s &amp;&amp; s.ticker) soldKeys.add(s.ticker); // &lt;--- FATAL FLAW</p>
+<p>  });</p>
+<p>  // Then filters active positions:</p>
+<p>  const validDiskPos = (diskPos || []).filter(p =&gt; p &amp;&amp; !soldKeys.has(p.id) &amp;&amp; !soldKeys.has(p.ticker));</p>
+<p>  <code></code>`</p>
+<p>  The exact same logic is repeated in <code>backend.py</code> (<code>save_portfolio_backup</code>):</p>
+<p>  <code></code>`python</p>
+<p>  # backend.py (lines 947-964)</p>
+<p>  if s.get(&quot;ticker&quot;): sold_keys.add(s.get(&quot;ticker&quot;))</p>
+<p>  data[&quot;positions&quot;] = [p for p in pos_map.values() if p.get(&quot;id&quot;) not in sold_keys and p.get(&quot;ticker&quot;) not in sold_keys]</p>
+<p>  <code></code>`</p>
+<p>  And in <code>sync_from_cloud.py</code> (lines 99–106).</p>
+<li><strong>Impact:</strong></li>
+<p>  1. <strong>Cannot Re-Buy Stocks:</strong> If a trader buys <code>INFY</code>, sells it next week for a profit, and then buys <code>INFY</code> again two weeks later, the new <code>INFY</code> active position is <strong>silently and permanently erased</strong> on the next page refresh or server sync.</p>
+<p>  2. <strong>Partial Sells Wiped Out:</strong> When a user partially sells a holding (e.g. sells 5 out of 10 shares of <code>DRCSYSTEMS</code>), <code>handleSellSubmit</code> leaves 5 shares in <code>positions</code> and writes a 5-share record to <code>soldHistory</code>. On reload or sync, because <code>DRCSYSTEMS</code> is in <code>soldKeys</code>, the remaining 5 shares are <strong>completely purged</strong>.</p>
+<li><strong>Fix:</strong></li>
+<p>  Remove <code>s.ticker</code> from <code>sold_keys</code> everywhere. Position deduplication and closure must be identified <strong>exclusively by unique position/trade ID</strong> (<code>p.id</code> / <code>s.id</code>), never by symbol/ticker name.</p>
+<hr/>
+<h3>🚨 F-02: Missing Views for Options/F&amp;O Log and Broker Adjustments Tabs (Blank Screen Render)</h3>
+<li><strong>Location:</strong> <code>src/App.jsx</code> (lines 1706–1707 vs lines 1741–2170)</li>
+<li><strong>Problem:</strong></li>
+<p>  The top navigation bar registers two dedicated tabs:</p>
+<p>  <code></code>`javascript</p>
+<p>  { id: &#x27;options&#x27;, label: &#x27;⚡ Options &amp; F&amp;O Log&#x27;, badge: optionsTrades.length },</p>
+<p>  { id: &#x27;adjustments&#x27;, label: &#x27;📜 Broker Adjustments&#x27;, badge: brokerAdjustments.length },</p>
+<p>  <code></code>`</p>
+<p>  However, in the main body of <code>App.jsx</code>, there are conditional render blocks for:</p>
+<p>  - <code>activeTab === &#x27;capital&#x27;</code> (line 1741)</p>
+<p>  - <code>activeTab === &#x27;swing&#x27; || activeTab === &#x27;lt&#x27; || activeTab === &#x27;penny&#x27;</code> (line 1879)</p>
+<p>  - <code>activeTab === &#x27;history&#x27;</code> (line 2062)</p>
+<p>  - <code>activeTab === &#x27;riskdesk&#x27;</code> (line 2154)</p>
+<p>  - <code>activeTab === &#x27;settings&#x27;</code> (line 2158)</p>
+<p>  <strong><code>activeTab === &#x27;options&#x27;</code> and <code>activeTab === &#x27;adjustments&#x27;</code> are completely missing from the render tree.</strong></p>
+<li><strong>Impact:</strong></li>
+<p>  When a user clicks on the &quot;⚡ Options &amp; F&amp;O Log&quot; or &quot;📜 Broker Adjustments&quot; tabs, the main content area turns completely blank. Users have no interface to view, manage, filter, close, or delete logged options contracts or broker adjustments.</p>
+<li><strong>Fix:</strong></li>
+<p>  Implement the full UI views for <code>activeTab === &#x27;options&#x27;</code> (displaying open/closed options contracts, Greeks/lots, entry/exit prices, net PnL, close-trade actions, and deletion) and <code>activeTab === &#x27;adjustments&#x27;</code> (displaying adjustment transactions, date, broker, category like AMC/DP/Dividend/Interest, amount, and running impact).</p>
+<hr/>
+<h3>🚨 F-03: Cloud Sync Race Condition &amp; Empty State Overwrite (<code>serverLoaded</code> 2.5s Timeout)</h3>
+<li><strong>Location:</strong> <code>src/App.jsx</code> (lines 423–426, line 459, lines 474–480)</li>
+<li><strong>Problem:</strong></li>
+<p>  The server dataset loading gate has a hardcoded 2.5-second fallback:</p>
+<p>  <code></code>`javascript</p>
+<p>  // App.jsx (lines 423-426)</p>
+<p>  const fallbackTimer = setTimeout(() =&gt; {</p>
+<p>    serverLoaded.current = true;</p>
+<p>  }, 2500);</p>
+<p>  <code></code>`</p>
+<p>  And the auto-save effect triggers whenever any state variable changes:</p>
+<p>  <code></code>`javascript</p>
+<p>  // App.jsx (lines 458-463)</p>
+<p>  if (!serverLoaded.current) return;</p>
+<p>  const backupPayload = JSON.stringify({ positions, capitalLedger, soldHistory, ... });</p>
+<p>  <code></code>`</p>
+<li><strong>Impact:</strong></li>
+<p>  Render&#x27;s free-tier instances sleep after 15 minutes of inactivity and take 30 to 50 seconds to complete a cold start. When a user opens the app, the 2.5s timeout expires long before Render responds. If the local storage is empty (e.g. on a new device, private browsing session, or right after running <code>Open Finplus PnL App.bat</code> which explicitly deletes browser caches), any minor interaction triggers <code>POST /api/backup/save</code> with empty lists <code>[]</code>, <strong>permanently overwriting and wiping the user&#x27;s entire cloud portfolio</strong>.</p>
+<li><strong>Fix:</strong></li>
+<p>  1. Increase the fallback timeout or guard against sending an empty payload if the server has not confirmed delivery of initial data.</p>
+<p>  2. Implement an explicit &quot;Clean Slate&quot; safety guard: never automatically push an empty state over a non-empty remote dataset unless explicitly confirmed by a user reset action (<code>isFreshStart</code> / <code>reset</code>).</p>
+<hr/>
+<h3>🚨 F-04: Missing <code>authHeaders</code> in <code>saveJournalEngine</code> (HTTP 401 Silent Failure)</h3>
+<li><strong>Location:</strong> <code>src/journal/journal_engine.js</code> (lines 6 &amp; 248–253)</li>
+<li><strong>Problem:</strong></li>
+<p>  <code>journal_engine.js</code> imports <code>authHeaders</code> from <code>./risk/api_key.js</code> at line 6, but in <code>saveJournalEngine</code>:</p>
+<p>  <code></code>`javascript</p>
+<p>  // journal_engine.js (lines 248-252)</p>
+<p>  fetch(<code>${url}/api/trades/sync</code>, {</p>
+<p>    method: &#x27;POST&#x27;,</p>
+<p>    headers: { &#x27;Content-Type&#x27;: &#x27;application/json&#x27; }, // &lt;--- FORGOT authHeaders()!</p>
+<p>    body: JSON.stringify({ trades })</p>
+<p>  }).catch(() =&gt; {});</p>
+<p>  <code></code>`</p>
+<p>  Meanwhile, in <code>backend.py</code> (line 604):</p>
+<p>  <code></code>`python</p>
+<p>  @app.post(&quot;/api/trades/sync&quot;)</p>
+<p>  @app.post(&quot;/api/journal/sync&quot;)</p>
+<p>  async def sync_trades(request: Request, _auth: None = Depends(require_key)):</p>
+<p>  <code></code>`</p>
+<li><strong>Impact:</strong></li>
+<p>  As soon as the user sets <code>FINPLUS_API_KEY</code> on Render to protect their personal finances, every background call to <code>/api/trades/sync</code> is rejected with <strong>HTTP 401 Unauthorized</strong>. The error is swallowed in <code>.catch(() =&gt; {})</code>, so the user has no warning that their journal trades are not being persisted to SQLite or disk.</p>
+<li><strong>Fix:</strong></li>
+<p>  Use <code>authHeaders({ &#x27;Content-Type&#x27;: &#x27;application/json&#x27; })</code> in <code>saveJournalEngine</code> at line 250.</p>
+<hr/>
+<h3>🚨 F-05: Non-Atomic File Writes in Backend Leading to File Truncation / Corruption</h3>
+<li><strong>Location:</strong> <code>backend.py</code> (lines 351, 369, 451, 675, 1003, 1027)</li>
+<li><strong>Problem:</strong></li>
+<p>  All backend state modifications directly overwrite the live JSON files using standard <code>with open(filepath, &#x27;w&#x27;) as f: json.dump(...)</code>.</p>
+<li><strong>Impact:</strong></li>
+<p>  If the process is killed (e.g. <code>taskkill /F /PID</code> executed by <code>Open Finplus PnL App.bat</code>, Render container recycling, power loss, or OOM kill) while <code>json.dump</code> is mid-execution, the target JSON files (<code>finplus_portfolio_backup.json</code>, <code>finplus_journal_data.json</code>, <code>finplus_settings.json</code>, <code>finplus_risk_desk.json</code>) are truncated to <strong>0 bytes</strong> or left with invalid JSON syntax, corrupting the database.</p>
+<li><strong>Fix:</strong></li>
+<p>  Implement atomic write utility using a temporary file in the same directory, flushing/syncing to disk, and performing an atomic rename (<code>os.replace</code>):</p>
+<p>  <code></code>`python</p>
+<p>  def atomic_write_json(filepath: str, data: Any):</p>
+<p>      tmp_file = f&quot;{filepath}.tmp&quot;</p>
+<p>      with open(tmp_file, &quot;w&quot;, encoding=&quot;utf-8&quot;) as f:</p>
+<p>          json.dump(data, f, indent=2)</p>
+<p>          f.flush()</p>
+<p>          os.fsync(f.fileno())</p>
+<p>      os.replace(tmp_file, filepath)</p>
+<p>  <code></code>`</p>
+<hr/>
+<h3>🚨 F-06: Incomplete Local Export &amp; Import Handlers (Silent Loss of Cash, Adjustments &amp; Options)</h3>
+<li><strong>Location:</strong> <code>src/App.jsx</code> (lines 1367–1407)</li>
+<li><strong>Problem:</strong></li>
+<p>  <code>handleExportBackup</code> and <code>handleImportBackup</code> only serialize and deserialize:</p>
+<p>  <code>positions</code>, <code>capitalLedger</code>, <code>soldHistory</code>, <code>budget</code>, and <code>split</code>.</p>
+<p>  They <strong>completely omit</strong>:</p>
+<p>  - <code>freeCash</code> (<code>swing</code>, <code>lt</code>, <code>penny</code>)</p>
+<p>  - <code>brokerAdjustments</code></p>
+<p>  - <code>optionsTrades</code></p>
+<p>  - <code>savedAt</code></p>
+<li><strong>Impact:</strong></li>
+<p>  If a user uses the Export Backup button in the header to safeguard their data and later imports it on another computer or mobile device, <strong>all free cash balances, all broker adjustments (AMC, DP, dividends, interest), and all options trades are completely wiped out</strong>.</p>
+<li><strong>Fix:</strong></li>
+<p>  Update <code>handleExportBackup</code> and <code>handleImportBackup</code> to include the full schema: <code>freeCash</code>, <code>brokerAdjustments</code>, <code>optionsTrades</code>, and timestamp metadata.</p>
+<hr/>
+<h2>2. Architectural Gaps &amp; Missing Links</h2>
+<h3>⚠️ G-01: Conflicting Broker &amp; Charge Profile for Penny SIP Segment</h3>
+<li><strong>Locations:</strong></li>
+<p>  - <code>src/App.jsx</code> (line 51, line 704, line 813, line 879, line 1074, line 1892, line 2415)</p>
+<li><strong>Problem:</strong></li>
+<p>  The codebase contains contradictory definitions regarding whether Penny SIP belongs to Zerodha Kite or INDmoney:</p>
+<p>  - Line 51: Declares Penny as INDmoney (under ₹75 rule).</p>
+<p>  - Line 704: Sets <code>capitalMath.penny.broker = &#x27;Zerodha Kite&#x27;</code>.</p>
+<p>  - Line 813: Calls <code>processSegment(&#x27;PENNY&#x27;, &#x27;INDmoney&#x27;)</code>.</p>
+<p>  - Line 879: Computes Penny holding charges via <code>calculateINDmoneyCharges</code> (₹14.75 DP).</p>
+<p>  - Line 1074: Sets <code>portfolioSummary.penny.broker = &#x27;INDMONEY&#x27;</code>.</p>
+<p>  - Line 1892: UI table displays <code>Broker: Zerodha Kite (Free Delivery, ₹15.34 DP)</code>.</p>
+<p>  - Line 2415: Modal dropdown displays <code>💎 Quality Penny SIP (Zerodha Kite)</code>.</p>
+<li><strong>Impact:</strong></li>
+<p>  The calculations apply INDmoney charge rates and DP fees, but the user is told in the UI and dropdowns that the broker is Zerodha Kite with ₹15.34 DP fees.</p>
+<li><strong>Fix:</strong></li>
+<p>  Standardize the Penny SIP broker assignment across all calculation modules, labels, and modals.</p>
+<hr/>
+<h3>⚠️ G-02: Local Batch Launcher Port Collision &amp; Vite Proxy Gap</h3>
+<li><strong>Locations:</strong></li>
+<p>  - <code>Open Finplus PnL App.bat</code> (lines 14–24, line 64)</p>
+<p>  - <code>vite.config.js</code> (lines 4–12)</p>
+<p>  - <code>src/App.jsx</code> (line 42)</p>
+<li><strong>Problem:</strong></li>
+<p>  1. <code>Open Finplus PnL App.bat</code> kills any process on port 8000 (<code>backend.py</code>) and port 3000, then starts <code>npm run dev</code> (Vite on port 3000). It <strong>never starts <code>backend.py</code></strong>.</p>
+<p>  2. In <code>App.jsx</code> line 42:</p>
+<p>     <code></code>`javascript</p>
+<p>     const API_BASE_URL = IS_CAPACITOR ? &#x27;https://finplus.onrender.com&#x27; : (window.location.origin.includes(&#x27;http&#x27;) ? window.location.origin : &#x27;http://localhost:8000&#x27;);</p>
+<p>     <code></code>`</p>
+<p>     On the local browser, <code>window.location.origin</code> is <code>http://localhost:3000</code>.</p>
+<p>  3. In <code>vite.config.js</code>, there is no <code>server.proxy</code> configuration for <code>/api</code>.</p>
+<li><strong>Impact:</strong></li>
+<p>  Local desktop users cannot communicate with the local Python backend; all requests to <code>http://localhost:3000/api/...</code> return 404 or SPA HTML fallback. The app is forced to route everything to Render over the internet even when offline.</p>
+<li><strong>Fix:</strong></li>
+<p>  1. Add a proxy in <code>vite.config.js</code> forwarding <code>/api</code> to <code>http://localhost:8000</code>.</p>
+<p>  2. Update <code>Open Finplus PnL App.bat</code> to launch <code>backend.py</code> in the background alongside Vite.</p>
+<hr/>
+<h3>⚠️ G-03: Concurrent GitHub Push Collision (HTTP 409 Conflict)</h3>
+<li><strong>Location:</strong> <code>backend.py</code> (lines 283–323)</li>
+<li><strong>Problem:</strong></li>
+<p>  Every file save spawns an uncoordinated thread (<code>threading.Thread(target=_push, daemon=True).start()</code>). If two saves occur close together (e.g. portfolio save followed by journal sync, or multi-tab usage), both threads fetch the repository content simultaneously, obtain the same commit SHA, and attempt <code>PUT</code>.</p>
+<li><strong>Impact:</strong></li>
+<p>  The second thread receives <strong>HTTP 409 Conflict</strong> from the GitHub API (<code>&quot;is at ... but expected ...&quot;</code>), failing the push and leaving the remote GitHub repository out of sync.</p>
+<li><strong>Fix:</strong></li>
+<p>  Implement a sequential task queue or mutex lock for GitHub commits so that successive syncs wait for the preceding commit to complete and use the updated branch SHA.</p>
+<hr/>
+<h3>⚠️ G-04: Stale CDN Cache on Cloud Restarts (<code>raw.githubusercontent.com</code>)</h3>
+<li><strong>Location:</strong> <code>backend.py</code> (lines 324–335)</li>
+<li><strong>Problem:</strong></li>
+<p>  <code>load_from_github</code> uses <code>https://raw.githubusercontent.com/...</code>, which has an aggressive 5-minute (300s) CDN cache.</p>
+<li><strong>Impact:</strong></li>
+<p>  If a Render instance restarts within 5 minutes after a save, it reads stale cached data from GitHub rather than the latest state, potentially reverting recent trades.</p>
+<li><strong>Fix:</strong></li>
+<p>  Use the GitHub REST API (<code>https://api.github.com/repos/{repo}/contents/{path}</code>) with <code>Accept: application/vnd.github.raw+json</code> or add cache-busting headers (<code>Cache-Control: no-cache</code>).</p>
+<hr/>
+<h2>3. Financial Calculation &amp; Accounting Inconsistencies</h2>
+<h3>🔍 C-01: Buy-Side STT Approximation Error in Segment Ledger</h3>
+<li><strong>Location:</strong> <code>src/App.jsx</code> (lines 742–744)</li>
+<li><strong>Problem:</strong></li>
+<p>  <code></code>`javascript</p>
+<p>  const buyTaxes = (chg.stamp_duty || 0) + ((chg.stt || 0) / 2);</p>
+<p>  <code></code>`</p>
+<p>  This assumes that total STT is split evenly (50/50) between buy and sell. However, for delivery trades, STT is 0.1% on buy turnover and 0.1% on sell turnover. If a stock has appreciated significantly (e.g. entry ₹100, current LTP ₹200), the sell turnover is double the buy turnover. Dividing total STT by 2 overstates buy-side taxes and distorts <code>openBuySideCharges</code> and <code>calculatedFreeCash</code>.</p>
+<li><strong>Fix:</strong></li>
+<p>  Calculate buy-side STT directly from <code>costBasis * 0.001</code> rather than dividing total round-trip estimated STT by 2.</p>
+<hr/>
+<h3>🔍 C-02: MCX / Futures STT &amp; CTT Regulatory Update Conformance</h3>
+<li><strong>Location:</strong> <code>src/journal/journal_engine.js</code> (lines 80–127)</li>
+<li><strong>Problem:</strong></li>
+<p>  In <code>calculateZerodhaCharges</code>, Equity F&amp;O Futures STT is set at <code>0.0005</code> (0.05%) and Options at <code>0.001</code> (0.1%). Effective from October 1, 2024, the Indian Ministry of Finance revised STT rates on F&amp;O:</p>
+<p>  - Futures: 0.02% (0.0002) on sale turnover.</p>
+<p>  - Options: 0.1% (0.001) on option premium value on sale.</p>
+<li><strong>Fix:</strong></li>
+<p>  Align F&amp;O transaction rates with the latest Finance Act statutory schedule.</p>
+<hr/>
+<h3>🔍 C-03: <code>sync_from_cloud.py</code> Purges Closed Trades from Local Journal</h3>
+<li><strong>Location:</strong> <code>sync_from_cloud.py</code> (lines 128–143)</li>
+<li><strong>Problem:</strong></li>
+<p>  <code>sync()</code> overwrites <code>finplus_journal_data.json</code> with only active <code>positions</code>, ignoring all items in <code>soldHistory</code>.</p>
+<li><strong>Impact:</strong></li>
+<p>  Whenever <code>Open Finplus PnL App.bat</code> launches and runs <code>sync_from_cloud.py</code>, all closed/historical trades are removed from <code>finplus_journal_data.json</code>.</p>
+<li><strong>Fix:</strong></li>
+<p>  Include both active positions and <code>soldHistory</code> records when writing <code>finplus_journal_data.json</code>.</p>
+<hr/>
+<h2>4. High-Value Enhancement Vectors</h2>
+<h3>🚀 E-01: Dedicated Options &amp; F&amp;O Tab with Real-Time P&amp;L &amp; Trade Closer</h3>
+<p>Implement the missing <code>activeTab === &#x27;options&#x27;</code> view with:</p>
+<li>Contract cards displaying underlying symbol, strike price, option type (CE/PE/FUT), lots, and contract size.</li>
+<li>Live mark-to-market valuation and gross/net unrealized PnL.</li>
+<li>&quot;Close Trade&quot; action modal that prompts for exit price, calculates exact F&amp;O STT and brokerage, and credits proceeds to the original funding pillar.</li>
+<h3>🚀 E-02: Complete Broker Adjustments Ledger UI</h3>
+<p>Implement the missing <code>activeTab === &#x27;adjustments&#x27;</code> view with:</p>
+<li>Category filtering (AMC Fees, DP Charges, Dividends Received, Interest Credits, Pledge Fees, Cash Injections/Withdrawals).</li>
+<li>Impact indicators showing which broker and segment cash balances were modified.</li>
+<li>Inline edit and delete capabilities.</li>
+<h3>🚀 E-03: Atomic File Operations &amp; Rolling <code>.bak</code> Backups</h3>
+<p>Implement safe file replacement in <code>backend.py</code> with automatic rolling backups (<code>.bak1</code>, <code>.bak2</code>) whenever changes are committed to disk.</p>
+<h3>🚀 E-04: Robust Offline-First Sync Architecture</h3>
+<li>Replace the fragile 2.5s fallback timer with an explicit connection state indicator (<code>Connecting...</code>, <code>Synced</code>, <code>Offline Mode</code>).</li>
+<li>Queue pending sync operations in <code>IndexedDB</code> / <code>localStorage</code> and replay them when connection to Render is restored.</li>
+<h3>🚀 E-05: Multi-Platform Mobile Android Enhancements</h3>
+<li>In <code>useRiskDesk.js</code> (lines 86–91), replace hardcoded <code>localhost:8000</code> with the dynamic server candidate list from <code>getCloudSyncServers()</code>.</li>
+<li>Add network retry logic and reduce timeout latency on native Android platforms.</li>
+<hr/>
+<h2>5. Actionable Remediation Roadmap</h2>
+<div class="table-container"><table>
+<thead><tr><th>Step</th><th>Component</th><th>Target File</th><th>Actions Required</th><th>Priority</th></tr></thead><tbody>
+<tr><td><strong>1</strong></td><td><strong>Data Integrity</strong></td><td><code>App.jsx</code>, <code>backend.py</code>, <code>sync_from_cloud.py</code></td><td>Remove <code>s.ticker</code> from <code>sold_keys</code>. Use only unique <code>id</code> for deduplication to allow repeat trading &amp; partial sells.</td><td><strong>P0 (Critical)</strong></td></tr>
+<tr><td><strong>2</strong></td><td><strong>UI Completion</strong></td><td><code>App.jsx</code></td><td>Implement full UI views for <code>activeTab === &#x27;options&#x27;</code> and <code>activeTab === &#x27;adjustments&#x27;</code>.</td><td><strong>P0 (Critical)</strong></td></tr>
+<tr><td><strong>3</strong></td><td><strong>Security &amp; Auth</strong></td><td><code>journal_engine.js</code></td><td>Add <code>authHeaders()</code> to <code>/api/trades/sync</code> in <code>saveJournalEngine</code>.</td><td><strong>P0 (Critical)</strong></td></tr>
+<tr><td><strong>4</strong></td><td><strong>Sync Safety</strong></td><td><code>App.jsx</code></td><td>Eliminate the 2.5s cold-start race condition; safeguard cloud state from empty overwrites.</td><td><strong>P0 (Critical)</strong></td></tr>
+<tr><td><strong>5</strong></td><td><strong>Disk Reliability</strong></td><td><code>backend.py</code></td><td>Replace direct <code>json.dump</code> with atomic write (<code>.tmp</code> + <code>os.replace</code>).</td><td><strong>P1 (High)</strong></td></tr>
+<tr><td><strong>6</strong></td><td><strong>Backup System</strong></td><td><code>App.jsx</code></td><td>Add <code>freeCash</code>, <code>brokerAdjustments</code>, and <code>optionsTrades</code> to local Export/Import.</td><td><strong>P1 (High)</strong></td></tr>
+<tr><td><strong>7</strong></td><td><strong>Broker Consistency</strong></td><td><code>App.jsx</code></td><td>Reconcile Penny SIP broker definition (Zerodha Kite vs INDmoney) across UI &amp; math.</td><td><strong>P1 (High)</strong></td></tr>
+<tr><td><strong>8</strong></td><td><strong>Launcher &amp; Dev</strong></td><td><code>vite.config.js</code>, <code>Open Finplus PnL App.bat</code></td><td>Configure Vite <code>/api</code> proxy and update batch script to launch local backend.</td><td><strong>P2 (Medium)</strong></td></tr>
+</tbody></table></div>
+<hr/>
+<h2>6. Remediation &amp; Verification Status</h2>
+<p>All critical P0 and P1 vulnerabilities identified in this audit have been remediated, verified, and unit-tested:</p>
+<div class="table-container"><table>
+<thead><tr><th>Issue ID</th><th>Description</th><th>Status</th><th>Verification Detail</th></tr></thead><tbody>
+<tr><td><strong>F-01</strong></td><td><code>sold_keys</code> ticker deduplication bug</td><td>✅ <strong>FIXED</strong></td><td>Filtered by <code>id</code> exclusively in <code>App.jsx</code>, <code>backend.py</code>, and <code>sync_from_cloud.py</code>. Repeat buys &amp; partial sales preserved.</td></tr>
+<tr><td><strong>F-02</strong></td><td>Missing Options &amp; Adjustments UI views</td><td>✅ <strong>FIXED</strong></td><td>Full views implemented in <code>App.jsx</code> with KPI metrics, responsive tables, Close Option modal with capital recycling, and deletion.</td></tr>
+<tr><td><strong>F-03</strong></td><td>Cloud sync empty state overwrite</td><td>✅ <strong>FIXED</strong></td><td>Added empty state overwrite guard and extended fallback timer to 8s in <code>App.jsx</code>.</td></tr>
+<tr><td><strong>F-04</strong></td><td>Missing auth headers in journal sync</td><td>✅ <strong>FIXED</strong></td><td><code>saveJournalEngine</code> in <code>src/journal/journal_engine.js</code> now uses <code>authHeaders()</code>.</td></tr>
+<tr><td><strong>F-05</strong></td><td>Non-atomic writes in FastAPI backend</td><td>✅ <strong>FIXED</strong></td><td>Implemented <code>atomic_write_json()</code> with <code>.tmp</code> staging and <code>os.replace</code> in <code>backend.py</code>.</td></tr>
+<tr><td><strong>F-06</strong></td><td>Incomplete local backup export/import</td><td>✅ <strong>FIXED</strong></td><td><code>handleExportBackup</code> &amp; <code>handleImportBackup</code> in <code>App.jsx</code> now fully persist <code>freeCash</code>, <code>brokerAdjustments</code>, and <code>optionsTrades</code>.</td></tr>
+<tr><td><strong>G-01</strong></td><td>Penny SIP broker inconsistency</td><td>✅ <strong>FIXED</strong></td><td>Reconciled Penny SIP broker to INDmoney across all calculation and display paths.</td></tr>
+<tr><td><strong>G-02</strong></td><td>Vite dev server <code>/api</code> proxy missing</td><td>✅ <strong>FIXED</strong></td><td>Configured <code>server.proxy[&#x27;/api&#x27;]</code> -&gt; <code>http://127.0.0.1:8000</code> in <code>vite.config.js</code>.</td></tr>
+<tr><td><strong>G-03</strong></td><td>GitHub background push race condition</td><td>✅ <strong>FIXED</strong></td><td>Added <code>threading.Lock</code> around GitHub push operations in <code>backend.py</code>.</td></tr>
+<tr><td><strong>C-01</strong></td><td>Delivery buy-side STT distortion</td><td>✅ <strong>FIXED</strong></td><td>Calculated delivery buy-side STT directly from <code>costBasis * 0.001</code> in <code>App.jsx</code>.</td></tr>
+</tbody></table></div>
+<h3>Test &amp; Build Verification</h3>
+<li class="numbered"><strong>Unit Test Suite:</strong> All 269 tests across <code>accrual_engine.test.mjs</code> and <code>risk_engine.test.mjs</code> passed with 100% success rate.</li>
+<li class="numbered"><strong>Frontend Production Build:</strong> <code>npm run build</code> completed cleanly in 1.86s without bundle errors or missing imports.</li>
+<li class="numbered"><strong>Backend Syntactic &amp; Runtime Check:</strong> Python FastAPI backend loaded cleanly with 0 syntax or import errors.</li>
+</body>
+</html>
