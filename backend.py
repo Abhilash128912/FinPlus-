@@ -302,7 +302,10 @@ def push_to_github(filepath: str, repo_path: str):
             content_b64 = base64.b64encode(content_bytes).decode("utf-8")
 
             payload = {
-                "message": f"sync: update {repo_path} from backend",
+                # "[skip render]" stops Render auto-deploying on data-only commits. Without
+                # it every save would push a commit, trigger a redeploy and restart
+                # the service - a loop, since the restart can itself trigger a save.
+                "message": f"sync: update {repo_path} from backend [skip render]",
                 "content": content_b64,
                 "branch": GITHUB_BRANCH
             }
