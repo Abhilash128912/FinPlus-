@@ -10,6 +10,7 @@ import {
   importMasterJsonBackup
 } from './journal/journal_engine';
 import RiskDesk from './journal/risk/RiskDesk.jsx';
+import { authHeaders, getApiKey, setApiKey, checkApiKey } from './journal/risk/api_key.js';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -231,6 +232,8 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addSegment, setAddSegment] = useState('SWING'); // 'SWING', 'LT', 'PENNY'
   const [pennyMaxPrice, setPennyMaxPrice] = useState(readPennyMaxPrice);
+  const [apiKeyInput, setApiKeyInput] = useState(() => getApiKey());
+  const [apiKeyStatus, setApiKeyStatus] = useState(null);
   const [segmentAutoSet, setSegmentAutoSet] = useState(false); // true when the price rule moved it
   const [formTicker, setFormTicker] = useState('');
   const [formName, setFormName] = useState('');
@@ -396,7 +399,7 @@ export default function App() {
     }, 2500);
 
     for (const ep of endpoints) {
-      fetch(`${ep}/api/backup/load`)
+      fetch(`${ep}/api/backup/load`, { headers: authHeaders() })
         .then(r => r.json())
         .then(applyDataset)
         .catch(() => { serverLoaded.current = true; });
@@ -445,7 +448,7 @@ export default function App() {
       try {
         fetch(`${ep}/api/backup/save`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: backupPayload
         }).catch(() => {});
       } catch(e) {}
@@ -2119,6 +2122,44 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '700px' }}>
             <div style={{ fontSize: '20px', fontWeight: 900, color: '#ffffff' }}>⚙️ Master JSON Backups &amp; Data Integrity</div>
 
+            {/* Backend access key */}
+            <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 800, color: '#ffffff', marginBottom: '8px' }}>🔐 Backend Access Key</div>
+              <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '14px' }}>
+                Your holdings and P&amp;L live on a public URL. Set <strong>FINPLUS_API_KEY</strong> on the server, then enter the
+                same value here so this device can read and write your data. Stored on this device only &mdash; enter it once per
+                device. Leave blank if the server has no key configured.
+              </div>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="password"
+                  placeholder="Paste your key"
+                  value={apiKeyInput}
+                  onChange={e => setApiKeyInput(e.target.value)}
+                  style={{ width: '260px', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px', fontWeight: 700 }}
+                />
+                <button
+                  onClick={async () => {
+                    setApiKey(apiKeyInput);
+                    setApiKeyStatus({ tone: 'muted', text: 'Checking…' });
+                    const r = await checkApiKey(RENDER_BACKEND_URL);
+                    if (r.error && r.authRequired === null) setApiKeyStatus({ tone: 'bad', text: `⚠ ${r.error}` });
+                    else if (!r.authRequired) setApiKeyStatus({ tone: 'muted', text: 'Server has no key configured — running open.' });
+                    else if (r.keyValid) setApiKeyStatus({ tone: 'good', text: '✓ Key accepted by the server.' });
+                    else setApiKeyStatus({ tone: 'bad', text: '✗ Server rejected this key.' });
+                  }}
+                  style={{ background: 'linear-gradient(135deg, #0284c7, #38bdf8)', color: '#090d16', border: 'none', padding: '10px 18px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer' }}
+                >
+                  Save &amp; Test
+                </button>
+                {apiKeyStatus && (
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: apiKeyStatus.tone === 'good' ? '#10b981' : apiKeyStatus.tone === 'bad' ? '#ef4444' : '#94a3b8' }}>
+                    {apiKeyStatus.text}
+                  </span>
+                )}
+              </div>
+            </div>
+
             {/* INDmoney classification rule used by the Record Buy form */}
             <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '20px' }}>
               <div style={{ fontSize: '14px', fontWeight: 800, color: '#ffffff', marginBottom: '8px' }}>💎 Penny Stock Threshold</div>
@@ -2282,7 +2323,7 @@ export default function App() {
                     try {
                       await fetch(`${ep}/api/backup/save`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: authHeaders({ 'Content-Type': 'application/json' }),
                         body: JSON.stringify(cleanPayload)
                       });
                     } catch(e) {}

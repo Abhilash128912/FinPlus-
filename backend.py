@@ -6,9 +6,10 @@ import requests
 import sqlite3
 import threading
 import socket
+import hmac
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-from fastapi import FastAPI, Request, Query, BackgroundTasks
+from fastapi import FastAPI, Request, Query, BackgroundTasks, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -19,7 +20,7 @@ app = FastAPI(title="Finplus PnL Independent YFinance Backend", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -450,6 +451,35 @@ def save_settings_file(settings: Dict[str, Any]):
             json.dump(settings, f, indent=2)
     push_to_github(SETTINGS_FILE, "finplus_settings.json")
 
+# ══════════════════════════════════════════════════════════════════════════════
+# API KEY GATE
+#
+# The service holds personal holdings, P&L and cash, so every endpoint that
+# reads or writes that data requires a shared key in the X-Finplus-Key header.
+#
+# Fail-open until FINPLUS_API_KEY is set, so deploying this build cannot lock
+# anyone out of their own data. /api/health reports which mode is active — set
+# the env var on the host and it becomes enforced on the next restart.
+#
+# The key is typed in by the user and stored on their device. It is never baked
+# into the web bundle, which is public and readable by anyone.
+# ══════════════════════════════════════════════════════════════════════════════
+
+FINPLUS_API_KEY = os.environ.get("FINPLUS_API_KEY", "").strip()
+AUTH_ENABLED = bool(FINPLUS_API_KEY)
+
+if not AUTH_ENABLED:
+    print("[Auth] FINPLUS_API_KEY not set - private endpoints are OPEN. "
+          "Set the env var to enforce the key.")
+
+def require_key(request: Request):
+    """Guard private endpoints. No-op until a key is configured on the host."""
+    if not AUTH_ENABLED:
+        return
+    supplied = request.headers.get("X-Finplus-Key") or request.query_params.get("k") or ""
+    if not supplied or not hmac.compare_digest(str(supplied), FINPLUS_API_KEY):
+        raise HTTPException(status_code=401, detail="Missing or invalid API key")
+
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
@@ -458,7 +488,8 @@ def health_check():
         "status": "online",
         "app": "Finplus PnL Independent Backend",
         "data_source": "yfinance",
-        "version": "2.0.0",
+        "version": "2.1.0",
+        "auth": "enabled" if AUTH_ENABLED else "disabled",
         "local_ips": local_ips,
         "recommended_server_urls": [f"http://{ip}:8000" for ip in local_ips]
     }
@@ -524,11 +555,11 @@ def get_nifty500():
     }
 
 @app.get("/api/investment/pullback")
-def get_pullback_data():
+def get_pullback_data(_auth: None = Depends(require_key)):
     return load_pullback_file()
 
 @app.post("/api/investment/pullback")
-async def save_pullback_data(request: Request):
+async def save_pullback_data(request: Request, _auth: None = Depends(require_key)):
     data = await request.json()
     if isinstance(data, dict):
         save_pullback_file(data)
@@ -536,7 +567,7 @@ async def save_pullback_data(request: Request):
     return { "status": "error", "message": "Invalid JSON payload" }
 
 @app.get("/api/settings")
-def get_settings():
+def get_settings(_auth: None = Depends(require_key)):
     settings = load_settings_file()
     return {
         "status": "success",
@@ -544,7 +575,7 @@ def get_settings():
     }
 
 @app.post("/api/settings")
-async def save_settings_endpoint(request: Request):
+async def save_settings_endpoint(request: Request, _auth: None = Depends(require_key)):
     payload = await request.json()
     if isinstance(payload, dict):
         save_settings_file(payload)
@@ -567,7 +598,7 @@ def get_trades():
 @app.post("/api/trades/journal")
 @app.post("/api/trades/sync")
 @app.post("/api/journal/sync")
-async def sync_trades(request: Request):
+async def sync_trades(request: Request, _auth: None = Depends(require_key)):
     payload = await request.json()
     trades_list = []
     settings_data = None
@@ -768,11 +799,11 @@ def _revalidate_trade(trade: Dict[str, Any], store: Dict[str, Any], month_key: O
     return {"agrees": len(blocked) == 0, "blocked": blocked, "warnings": warnings}
 
 @app.get("/api/risk/sync")
-def risk_sync_get():
+def risk_sync_get(_auth: None = Depends(require_key)):
     return load_risk_file()
 
 @app.post("/api/risk/sync")
-async def risk_sync_post(request: Request):
+async def risk_sync_post(request: Request, _auth: None = Depends(require_key)):
     try:
         payload = await request.json()
     except Exception:
@@ -797,7 +828,7 @@ async def risk_sync_post(request: Request):
     }
 
 @app.post("/api/risk/validate")
-async def risk_validate(request: Request):
+async def risk_validate(request: Request, _auth: None = Depends(require_key)):
     try:
         payload = await request.json()
     except Exception:
@@ -833,7 +864,7 @@ async def risk_validate(request: Request):
     return result
 
 @app.get("/api/risk/audit")
-def risk_audit(limit: int = Query(200)):
+def risk_audit(_auth: None = Depends(require_key), limit: int = Query(200)):
     try:
         conn = sqlite3.connect(DB_FILE)
         _risk_tables(conn)
@@ -847,7 +878,7 @@ def risk_audit(limit: int = Query(200)):
 
 
 @app.get("/api/sync/all")
-def get_all_sync_data():
+def get_all_sync_data(_auth: None = Depends(require_key)):
     return {
         "status": "success",
         "trades": load_journal_file(),
@@ -857,7 +888,7 @@ def get_all_sync_data():
     }
 
 @app.post("/api/sync/all")
-async def post_all_sync_data(request: Request):
+async def post_all_sync_data(request: Request, _auth: None = Depends(require_key)):
     payload = await request.json()
     if isinstance(payload, dict):
         trades = payload.get("trades")
@@ -879,7 +910,7 @@ async def post_all_sync_data(request: Request):
 PORTFOLIO_FILE = os.path.join(BASE_DIR, "finplus_portfolio_backup.json")
 
 @app.post("/api/backup/save")
-async def save_portfolio_backup(request: Request):
+async def save_portfolio_backup(request: Request, _auth: None = Depends(require_key)):
     try:
         data = await request.json()
         if isinstance(data, dict):
@@ -974,7 +1005,7 @@ async def save_portfolio_backup(request: Request):
         return { "status": "error", "message": str(e) }
 
 @app.post("/api/backup/reset")
-async def reset_portfolio_backup():
+async def reset_portfolio_backup(_auth: None = Depends(require_key)):
     try:
         now_ts = int(time.time() * 1000)
         fresh_data = {
@@ -1002,7 +1033,7 @@ async def reset_portfolio_backup():
 
 
 @app.get("/api/backup/load")
-def load_portfolio_backup():
+def load_portfolio_backup(_auth: None = Depends(require_key)):
     with file_lock:
         if not os.path.exists(PORTFOLIO_FILE):
             load_from_github(PORTFOLIO_FILE, "finplus_portfolio_backup.json")

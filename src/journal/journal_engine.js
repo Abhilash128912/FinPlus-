@@ -3,6 +3,8 @@
  * Standalone PnL App Engine - Zero dependency on backend scanner tables
  */
 
+import { authHeaders } from './risk/api_key.js';
+
 const STORAGE_KEY = 'finplus_pnl_v4_fresh';
 const DATA_VERSION = '20260907_fresh_start_v2';
 const VERSION_KEY = 'finplus_data_version';
@@ -544,7 +546,7 @@ export async function pushJournalToCloud(trades, settings = {}) {
     try {
       const res = await fetch(`${serverUrl}/api/journal/sync`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
       });
       if (res.ok) {
@@ -561,7 +563,7 @@ export async function fetchJournalFromCloud() {
   const syncServers = getCloudSyncServers();
   for (const serverUrl of syncServers) {
     try {
-      const res = await fetch(`${serverUrl}/api/journal/sync`);
+      const res = await fetch(`${serverUrl}/api/journal/sync`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.trades)) {

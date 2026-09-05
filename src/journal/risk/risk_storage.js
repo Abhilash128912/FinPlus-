@@ -9,6 +9,7 @@
 import { generateMonths, DEFAULT_CONFIG } from './risk_model.js';
 import { SEED_CHARGE_PROFILES } from './broker_profiles.js';
 import { getCloudSyncServers } from '../journal_engine.js';
+import { authHeaders } from './api_key.js';
 
 const STORE_KEY = 'finplus_risk_desk_v1';
 const QUEUE_KEY = 'finplus_risk_audit_queue_v1';
@@ -112,7 +113,7 @@ async function tryServers(path, init) {
       const res = await fetch(`${base}${path}`, {
         ...init,
         signal: AbortSignal.timeout(6000),
-        headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) }
+        headers: authHeaders({ 'Content-Type': 'application/json', ...(init?.headers || {}) })
       });
       if (res.ok) return { ok: true, server: base, data: await res.json() };
     } catch (e) {
