@@ -49,7 +49,8 @@ ok('Intraday alloc 750', cfg.allocations.INTRADAY === 750);
 ok('Long Term alloc 1500', cfg.allocations.LONG_TERM === 1500);
 ok('reserve halved to 500 to fund CRUDE', cfg.reserveAllocation === 500);
 ok('CRUDE alloc 500', cfg.allocations.CRUDE === 500);
-ok('Swing SL deliberately unset', cfg.segmentSL.SWING === null);
+ok('Swing risk matches Intraday at 100', cfg.segmentSL.SWING === 100);
+ok('Swing stop is percentage-based', cfg.segmentSLPercent.SWING === 5);
 ok('Long Term broker unset', cfg.segmentBroker.LONG_TERM === null);
 ok('Intraday/Index/Stock/NatGas -> INDMONEY',
   ['INTRADAY','INDEX_OPTIONS','STOCK_OPTIONS','NATURAL_GAS'].every(k => cfg.segmentBroker[k] === 'INDMONEY'));

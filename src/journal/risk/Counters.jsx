@@ -77,7 +77,7 @@ export default function Counters({ accrualState, monthView }) {
                 </div>
                 {l.isReserve ? (
                   <Chip tone="violet">reserve</Chip>
-                ) : l.slPercent ? (
+                ) : l.slPercent && l.threshold === null ? (
                   <Chip tone={l.unlocked ? 'good' : 'muted'}>{l.slPercent}% SL{l.unlocked ? ' · ready' : ''}</Chip>
                 ) : noThreshold ? (
                   <Chip tone="warn">no SL set</Chip>
@@ -96,18 +96,22 @@ export default function Counters({ accrualState, monthView }) {
                       {inr(l.counter)}
                     </span>
                     <span style={{ fontSize: '11px', color: C.muted, fontWeight: 700 }}>
-                      {l.slPercent ? `${l.slPercent}% stop` : noThreshold ? 'no target' : `of ${inr(l.threshold)}`}
+                      {l.threshold !== null
+                        ? `of ${inr(l.threshold)}${l.slPercent ? ` · ${l.slPercent}% stop` : ''}`
+                        : l.slPercent ? `${l.slPercent}% stop` : 'no target'}
                     </span>
                   </div>
                   <Bar
                     used={l.counter}
-                    total={l.slPercent ? l.counter || 1 : l.threshold || l.counter || 1}
+                    total={l.threshold || (l.slPercent ? l.counter || 1 : 1)}
                     color={l.unlocked ? C.green : C.accent}
                     height={9}
                   />
                   <div style={{ fontSize: '10px', color: C.dim, marginTop: '6px' }}>
                     {l.slPercent
-                      ? `Sized to the counter — supports a position up to ${inr(l.maxPositionValue)} at a ${l.slPercent}% stop${l.targetPercent ? `, target +${l.targetPercent}%` : ''}.`
+                      ? (l.cappedRisk
+                          ? `Risk capped at ${inr(l.cappedRisk)} per trade — supports a position up to ${inr(l.maxPositionValue)} at a ${l.slPercent}% stop${l.targetPercent ? `, target +${l.targetPercent}%` : ''}.`
+                          : `Sized to the counter — supports a position up to ${inr(l.maxPositionValue)} at a ${l.slPercent}% stop${l.targetPercent ? `, target +${l.targetPercent}%` : ''}.`)
                       : noThreshold
                         ? 'Set a stop-loss for this segment to enable the unlock.'
                         : l.unlocked

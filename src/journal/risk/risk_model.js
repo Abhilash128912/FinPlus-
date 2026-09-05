@@ -101,7 +101,7 @@ export const BRIEF_DEFAULTS = {
     INDEX_OPTIONS: 250,
     NATURAL_GAS: 250,
     STOCK_OPTIONS: 250,
-    SWING: null, // Swing is percentage-based — see segmentSLPercent
+    SWING: 100,  // same per-trade risk as Intraday; the 5% below sets the stop PRICE
     CRUDE: 250
   },
   segmentSLPercent: {

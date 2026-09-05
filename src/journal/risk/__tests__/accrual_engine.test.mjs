@@ -235,13 +235,13 @@ console.log('');
 console.log('=== 15. Swing: percentage stop-loss and target ===');
 ok('Swing SL is 5%', slPercentFor('SWING', liveCfg) === 5);
 ok('Swing target is 5%', targetPercentFor('SWING', liveCfg) === 5);
-ok('Swing has no rupee SL', liveCfg.segmentSL.SWING === null);
+ok('Swing carries a rupee risk cap', liveCfg.segmentSL.SWING === 100);
 ok('rupee segments have no percentage', slPercentFor('INTRADAY', liveCfg) === null);
 
 const sw = L('2026-09-04').byId.SWING;
-ok('Swing has no fixed threshold', sw.threshold === null);
-ok('Swing unlocks on any accrual', sw.unlocked === true);
-ok('Swing needs no waiting days', sw.daysToUnlock === 0);
+ok('Swing has a threshold from its cap', sw.threshold === 100);
+ok('Swing paces to its cap, not instant', sw.unlocked === false);
+ok('Swing needs 2 more trading days on day 1', sw.daysToUnlock === 2, String(sw.daysToUnlock));
 ok('Swing exposes slPercent', sw.slPercent === 5);
 // 45.45 accrued at a 5% stop supports a 45.45 / 0.05 = 909.09 position
 ok('max position = counter / 5%', near(sw.maxPositionValue, sw.counter / 0.05, 0.05), String(sw.maxPositionValue));
@@ -282,6 +282,26 @@ ok('counter resets on the loss day', onIt.counter === 0, String(onIt.counter));
 ok('capital drops on the loss day', near(onIt.capital, 136.36 - 118.40), String(onIt.capital));
 ok('loss is booked from that day', near(onIt.lossTotal, 118.40));
 ok('accrual restarts the next day', near(afterIt.counter, 34.09), String(afterIt.counter));
+
+console.log('');
+console.log('=== 17. Swing capped at the Intraday figure ===');
+ok('Swing rupee risk = 100, same as Intraday',
+  liveCfg.segmentSL.SWING === 100 && liveCfg.segmentSL.INTRADAY === 100);
+ok('Swing still uses a 5% stop', liveCfg.segmentSLPercent.SWING === 5);
+
+const swEarly = L('2026-09-04').byId.SWING;
+const swOpen  = L('2026-09-08').byId.SWING;
+const swLate  = L('2026-10-30').byId.SWING;
+
+ok('Swing is NOT instantly unlocked any more', swEarly.unlocked === false);
+ok('Swing unlocks at 100 like Intraday', swOpen.unlocked === true && L('2026-09-08').byId.INTRADAY.unlocked === true);
+ok('Swing reports a real threshold', swOpen.threshold === 100);
+ok('Swing exposes the risk cap', swOpen.cappedRisk === 100);
+ok('max position capped at 100 / 5% = 2000', swOpen.maxPositionValue === 2000, String(swOpen.maxPositionValue));
+ok('cap holds as the counter keeps growing', swLate.maxPositionValue === 2000, String(swLate.maxPositionValue));
+ok('counter itself still grows past the cap', swLate.counter > 1000, String(swLate.counter));
+ok('while short, size follows the counter', near(swEarly.maxPositionValue, swEarly.counter / 0.05, 0.05),
+  String(swEarly.maxPositionValue));
 
 console.log('='.repeat(52));
 console.log('  ' + pass + ' passed, ' + fail + ' failed');

@@ -180,8 +180,12 @@ export function buildAccrualState({ trades = [], config = DEFAULT_CONFIG, asOf =
     const rate = dailyRateFor(laneId, config);
     const slPercent = slPercentFor(laneId, config);
     const targetPercent = targetPercentFor(laneId, config);
-    // A percentage segment is sized to the counter, so it has no fixed threshold.
-    const threshold = slPercent ? null : unlockThresholdFor(laneId, config);
+    // A percentage segment sets the stop PRICE from entry. If it also carries a
+    // rupee figure, that caps the risk per trade and acts as the unlock threshold
+    // exactly like a rupee segment; without one it is simply sized to the counter.
+    const rupeeSL = unlockThresholdFor(laneId, config);
+    const threshold = slPercent ? (rupeeSL || null) : rupeeSL;
+    const cappedRisk = slPercent ? rupeeSL : null;
     const books = booksLosses(laneId, config);
 
     const laneTrades = closed.filter(t => t.segment === laneId);
@@ -219,16 +223,17 @@ export function buildAccrualState({ trades = [], config = DEFAULT_CONFIG, asOf =
         : accrualDays(startDate, today, true, basis);
     const counter = r2(rate * counterDays);
 
-    const unlocked = slPercent
-      ? counter > 0.001                       // sized to the counter, so any accrual works
-      : threshold === null
-        ? null
-        : counter + 0.001 >= threshold;
-    const shortfall = slPercent || threshold === null ? null : r2(Math.max(0, threshold - counter));
+    const unlocked = threshold === null
+      ? (slPercent ? counter > 0.001 : null)  // uncapped percentage lane: any accrual works
+      : counter + 0.001 >= threshold;
+    const shortfall = threshold === null ? null : r2(Math.max(0, threshold - counter));
     const daysToUnlock =
-      slPercent || threshold === null || unlocked || rate <= 0 ? 0 : Math.ceil(shortfall / rate);
-    // Largest position the counter can carry at this percentage stop.
-    const maxPositionValue = slPercent ? r2(counter / (slPercent / 100)) : null;
+      threshold === null || unlocked || rate <= 0 ? 0 : Math.ceil(shortfall / rate);
+    // Largest position this lane can carry at its percentage stop. Capped by the
+    // per-trade rupee risk when one is set, otherwise by the counter itself.
+    const maxPositionValue = slPercent
+      ? r2(Math.min(cappedRisk || Infinity, counter) / (slPercent / 100))
+      : null;
 
     const wins = laneTrades.filter(t => Number(t?._pnl?.net ?? t?.net_pnl ?? 0) > 0).length;
 
@@ -241,6 +246,7 @@ export function buildAccrualState({ trades = [], config = DEFAULT_CONFIG, asOf =
       threshold,
       slPercent,
       targetPercent,
+      cappedRisk,
       maxPositionValue,
       booksLosses: books,
       startDate,
