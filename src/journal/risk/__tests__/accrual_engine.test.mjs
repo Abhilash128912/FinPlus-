@@ -262,6 +262,27 @@ ok('long stop = entry - 5%', Number((entry * (1 - 5 / 100)).toFixed(2)) === 95);
 ok('long target = entry + 5%', Number((entry * (1 + 5 / 100)).toFixed(2)) === 105);
 ok('short stop = entry + 5%', Number((entry * (1 + 5 / 100)).toFixed(2)) === 105);
 
+console.log('');
+console.log('=== 16. A future trade must not affect an earlier day ===');
+const futureLoss = [{
+  id: 'F', segment: 'INTRADAY', status: 'CLOSED', exit_price: 1,
+  entry_date: '2026-09-09', exit_date: '2026-09-09', _pnl: { net: -118.40 }
+}];
+const beforeIt = buildAccrualState({ trades: futureLoss, config: liveCfg, asOf: '2026-09-08' }).byId.INTRADAY;
+const onIt = buildAccrualState({ trades: futureLoss, config: liveCfg, asOf: '2026-09-09' }).byId.INTRADAY;
+const afterIt = buildAccrualState({ trades: futureLoss, config: liveCfg, asOf: '2026-09-10' }).byId.INTRADAY;
+
+ok('counter unaffected the day before the loss', near(beforeIt.counter, 102.27), String(beforeIt.counter));
+ok('capital unaffected the day before the loss', near(beforeIt.capital, 102.27), String(beforeIt.capital));
+ok('segment is unlocked before the loss', beforeIt.unlocked === true);
+ok('no lastLossDate before the loss', beforeIt.lastLossDate === null);
+ok('booked losses are zero before the loss', beforeIt.lossTotal === 0);
+
+ok('counter resets on the loss day', onIt.counter === 0, String(onIt.counter));
+ok('capital drops on the loss day', near(onIt.capital, 136.36 - 118.40), String(onIt.capital));
+ok('loss is booked from that day', near(onIt.lossTotal, 118.40));
+ok('accrual restarts the next day', near(afterIt.counter, 34.09), String(afterIt.counter));
+
 console.log('='.repeat(52));
 console.log('  ' + pass + ' passed, ' + fail + ' failed');
 console.log('='.repeat(52));

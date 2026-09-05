@@ -165,7 +165,15 @@ export function buildAccrualState({ trades = [], config = DEFAULT_CONFIG, asOf =
   const started = !!startDate && toDayNumber(startDate) !== null;
   const startedYet = started && toDayNumber(today) >= toDayNumber(startDate);
 
-  const closed = trades.filter(isClosedTrade);
+  // Only trades already closed ON OR BEFORE the evaluation date may affect it.
+  // Without this, a later loss would retroactively reset an earlier day's counter
+  // and deduct its capital, making any back-dated view wrong.
+  const closed = trades.filter(t => {
+    if (!isClosedTrade(t)) return false;
+    const closedOn = String(t.exit_date || t.entry_date || '').slice(0, 10);
+    if (!closedOn) return false;
+    return toDayNumber(closedOn) <= toDayNumber(today);
+  });
 
   const lanes = ACCRUAL_LANES.map(laneId => {
     const seg = SEGMENTS.find(s => s.id === laneId) || null;

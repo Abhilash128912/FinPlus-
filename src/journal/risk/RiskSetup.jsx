@@ -50,7 +50,7 @@ export default function RiskSetup({ desk, onReset }) {
   const problems = [];
   if (!(normalized.monthlyRiskBudget > 0)) problems.push({ message: 'Monthly risk budget must be greater than zero.' });
   if (!balance.balanced && normalized.monthlyRiskBudget > 0) {
-    problems.push({ message: `Segment allocations plus reserve total ${inr(balance.sum)}, which is ${inr(Math.abs(balance.difference))} ${balance.difference > 0 ? 'more' : 'less'} than the ${inr(balance.budget)} budget.` });
+    problems.push({ message: `Segment allocations plus reserve total ${inr(balance.sum)} — ${inr(Math.abs(balance.difference))} ${balance.difference > 0 ? 'more' : 'less'} than the ${inr(balance.budget)} budget. Use "Auto-split budget" to divide it up, or "Apply brief values" for the full recommended setup.` });
   }
   if (!(normalized.dailyRiskLimit > 0)) problems.push({ message: 'Daily risk limit must be greater than zero.' });
 
@@ -77,6 +77,27 @@ export default function RiskSetup({ desk, onReset }) {
       segmentBroker: { ...BRIEF_DEFAULTS.segmentBroker },
       openingDeductions: { ...BRIEF_DEFAULTS.openingDeductions }
     }));
+    setSaved(false);
+  };
+
+  /**
+   * Spread whatever monthly budget is typed across the lanes, keeping the
+   * brief's proportions. Rounded to whole rupees with the remainder pushed into
+   * the Opportunity Reserve so the split always sums exactly to the budget.
+   */
+  const autoSplit = () => {
+    const budget = Number(f.monthlyRiskBudget) || 0;
+    if (budget <= 0) return;
+    const weights = { ...BRIEF_DEFAULTS.allocations, OPPORTUNITY_RESERVE: BRIEF_DEFAULTS.reserveAllocation };
+    const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+    const alloc = {};
+    let used = 0;
+    for (const seg of SEGMENTS) {
+      const v = Math.round((budget * (weights[seg.id] || 0)) / totalWeight);
+      alloc[seg.id] = v;
+      used += v;
+    }
+    setF(p => ({ ...p, allocations: alloc, reserveAllocation: Math.round((budget - used) * 100) / 100 }));
     setSaved(false);
   };
 
@@ -121,7 +142,8 @@ export default function RiskSetup({ desk, onReset }) {
         subtitle="A maximum planned loss per month. Not a spending target, and it never grows from unused allocation or profit."
         right={
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <Btn tone="ghost" onClick={applyBrief}>Apply brief values</Btn>
+            <Btn onClick={applyBrief}>Apply brief values</Btn>
+            <Btn tone="ghost" onClick={autoSplit} disabled={!(Number(f.monthlyRiskBudget) > 0)}>Auto-split budget</Btn>
             <Btn tone="ghost" onClick={clearAll}>Clear to zero</Btn>
           </div>
         }
@@ -153,7 +175,7 @@ export default function RiskSetup({ desk, onReset }) {
         </div>
       </Panel>
 
-      <Panel title="Segments" subtitle="Allocation, planned stop-loss and broker for each of the six active segments. CRUDE is removed; Swing replaces it.">
+      <Panel title="Segments" subtitle="Allocation, planned stop-loss and broker for each of the seven active segments. A segment can use a rupee stop OR a percentage stop, not both.">
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '620px' }}>
             <thead>
