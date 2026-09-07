@@ -1,6 +1,18 @@
 {
   "positions": [
     {
+      "id": "pos_1788763603605_od4gm",
+      "ticker": "BEPL",
+      "name": "Bhansali Engineering Polymers Limited",
+      "segment": "LT",
+      "shares": 2,
+      "buyPrice": 126.25,
+      "buyDate": "2026-09-07",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": ""
+    },
+    {
       "id": "pos_1788548077313_0_panamapet",
       "ticker": "PANAMAPET",
       "name": "Panama Petrochem Ltd",
@@ -91,7 +103,7 @@
   "optionsTrades": [],
   "freeCash": {
     "swing": "0",
-    "lt": "0",
+    "lt": "0.00",
     "penny": "0"
   },
   "budget": "0",
@@ -100,5 +112,5 @@
     "lt": 30,
     "penny": 10
   },
-  "savedAt": 1788757877626
+  "savedAt": 1788763603610
 }
