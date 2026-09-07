@@ -1,6 +1,18 @@
 {
   "positions": [
     {
+      "id": "pos_1788782400618_ykuj2",
+      "ticker": "BEPL",
+      "name": "Bhansali Engineering Polymers Limited",
+      "segment": "LT",
+      "shares": 2,
+      "buyPrice": 126.84,
+      "buyDate": "2026-09-07",
+      "target1": 0,
+      "stopLoss": 0,
+      "notes": ""
+    },
+    {
       "id": "pos_1788763603605_od4gm",
       "ticker": "BEPL",
       "name": "Bhansali Engineering Polymers Limited",
@@ -112,5 +124,5 @@
     "lt": 30,
     "penny": 10
   },
-  "savedAt": 1788782240116
+  "savedAt": 1788782400624
 }
