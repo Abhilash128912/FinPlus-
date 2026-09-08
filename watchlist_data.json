@@ -7,43 +7,36 @@
     "avg_cost": 160.53,
     "total_invested": 321.06,
     "added_at": "2026-08-13",
-    "score_at_entry": 35.4,
+    "score_at_entry": 29.2,
     "strength_at_entry": 0.0,
     "value_at_entry": 0.0,
-    "momentum_at_entry": 43.0,
+    "momentum_at_entry": 38.0,
     "roe_at_entry": null,
     "de_at_entry": null,
     "npm_at_entry": null,
-    "current_score": 35.4,
+    "current_score": 29.2,
     "current_strength": 0.0,
-    "current_value": 340.0,
-    "current_momentum": 43.0,
-    "ltp": 170.0,
+    "current_value": 338.28,
+    "current_momentum": 38.0,
+    "ltp": 169.14,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 48.4,
-    "ma200": 171.36,
-    "wk52_return_pct": 23.83,
-    "volume_spike": 0.67,
-    "today_volume": 10424912,
-    "avg_volume_10d": 15510325.85,
+    "rsi": 46.9,
+    "ma200": 171.48,
+    "wk52_return_pct": 23.2,
+    "volume_spike": 0.48,
+    "today_volume": 5292140,
+    "avg_volume_10d": 14952223.2,
     "news": [
       {
-        "title": "Ashok Leyland Ltd Sees Significant Open Interest Surge Amid Mixed Market Signals",
-        "url": "https://news.google.com/rss/articles/CBMi1AFBVV95cUxNOU4zUDVqWTdsTHFTWmw4NTNYYTdUa3dJMjRzYzZhVHFwcUFWeGpmS2N5dldjUHdsZnJVUE9jMk91Rzg2T0I1VEhJLUxxZnVXYUpfOUo3c196Z2NIc2xUblhJdWVpX2VKNkdnUDRjOFJmNU05UlZPYVJtWFJ0R1FHTEIzX3dFRHFkcnVWNVNDb19UTU12UXVnVFJZOHQ1VWNEazFwUUVGT041NFp4dEpDZm5VWTVaekVObnpiTHhsbzJ6cjhEZmJnS20tcG1oR2RfSjZPTw?oc=5",
-        "pubDate": "Sat, 05 Sep 2026 23:39:31 GMT",
-        "provider": "MarketsMojo",
-        "summary": "Published: Sat, 05 Sep 2026 23:39:31 GMT"
-      },
-      {
-        "title": "Ashok Leyland Share Price Rise: Sector and Peer Analysis",
-        "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE1OdHE5ckxXZXVTR2ZNNktDVmsxM2FQMUppbC10YXJFOFdVYTV2LVJyNUUtN21va2Z6eUZvQ3o4SU1BcnR0RWIxUFotWjd1YXJCaG9CRFBQVE9INV9TWUYzX2lMVm9faUJpaXY1dE5ibEdlN29vZjJYUUxaVWRPV2c?oc=5",
-        "pubDate": "Thu, 13 Aug 2026 07:00:00 GMT",
+        "title": "Ashok Leyland Ltd. Share Price Today: Price Rise Review",
+        "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE5xRUE2bUdJb2ZFcEZGazJVRS1IMnZuUVVzTUdpY3dnSHZVd1B5bEVKSFFjSVpOTW5iZzItUEZkUXJWWTNDenhlSEk1aFVrMVdBYV9ERlNJSnlod0x4b0JKTXZDc1k1cEU1cnoyZW9ibk1STTVkSm1INmgxS0xTbnM?oc=5",
+        "pubDate": "Mon, 17 Aug 2026 07:00:00 GMT",
         "provider": "Univest",
-        "summary": "Published: Thu, 13 Aug 2026 07:00:00 GMT"
+        "summary": "Published: Mon, 17 Aug 2026 07:00:00 GMT"
       },
       {
         "title": "Ashok Leyland Limited's (NSE:ASHOKLEY) Share Price Not Quite Adding Up",
@@ -55,16 +48,23 @@
       {
         "title": "Ashok Leyland shares surge 2%, up 5% in a month; what\u2019s driving the rally on Tuesday?",
         "url": "https://news.google.com/rss/articles/CBMi1gFBVV95cUxNUm1KX0lPV0F5dFRBX3pYM2VyTjRfWW1tVDU4cERZXzZxZVltV1BCckRhRnkyLTdNY19ncmN0c3lpdk9yRmVFRkxCTDlZYnMwbWZSQVk2RVd3NUZNeWpSSkZ6WEttUjN4dDFxbUNUME85UkdHMnNWdnB1RG8wbV8tRUV6RzdtU1lteXpjRWpHNU9qeGNnbFVvTm1hSDU1eHR3QVNYZW9xVnBveUk1bFV6d0pPRWJyQlZnTm4yREM3U0ZVdkwzbUs4X1lWT3FpLXFGWTFvQ3J3?oc=5",
-        "pubDate": "Mon, 15 Jun 2026 07:00:00 GMT",
+        "pubDate": "Tue, 16 Jun 2026 07:00:00 GMT",
         "provider": "Upstox",
-        "summary": "Published: Mon, 15 Jun 2026 07:00:00 GMT"
+        "summary": "Published: Tue, 16 Jun 2026 07:00:00 GMT"
       },
       {
         "title": "Ashok Leyland Partners Shriram Automall for Pre-Owned Commercial Vehicles Business",
         "url": "https://news.google.com/rss/articles/CBMiggFBVV95cUxQZjJRcW84SlFJNFlhSl9pYlhvREFHM1BMUU50b3hMU2FlYUczakNIaVhiTVhTblg1UnB4c1AyUHQ2VzNQUXlBWFV4R1NlVUt5TmFYekdLdTdYOXhWX0hmSWxzQmFNQXd0Q194cndzYUZ4R3M4ZnRxZTZUZnFxVVlaZ21R?oc=5",
         "pubDate": "Thu, 23 Jul 2026 07:00:00 GMT",
-        "provider": "hdfcsky.com",
+        "provider": "HDFC Sky",
         "summary": "Published: Thu, 23 Jul 2026 07:00:00 GMT"
+      },
+      {
+        "title": "Ashok Leyland Shares Gain 2.13% in Early Trade",
+        "url": "https://news.google.com/rss/articles/CBMirAFBVV95cUxNcVNfZWwydTlkTGdLSUY1bS1yUWpaby1aNTBxYUk2TXlvclJYY1hMSkZhd0l6Wm1FRzBlaC0wbkQwZ1BzMEdEVE1hZXpGUlhGMlQ4NnIxRm5KaFhFVFNka2RjenhjNDVObmtLSlpCNWtZM2JJdVFmbnNta0dlN0o5dlFQTnBHbTdiR2xoMnVVdFlpWjQ0SlJmeEdCZm5MQlhkWlJEU3dlSUN3a0RS?oc=5",
+        "pubDate": "Fri, 31 Jul 2026 07:00:00 GMT",
+        "provider": "TradingView",
+        "summary": "Published: Fri, 31 Jul 2026 07:00:00 GMT"
       }
     ],
     "corporate_actions": [],
@@ -72,19 +72,19 @@
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 35.4 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 29.2 (below 40 threshold)"
       },
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9170.0 fell below 200-day MA \u20b9171.36"
+        "message": "Trend Broken \u2014 Price \u20b9169.14 fell below 200-day MA \u20b9171.48"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 35.4 (<40)",
-    "unrealised_pnl": 18.94,
-    "unrealised_pct": 5.9
+    "signal_reason": "Quality score collapsed to 29.2 (<40)",
+    "unrealised_pnl": 17.22,
+    "unrealised_pct": 5.36
   },
   {
     "symbol": "BEL",
@@ -94,36 +94,50 @@
     "avg_cost": 403.52,
     "total_invested": 1210.56,
     "added_at": "2026-08-13",
-    "score_at_entry": 34.2,
+    "score_at_entry": 51.6,
     "strength_at_entry": 0.0,
     "value_at_entry": 0.0,
-    "momentum_at_entry": 27.0,
+    "momentum_at_entry": 56.0,
     "roe_at_entry": null,
     "de_at_entry": null,
     "npm_at_entry": null,
-    "current_score": 34.2,
+    "current_score": 51.6,
     "current_strength": 0.0,
-    "current_value": 1212.0,
-    "current_momentum": 27.0,
-    "ltp": 404.0,
+    "current_value": 1234.05,
+    "current_momentum": 56.0,
+    "ltp": 411.35,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 45.6,
-    "ma200": 419.0,
-    "wk52_return_pct": 8.63,
-    "volume_spike": 0.64,
-    "today_volume": 5963558,
-    "avg_volume_10d": 9248511.65,
+    "rsi": 53.9,
+    "ma200": 418.98,
+    "wk52_return_pct": 10.61,
+    "volume_spike": 2.55,
+    "today_volume": 18473359,
+    "avg_volume_10d": 9832134.3,
     "news": [
       {
-        "title": "Buy, Sell Or Hold: Paytm, LIC, Mazagon Dock, BEL And Varun Beverages \u2014 Ask Profit",
-        "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxObWhLSlU2M0NvTUFPS21YU1BPRk9uazZqTkFuRXdwdkxnQ0tYOTk2SVlYQXZfc2dBUHVVU2tWOFp2MWZpWHJBOWViNWRDc24xWFBiRXMxQ2FZS3V6RmJFX0N4SDFvRmNzczQ5ckxaZC1rS0VNbF9VOWZRZWJwYW9SWi0tZ1NXU0xmbjlaSVg4NTdScmFYNGlEMXE3TVloN3Z2MVk5MEQ0RXpJR2VWeGZVaVM5UkhEbTk0R3fSAcIBQVVfeXFMTWNkTndYTDlBSUlzSHl3Qy0yeVBiY2J1MEUtRjBZQUpvTnBSSkVRZnpuWXMxV3Zoa2hkQ0FiUHRxYUpOdkExWjBTS19pUDBnRTFYNjFlUDNoRHNZNllWbmpmcUN6Yl85UnE1MXQtNGlFOE9YMjVtampCYUk5Q0tGbS1mckRac2pEbnRtN3poeWs5amFnMnRIYnN6WTczcl9Ua2RlT3VNWGdPRHJGR2puRjJzcUJYZk91QkNNZ3drTnRvaFE?oc=5",
-        "pubDate": "Sun, 06 Sep 2026 16:22:13 GMT",
+        "title": "Three defence stocks that Motilal Oswal recommends buying after the latest DAC proposals",
+        "url": "https://news.google.com/rss/articles/CBMi8gFBVV95cUxNMUxmbVNkLTNTc2J3YnMwcXF0NHczOWpvNXVpX0NMVG5CaGZiWjN3SlVTZ0Y2ckZrel9vek9UY0tSRkx0NlpoTG5GLXdYbEFZRUtVZjB5bW1FQVVweW90N0tKbGdiQXdCeVAxNmR5U3g4bU5MVmhVSFdHTFMxa1J2cVFhXzlQQ2FXcTRsMGx5akRxTWpkUkkwejljakVhWFNzbXhpOUhHdnV2WlhMdW04VlNCMHcwckl1UXZUTEk3ZnVCVmpNblBkc3M1TkpFNVpzYXI3ZDViaS1qckt2Y2RtLVhSM1k3UVZfNWNia1lleXh4QdIB9wFBVV95cUxPOHZYRnVHSjY1aldxeENIeHlBMDlFaHhKY0licmk0TUQwTm5oMWQ3QTFvNGROalNiSDVQczh2TFN6WnJFN09wVElCLV9NNVIwY05vcTZHbzBWMWxRMWZQS2U4Vjh5TFBxanBrUjRha0NHLUlyVjZYV3d3a3YxR2d4Vy1tdEtNZzZVNXdDMGNJLW1WV3V2ZTlLNjlVaXBpQW5reXRiUkcwOW95Ni1taEVPaG8wTjZ6Q05EenRlMS1lRGVkczN0UUdGOGhqNUE3RWdLMENMbXJ2TnpsSG9yLXVyeGF4dURzYldCR1doSEctWVpWRmpHT09J?oc=5",
+        "pubDate": "Tue, 08 Sep 2026 02:24:08 GMT",
+        "provider": "CNBC TV18",
+        "summary": "Published: Tue, 08 Sep 2026 02:24:08 GMT"
+      },
+      {
+        "title": "BEL, HAL, Astra Microwave and others: Why defence stocks are on fire - Rally reason explained | Top shares to buy",
+        "url": "https://news.google.com/rss/articles/CBMihwJBVV95cUxQTG9uazVyNmtVRHQ4amlseWlWMmN3T2oyQkhseFJySGphOUJVSnFrU3gxQTFJNFVqQ1RXcFU2S0lRSXlua3RzMGIwZWZaQWQ0clRLTVlZUjQ3XzVhOFpSMDFMV1VtNnlaYkhIV1N6YUdXcThvRUdRUjV2VmVXLUtpQzBkYzJldDFSeENPdkJGNkpQNEFOZEh0ekJhWWZkaVJCelg3a3pMQmpzZFAyOEQtVHhSV0dOY0tKQVdXaUs0M3pzZ1M1LThrem1qWWdPWEgxLWdUbUJ4NkZwOXBoUkhEZDRLcXpGZ0NLX1MybWdyd0pfYkk2UWRBWHI1Wk00MWI4Q3hvMEtnNNIBjAJBVV95cUxPTDZCeGRtekRsT2JQamlEOFl5YUZpX244WTV6ell6MmRPNlRrbzRRU2dYV1AxVVBJMl95V2pPc0R1a1B4c3A5Ym5PMzl0NHBWT1ZSZWtBZDV3QTRIMGV6UXMtVWtUVDJiMWQwUlQxOUFvSF8zLWRrUlY0QUNnemVfY2ZIMDQ4bU1XWTFkelpvejNaUTBTTGRnYnpDWTNmdFN1NjFkSlJ5YS1TR0NVSWJJRGozWS1pUkw3aWcyeVAtRmlfdENsYVgxeS0xRERqQWpCbVNRRDA2bXhnTTJjQWdvZEhyS0NRZlUteUs3bS14SGlWa1hpZ3h6VWZCemFVUTZQcFpvdGg1azdoWmM4?oc=5",
+        "pubDate": "Tue, 08 Sep 2026 04:22:37 GMT",
+        "provider": "Livemint",
+        "summary": "Published: Tue, 08 Sep 2026 04:22:37 GMT"
+      },
+      {
+        "title": "Buy, Sell Or Hold: HAL, Supreme Petrochem, BEL, Suzlon, M&M, PC Jeweller \u2014 Ask Profit",
+        "url": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxOaVU3MnprMndHMDlzSmRBLWIwY1ZOYVhGR2w0T19DVlk1Y0JteVNPSUNXY3BOUS02YjBiV3VzTFA0Vl9rWVRHWUphU3dseWdmRVQxVlJRWkowdEtZUmViMGlUczc1dUJES29OMURDNFNYdC1fb3A0LU9hbzVTempkdXo3UHRGSW00WEt6RVFHWXZSN2JZYnU2OWxua0NSeXJfcmp0enlyeVdVWS1hR0Y1MVJQT21tR1BFaHg3SWg5TlNxc3fSAcsBQVVfeXFMTU11SDg2ME5WcmIwTWVTV3dudFhXX3VhWXJIZnJjaUZSNTU0QVJTSnlzQVJNQnBQdWJhS2x2SThSdExGQVBQTkJ3dGJscmpMRWtZZjdFNFhkX0loM0VWZ1BVZUs3MlRFc1lLQ2RFMUN5aU9lQktVcUlaNWtELW5BTzE3STdRZmd4eVNka0lyQXZTdC1SWTI4aDcyWnBrWnFBbjFzV2lUYjZhMTBYVEg1M24zNzdOQnRvaVk0WURzZUR4eFNLRjFMVm9qVUU?oc=5",
+        "pubDate": "Tue, 08 Sep 2026 07:01:32 GMT",
         "provider": "NDTV Profit",
-        "summary": "Published: Sun, 06 Sep 2026 16:22:13 GMT"
+        "summary": "Published: Tue, 08 Sep 2026 07:01:32 GMT"
       },
       {
         "title": "BEL Share Price Live: Stock falls 3% on concerning margins",
@@ -138,40 +152,21 @@
         "pubDate": "Sun, 26 Jul 2026 07:00:00 GMT",
         "provider": "NiftyTrader",
         "summary": "Published: Sun, 26 Jul 2026 07:00:00 GMT"
-      },
-      {
-        "title": "Bharat Electronics shares to be in focus on Thursday as company secures \u20b9730 crore order",
-        "url": "https://news.google.com/rss/articles/CBMi8gFBVV95cUxNR1Q0MzBTSDY0LUVjdmlBQ0dqMWNmVTV0NnNsZTU4eVNGbkpsVHJWWlVCTzYyS1hxWnB1LXp1NG1SWmI3TVVBank4STVOMkpJQUNTTHpobnZUNEFKZEVjZmhMckxHTThmUlF0X0hkY1BTUjRLV2FyS0h3dmRpekJlUGJMVDFsaHhNaHhRR3RWZGljeUlQeHpPU3ljVnhoLUhNdE5KZWZWa3cwSWREZk90VUxtZmtOSF9uclZtaG9ocExvUEp6U1NpaXpFV0dLZWdlSlk2cnUzR0hRcDk4ZnR4amFpZ1hRTy1kaGtueGVBVGZJQdIB9wFBVV95cUxPZDdaVzRLRDNGeDROOW1OTWZYQzkxQU5xenRBSVFjdnRiZTV6UFdYMGZGYmozeU9CcTRhWlRPZE9aZ2hJUnlJSVNhdk9qWHRuZ3V1MVl3dEVMdXozS2pJVldyWkFNUEJWRGRHaXlRMDdlM0V3M2tTbXZzdWxzTzl1bnJONWR4bjVoOGw4a1VXeFFlc0NaN1JCTUdPS0F0YklBanVfMlUza0EtQjV4UFVpZFczbEU1elBDcGNGWG5wdzdlVlhJS0t0NXN4enFfRk1ERklPMkxoYU82T3hXdjMzMGVnTDZaU3hoUG13dkF6Mlk3S3F6V1g0?oc=5",
-        "pubDate": "Wed, 26 Aug 2026 07:00:00 GMT",
-        "provider": "Livemint",
-        "summary": "Published: Wed, 26 Aug 2026 07:00:00 GMT"
-      },
-      {
-        "title": "Bharat Electronics Stock Volatile Ahead Of Q1 Results; What To Expect In BEL's Q1? Check Timing & Dividends",
-        "url": "https://news.google.com/rss/articles/CBMi3gFBVV95cUxOMU5TTks2RDJKVDZ4NDVOZTlLYUhpb0d5dVhxcWU5Q1BmRUVCa2xVa1ZJVkZqMDRqblRHQVJCTnNCS053T0NiVWhQSHJmQ2d1cXZlVk5ERTlpT29HOHpuSGlrVWJ0cS1vTDFBbUdGSHpOVjl0dlk1aFVpaWlNWDBReTE0LUdBTWpaaS1DcmR0Q0Z2QWV6RjBrUG9DcXlEbmlnTUR3c3VGLTlXa0pNdHZwWklZekFzOEx5dGhSX28zc2xXSzJfUGIxd1gtS2E1bVFqSnlGbl9XM25TLUFZYkE?oc=5",
-        "pubDate": "Mon, 27 Jul 2026 07:00:00 GMT",
-        "provider": "Goodreturns",
-        "summary": "Published: Mon, 27 Jul 2026 07:00:00 GMT"
       }
     ],
     "corporate_actions": [],
     "alerts": [
       {
-        "level": "SELL",
-        "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 34.2 (below 40 threshold)"
-      },
-      {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9404.0 fell below 200-day MA \u20b9419.0"
+        "message": "Trend Broken \u2014 Price \u20b9411.35 fell below 200-day MA \u20b9418.98"
       }
     ],
-    "signal": "SELL",
-    "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 34.2 (<40)",
-    "unrealised_pnl": 1.44,
-    "unrealised_pct": 0.12
+    "signal": "HOLD",
+    "signal_badge": "\ud83d\udfe1 HOLD",
+    "signal_reason": "Moderate quality score; maintain position",
+    "unrealised_pnl": 23.49,
+    "unrealised_pct": 1.94
   },
   {
     "symbol": "BORANA",
@@ -181,29 +176,29 @@
     "avg_cost": 342.0,
     "total_invested": 342.0,
     "added_at": "2026-08-13",
-    "score_at_entry": 52.9,
+    "score_at_entry": 46.5,
     "strength_at_entry": 62.0,
     "value_at_entry": 35.0,
-    "momentum_at_entry": 66.0,
+    "momentum_at_entry": 43.0,
     "roe_at_entry": 35.0,
     "de_at_entry": 0.25,
     "npm_at_entry": 16.6,
-    "current_score": 52.9,
+    "current_score": 46.5,
     "current_strength": 62.0,
-    "current_value": 325.25,
-    "current_momentum": 66.0,
-    "ltp": 325.25,
+    "current_value": 316.0,
+    "current_momentum": 43.0,
+    "ltp": 316.0,
     "sector": "",
     "pe": 13.33,
     "roe_pct": 35.0,
     "de_ratio": 0.25,
     "npm_pct": 16.6,
-    "rsi": 56.4,
-    "ma200": 328.25,
-    "wk52_return_pct": 47.22,
-    "volume_spike": 3.63,
-    "today_volume": 103211,
-    "avg_volume_10d": 28412.2,
+    "rsi": 51.1,
+    "ma200": 328.21,
+    "wk52_return_pct": 43.03,
+    "volume_spike": 0.94,
+    "today_volume": 16716,
+    "avg_volume_10d": 24087.45,
     "news": [
       {
         "title": "Borana Weaves approves \u20b95 Cr loan to Win Star Industries at 12%",
@@ -213,11 +208,11 @@
         "summary": "Published: Sat, 05 Sep 2026 08:30:03 GMT"
       },
       {
-        "title": "Borana Weaves Ltd Key Financial Ratios \u2013 Valuation, Profitability & More",
-        "url": "https://news.google.com/rss/articles/CBMihgFBVV95cUxNNXNyRVh6d05XMEh5V1A3SjJDMlVJM2xNaUZHODVjV3dFc1hWT240QWZvNmlLTzZxNTQ3Q0c0WTJScVl1U1NvTzd5eGlaX21KSnBScFNZNWRCRV91T2dwNHJEcDBhWnB4VG1GZEczREhnU3dQOXV2c2lYREJ4NFMzUnpCblFlUQ?oc=5",
-        "pubDate": "Sat, 29 Aug 2026 22:35:18 GMT",
-        "provider": "valueresearchonline.com",
-        "summary": "Published: Sat, 29 Aug 2026 22:35:18 GMT"
+        "title": "Borana Weaves Ltd Financials \u2013 Balance Sheet, Profit & Loss, Cash Flow",
+        "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxOU0pwVDhETjBpUV9Qa3hUUkNoZmdJOUZpcDF0bDhRZzV4TGtOZncwSi0tUE5SMm0xN19VWUIxU3ZVUXRQOWVjM3BQZGdFd0hoUjZxd05xNEN0ckcxMHV2V0wtci1XWmpJblNXdXBiUHJzRExXZ0NZRVlIQlVsOFlFY090OVNYLWRVMFplWGpZcw?oc=5",
+        "pubDate": "Sat, 29 Aug 2026 22:25:08 GMT",
+        "provider": "Value Research",
+        "summary": "Published: Sat, 29 Aug 2026 22:25:08 GMT"
       },
       {
         "title": "Market Might Still Lack Some Conviction On Borana Weaves Limited (NSE:BORANA) Even After 28% Share Price Boost",
@@ -227,11 +222,11 @@
         "summary": "Published: Thu, 29 Jan 2026 08:00:00 GMT"
       },
       {
-        "title": "Borana Weaves Ltd Financials \u2013 Balance Sheet, Profit & Loss, Cash Flow",
-        "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxOU0pwVDhETjBpUV9Qa3hUUkNoZmdJOUZpcDF0bDhRZzV4TGtOZncwSi0tUE5SMm0xN19VWUIxU3ZVUXRQOWVjM3BQZGdFd0hoUjZxd05xNEN0ckcxMHV2V0wtci1XWmpJblNXdXBiUHJzRExXZ0NZRVlIQlVsOFlFY090OVNYLWRVMFplWGpZcw?oc=5",
-        "pubDate": "Sat, 29 Aug 2026 22:25:08 GMT",
-        "provider": "valueresearchonline.com",
-        "summary": "Published: Sat, 29 Aug 2026 22:25:08 GMT"
+        "title": "Borana Weaves Ltd Shareholding Pattern \u2013 Promoters, FIIs & DIIs",
+        "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNcTdkdEhFckg4M2FLd2YzZjFlaWdUb3Joa3VJcWx1Sk91U3RJOGkzRUxYdjRqYlFPZnZlZmRqWGNRTjhhUXNubTJ4V2pVdDVXTkFtRDgxV2FhdzZWWTJqbUNGSVRzVmVzNTBwM1Ztbzl0OXdOVVp4dl9HOTlnLWkwZnZ1TGU5dHNH?oc=5",
+        "pubDate": "Sat, 29 Aug 2026 22:37:31 GMT",
+        "provider": "Value Research",
+        "summary": "Published: Sat, 29 Aug 2026 22:37:31 GMT"
       },
       {
         "title": "BORANA WEAVES LIMITED Share Price",
@@ -246,14 +241,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9325.25 fell below 200-day MA \u20b9328.25"
+        "message": "Trend Broken \u2014 Price \u20b9316.0 fell below 200-day MA \u20b9328.21"
       }
     ],
-    "signal": "HOLD",
-    "signal_badge": "\ud83d\udfe1 HOLD",
-    "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": -16.75,
-    "unrealised_pct": -4.9
+    "signal": "SELL",
+    "signal_badge": "\ud83d\udd34 SELL",
+    "signal_reason": "Price below 200-day MA (\u20b9328.21) & score <50",
+    "unrealised_pnl": -26.0,
+    "unrealised_pct": -7.6
   },
   {
     "symbol": "FEDERALBNK",
@@ -263,29 +258,29 @@
     "avg_cost": 356.1,
     "total_invested": 712.2,
     "added_at": "2026-08-13",
-    "score_at_entry": 42.2,
+    "score_at_entry": 49.4,
     "strength_at_entry": 0.0,
     "value_at_entry": 0.0,
-    "momentum_at_entry": 49.0,
+    "momentum_at_entry": 51.0,
     "roe_at_entry": null,
     "de_at_entry": null,
     "npm_at_entry": null,
-    "current_score": 42.2,
+    "current_score": 49.4,
     "current_strength": 0.0,
-    "current_value": 684.0,
-    "current_momentum": 49.0,
-    "ltp": 342.0,
+    "current_value": 691.3,
+    "current_momentum": 51.0,
+    "ltp": 345.65,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 43.3,
-    "ma200": 298.05,
-    "wk52_return_pct": 79.41,
-    "volume_spike": 1.05,
-    "today_volume": 5173640,
-    "avg_volume_10d": 4915316.95,
+    "rsi": 46.8,
+    "ma200": 298.55,
+    "wk52_return_pct": 81.33,
+    "volume_spike": 0.52,
+    "today_volume": 1828501,
+    "avg_volume_10d": 4764600.8,
     "news": [
       {
         "title": "Federal Bank Share Price - Live NSE: FEDERALBNK Stock Price & Chart",
@@ -305,7 +300,7 @@
         "title": "Federal Bank Shares Rally 7% After Q1 Profit Jumps 36%, NII Surges 26%; Asset Quality Improves",
         "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxNMUJha1N3VGo4UHpwbGFOdWp0U29sVVIwWWkweFc2OTRVS1JyelB3Y2lELWFBMWNUWkd5N0hCSHgwNlNvNE5peHNqQ0RZYklGenJTVTktN0NYMGwtamp3TVN0X1FwRWQ2X3lsbGNPZEF2cW9xbU1JMWtNckRTRk1MYzdwZzFaNnlBS09uNWdFTmROUQ?oc=5",
         "pubDate": "Fri, 17 Jul 2026 07:00:00 GMT",
-        "provider": "hdfcsky.com",
+        "provider": "HDFC Sky",
         "summary": "Published: Fri, 17 Jul 2026 07:00:00 GMT"
       },
       {
@@ -327,9 +322,9 @@
     "alerts": [],
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
-    "signal_reason": "Consolidating price & fundamentals",
-    "unrealised_pnl": -28.2,
-    "unrealised_pct": -3.96
+    "signal_reason": "Moderate quality score; maintain position",
+    "unrealised_pnl": -20.9,
+    "unrealised_pct": -2.93
   },
   {
     "symbol": "ITC",
@@ -339,29 +334,29 @@
     "avg_cost": 275.45,
     "total_invested": 275.45,
     "added_at": "2026-08-13",
-    "score_at_entry": 32.6,
+    "score_at_entry": 36.9,
     "strength_at_entry": 65.0,
     "value_at_entry": 28.0,
-    "momentum_at_entry": 2.0,
+    "momentum_at_entry": 10.0,
     "roe_at_entry": 33.8,
     "de_at_entry": 0.0,
     "npm_at_entry": 28.5,
-    "current_score": 32.6,
+    "current_score": 36.9,
     "current_strength": 65.0,
-    "current_value": 263.5,
-    "current_momentum": 2.0,
-    "ltp": 263.5,
+    "current_value": 265.05,
+    "current_momentum": 10.0,
+    "ltp": 265.05,
     "sector": "",
     "pe": 15.2,
     "roe_pct": 33.8,
     "de_ratio": 0.0,
     "npm_pct": 28.5,
-    "rsi": 39.3,
-    "ma200": 314.16,
-    "wk52_return_pct": -35.35,
-    "volume_spike": 0.48,
-    "today_volume": 6684240,
-    "avg_volume_10d": 13963984.35,
+    "rsi": 41.8,
+    "ma200": 313.44,
+    "wk52_return_pct": -34.97,
+    "volume_spike": 0.41,
+    "today_volume": 4093711,
+    "avg_volume_10d": 13516171.9,
     "news": [
       {
         "title": "Cigarette Stock: Should ITC Ltd Split Its Business Into 1:2? What's Smoking In This FMCG Giant?",
@@ -371,18 +366,11 @@
         "summary": "Published: Mon, 07 Sep 2026 05:42:40 GMT"
       },
       {
-        "title": "ITC Ltd. is Rated Hold by MarketsMOJO",
-        "url": "https://news.google.com/rss/articles/CBMinwFBVV95cUxOWXo5RnFzaHFJUXJZWTl0ZGsyZWhFNDdTSFk4Y1VHRV9CeHVLM20ta0lPWUowelVlX0VXLWZENDBNNUtJZXBERmRORGlIb3lRSkx1UlZZS3RDbXQxeTFkcUlWV0dfdkZsM29LS3l0U2FyV19nYVVsQzZKUDQ5U3FzVDhBVjNCcjgtNXROYm9KTFB5RHdnbXdzcWxHdkhieGs?oc=5",
-        "pubDate": "Sun, 06 Sep 2026 20:20:33 GMT",
-        "provider": "MarketsMojo",
-        "summary": "Published: Sun, 06 Sep 2026 20:20:33 GMT"
-      },
-      {
-        "title": "ITC shares jump nearly 3%, among top Nifty gainers after Happiest Minds-ITC Infotech merger deal",
-        "url": "https://news.google.com/rss/articles/CBMi8AFBVV95cUxNUE5nTUJZdTZUZVgwMmhudHJCeVlJd0FSVkpCNTl6UmMxVG53NWQtZ2FETmg1VV9DT2RDdzJudjhYRHZBY0pUUEM1WXFxQVoweFpPSklJNmdMNmE5c3YzQ24xTVZseUVWWE9WTTIxZ1d2dkdhb2ZQbzRXbjlZaDJmNmFXSWU5bTBnYnVFNzAyczJ5aGZxOFJmcE9LN1doeDByaVNoSVB5TlBmaXNJTERpMFBBV25jaHV4ZGlHYXdKTXFTOGxzaDU1Y1ZRYzZOMllZMlBJRVQ0STVwSkVyTkZwVS1scjNXYjZLa3Jrc0Q4T0HSAfYBQVVfeXFMTWoybHNPN3FXTW9IdlBJaHlVMExHX3g0YW15Z0hFMzAyN21UbUtRQVBwTmRwb3dyN3RNbU0zeThiblFHOE9IMTRRM2pZX2V4ZldJYXprYTZtMXh4MXdxZ0RSMlZNRG5vSWRka0E4d2t0UmpUMWFhNkRxa3Q4djdSRGpjUjlScE5YbnlVNm5tdzVmZFhaX2M0S0p0RnVWQTJnYms5Nmw1WWhGcDVLRVVqcTVpVVR2OU94dUc1REFJbm9nOC1RWUpmZjdTaFliRllZMWYzcklFdXd5cTBaX2ZJeGRNQklVYlRLOXVBV0YwdFlTNUs4c0lB?oc=5",
-        "pubDate": "Tue, 01 Sep 2026 04:31:55 GMT",
-        "provider": "Moneycontrol.com",
-        "summary": "Published: Tue, 01 Sep 2026 04:31:55 GMT"
+        "title": "ITC Ltd. Upgraded to Hold by MarketsMOJO Amid Mixed Financial and Technical Signals",
+        "url": "https://news.google.com/rss/articles/CBMi3AFBVV95cUxQRkJwS0pyQ3hnbUtyRV9MMWd5MFkyZWk5cldVWWhCbjg4MlVNNWE2N2F5UmNlekhQbnZlTVBGdFpDVnY0aEplWjdyeEhsd0RQaGY0cnFCSGxPb3FQVDlBcUtsa0liZDNaaTYzZkwzNGpzWGltVHRVYkFZVC1PdlhJYlU2MDZ1STBCVVpDLURGSmc3WGpUVENRSzczRWZ5V1BBTFJYMnkzNlFYRTJvVV9iYkdNZzlrZGJfcDk5UzJtRWxMUHhDTFBmbDNHckZZMWRFM3YtVkRHbVBlWUJa?oc=5",
+        "pubDate": "Sat, 05 Sep 2026 23:41:31 GMT",
+        "provider": "marketsmojo.com",
+        "summary": "Published: Sat, 05 Sep 2026 23:41:31 GMT"
       },
       {
         "title": "ITC share price slips 2%, hits 52-week low; what's making Street nervous?",
@@ -392,11 +380,18 @@
         "summary": "Published: Mon, 17 Aug 2026 07:00:00 GMT"
       },
       {
-        "title": "Why ITC share price is down today? What's behind the stock plunge? Trigger and data details here",
-        "url": "https://news.google.com/rss/articles/CBMi9gFBVV95cUxQOEY3dG5JTjV4ejZHYThaRUlnZTJQd0oyRlE3RFF2RTJGS0NJLTJ4ZHRxdlh1ZEZEOEVOT2NlMVZmRFdnOUZOWEpHZUdyVzRfZVJEUGM5WTFubTRLclUzZ05ENUMtbUNGY29ySld4QTdvNmFBWVE4ZVNNckFwWW1Rcll6QXRONUd4QlB4QlU4VEdQbG13VXhIQUNFdS1mTUFmM2JXQnFwdWstQ1Bxel91THhXamtJdFdHb1ptaHBReHd6V052ZzBrTzc0MGIwZVdEU3JMdXJLWTE4WTlqNWVNVFp1Z0xsdThkUmM1YTVhSE9fVlZQZUHSAfsBQVVfeXFMT2RGdW95LTloWHZtSDU5WmZjVThuY0NrUFFHaU9qNk11anhfcjcxRTF1WHo0Z201SF9CSEp1dkRzTWFMVGl1bDVIVEp6U3V0WUtjUGU1eFYwMGQyX1VBUExVTzdvNm1OakRJbzBjZ0hXTVAyUDh3emZjVkRyWUdSSDRqMjhCMmZhVlNsS0V3MW1RQ1RyWGp2eXAtUUNDWkFQcnNVQXNPcWhQTWJ0REwxSXkxclNHRGJveHNaNzZzM01GQ2FVRUwtQURmdU9iQzRsV2pLZWF1dkgzMFIxb0l6dUdqSDRFZWNjXzZpdm5lNW1RbHRsMC0xUW5LbVU?oc=5",
-        "pubDate": "Tue, 01 Sep 2026 04:16:37 GMT",
-        "provider": "Livemint",
-        "summary": "Published: Tue, 01 Sep 2026 04:16:37 GMT"
+        "title": "ITC shares jump nearly 3%, among top Nifty gainers after Happiest Minds-ITC Infotech merger deal",
+        "url": "https://news.google.com/rss/articles/CBMi8AFBVV95cUxNUE5nTUJZdTZUZVgwMmhudHJCeVlJd0FSVkpCNTl6UmMxVG53NWQtZ2FETmg1VV9DT2RDdzJudjhYRHZBY0pUUEM1WXFxQVoweFpPSklJNmdMNmE5c3YzQ24xTVZseUVWWE9WTTIxZ1d2dkdhb2ZQbzRXbjlZaDJmNmFXSWU5bTBnYnVFNzAyczJ5aGZxOFJmcE9LN1doeDByaVNoSVB5TlBmaXNJTERpMFBBV25jaHV4ZGlHYXdKTXFTOGxzaDU1Y1ZRYzZOMllZMlBJRVQ0STVwSkVyTkZwVS1scjNXYjZLa3Jrc0Q4T0HSAfYBQVVfeXFMTWoybHNPN3FXTW9IdlBJaHlVMExHX3g0YW15Z0hFMzAyN21UbUtRQVBwTmRwb3dyN3RNbU0zeThiblFHOE9IMTRRM2pZX2V4ZldJYXprYTZtMXh4MXdxZ0RSMlZNRG5vSWRka0E4d2t0UmpUMWFhNkRxa3Q4djdSRGpjUjlScE5YbnlVNm5tdzVmZFhaX2M0S0p0RnVWQTJnYms5Nmw1WWhGcDVLRVVqcTVpVVR2OU94dUc1REFJbm9nOC1RWUpmZjdTaFliRllZMWYzcklFdXd5cTBaX2ZJeGRNQklVYlRLOXVBV0YwdFlTNUs4c0lB?oc=5",
+        "pubDate": "Tue, 01 Sep 2026 04:31:55 GMT",
+        "provider": "Moneycontrol.com",
+        "summary": "Published: Tue, 01 Sep 2026 04:31:55 GMT"
+      },
+      {
+        "title": "ITC Share Price Today at 52-Week Low: Price and Valuation",
+        "url": "https://news.google.com/rss/articles/CBMie0FVX3lxTE9walNHUUt3ZkFTUlNEQWlNSkpibmJ1Tm9vUXg3Y3kwR01qZkV3MXhJbHJUanhYeG1BXzhrTng4enI3OVhfTGtPZllZVzJXRXB0ay1wRjBndnJFOHNyRXQ5SFRaeV9zTWQzanNkV2FVcC0yV3g3TFhrX1lnMA?oc=5",
+        "pubDate": "Thu, 20 Aug 2026 05:37:00 GMT",
+        "provider": "Univest",
+        "summary": "Published: Thu, 20 Aug 2026 05:37:00 GMT"
       }
     ],
     "corporate_actions": [],
@@ -404,19 +399,19 @@
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 32.6 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 36.9 (below 40 threshold)"
       },
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9263.5 fell below 200-day MA \u20b9314.16"
+        "message": "Trend Broken \u2014 Price \u20b9265.05 fell below 200-day MA \u20b9313.44"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 32.6 (<40)",
-    "unrealised_pnl": -11.95,
-    "unrealised_pct": -4.34
+    "signal_reason": "Quality score collapsed to 36.9 (<40)",
+    "unrealised_pnl": -10.4,
+    "unrealised_pct": -3.78
   },
   {
     "symbol": "NMDC",
@@ -426,43 +421,36 @@
     "avg_cost": 85.21,
     "total_invested": 511.26,
     "added_at": "2026-08-13",
-    "score_at_entry": 49.0,
+    "score_at_entry": 50.8,
     "strength_at_entry": 65.0,
     "value_at_entry": 35.0,
-    "momentum_at_entry": 32.0,
+    "momentum_at_entry": 38.0,
     "roe_at_entry": 28.5,
     "de_at_entry": 0.0,
     "npm_at_entry": 32.0,
-    "current_score": 49.0,
+    "current_score": 50.8,
     "current_strength": 65.0,
-    "current_value": 503.1,
-    "current_momentum": 32.0,
-    "ltp": 83.85,
+    "current_value": 504.54,
+    "current_momentum": 38.0,
+    "ltp": 84.09,
     "sector": "",
     "pe": 10.8,
     "roe_pct": 28.5,
     "de_ratio": 0.0,
     "npm_pct": 32.0,
-    "rsi": 44.5,
-    "ma200": 83.67,
-    "wk52_return_pct": 12.54,
-    "volume_spike": 0.83,
-    "today_volume": 15201091,
-    "avg_volume_10d": 18254364.7,
+    "rsi": 45.5,
+    "ma200": 83.72,
+    "wk52_return_pct": 12.86,
+    "volume_spike": 0.66,
+    "today_volume": 8768868,
+    "avg_volume_10d": 18020829.9,
     "news": [
       {
         "title": "NMDC Steel Ltd. Stock News",
         "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE9Db1lfZm52V1llc0xlbjRKSmxBWjIwTXkxSXVMRGpvYjdYQUM2S2EzWGxYWXR4X1QtMmU0aGlRbXBXZXpJZU1aQV82MkY1UndrVzg5bXJiVVpJUWotWl9uTzZHYkFWLU5CdVp2Vi01RDZoZ0I5NERCNEpR?oc=5",
         "pubDate": "Thu, 03 Sep 2026 20:54:11 GMT",
-        "provider": "valueresearchonline.com",
+        "provider": "Value Research",
         "summary": "Published: Thu, 03 Sep 2026 20:54:11 GMT"
-      },
-      {
-        "title": "NMDC Incorporates GIFT City Subsidiary; Shares Rise 0.78%",
-        "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxOSk9mOUpMYTdFb1hWeXVHSnNlc3NXOGowdmk4NmZvSW9DbXpfVnNRSjlGNDVpQVhfUnViTFc2dW0yU09WWDZLbExUdnp5NkRvQVZHMF9vSzhlVlFMTDcwYUdDYW5TZ1BsN2NSemVzUWF4Z2l4WWJfdTd2VUQ3cjJWVVV6S3pWY1Zweld6SjA0U2lVdw?oc=5",
-        "pubDate": "Thu, 03 Sep 2026 04:28:50 GMT",
-        "provider": "hdfcsky.com",
-        "summary": "Published: Thu, 03 Sep 2026 04:28:50 GMT"
       },
       {
         "title": "NMDC Q1 Results Today: Time, Earnings Call, Dividend News, What To Watch, Share Price Performance",
@@ -479,11 +467,18 @@
         "summary": "Published: Tue, 02 Jun 2026 07:00:00 GMT"
       },
       {
-        "title": "NMDC Steel Ltd Upgraded to Sell Rating Amid Mixed Financial and Technical Signals",
-        "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxPV09TSGd0MENaSTJzVEwzTTBYSzlqRGN3ZXhxWFpPeTA1cWxIaUxyV25BQmFVcERoQS05QmtXclIzLVZXQmk0dmtBQmw5TTlzUlpFLUVpWGV5ZTVTY3FZa05UYzBYSFkyQVkyb1R2SkdZdndaLVBZMDEyMUxEclRMQnRwOFl6X01VY21EOUx4b1lBalE1SXZrbkpYMkEtcXFYYmNwX2hUM0FLd1lXM1R4TzJhdVBlR2ZlaWxRbU9aWVFjT3NfMGdjZC1TWF9NSmJwRTB6TUk5S2I1SDQ?oc=5",
-        "pubDate": "Sat, 05 Sep 2026 23:41:04 GMT",
-        "provider": "MarketsMojo",
-        "summary": "Published: Sat, 05 Sep 2026 23:41:04 GMT"
+        "title": "NMDC Ltd soars 1.49%, gains for fifth straight session",
+        "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxPNGRlYWpqRWFnRVFDczByTGRIelBicEZkTmF4emZMcmNhZ0FGa3VYVm5QMnpxMUxjNlRoQy1VNFFyeGNyUGNGckFqUFJzZkp6bVktNFoxbmRWdFljbXc4Ull5OFRfOUtxZmRjd1JITUhFUWEzWmVrNWZhbE9OMlJUdGdLZldqRDFuQ3BodGNNbDRKbzhFdUJlS25zNk9FaXpnZW96QUZpT1hkbUNvMFhOUUU5REJwNlhXd3U0djU4cGVHX3VHdEdhWFZ2c19zbzTSAdQBQVVfeXFMTXBpT3dzdFdtRGs0TUJKekFMYjMxRVpHUFF0Z3ZNUnRSbHpQWENZc1JMaldoWTJnLTlJMDlodVVDdGhlNE9WYkg5RDBHNzRlaDFtQUJwQnEzaGxjbjFhZlZQLUtROVNwbmtwdW1OVDA4UEpyN1FESWxhNVdOYlRISEVad2szR1NxLVdKOFQ5eGVTX1VLOFdfN1NYWXBGdDdZdWJWV0ZFNFJyNTlCZ3VzUmgtblhKMXg5aWZHWEI4bnFnY0RwbHpta3RXSVhnSzBDc09jY2g?oc=5",
+        "pubDate": "Wed, 26 Aug 2026 07:00:00 GMT",
+        "provider": "Business Standard",
+        "summary": "Published: Wed, 26 Aug 2026 07:00:00 GMT"
+      },
+      {
+        "title": "NMDC Forecast \u2014 Price Target \u2014 Prediction for 2027",
+        "url": "https://news.google.com/rss/articles/CBMidkFVX3lxTE82WEF2eTJmOGd5MTZtR1g3eWZjdUt4aEV3QVZoQVQzLXhIeHlQQ2FOd3p5Z2ZDLVF2TEt0cm80NE84aWtiU0xJSGkwbk5OY1p2YV9EYmF3aWNCbDZJWkQ5X3pGeGN4a2xVT2V1OExmZ210ZFRaOVE?oc=5",
+        "pubDate": "Thu, 25 Jun 2026 13:12:39 GMT",
+        "provider": "TradingView",
+        "summary": "Published: Thu, 25 Jun 2026 13:12:39 GMT"
       }
     ],
     "corporate_actions": [],
@@ -491,8 +486,8 @@
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": -8.16,
-    "unrealised_pct": -1.6
+    "unrealised_pnl": -6.72,
+    "unrealised_pct": -1.31
   },
   {
     "symbol": "TATAPOWER",
@@ -502,43 +497,36 @@
     "avg_cost": 382.25,
     "total_invested": 382.25,
     "added_at": "2026-08-13",
-    "score_at_entry": 28.4,
+    "score_at_entry": 20.0,
     "strength_at_entry": 0.0,
     "value_at_entry": 0.0,
-    "momentum_at_entry": 18.0,
+    "momentum_at_entry": 12.0,
     "roe_at_entry": null,
     "de_at_entry": null,
     "npm_at_entry": null,
-    "current_score": 28.4,
+    "current_score": 20.0,
     "current_strength": 0.0,
-    "current_value": 365.7,
-    "current_momentum": 18.0,
-    "ltp": 365.7,
+    "current_value": 363.9,
+    "current_momentum": 12.0,
+    "ltp": 363.9,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 45.7,
-    "ma200": 388.3,
-    "wk52_return_pct": -4.58,
-    "volume_spike": 0.87,
-    "today_volume": 4849529,
-    "avg_volume_10d": 5579558.75,
+    "rsi": 44.0,
+    "ma200": 388.18,
+    "wk52_return_pct": -5.05,
+    "volume_spike": 0.35,
+    "today_volume": 1414786,
+    "avg_volume_10d": 5502057.55,
     "news": [
       {
-        "title": "Tata Power Falls 4% After Singapore Court Rejects Appeal",
-        "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTE5zdkpicWJjNV85REpac05IeGxuczR6VkFSUy1Pb0Y4ajNPVUJjOGlvMEc0aHZ4LU5Sa1AyaUZZREdNVWlUWUM3S2dZOXlFVjZZemh6eGgzQjc3aXRUdW9LdkFRZUtJOEp5Q1ZJU0NQcw?oc=5",
-        "pubDate": "Thu, 27 Aug 2026 07:00:00 GMT",
-        "provider": "hdfcsky.com",
-        "summary": "Published: Thu, 27 Aug 2026 07:00:00 GMT"
-      },
-      {
-        "title": "Tata Power share price jumps up to 5% in early trade; here is why",
-        "url": "https://news.google.com/rss/articles/CBMitwFBVV95cUxPOWJLZDRTemNFck0xaDNWSjdpRU91WXZxUXBMMUhzR0tseU1QTGdCaVRZd3JKdTJ0YUVURFFjYlQ5VUkxU3VEbEtMeG9sVmw3SElhYWUySm5TSmw4VjlfejFPY05SdE5zR0NUVEc4Q3RzZGhrRlNEY2FUd1JrMjRFMnlwdWJhdkxNcUNQT04wYUJXcFozOFNxT09XTkhWX2hDSlBOUHI0MGhnUjRuam5nZVpCM0p6RFU?oc=5",
-        "pubDate": "Thu, 19 Mar 2026 07:00:00 GMT",
-        "provider": "Upstox",
-        "summary": "Published: Thu, 19 Mar 2026 07:00:00 GMT"
+        "title": "Tata Power Commissions 100.8 MW Wind Project; Shares Slip 0.32%",
+        "url": "https://news.google.com/rss/articles/CBMimgFBVV95cUxPNUlVb1RiTDNVVGJRenpDbUJ4N2kwLVBNSHpNN3NuMnNMbWFWM1lOWHl3Vl9QMUNEYjNPNzM4cVExY3duaTlvcV9HNUQxMFF4S09vcVh0UG9reUxTX3JyY091ZWptMldfRDZPNER4Y1E4T29idFo5R2w1ekd2c2RJbWl5ekpwazh2SW81OUFORlVNZ0hrdDNqUkNB?oc=5",
+        "pubDate": "Fri, 03 Jul 2026 07:00:00 GMT",
+        "provider": "HDFC Sky",
+        "summary": "Published: Fri, 03 Jul 2026 07:00:00 GMT"
       },
       {
         "title": "Tata Power share price target: 29% upside? Why MOFSL is bullish on this Tata stock post AGM",
@@ -546,6 +534,13 @@
         "pubDate": "Wed, 15 Jul 2026 07:00:00 GMT",
         "provider": "Business Today",
         "summary": "Published: Wed, 15 Jul 2026 07:00:00 GMT"
+      },
+      {
+        "title": "Tata Power share price jumps up to 5% in early trade; here is why",
+        "url": "https://news.google.com/rss/articles/CBMitwFBVV95cUxPOWJLZDRTemNFck0xaDNWSjdpRU91WXZxUXBMMUhzR0tseU1QTGdCaVRZd3JKdTJ0YUVURFFjYlQ5VUkxU3VEbEtMeG9sVmw3SElhYWUySm5TSmw4VjlfejFPY05SdE5zR0NUVEc4Q3RzZGhrRlNEY2FUd1JrMjRFMnlwdWJhdkxNcUNQT04wYUJXcFozOFNxT09XTkhWX2hDSlBOUHI0MGhnUjRuam5nZVpCM0p6RFU?oc=5",
+        "pubDate": "Thu, 19 Mar 2026 07:00:00 GMT",
+        "provider": "Upstox",
+        "summary": "Published: Thu, 19 Mar 2026 07:00:00 GMT"
       },
       {
         "title": "Tata Power Company Ltd and Druk Green sign MoU for 5,000 MW clean energy skill development",
@@ -567,19 +562,19 @@
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 28.4 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 20.0 (below 40 threshold)"
       },
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9365.7 fell below 200-day MA \u20b9388.3"
+        "message": "Trend Broken \u2014 Price \u20b9363.9 fell below 200-day MA \u20b9388.18"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 28.4 (<40)",
-    "unrealised_pnl": -16.55,
-    "unrealised_pct": -4.33
+    "signal_reason": "Quality score collapsed to 20.0 (<40)",
+    "unrealised_pnl": -18.35,
+    "unrealised_pct": -4.8
   },
   {
     "symbol": "TATASTEEL",
@@ -589,29 +584,29 @@
     "avg_cost": 182.82,
     "total_invested": 182.82,
     "added_at": "2026-08-13",
-    "score_at_entry": 33.8,
+    "score_at_entry": 39.0,
     "strength_at_entry": 0.0,
     "value_at_entry": 0.0,
     "momentum_at_entry": 27.0,
     "roe_at_entry": null,
     "de_at_entry": null,
     "npm_at_entry": null,
-    "current_score": 33.8,
+    "current_score": 39.0,
     "current_strength": 0.0,
-    "current_value": 185.61,
+    "current_value": 184.15,
     "current_momentum": 27.0,
-    "ltp": 185.61,
+    "ltp": 184.15,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 48.1,
-    "ma200": 192.91,
-    "wk52_return_pct": 9.95,
-    "volume_spike": 0.87,
-    "today_volume": 23689399,
-    "avg_volume_10d": 27339014.7,
+    "rsi": 45.0,
+    "ma200": 192.99,
+    "wk52_return_pct": 9.08,
+    "volume_spike": 0.8,
+    "today_volume": 16024873,
+    "avg_volume_10d": 27091908.15,
     "news": [
       {
         "title": "Tata Steel Limited Just Missed Earnings - But Analysts Have Updated Their Models",
@@ -635,18 +630,18 @@
         "summary": "Published: Wed, 12 Aug 2026 07:00:00 GMT"
       },
       {
+        "title": "TATASTEEL Forecast \u2014 Price Target \u2014 Prediction for 2027",
+        "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTE9HNjN1V0FZYVY0UWRxRG5uRGk4QXFjWUsxeXdfRVpWVjNmMW14T25iUEhDNF9iWDFob2lYNTlsX0x5OFNIOWpIOTJVLVNVamJKTWhUNklIei1qZGVVeWFoRDR1TlJTQmdLLTYxUHFzNTBxUHNqRFpMREhYSno?oc=5",
+        "pubDate": "Thu, 25 Jun 2026 13:43:04 GMT",
+        "provider": "TradingView",
+        "summary": "Published: Thu, 25 Jun 2026 13:43:04 GMT"
+      },
+      {
         "title": "Tata Steel Ltd. Share Price Today - Tata Steel Ltd. Stock Price Live NSE/BSE",
         "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE9sMWt1VDI2b2YxeWpVNUZUMDl3dG1sbEN2WHZnQmxSRWVPV0ZyVVIwdmdFUVEyUDF2ZW5KenU1VXU5YnR3SFJnRjlqQjItdmFkcGg0VlpBUU9XMEczWGFQNURwLVBvR0s3Y2Rxd3cyOWxFQ1o4TFdmMUJR?oc=5",
         "pubDate": "Sat, 03 Jan 2026 16:44:23 GMT",
         "provider": "CNBC TV18",
         "summary": "Published: Sat, 03 Jan 2026 16:44:23 GMT"
-      },
-      {
-        "title": "REG - Tata Steel Limited - Disclosure under Reg 30&51 of SEBI LODR, 2015",
-        "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxOUTJOd0xzWWU5N1VtWHY2VEtwQW5kY01BZWt2V0lyU2NJMDYyWHJhczdZd0ZDTlk5QXhqRjE3Wkx6bTVvakpjX0lkekRnOHlfVENTenVPY19aeG56YzhYN1o2dlk4S0F2dEttLWNZbFJGQUdyRDBReUJob2F3cHhWOEpEU2FrMldrNUhRS0piOVJlSk5ocmhvdDBiOFpKNjJxazhzTkhINF9PdG5LdENjSXA0eld2eUZTcUFYQTR2eVNTcXZjUUdVXzdHNW1wYUFOSVlURWVoc1Z5Q0U?oc=5",
-        "pubDate": "Fri, 10 Jul 2026 07:00:00 GMT",
-        "provider": "TradingView",
-        "summary": "Published: Fri, 10 Jul 2026 07:00:00 GMT"
       }
     ],
     "corporate_actions": [],
@@ -654,19 +649,19 @@
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 33.8 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 39.0 (below 40 threshold)"
       },
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9185.61 fell below 200-day MA \u20b9192.91"
+        "message": "Trend Broken \u2014 Price \u20b9184.15 fell below 200-day MA \u20b9192.99"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 33.8 (<40)",
-    "unrealised_pnl": 2.79,
-    "unrealised_pct": 1.53
+    "signal_reason": "Quality score collapsed to 39.0 (<40)",
+    "unrealised_pnl": 1.33,
+    "unrealised_pct": 0.73
   },
   {
     "symbol": "UYFINCORP",
@@ -685,20 +680,20 @@
     "npm_at_entry": null,
     "current_score": 46.0,
     "current_strength": 0.0,
-    "current_value": 235.56,
+    "current_value": 236.4,
     "current_momentum": 70.0,
-    "ltp": 19.63,
+    "ltp": 19.7,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 51.0,
+    "rsi": 51.7,
     "ma200": 15.17,
-    "wk52_return_pct": 48.37,
-    "volume_spike": 0.65,
-    "today_volume": 96033,
-    "avg_volume_10d": 148097.9,
+    "wk52_return_pct": 48.9,
+    "volume_spike": 0.68,
+    "today_volume": 74096,
+    "avg_volume_10d": 147001.05,
     "news": [
       {
         "title": "Benign Growth For U. Y. Fincorp Limited (NSE:UYFINCORP) Underpins Its Share Price",
@@ -715,11 +710,11 @@
         "summary": "Published: Fri, 07 Aug 2026 07:00:00 GMT"
       },
       {
-        "title": "U. Y. Fincorp Limited (UYFINCORP): Modest Decline Amid Range-Bound Trading - Retracement Entry",
-        "url": "https://news.google.com/rss/articles/CBMirAFBVV95cUxNMVlmcFpHZl9wOWl2RUZaRVZ4UEJIY3ZkaG1TR1ZsVFptVUc4UXZtQ3UwMUFOTWVTWDZMb2xBa2Nndkl4TE52Z05LSm4ycjF6Mlk0OGM2UzM5b3NpRW5RNVhqRC03eFhjOWNYN2FhMFVDTXdOUUM4T2MzQ0JrdmFnLTlYeWcwa0VZRzBoZGxGSFpKTGdvSEM3SHJTdTNXVTdMek01THNaTnpSR1gy?oc=5",
-        "pubDate": "Wed, 17 Jun 2026 07:00:00 GMT",
+        "title": "U. Y. Fincorp Gains 3.51% as Price Breaks Above Key Support Level - Last Point Resistance",
+        "url": "https://news.google.com/rss/articles/CBMipgFBVV95cUxOWjAyOTVDWTNkTGxmeERBTHlsS3hlU3BLMXlIZWltQmhvQ1JTUzFaVkFBYUtrQ0pObW00UHFwV29LRElYOEEwLWpyT21sNUN1TnozcVZ2blE1ZWwtOWs3Z1MtVEdZUk1feGFqZ2x3M0pGLV9yNDRWMjEzX01YWm94cXF1aVQyLXhQNU45ZXR2SUx5TmlqU3hpaWJhU3lIOXdMSVpMZDBB?oc=5",
+        "pubDate": "Mon, 06 Jul 2026 07:00:00 GMT",
         "provider": "vinanet.vn",
-        "summary": "Published: Wed, 17 Jun 2026 07:00:00 GMT"
+        "summary": "Published: Mon, 06 Jul 2026 07:00:00 GMT"
       },
       {
         "title": "UYFINCORP Stock Price and Chart \u2014 NSE:UYFINCORP",
@@ -729,11 +724,11 @@
         "summary": "Published: Thu, 03 Oct 2024 15:35:07 GMT"
       },
       {
-        "title": "U. Y. Fincorp Gains 3.51% as Price Breaks Above Key Support Level - Last Point Resistance",
-        "url": "https://news.google.com/rss/articles/CBMipgFBVV95cUxOWjAyOTVDWTNkTGxmeERBTHlsS3hlU3BLMXlIZWltQmhvQ1JTUzFaVkFBYUtrQ0pObW00UHFwV29LRElYOEEwLWpyT21sNUN1TnozcVZ2blE1ZWwtOWs3Z1MtVEdZUk1feGFqZ2x3M0pGLV9yNDRWMjEzX01YWm94cXF1aVQyLXhQNU45ZXR2SUx5TmlqU3hpaWJhU3lIOXdMSVpMZDBB?oc=5",
-        "pubDate": "Mon, 06 Jul 2026 07:00:00 GMT",
+        "title": "U. Y. Fincorp Limited (UYFINCORP) Consolidates Around \u20b915 with Modest Upward Tick - OBV Trend Line",
+        "url": "https://news.google.com/rss/articles/CBMiuAFBVV95cUxOdGIzb1EwcnZaY056TkViVGNCNmhReVVOT1c2MGw4Vnc1SGE2S2pGREluUVJUUlVucm8xSVUyYWpqY2dKY21JRjEzcWp2dU9EdlpSTGNpNElSY0piUTYxc3FKUHhZVE9fUnZnRV9kN3ZZaW5BdWxYQ1ZvQ28xU3lmQWtMZnFMQUdvVWIzTXdsQzdvUTVpVnE4N2Zpd3VkUVlkaVFRZEYxWHo4Y081VGYyZ3MycnRtZnNv?oc=5",
+        "pubDate": "Tue, 02 Jun 2026 07:00:00 GMT",
         "provider": "vinanet.vn",
-        "summary": "Published: Mon, 06 Jul 2026 07:00:00 GMT"
+        "summary": "Published: Tue, 02 Jun 2026 07:00:00 GMT"
       }
     ],
     "corporate_actions": [],
@@ -741,7 +736,7 @@
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": 3.6,
-    "unrealised_pct": 1.55
+    "unrealised_pnl": 4.44,
+    "unrealised_pct": 1.91
   }
 ]
