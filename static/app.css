@@ -143,6 +143,7 @@ tr:hover td{background:#ffffff06}
 /* "Not measured" reads as its own state, never as a failing score. */
 .score-fill-na{width:100%;background:repeating-linear-gradient(90deg,var(--border) 0 5px,transparent 5px 10px)}
 .score-num-na{color:var(--muted);font-weight:700;font-style:italic;opacity:.9}
+.score-basis{font-size:11.5px;color:var(--muted);font-weight:700;margin-top:3px;letter-spacing:.02em;opacity:.85}
 .partial-tag{font-size:13px;color:var(--muted);background:var(--card2);border-radius:4px;padding:1px 5px;margin-left:4px}
 
 /* ── Add button ── */

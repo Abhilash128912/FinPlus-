@@ -1208,6 +1208,10 @@ function renderLtWatchlist() {
     const qConfident = (s.lt_quality_confident !== false);
     const qInputs = (s.lt_fund_inputs_present != null)
       ? `${s.lt_fund_inputs_present}/${s.lt_fund_inputs_total || 6} inputs` : '';
+    // The ceiling, not 100: no points are given for metrics the source never
+    // reported, so a stock with no filings is judged out of ~35 and showing it
+    // as "31/100" would read as a failing business rather than a thin one.
+    const qMax = Math.round(Number(s.lt_quality_attainable_pct) || 100);
     const scoreColor = scoreVal >= 85 ? '#34d399' : scoreVal >= 75 ? '#60a5fa' : '#fbbf24';
     const subScores = [
       ['Growth', s.lt_growth_score], ['Value', s.lt_valuation_score],
@@ -1236,7 +1240,7 @@ function renderLtWatchlist() {
     return `
     <tr style="${isRetired ? 'opacity:0.5;background:rgba(0,0,0,0.2)' : ''}">
       <td>
-        <div style="font-weight:800;color:${scoreColor};font-size:19px" title="${scoreIsComputed ? 'Computed sector-aware LT quality score' : 'Manually entered durability score — not computed'}">${scoreVal} <span style="font-size:13px;color:var(--muted)">/100</span></div>
+        <div style="font-weight:800;color:${scoreColor};font-size:19px" title="${scoreIsComputed ? `Computed sector-aware LT quality. Points are only awarded for metrics the source actually reported, so the ceiling is ${qMax} for this stock, not 100.` : 'Manually entered durability score — not computed'}">${scoreVal} <span style="font-size:13px;color:var(--muted)">/${scoreIsComputed ? qMax : 100}</span></div>
         <div style="font-size:12px;margin-top:2px;font-weight:700;color:${scoreIsComputed ? (qConfident ? 'var(--muted)' : '#fbbf24') : 'var(--muted)'}" title="${scoreIsComputed ? (qConfident ? 'Computed from available fundamentals' : 'Low confidence: the source returned few or no fundamentals, and missing inputs are scored as zero') : 'Manually entered — not computed'}">${scoreIsComputed ? (qConfident ? 'computed' : '⚠ low confidence') : '✎ manual'}</div>
         ${scoreIsComputed && qInputs ? `<div style="font-size:11.5px;color:var(--muted);opacity:.8">${qInputs}</div>` : ''}
         ${subScoreStr ? `<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.3">${subScoreStr}</div>` : ''}
@@ -3687,6 +3691,25 @@ function fundAvailable(flag, breakdown) {
   return inputs.some(k => breakdown[k] !== null && breakdown[k] !== undefined);
 }
 
+// Says what a total score is actually made of. score_stock redistributes weight
+// away from fundamentals it does not have, so the number is never depressed by
+// missing data -- but for ~99% of this universe that leaves a purely technical
+// score, and an 86 built on price action is a different claim from an 86 backed
+// by filings. Without this the two are indistinguishable on the row.
+function scoreBasisTag(s) {
+  const fw = s.fund_weight_pct;
+  if (fw == null) {
+    // Fall back to the breakdowns for scan data written before the engine
+    // started emitting the weights.
+    const anyFund = fundAvailable(s.strength_available, s.strength_breakdown)
+                 || fundAvailable(s.value_available, s.value_breakdown);
+    return anyFund ? '' : '<div class="score-basis" title="No fundamentals available — this score is built entirely on price, volume and trend">technical only</div>';
+  }
+  if (fw >= 50) return '';
+  if (fw <= 1)  return '<div class="score-basis" title="No fundamentals available — this score is built entirely on price, volume and trend">technical only</div>';
+  return `<div class="score-basis" title="Fundamentals contributed ${fw.toFixed(0)}% of this score; the rest is price, volume and trend">${fw.toFixed(0)}% fundamental</div>`;
+}
+
 function scoreBar(val, max=100, available=true) {
   // "Not measured" and "measured as zero" are different facts and must not share
   // a cell. yfinance returns no fundamentals for ~99% of this universe, so
@@ -3997,7 +4020,7 @@ function renderTable() {
         <div class="stock-sector">${s.sector||''}</div>
       </td>
       <td><span class="price">₹${s.ltp.toFixed(2)}</span></td>
-      <td>${scoreBar(s.total_score)}</td>
+      <td>${scoreBar(s.total_score)}${scoreBasisTag(s)}</td>
       <td>${rsBadge}</td>
       <td>${scoreBar(s.strength, 100, fundAvailable(s.strength_available, s.strength_breakdown))}</td>
       <td>${scoreBar(s.value, 100, fundAvailable(s.value_available, s.value_breakdown))}</td>

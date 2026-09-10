@@ -231,6 +231,29 @@ def score_value(info: dict) -> tuple[float, dict]:
     return round(min(100.0, score), 1), breakdown
 
 
+def compute_atr(history: pd.DataFrame, period: int = 14) -> float | None:
+    """Average True Range over `period` bars, or None without enough history.
+
+    True range is the largest of: today's high-low, and each of high/low
+    measured against the previous close, so gaps count as range rather than
+    being missed the way a plain high-low would miss them.
+    """
+    if (history is None or history.empty or len(history) < period + 1
+            or not {"High", "Low", "Close"}.issubset(history.columns)):
+        return None
+    h = history["High"].astype(float)
+    l = history["Low"].astype(float)
+    c = history["Close"].astype(float)
+    prev_close = c.shift(1)
+    tr = pd.concat([(h - l), (h - prev_close).abs(), (l - prev_close).abs()], axis=1).max(axis=1)
+    atr = tr.tail(period).mean()
+    try:
+        atr = float(atr)
+    except (TypeError, ValueError):
+        return None
+    return round(atr, 2) if atr and atr > 0 else None
+
+
 def score_momentum(info: dict, history: pd.DataFrame) -> tuple[float, dict]:
     """
     Momentum Score (0-100): Is it trending well?
@@ -632,7 +655,13 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
     open_price = info.get("open") or info.get("regularMarketOpen")
     prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
 
+    # Volatility, so stops can be sized to the stock instead of a flat percentage.
+    _atr = compute_atr(history, 14)
+    _atr_pct = round((_atr / current_price) * 100, 2) if (_atr and current_price > 0) else None
+
     res_stock = {
+        "atr_14": _atr,
+        "atr_pct": _atr_pct,
         "total_score": total,
         "strength": strength,
         "value": value,
@@ -1326,11 +1355,24 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
 
     # D. Stop-Loss & Risk-Reward Ratio (up to 25 pts)
     if ltp > 0:
+        # Stop distance follows the stock's own volatility. A flat 3.5% is two
+        # days of noise on a 4%-ATR smallcap and a week of range on a 0.8%-ATR
+        # largecap, so the same number meant "stopped out by nothing" for one and
+        # "far too much risk" for the other.
+        #
+        # 1.5 x ATR(14) is the anchor. The MA50 stop is kept when price is
+        # sitting just above it, because a level the market is actually trading
+        # against beats a computed distance. The 2%/7% clamps stay as a sanity
+        # band for extreme ATRs, and the flat percentage remains the fallback for
+        # rows scanned before ATR existed.
+        atr = scored.get("atr_14")
         if ma50 and (ltp * 0.94 <= ma50 <= ltp * 0.99):
             sl = round(ma50 * 0.985, 2)
+        elif atr and atr > 0:
+            sl = round(ltp - (1.5 * float(atr)), 2)
         else:
             sl = round(ltp * 0.965, 2)
-            
+
         risk = round(ltp - sl, 2)
         if risk <= 0 or (risk / ltp) < 0.02:
             risk = round(ltp * 0.035, 2)
@@ -1627,6 +1669,7 @@ def detect_sr_breaks_and_retests(
         "sr_score": 0.0,
         "sr_reason": "No clear resistance breakout or retest pattern",
         "breakout_bars_ago": None,
+        "breakout_provisional": False,
         "is_break_res": False,
         "is_retest_buy": False,
         "is_approaching_breakout": False,
@@ -1912,6 +1955,12 @@ def detect_sr_breaks_and_retests(
         "sr_score": sr_score,
         "sr_reason": sr_reason,
         "breakout_bars_ago": breakout_bars_ago,
+        # A breakout found on the newest bar is sitting on a candle that has not
+        # closed yet: during a session that bar's "close" is just the live price,
+        # so the signal can appear at 11am on a touch and be gone by 15:30. The
+        # detection itself is close-based (B4), but only a completed bar makes
+        # that close final. The post-close scan re-evaluates and settles it.
+        "breakout_provisional": (breakout_bars_ago == 0) if breakout_bars_ago is not None else False,
         "is_break_res": is_break_res,
         "is_retest_buy": is_retest_buy,
         "is_approaching_breakout": is_approaching,
@@ -2296,10 +2345,19 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
     industry = scored.get("industry") or ""
     sec_group = classify_stock_sector_group(sector, industry)
 
-    roe = float(scored.get("roe_pct") if scored.get("roe_pct") is not None else 0.0)
-    de = float(scored.get("de_ratio") if scored.get("de_ratio") is not None else 0.0)
-    npm = float(scored.get("npm_pct") if scored.get("npm_pct") is not None else 0.0)
-    rev_growth = float(scored.get("rev_growth_pct") if scored.get("rev_growth_pct") is not None else 0.0)
+    # Absent fundamentals are still coerced to 0.0 so the branch logic below is
+    # unchanged, but which ones were genuinely reported is tracked alongside. A
+    # missing ROE is not a company that earns nothing, and scoring it as one
+    # dragged large profitable names to the bottom of the list.
+    has_roe = scored.get("roe_pct") is not None
+    has_de = scored.get("de_ratio") is not None
+    has_npm = scored.get("npm_pct") is not None
+    has_growth = scored.get("rev_growth_pct") is not None
+
+    roe = float(scored.get("roe_pct") if has_roe else 0.0)
+    de = float(scored.get("de_ratio") if has_de else 0.0)
+    npm = float(scored.get("npm_pct") if has_npm else 0.0)
+    rev_growth = float(scored.get("rev_growth_pct") if has_growth else 0.0)
     total_score = float(scored.get("total_score") or 50.0)
     strength = float(scored.get("strength") or 50.0)
     pe = scored.get("pe")
@@ -2309,37 +2367,59 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
     # ── 1. BUSINESS QUALITY & GOVERNANCE (50% max = 50 pts) ─────────────────
     bq_pts = 0.0
     if sec_group == "BFSI":
-        if roe >= 18.0: bq_pts += 20.0
-        elif roe >= 14.0: bq_pts += 15.0
-        elif roe >= 10.0: bq_pts += 10.0
+        if has_roe:
+            if roe >= 18.0: bq_pts += 20.0
+            elif roe >= 14.0: bq_pts += 15.0
+            elif roe >= 10.0: bq_pts += 10.0
         bq_pts += min(15.0, (strength / 100.0) * 15.0)
-        if npm >= 15.0: bq_pts += 15.0
-        elif npm >= 10.0: bq_pts += 10.0
-        else: bq_pts += 5.0
+        if has_npm:
+            if npm >= 15.0: bq_pts += 15.0
+            elif npm >= 10.0: bq_pts += 10.0
+            else: bq_pts += 5.0
     elif sec_group == "COMMODITY":
-        if roe >= 15.0: bq_pts += 18.0
-        elif roe >= 10.0: bq_pts += 12.0
-        elif roe >= 5.0: bq_pts += 8.0
-        if de <= 0.15: bq_pts += 20.0
-        elif de <= 0.40: bq_pts += 14.0
-        elif de <= 0.80: bq_pts += 8.0
-        if npm >= 10.0: bq_pts += 12.0
-        elif npm > 0: bq_pts += 6.0
+        if has_roe:
+            if roe >= 15.0: bq_pts += 18.0
+            elif roe >= 10.0: bq_pts += 12.0
+            elif roe >= 5.0: bq_pts += 8.0
+        if has_de:
+            if de <= 0.15: bq_pts += 20.0
+            elif de <= 0.40: bq_pts += 14.0
+            elif de <= 0.80: bq_pts += 8.0
+        if has_npm:
+            if npm >= 10.0: bq_pts += 12.0
+            elif npm > 0: bq_pts += 6.0
     elif sec_group == "UTILITIES_INFRA":
-        if de <= 0.8: bq_pts += 18.0
-        elif de <= 1.5: bq_pts += 12.0
-        if roe >= 12.0: bq_pts += 18.0
-        elif roe >= 8.0: bq_pts += 12.0
+        if has_de:
+            if de <= 0.8: bq_pts += 18.0
+            elif de <= 1.5: bq_pts += 12.0
+        if has_roe:
+            if roe >= 12.0: bq_pts += 18.0
+            elif roe >= 8.0: bq_pts += 12.0
         bq_pts += min(14.0, (strength / 100.0) * 14.0)
     else:  # MANUFACTURING & QUALITY_GROWTH
-        if roe >= 20.0: bq_pts += 20.0
-        elif roe >= 14.0: bq_pts += 14.0
-        elif roe >= 8.0: bq_pts += 8.0
-        if de <= 0.15: bq_pts += 18.0
-        elif de <= 0.40: bq_pts += 12.0
-        elif de <= 1.0: bq_pts += 6.0
-        if npm >= 12.0: bq_pts += 12.0
-        elif npm >= 6.0: bq_pts += 8.0
+        if has_roe:
+            if roe >= 20.0: bq_pts += 20.0
+            elif roe >= 14.0: bq_pts += 14.0
+            elif roe >= 8.0: bq_pts += 8.0
+        if has_de:
+            if de <= 0.15: bq_pts += 18.0
+            elif de <= 0.40: bq_pts += 12.0
+            elif de <= 1.0: bq_pts += 6.0
+        if has_npm:
+            if npm >= 12.0: bq_pts += 12.0
+            elif npm >= 6.0: bq_pts += 8.0
+
+    # Points this stock could possibly have earned, given which inputs exist.
+    # Every branch above totals 50: the sector decides how those 50 are split
+    # between ROE, D/E, net margin and the technical `strength` term.
+    if sec_group == "BFSI":
+        bq_attainable = (20.0 if has_roe else 0.0) + 15.0 + (15.0 if has_npm else 0.0)
+    elif sec_group == "COMMODITY":
+        bq_attainable = (18.0 if has_roe else 0.0) + (20.0 if has_de else 0.0) + (12.0 if has_npm else 0.0)
+    elif sec_group == "UTILITIES_INFRA":
+        bq_attainable = (18.0 if has_de else 0.0) + (18.0 if has_roe else 0.0) + 14.0
+    else:
+        bq_attainable = (20.0 if has_roe else 0.0) + (18.0 if has_de else 0.0) + (12.0 if has_npm else 0.0)
 
     lt_business_quality = round(min(50.0, max(0.0, bq_pts)), 1)
 
@@ -2363,7 +2443,17 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
     elif cmf >= 0.0 or clv >= 0.45: s_pts += 5.0
 
     lt_sustainability_score = round(min(25.0, max(0.0, s_pts)), 1)
+
+    # Reported on the real 0-100 scale. Normalising to "percent of what was
+    # measurable" was tried and is worse: with only 35 of 100 points observable,
+    # ten stocks came out at a confident-looking 100.0 on zero fundamental
+    # inputs. The honest presentation is a genuinely low score plus the
+    # attainable figure and the input count, so the page can say the number is
+    # incomplete rather than dressing it up.
+    g_attainable = (15.0 if has_growth else 0.0) + 10.0
+    attainable = bq_attainable + g_attainable + 25.0
     lt_quality_score = round(lt_business_quality + lt_growth_score + lt_sustainability_score, 1)
+    lt_quality_attainable_pct = round(attainable, 1)
 
     trend_res = compute_fundamental_trend_score(scored)
     cycle_res = compute_cyclicality_and_normalization(scored, sec_group, lt_quality_score, trend_res["fundamental_trend_score"])
@@ -2395,8 +2485,10 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
     elif lt_valuation_score >= 45: lt_val_status = "FAIRLY_VALUED"
     else: lt_val_status = "EXTENDED"
 
-    if de <= 0.3 and roe >= 14.0: lt_risk = "LOW"
-    elif de <= 0.8: lt_risk = "MODERATE"
+    if not (has_de or has_roe):
+        lt_risk = "UNKNOWN"          # not "LOW" because nothing was reported
+    elif has_de and has_roe and de <= 0.3 and roe >= 14.0: lt_risk = "LOW"
+    elif has_de and de <= 0.8: lt_risk = "MODERATE"
     else: lt_risk = "HIGH"
 
     # Unlike score_stock, this function coerces every absent fundamental to 0.0
@@ -2422,6 +2514,8 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
         "lt_valuation_score": lt_valuation_score,
         "lt_valuation_status": lt_val_status,
         "lt_risk_level": lt_risk,
+        # What share of the full 100-point model this stock could be judged on.
+        "lt_quality_attainable_pct": lt_quality_attainable_pct,
         "lt_fund_inputs_present": _present,
         "lt_fund_inputs_total": len(_fund_inputs),
         "lt_quality_confident": _present >= 3,
@@ -2480,6 +2574,15 @@ def get_lt_watchlist_status(
     # Calculate sector-aware fundamental quality metrics
     eval_res = compute_sector_aware_lt_quality(scored)
     lt_quality_score = eval_res["lt_quality_score"]
+    # Thresholds are a share of what could be measured, not of a flat 100.
+    # Once points stopped being awarded for absent metrics, a stock with no
+    # published fundamentals can reach at most ~35 of 100 -- so a fixed ">= 70"
+    # made BUY_NOW unreachable for ~99% of this universe, which is how BUY_NOW
+    # became dead code the last time. The bar is still "70% of the available
+    # evidence"; only the denominator changed.
+    _attainable = float(eval_res.get("lt_quality_attainable_pct") or 100.0) or 100.0
+    _q_high = 0.70 * _attainable
+    _q_mid = 0.45 * _attainable
 
     # ── LT ENTRY SCORE (0 - 100) ────────────────────────────────────────────
     # Missing inputs score ZERO, not a default. These branches previously awarded
@@ -2527,7 +2630,7 @@ def get_lt_watchlist_status(
             "lt_entry_score": lt_entry_score
         }
 
-    if lt_quality_score >= 70:
+    if lt_quality_score >= _q_high:
         # BUY_NOW only for Strong Uptrend + GTT triggered (price at/near support)
         gtt_triggered = (gtt_level and gtt_level > 0 and ltp > 0 and
                         ((ltp - gtt_level) / gtt_level) * 100.0 <= 2.0)
@@ -2550,7 +2653,7 @@ def get_lt_watchlist_status(
             badge = "🟢 ACCUMULATE ON DIP"
             badge_class = "badge-green"
             reason = f"Top quality business ({lt_quality_score:.0f}/100) — extended entry ({lt_entry_score:.0f}/100); set GTT near ₹{gtt_level:.2f}" if gtt_level else f"Top quality business ({lt_quality_score:.0f}/100) — set GTT near support"
-    elif lt_quality_score >= 45:
+    elif lt_quality_score >= _q_mid:
         status = "WAIT"
         badge = "🔵 HOLD / MONITOR"
         badge_class = "badge-purple"

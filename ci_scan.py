@@ -89,12 +89,33 @@ def main() -> int:
     print(f"Scan complete! screener.html ({len(html):,} bytes), mobile.html, "
           f"screener_data.json, scan_meta.json, static/app.css & static/app.js updated")
 
+    # This sync is the ONLY way a scan reaches the deployment. render.yaml's
+    # buildFilter ignores **/*.json and **/*.html, and a scan commit touches
+    # nothing else — so a committed scan does not trigger a deploy. Without this
+    # POST, Render keeps serving whatever it had at the last code push, and the
+    # phone shows stale picks while its live prices keep ticking, which is the
+    # hardest version of this to notice.
+    #
+    # The result used to be discarded, so a missing token failed in silence.
     print("Syncing fresh scan results directly to Render cloud instance...")
+    synced = False
     try:
-        fb.sync_to_render_cloud(async_mode=False)
+        synced = bool(fb.sync_to_render_cloud(async_mode=False))
     except Exception as e:
-        print(f"  ⚠ Direct Render sync skipped: {e}")
+        print(f"  Direct Render sync raised: {e}")
 
+    if not synced:
+        # ::error:: surfaces as an annotation on the Actions run. Exit 3, not 1:
+        # the scan itself succeeded and its data must still be committed, so the
+        # caller commits first and then fails the job.
+        print("::error title=Render sync failed::Scan data was NOT pushed to the "
+              "deployment. Render ignores *.json/*.html in buildFilter, so the "
+              "committed scan will not deploy on its own and the phone will show "
+              "stale picks. Most likely cause: the SCREENER_SYNC_TOKEN secret is "
+              "not set on the repository.")
+        return 3
+
+    print("  Render sync OK - the deployment is serving this scan.")
     return 0
 
 

@@ -3085,6 +3085,7 @@ tr:hover td{background:#ffffff06}
 /* "Not measured" reads as its own state, never as a failing score. */
 .score-fill-na{width:100%;background:repeating-linear-gradient(90deg,var(--border) 0 5px,transparent 5px 10px)}
 .score-num-na{color:var(--muted);font-weight:700;font-style:italic;opacity:.9}
+.score-basis{font-size:11.5px;color:var(--muted);font-weight:700;margin-top:3px;letter-spacing:.02em;opacity:.85}
 .partial-tag{font-size:13px;color:var(--muted);background:var(--card2);border-radius:4px;padding:1px 5px;margin-left:4px}
 
 /* ── Add button ── */
@@ -5365,6 +5366,10 @@ function renderLtWatchlist() {
     const qConfident = (s.lt_quality_confident !== false);
     const qInputs = (s.lt_fund_inputs_present != null)
       ? `${s.lt_fund_inputs_present}/${s.lt_fund_inputs_total || 6} inputs` : '';
+    // The ceiling, not 100: no points are given for metrics the source never
+    // reported, so a stock with no filings is judged out of ~35 and showing it
+    // as "31/100" would read as a failing business rather than a thin one.
+    const qMax = Math.round(Number(s.lt_quality_attainable_pct) || 100);
     const scoreColor = scoreVal >= 85 ? '#34d399' : scoreVal >= 75 ? '#60a5fa' : '#fbbf24';
     const subScores = [
       ['Growth', s.lt_growth_score], ['Value', s.lt_valuation_score],
@@ -5393,7 +5398,7 @@ function renderLtWatchlist() {
     return `
     <tr style="${isRetired ? 'opacity:0.5;background:rgba(0,0,0,0.2)' : ''}">
       <td>
-        <div style="font-weight:800;color:${scoreColor};font-size:19px" title="${scoreIsComputed ? 'Computed sector-aware LT quality score' : 'Manually entered durability score — not computed'}">${scoreVal} <span style="font-size:13px;color:var(--muted)">/100</span></div>
+        <div style="font-weight:800;color:${scoreColor};font-size:19px" title="${scoreIsComputed ? `Computed sector-aware LT quality. Points are only awarded for metrics the source actually reported, so the ceiling is ${qMax} for this stock, not 100.` : 'Manually entered durability score — not computed'}">${scoreVal} <span style="font-size:13px;color:var(--muted)">/${scoreIsComputed ? qMax : 100}</span></div>
         <div style="font-size:12px;margin-top:2px;font-weight:700;color:${scoreIsComputed ? (qConfident ? 'var(--muted)' : '#fbbf24') : 'var(--muted)'}" title="${scoreIsComputed ? (qConfident ? 'Computed from available fundamentals' : 'Low confidence: the source returned few or no fundamentals, and missing inputs are scored as zero') : 'Manually entered — not computed'}">${scoreIsComputed ? (qConfident ? 'computed' : '⚠ low confidence') : '✎ manual'}</div>
         ${scoreIsComputed && qInputs ? `<div style="font-size:11.5px;color:var(--muted);opacity:.8">${qInputs}</div>` : ''}
         ${subScoreStr ? `<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.3">${subScoreStr}</div>` : ''}
@@ -7844,6 +7849,25 @@ function fundAvailable(flag, breakdown) {
   return inputs.some(k => breakdown[k] !== null && breakdown[k] !== undefined);
 }
 
+// Says what a total score is actually made of. score_stock redistributes weight
+// away from fundamentals it does not have, so the number is never depressed by
+// missing data -- but for ~99% of this universe that leaves a purely technical
+// score, and an 86 built on price action is a different claim from an 86 backed
+// by filings. Without this the two are indistinguishable on the row.
+function scoreBasisTag(s) {
+  const fw = s.fund_weight_pct;
+  if (fw == null) {
+    // Fall back to the breakdowns for scan data written before the engine
+    // started emitting the weights.
+    const anyFund = fundAvailable(s.strength_available, s.strength_breakdown)
+                 || fundAvailable(s.value_available, s.value_breakdown);
+    return anyFund ? '' : '<div class="score-basis" title="No fundamentals available — this score is built entirely on price, volume and trend">technical only</div>';
+  }
+  if (fw >= 50) return '';
+  if (fw <= 1)  return '<div class="score-basis" title="No fundamentals available — this score is built entirely on price, volume and trend">technical only</div>';
+  return `<div class="score-basis" title="Fundamentals contributed ${fw.toFixed(0)}% of this score; the rest is price, volume and trend">${fw.toFixed(0)}% fundamental</div>`;
+}
+
 function scoreBar(val, max=100, available=true) {
   // "Not measured" and "measured as zero" are different facts and must not share
   // a cell. yfinance returns no fundamentals for ~99% of this universe, so
@@ -8154,7 +8178,7 @@ function renderTable() {
         <div class="stock-sector">${s.sector||''}</div>
       </td>
       <td><span class="price">₹${s.ltp.toFixed(2)}</span></td>
-      <td>${scoreBar(s.total_score)}</td>
+      <td>${scoreBar(s.total_score)}${scoreBasisTag(s)}</td>
       <td>${rsBadge}</td>
       <td>${scoreBar(s.strength, 100, fundAvailable(s.strength_available, s.strength_breakdown))}</td>
       <td>${scoreBar(s.value, 100, fundAvailable(s.value_available, s.value_breakdown))}</td>
@@ -11223,6 +11247,32 @@ def run_selftest() -> bool:
         "trend": "Strong Uptrend", "rsi": 60.0, "volume_spike": 1.5,
         "ma50": 2800.0, "ma200": 2600.0, "ema20": 2850.0
     }
+    # Test 5: no free points for fundamentals the source never reported. A missing
+    # D/E used to satisfy "de <= 0.15" and score as debt-free, which is how large
+    # profitable names ranked below shells.
+    from screener_engine import compute_sector_aware_lt_quality, compute_atr
+    blank = {"sector": "", "industry": "", "trend": "Consolidation", "total_score": 50.0}
+    q_blank = compute_sector_aware_lt_quality(blank)
+    assert q_blank["lt_fund_inputs_present"] == 0, "fixture should report no fundamentals"
+    assert q_blank["lt_quality_attainable_pct"] < 100,         "with no fundamentals the ceiling must be below 100"
+    assert q_blank["lt_quality_score"] <= q_blank["lt_quality_attainable_pct"],         "score cannot exceed what was measurable"
+    assert q_blank["lt_risk_level"] == "UNKNOWN",         "missing debt data must not read as LOW risk"
+
+    rich = dict(blank, roe_pct=22.0, de_ratio=0.1, npm_pct=14.0, rev_growth_pct=25.0, pe=20.0, pb=3.0)
+    q_rich = compute_sector_aware_lt_quality(rich)
+    assert q_rich["lt_quality_attainable_pct"] == 100.0, "full data must allow the full 100"
+    assert q_rich["lt_quality_score"] > q_blank["lt_quality_score"],         "a documented quality business must outrank one with no data"
+
+    # Test 6: ATR drives stop distance, and degrades safely.
+    import pandas as _pd
+    _n = 40
+    _calm = _pd.DataFrame({"High": [101.0] * _n, "Low": [99.0] * _n, "Close": [100.0] * _n})
+    _wild = _pd.DataFrame({"High": [110.0] * _n, "Low": [90.0] * _n, "Close": [100.0] * _n})
+    _a_calm, _a_wild = compute_atr(_calm, 14), compute_atr(_wild, 14)
+    assert _a_calm and _a_wild and _a_wild > _a_calm, "a wider range must give a larger ATR"
+    assert compute_atr(_pd.DataFrame({"Close": [1, 2, 3]}), 14) is None,         "ATR must return None rather than guess when High/Low are absent"
+    assert compute_atr(_calm.head(5), 14) is None, "ATR needs enough bars"
+
     sig = compute_fno_signal(scored, fno_cfg)
     assert sig is not None, "compute_fno_signal should return a signal dict"
     assert sig.get("symbol") == "RELIANCE", "Symbol should match"
