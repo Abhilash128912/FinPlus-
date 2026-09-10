@@ -16,20 +16,20 @@
     "npm_at_entry": null,
     "current_score": 27.0,
     "current_strength": 0.0,
-    "current_value": 331.3,
+    "current_value": 331.8,
     "current_momentum": 29.0,
-    "ltp": 165.65,
+    "ltp": 165.9,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 41.1,
+    "rsi": 41.5,
     "ma200": 171.69,
-    "wk52_return_pct": 23.61,
-    "volume_spike": 1.06,
-    "today_volume": 11161909.0,
-    "avg_volume_10d": 14060573.8,
+    "wk52_return_pct": 23.8,
+    "volume_spike": 1.1,
+    "today_volume": 13627673.0,
+    "avg_volume_10d": 14183862.0,
     "news": [
       {
         "title": "Ashok Leyland (NSEI:ASHOKLEY) Stock Fair Value Moves Lower On More Cautious Analyst Assumptions",
@@ -60,11 +60,11 @@
         "summary": "Published: Mon, 15 Jun 2026 07:00:00 GMT"
       },
       {
-        "title": "Ashok Leyland Shares Gain 2.13% in Early Trade",
-        "url": "https://news.google.com/rss/articles/CBMirAFBVV95cUxNcVNfZWwydTlkTGdLSUY1bS1yUWpaby1aNTBxYUk2TXlvclJYY1hMSkZhd0l6Wm1FRzBlaC0wbkQwZ1BzMEdEVE1hZXpGUlhGMlQ4NnIxRm5KaFhFVFNka2RjenhjNDVObmtLSlpCNWtZM2JJdVFmbnNta0dlN0o5dlFQTnBHbTdiR2xoMnVVdFlpWjQ0SlJmeEdCZm5MQlhkWlJEU3dlSUN3a0RS?oc=5",
-        "pubDate": "Fri, 31 Jul 2026 07:00:00 GMT",
-        "provider": "TradingView",
-        "summary": "Published: Fri, 31 Jul 2026 07:00:00 GMT"
+        "title": "Ashok Leyland Partners Shriram Automall for Pre-Owned Commercial Vehicles Business",
+        "url": "https://news.google.com/rss/articles/CBMiggFBVV95cUxQZjJRcW84SlFJNFlhSl9pYlhvREFHM1BMUU50b3hMU2FlYUczakNIaVhiTVhTblg1UnB4c1AyUHQ2VzNQUXlBWFV4R1NlVUt5TmFYekdLdTdYOXhWX0hmSWxzQmFNQXd0Q194cndzYUZ4R3M4ZnRxZTZUZnFxVVlaZ21R?oc=5",
+        "pubDate": "Thu, 23 Jul 2026 07:00:00 GMT",
+        "provider": "HDFC Sky",
+        "summary": "Published: Thu, 23 Jul 2026 07:00:00 GMT"
       }
     ],
     "corporate_actions": [],
@@ -77,14 +77,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9165.65 fell below 200-day MA \u20b9171.69"
+        "message": "Trend Broken \u2014 Price \u20b9165.9 fell below 200-day MA \u20b9171.69"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Quality score collapsed to 27.0 (<40)",
-    "unrealised_pnl": 10.24,
-    "unrealised_pct": 3.19
+    "unrealised_pnl": 10.74,
+    "unrealised_pct": 3.35
   },
   {
     "symbol": "BEL",
@@ -94,29 +94,29 @@
     "avg_cost": 403.52,
     "total_invested": 1210.56,
     "added_at": "2026-08-13",
-    "score_at_entry": 23.0,
+    "score_at_entry": 19.4,
     "strength_at_entry": 0.0,
     "value_at_entry": 0.0,
-    "momentum_at_entry": 27.0,
+    "momentum_at_entry": 21.0,
     "roe_at_entry": null,
     "de_at_entry": null,
     "npm_at_entry": null,
-    "current_score": 23.0,
+    "current_score": 19.4,
     "current_strength": 0.0,
-    "current_value": 1209.6,
-    "current_momentum": 27.0,
-    "ltp": 403.2,
+    "current_value": 1206.9,
+    "current_momentum": 21.0,
+    "ltp": 402.3,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 45.3,
-    "ma200": 418.95,
-    "wk52_return_pct": 3.9,
+    "rsi": 44.5,
+    "ma200": 418.94,
+    "wk52_return_pct": 3.67,
     "volume_spike": 0.77,
-    "today_volume": 5493079.0,
-    "avg_volume_10d": 9542112.6,
+    "today_volume": 6469373.0,
+    "avg_volume_10d": 9590927.3,
     "news": [
       {
         "title": "Bharat Electronics Share Price: BEL Gains on Price Action",
@@ -159,19 +159,19 @@
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 23.0 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 19.4 (below 40 threshold)"
       },
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9403.2 fell below 200-day MA \u20b9418.95"
+        "message": "Trend Broken \u2014 Price \u20b9402.3 fell below 200-day MA \u20b9418.94"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 23.0 (<40)",
-    "unrealised_pnl": -0.96,
-    "unrealised_pct": -0.08
+    "signal_reason": "Quality score collapsed to 19.4 (<40)",
+    "unrealised_pnl": -3.66,
+    "unrealised_pct": -0.3
   },
   {
     "symbol": "BORANA",
@@ -190,20 +190,20 @@
     "npm_at_entry": 16.6,
     "current_score": 49.7,
     "current_strength": 62.0,
-    "current_value": 318.0,
+    "current_value": 318.1,
     "current_momentum": 46.0,
-    "ltp": 318.0,
+    "ltp": 318.1,
     "sector": "",
     "pe": 13.33,
     "roe_pct": 35.0,
     "de_ratio": 0.25,
     "npm_pct": 16.6,
-    "rsi": 51.6,
+    "rsi": 51.7,
     "ma200": 328.36,
-    "wk52_return_pct": 44.84,
+    "wk52_return_pct": 44.88,
     "volume_spike": 0.36,
-    "today_volume": 6563.0,
-    "avg_volume_10d": 24414.2,
+    "today_volume": 7650.0,
+    "avg_volume_10d": 24468.55,
     "news": [
       {
         "title": "Borana Weaves Share Price: Buy or Sell",
@@ -246,14 +246,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9318.0 fell below 200-day MA \u20b9328.36"
+        "message": "Trend Broken \u2014 Price \u20b9318.1 fell below 200-day MA \u20b9328.36"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Price below 200-day MA (\u20b9328.36) & score <50",
-    "unrealised_pnl": -24.0,
-    "unrealised_pct": -7.02
+    "unrealised_pnl": -23.9,
+    "unrealised_pct": -6.99
   },
   {
     "symbol": "FEDERALBNK",
@@ -272,20 +272,20 @@
     "npm_at_entry": null,
     "current_score": 51.8,
     "current_strength": 0.0,
-    "current_value": 692.6,
+    "current_value": 691.4,
     "current_momentum": 55.0,
-    "ltp": 346.3,
+    "ltp": 345.7,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 47.7,
+    "rsi": 47.0,
     "ma200": 299.48,
-    "wk52_return_pct": 76.61,
-    "volume_spike": 0.98,
-    "today_volume": 3615242.0,
-    "avg_volume_10d": 4924693.05,
+    "wk52_return_pct": 76.31,
+    "volume_spike": 1.04,
+    "today_volume": 4545757.0,
+    "avg_volume_10d": 4971218.8,
     "news": [
       {
         "title": "Federal Bank Shares Rally 7% After Q1 Profit Jumps 36%, NII Surges 26%; Asset Quality Improves",
@@ -328,8 +328,8 @@
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": -19.6,
-    "unrealised_pct": -2.75
+    "unrealised_pnl": -20.8,
+    "unrealised_pct": -2.92
   },
   {
     "symbol": "ITC",
@@ -348,20 +348,20 @@
     "npm_at_entry": 28.5,
     "current_score": 34.3,
     "current_strength": 65.0,
-    "current_value": 260.4,
+    "current_value": 260.2,
     "current_momentum": 10.0,
-    "ltp": 260.4,
+    "ltp": 260.2,
     "sector": "",
     "pe": 15.2,
     "roe_pct": 33.8,
     "de_ratio": 0.0,
     "npm_pct": 28.5,
-    "rsi": 36.1,
+    "rsi": 35.9,
     "ma200": 312.02,
-    "wk52_return_pct": -36.96,
-    "volume_spike": 1.35,
-    "today_volume": 13806313.0,
-    "avg_volume_10d": 13677071.95,
+    "wk52_return_pct": -37.01,
+    "volume_spike": 1.24,
+    "today_volume": 14930089.0,
+    "avg_volume_10d": 13733260.75,
     "news": [
       {
         "title": "Cigarette Stock: Should ITC Ltd Split Its Business Into 1:2? What's Smoking In This FMCG Giant?",
@@ -371,18 +371,18 @@
         "summary": "Published: Mon, 07 Sep 2026 05:42:40 GMT"
       },
       {
-        "title": "ITC share price slips 2%, hits 52-week low; what's making Street nervous?",
-        "url": "https://news.google.com/rss/articles/CBMi0gFBVV95cUxNOWxlZHZwTDF3elN3ak5DRnVheUVCV0czVHVycGdKNG5hcGRtQVVrc3dLZFBoTXB2b1hRaHl0Ny04Wkh2TWQ0TWNHYnNYLW5SaGk3bktYdHV6bWlWN1IxTGhTM0JiZDFRVkhLaXBNRFgteUJ1Q0FvVTlaVzNjSTdKZmxzNUlsaGZLUFp6NVdqSlhCbkxTQ24wc0J3RHEtMy1QWWo0LTVYb29JZUFmdFZxNzBvb3NZTjJ4YU5ZWkpUbTFWcTlZdnVkSzFfNGFtMVNNa0HSAdcBQVVfeXFMT2pXaVR3bzl4aHNXVGp6d0h4d1JrNzB1dTh1WHlkdlYtQnlSalRVWnVKdWQyUjRqay1UOW9zdWlaR2ZmQTZPR1gwb0t2VTA3ZUVvWnZrRmVJUW1pTktKQTVDdHNLWGg4TjJ5WmdmM0FBS1JLVXl6ajI2c2U1SE00cnlEV0VNcFc3VUpBWE1pRVhrZUlkM2ZjSS1SZFdzVDRIQ2V0c0stOXhfUHJQVmFWQ0doZ1Y1WUo3ZVNtbVRaUGlWend0cldXcXhoVWpJcVM2R0lZTUpuSjA?oc=5",
-        "pubDate": "Mon, 17 Aug 2026 07:00:00 GMT",
-        "provider": "Business Standard",
-        "summary": "Published: Mon, 17 Aug 2026 07:00:00 GMT"
-      },
-      {
         "title": "ITC Ltd. Peer Comparison \u2013 Compare with Others",
         "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTE5NbGp2WHVDNGNGTGpVZVNvZm40OWNSY1QyXzJPdnAyWEZzX1libXJVZXd6dGxBLUFTZ2U3S0cxbUhralhvRjFGWmtTejFscV9IcXdRamphSFVnLUF1MjdrZnlneUlRZHdOOGhpVEpma1M2YUxWYlJ5S0pZNGVhdw?oc=5",
         "pubDate": "Fri, 04 Sep 2026 07:00:00 GMT",
         "provider": "Value Research",
         "summary": "Published: Fri, 04 Sep 2026 07:00:00 GMT"
+      },
+      {
+        "title": "ITC share price slips 2%, hits 52-week low; what's making Street nervous?",
+        "url": "https://news.google.com/rss/articles/CBMi0gFBVV95cUxNOWxlZHZwTDF3elN3ak5DRnVheUVCV0czVHVycGdKNG5hcGRtQVVrc3dLZFBoTXB2b1hRaHl0Ny04Wkh2TWQ0TWNHYnNYLW5SaGk3bktYdHV6bWlWN1IxTGhTM0JiZDFRVkhLaXBNRFgteUJ1Q0FvVTlaVzNjSTdKZmxzNUlsaGZLUFp6NVdqSlhCbkxTQ24wc0J3RHEtMy1QWWo0LTVYb29JZUFmdFZxNzBvb3NZTjJ4YU5ZWkpUbTFWcTlZdnVkSzFfNGFtMVNNa0HSAdcBQVVfeXFMT2pXaVR3bzl4aHNXVGp6d0h4d1JrNzB1dTh1WHlkdlYtQnlSalRVWnVKdWQyUjRqay1UOW9zdWlaR2ZmQTZPR1gwb0t2VTA3ZUVvWnZrRmVJUW1pTktKQTVDdHNLWGg4TjJ5WmdmM0FBS1JLVXl6ajI2c2U1SE00cnlEV0VNcFc3VUpBWE1pRVhrZUlkM2ZjSS1SZFdzVDRIQ2V0c0stOXhfUHJQVmFWQ0doZ1Y1WUo3ZVNtbVRaUGlWend0cldXcXhoVWpJcVM2R0lZTUpuSjA?oc=5",
+        "pubDate": "Mon, 17 Aug 2026 07:00:00 GMT",
+        "provider": "Business Standard",
+        "summary": "Published: Mon, 17 Aug 2026 07:00:00 GMT"
       },
       {
         "title": "ITC Ltd. Upgraded to Hold by MarketsMOJO Amid Mixed Financial and Technical Signals",
@@ -392,10 +392,10 @@
         "summary": "Published: Sat, 05 Sep 2026 23:41:31 GMT"
       },
       {
-        "title": "Explained - Why ITC shares jumped 4% on Tuesday after unit's deal with happiest Minds",
-        "url": "https://news.google.com/rss/articles/CBMiyAFBVV95cUxPamxma05HRDFKb0VkUXpGQ0FJWFNSY2xVV1V4Sl9NbGRHeUhsU2V3VTkwWWdYMTlabkRwZS1vLVV1RVk4dEI2amE2THZOOHJKTE5CUmh1XzBVSzg5RDFobzhpYmlCNFFMeGdUdmxtMnJTWlNvMmtDX1lZVnpQODhxbEFlV2JMQWh5S1FVX1NBVjlUQUc4UmlQd1NQWHV1SDJlM1psRzA2QS05T2MzeTJwZmE3bTJXSHY5Znh6LXQ5UUtKUWczLVdEMtIBzgFBVV95cUxPVF9HWlJvZTkwcDBPUllzUVVSOTJQZ3pLenBObFBRSzZDbTNaM25zYnQ5UkRqTm1Gd2swMHVrSkI3TlBRTEtWQlk5di1MZ0tVNGRBLW01dUpYVEswcTY1a3RQMlFzZEttY1N2YTlKNmhiMGtnNzAta3hrZ2laZXY4M3d6TlBXWERDYzV2WnpaR2NKZ3M5OVZNS2JKZVludEMwazR0OVlobm9raTItdmdReldBWnFBS1pqTjk3WDB6RTc0aGtLT1c0X0I3b2tzQQ?oc=5",
+        "title": "ITC shares jump nearly 3%, among top Nifty gainers after Happiest Minds-ITC Infotech merger deal",
+        "url": "https://news.google.com/rss/articles/CBMi8AFBVV95cUxNUE5nTUJZdTZUZVgwMmhudHJCeVlJd0FSVkpCNTl6UmMxVG53NWQtZ2FETmg1VV9DT2RDdzJudjhYRHZBY0pUUEM1WXFxQVoweFpPSklJNmdMNmE5c3YzQ24xTVZseUVWWE9WTTIxZ1d2dkdhb2ZQbzRXbjlZaDJmNmFXSWU5bTBnYnVFNzAyczJ5aGZxOFJmcE9LN1doeDByaVNoSVB5TlBmaXNJTERpMFBBV25jaHV4ZGlHYXdKTXFTOGxzaDU1Y1ZRYzZOMllZMlBJRVQ0STVwSkVyTkZwVS1scjNXYjZLa3Jrc0Q4T0HSAfYBQVVfeXFMTWoybHNPN3FXTW9IdlBJaHlVMExHX3g0YW15Z0hFMzAyN21UbUtRQVBwTmRwb3dyN3RNbU0zeThiblFHOE9IMTRRM2pZX2V4ZldJYXprYTZtMXh4MXdxZ0RSMlZNRG5vSWRka0E4d2t0UmpUMWFhNkRxa3Q4djdSRGpjUjlScE5YbnlVNm5tdzVmZFhaX2M0S0p0RnVWQTJnYms5Nmw1WWhGcDVLRVVqcTVpVVR2OU94dUc1REFJbm9nOC1RWUpmZjdTaFliRllZMWYzcklFdXd5cTBaX2ZJeGRNQklVYlRLOXVBV0YwdFlTNUs4c0lB?oc=5",
         "pubDate": "Tue, 01 Sep 2026 07:00:00 GMT",
-        "provider": "CNBC TV18",
+        "provider": "Moneycontrol.com",
         "summary": "Published: Tue, 01 Sep 2026 07:00:00 GMT"
       }
     ],
@@ -409,14 +409,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9260.4 fell below 200-day MA \u20b9312.02"
+        "message": "Trend Broken \u2014 Price \u20b9260.2 fell below 200-day MA \u20b9312.02"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Quality score collapsed to 34.3 (<40)",
-    "unrealised_pnl": -15.05,
-    "unrealised_pct": -5.46
+    "unrealised_pnl": -15.25,
+    "unrealised_pct": -5.54
   },
   {
     "symbol": "NMDC",
@@ -435,20 +435,20 @@
     "npm_at_entry": 32.0,
     "current_score": 51.1,
     "current_strength": 65.0,
-    "current_value": 505.44,
+    "current_value": 506.52,
     "current_momentum": 38.0,
-    "ltp": 84.24,
+    "ltp": 84.42,
     "sector": "",
     "pe": 10.8,
     "roe_pct": 28.5,
     "de_ratio": 0.0,
     "npm_pct": 32.0,
-    "rsi": 46.4,
+    "rsi": 47.0,
     "ma200": 83.85,
-    "wk52_return_pct": 11.9,
-    "volume_spike": 0.54,
-    "today_volume": 7196702.0,
-    "avg_volume_10d": 17793254.65,
+    "wk52_return_pct": 12.14,
+    "volume_spike": 0.53,
+    "today_volume": 8314338.0,
+    "avg_volume_10d": 17849136.45,
     "news": [
       {
         "title": "Results: NMDC Limited Exceeded Expectations And The Consensus Has Updated Its Estimates",
@@ -491,8 +491,8 @@
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
     "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": -5.82,
-    "unrealised_pct": -1.14
+    "unrealised_pnl": -4.74,
+    "unrealised_pct": -0.93
   },
   {
     "symbol": "TATAPOWER",
@@ -502,29 +502,29 @@
     "avg_cost": 382.25,
     "total_invested": 382.25,
     "added_at": "2026-08-13",
-    "score_at_entry": 20.4,
+    "score_at_entry": 17.2,
     "strength_at_entry": 0.0,
     "value_at_entry": 0.0,
     "momentum_at_entry": 18.0,
     "roe_at_entry": null,
     "de_at_entry": null,
     "npm_at_entry": null,
-    "current_score": 20.4,
+    "current_score": 17.2,
     "current_strength": 0.0,
-    "current_value": 366.55,
+    "current_value": 366.1,
     "current_momentum": 18.0,
-    "ltp": 366.55,
+    "ltp": 366.1,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 47.0,
+    "rsi": 46.6,
     "ma200": 388.06,
-    "wk52_return_pct": -5.16,
-    "volume_spike": 0.45,
-    "today_volume": 1879400.0,
-    "avg_volume_10d": 5560992.35,
+    "wk52_return_pct": -5.28,
+    "volume_spike": 0.42,
+    "today_volume": 2069505.0,
+    "avg_volume_10d": 5570497.6,
     "news": [
       {
         "title": "Tata Power Falls 4% After Singapore Court Rejects Appeal",
@@ -567,19 +567,19 @@
       {
         "level": "SELL",
         "icon": "\ud83d\udd34",
-        "message": "Quality Gone \u2014 Total score 20.4 (below 40 threshold)"
+        "message": "Quality Gone \u2014 Total score 17.2 (below 40 threshold)"
       },
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9366.55 fell below 200-day MA \u20b9388.06"
+        "message": "Trend Broken \u2014 Price \u20b9366.1 fell below 200-day MA \u20b9388.06"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
-    "signal_reason": "Quality score collapsed to 20.4 (<40)",
-    "unrealised_pnl": -15.7,
-    "unrealised_pct": -4.11
+    "signal_reason": "Quality score collapsed to 17.2 (<40)",
+    "unrealised_pnl": -16.15,
+    "unrealised_pct": -4.22
   },
   {
     "symbol": "TATASTEEL",
@@ -598,20 +598,20 @@
     "npm_at_entry": null,
     "current_score": 39.0,
     "current_strength": 0.0,
-    "current_value": 185.55,
+    "current_value": 185.68,
     "current_momentum": 27.0,
-    "ltp": 185.55,
+    "ltp": 185.68,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 48.4,
+    "rsi": 48.6,
     "ma200": 193.2,
-    "wk52_return_pct": 9.51,
-    "volume_spike": 0.79,
-    "today_volume": 16351983.0,
-    "avg_volume_10d": 27799946.85,
+    "wk52_return_pct": 9.59,
+    "volume_spike": 0.74,
+    "today_volume": 18019272.0,
+    "avg_volume_10d": 27883311.3,
     "news": [
       {
         "title": "Tata Steel Limited (NSE:TATASTEEL) Looks Like A Good Stock, And It's Going Ex-Dividend Soon",
@@ -659,14 +659,14 @@
       {
         "level": "ALERT",
         "icon": "\u26a0\ufe0f",
-        "message": "Trend Broken \u2014 Price \u20b9185.55 fell below 200-day MA \u20b9193.2"
+        "message": "Trend Broken \u2014 Price \u20b9185.68 fell below 200-day MA \u20b9193.2"
       }
     ],
     "signal": "SELL",
     "signal_badge": "\ud83d\udd34 SELL",
     "signal_reason": "Quality score collapsed to 39.0 (<40)",
-    "unrealised_pnl": 2.73,
-    "unrealised_pct": 1.49
+    "unrealised_pnl": 2.86,
+    "unrealised_pct": 1.56
   },
   {
     "symbol": "UYFINCORP",
@@ -676,29 +676,29 @@
     "avg_cost": 19.33,
     "total_invested": 231.96,
     "added_at": "2026-08-13",
-    "score_at_entry": 54.8,
+    "score_at_entry": 44.2,
     "strength_at_entry": 0.0,
     "value_at_entry": 0.0,
-    "momentum_at_entry": 70.0,
+    "momentum_at_entry": 63.0,
     "roe_at_entry": null,
     "de_at_entry": null,
     "npm_at_entry": null,
-    "current_score": 54.8,
+    "current_score": 44.2,
     "current_strength": 0.0,
-    "current_value": 236.88,
-    "current_momentum": 70.0,
-    "ltp": 19.74,
+    "current_value": 234.0,
+    "current_momentum": 63.0,
+    "ltp": 19.5,
     "sector": "",
     "pe": null,
     "roe_pct": null,
     "de_ratio": null,
     "npm_pct": null,
-    "rsi": 51.9,
+    "rsi": 49.4,
     "ma200": 15.22,
-    "wk52_return_pct": 50.34,
-    "volume_spike": 0.17,
-    "today_volume": 15977.0,
-    "avg_volume_10d": 128492.25,
+    "wk52_return_pct": 48.51,
+    "volume_spike": 0.2,
+    "today_volume": 23219.0,
+    "avg_volume_10d": 128854.35,
     "news": [
       {
         "title": "Benign Growth For U. Y. Fincorp Limited (NSE:UYFINCORP) Underpins Its Share Price",
@@ -740,8 +740,8 @@
     "alerts": [],
     "signal": "HOLD",
     "signal_badge": "\ud83d\udfe1 HOLD",
-    "signal_reason": "Moderate quality score; maintain position",
-    "unrealised_pnl": 4.92,
-    "unrealised_pct": 2.12
+    "signal_reason": "Consolidating price & fundamentals",
+    "unrealised_pnl": 2.04,
+    "unrealised_pct": 0.88
   }
 ]
