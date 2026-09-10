@@ -1,12 +1,15 @@
 """
 Build a lightweight NSE stock lookup list: [{symbol, name}]
 Uses NSE equity symbols from nifty_stocks_auto.json + yfinance for names.
-Output: nse_stock_list.json in FINPLUS PNL APP/public/
+Output: public/nse_stocks.json in this project.
 """
 import json, os, time
 
 # Load symbols
-symbols = json.load(open(r'd:\STOCK SCREENER APP\nifty_stocks_auto.json', encoding='utf-8'))
+# Relative to this file, not an absolute path on one machine: the hardcoded
+# drive letter tied this script to a single checkout.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+symbols = json.load(open(os.path.join(_HERE, 'nifty_stocks_auto.json'), encoding='utf-8'))
 print(f"Total symbols: {len(symbols)}")
 
 # Try to get company names from yfinance info (fast_info is quickest)
