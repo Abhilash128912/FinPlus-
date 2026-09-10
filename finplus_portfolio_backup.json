@@ -1,6 +1,15 @@
 {
   "positions": [],
-  "capitalLedger": [],
+  "capitalLedger": [
+    {
+      "id": "cap_1789037582745",
+      "date": "2026-09-10",
+      "type": "INJECTION",
+      "amount": 3350,
+      "segment": "ALL",
+      "notes": "Capital Injected"
+    }
+  ],
   "soldHistory": [],
   "brokerAdjustments": [],
   "optionsTrades": [],
@@ -15,8 +24,5 @@
     "lt": 30,
     "penny": 10
   },
-  "savedAt": 1789037536760,
-  "force_reset": true,
-  "reset": true,
-  "isFreshStart": true
+  "savedAt": 1789037582748
 }
