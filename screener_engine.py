@@ -6,6 +6,7 @@ No mock data — if a metric is missing, it is skipped and score is partial.
 """
 
 import bisect
+import math
 import pandas as pd
 import numpy as np
 
@@ -253,7 +254,7 @@ def score_momentum(info: dict, history: pd.DataFrame) -> tuple[float, dict]:
     # 1. Price vs 200-day MA → up to 20 pts
     ma200_pts = 0
     ma200 = None
-    if len(history) >= 100 and current_price > 0:
+    if len(history) >= 200 and current_price > 0:
         ma200 = round(history["Close"].tail(200).mean(), 2)
         diff_pct = ((current_price - ma200) / ma200) * 100
         if diff_pct >= 10:   ma200_pts = 20
@@ -268,7 +269,7 @@ def score_momentum(info: dict, history: pd.DataFrame) -> tuple[float, dict]:
     # 2. Price vs 50-day MA → up to 20 pts
     ma50_pts = 0
     ma50 = None
-    if len(history) >= 40 and current_price > 0:
+    if len(history) >= 50 and current_price > 0:
         ma50 = round(history["Close"].tail(50).mean(), 2)
         diff_pct = ((current_price - ma50) / ma50) * 100
         if diff_pct >= 5:    ma50_pts = 20
@@ -332,10 +333,10 @@ def score_momentum(info: dict, history: pd.DataFrame) -> tuple[float, dict]:
     breakdown["rsi"] = rsi_val
     breakdown["rsi_pts"] = rsi_pts
 
-    # 5. Volume Spike Ratio → up to 15 pts
-    # Use 20-day average (industry standard) — 10-day is too short and self-contaminating
-    vol = info.get("volume") or info.get("regularMarketVolume") or 0
-    avg_vol_20d = info.get("averageVolume") or 0   # yfinance 'averageVolume' is ~3-month avg
+    # 5. Volume Spike (today vs 20-day avg) → up to 15 pts
+    # Use real 20-day historical mean (falls back to 10-day only if <20 bars)
+    avg_vol_20d = to_float(info.get("averageVolume") or info.get("averageDailyVolume10Day"))
+    vol = to_float(info.get("volume") or info.get("regularMarketVolume"))
 
     if not avg_vol_20d and len(history) >= 20 and "Volume" in history.columns:
         avg_vol_20d = float(history["Volume"].tail(20).mean())
@@ -360,9 +361,12 @@ def score_momentum(info: dict, history: pd.DataFrame) -> tuple[float, dict]:
                 market_close_t = datetime.time(15, 30)
                 if market_open_t <= now_t <= market_close_t:
                     mins_elapsed = (now_t.hour * 60 + now_t.minute) - (9 * 60 + 15)
-                    if mins_elapsed > 15:
-                        progress = min(1.0, max(0.08, mins_elapsed / 375.0))
+                    # B6 Fix: Do not extrapolate before 09:45 AM (mins_elapsed < 30) to avoid 66x opening volume burst distortion
+                    if mins_elapsed >= 30:
+                        progress = min(1.0, mins_elapsed / 375.0)
                         vol_pace = vol / progress
+                    else:
+                        vol_pace = vol
         except Exception:
             pass
 
@@ -379,9 +383,9 @@ def score_momentum(info: dict, history: pd.DataFrame) -> tuple[float, dict]:
     breakdown["today_volume"] = vol
     breakdown["avg_volume_10d"] = avg_vol_20d   # key kept for backward compat
 
-    # 20-day EMA calculation
-    if len(history) >= 10 and "Close" in history.columns:
-        breakdown["ema20"] = round(float(history["Close"].ewm(span=min(20, len(history)), adjust=False).mean().iloc[-1]), 2)
+    # 20-day EMA calculation (B7 Fix: requires genuine 20-bar history)
+    if len(history) >= 20 and "Close" in history.columns:
+        breakdown["ema20"] = round(float(history["Close"].ewm(span=20, adjust=False).mean().iloc[-1]), 2)
     else:
         breakdown["ema20"] = None
 
@@ -611,18 +615,17 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
         info.get("regularMarketPrice") or
         info.get("previousClose") or 0
     )
-    # Calculate 1-Month (21-day) and 3-Month (63-day) returns for Relative Strength
-    ret_1m = 0.0
-    ret_3m = 0.0
-    if history is not None and not history.empty and len(history) >= 5:
+    # Calculate 1-Month (21-day) and 3-Month (63-day) returns for Relative Strength (B11 Fix)
+    ret_1m = None
+    ret_3m = None
+    if history is not None and not history.empty and len(history) >= 22:
         try:
             c_series = history["Close"].dropna()
-            if len(c_series) >= 2:
+            if len(c_series) >= 22:
                 curr_c = float(c_series.iloc[-1])
-                idx_1m = min(len(c_series) - 1, 21)
-                idx_3m = min(len(c_series) - 1, 63)
-                ret_1m = round(((curr_c - float(c_series.iloc[-idx_1m - 1])) / float(c_series.iloc[-idx_1m - 1])) * 100, 2)
-                ret_3m = round(((curr_c - float(c_series.iloc[-idx_3m - 1])) / float(c_series.iloc[-idx_3m - 1])) * 100, 2)
+                ret_1m = round(((curr_c - float(c_series.iloc[-22])) / float(c_series.iloc[-22])) * 100, 2)
+            if len(c_series) >= 64:
+                ret_3m = round(((curr_c - float(c_series.iloc[-64])) / float(c_series.iloc[-64])) * 100, 2)
         except Exception:
             pass
 
@@ -634,6 +637,16 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
         "strength": strength,
         "value": value,
         "momentum": momentum,
+        # How much of `total_score` each half actually earned the right to move.
+        # yfinance's .info returns no fundamentals for ~99% of this universe, so
+        # `strength` and `value` come back 0 with zero weight behind them. Emitting
+        # only the 0 let the table paint it as a measured, failing score; these
+        # flags are what let the page say "not available" instead of "zero", and
+        # say plainly when a total is carried entirely by technicals.
+        "strength_available": s_completeness > 0,
+        "value_available": v_completeness > 0,
+        "fund_weight_pct": round(fund_weight * 100, 1),
+        "tech_weight_pct": round(tech_weight * 100, 1),
         "strength_breakdown": s_break,
         "value_breakdown": v_break,
         "momentum_breakdown": m_break,
@@ -730,9 +743,9 @@ def compute_nifty_market_regime(nifty_df: pd.DataFrame = None) -> dict:
     prev_close = float(close.iloc[-2]) if len(close) >= 2 else ltp
     change_pct = round(((ltp - prev_close) / prev_close) * 100, 2)
 
-    # Moving averages
-    ema20 = float(close.ewm(span=min(20, len(close)), adjust=False).mean().iloc[-1])
-    ma50 = float(close.rolling(window=min(50, len(close))).mean().iloc[-1]) if len(close) >= 10 else ema20
+    # Moving averages (genuine 20 and 50 periods required)
+    ema20 = float(close.ewm(span=20, adjust=False).mean().iloc[-1]) if len(close) >= 20 else None
+    ma50 = float(close.rolling(window=50).mean().iloc[-1]) if len(close) >= 50 else None
 
     # 5-day slope
     lookback_5d = min(5, len(close) - 1)
@@ -753,8 +766,8 @@ def compute_nifty_market_regime(nifty_df: pd.DataFrame = None) -> dict:
         elif last_gain > 0:
             rsi = 100.0
 
-    is_above_ema20 = ltp >= ema20
-    is_above_ma50 = ltp >= ma50
+    is_above_ema20 = (ema20 is not None and ltp >= ema20)
+    is_above_ma50 = (ma50 is not None and ltp >= ma50) if ma50 is not None else is_above_ema20
 
     if is_above_ema20 and is_above_ma50 and ret_5d >= -0.5:
         status = "BULLISH"
@@ -809,20 +822,62 @@ def compute_relative_strength_ratings(screener_results: list[dict], nifty_histor
             curr_n = float(c.iloc[-1])
             idx_1m = min(len(c) - 1, 21)
             idx_3m = min(len(c) - 1, 63)
-            nifty_1m_ret = ((curr_n - float(c.iloc[-idx_1m - 1])) / float(c.iloc[-idx_1m - 1])) * 100.0
-            nifty_3m_ret = ((curr_n - float(c.iloc[-idx_3m - 1])) / float(c.iloc[-idx_3m - 1])) * 100.0
+            denom_1m = float(c.iloc[-idx_1m - 1])
+            denom_3m = float(c.iloc[-idx_3m - 1])
+            nifty_1m_ret = ((curr_n - denom_1m) / denom_1m * 100.0) if denom_1m != 0 else 0.0
+            nifty_3m_ret = ((curr_n - denom_3m) / denom_3m * 100.0) if denom_3m != 0 else 0.0
 
     raw_scores = []
     for s in screener_results:
-        ret_1m = s.get("ret_1m") if s.get("ret_1m") is not None else (s.get("wk52_return_pct", 0) / 12.0)
-        ret_3m = s.get("ret_3m") if s.get("ret_3m") is not None else (s.get("wk52_return_pct", 0) / 4.0)
-        excess_1m = ret_1m - nifty_1m_ret
-        excess_3m = ret_3m - nifty_3m_ret
+        wk52 = s.get("wk52_return_pct")
+        try:
+            wk52_val = float(wk52) if (wk52 is not None and not pd.isna(wk52)) else 0.0
+        except (ValueError, TypeError):
+            wk52_val = 0.0
+
+        r1 = s.get("ret_1m")
+        if r1 is not None and not pd.isna(r1):
+            try:
+                ret_1m = float(r1)
+            except (ValueError, TypeError):
+                ret_1m = wk52_val / 12.0
+        else:
+            ret_1m = wk52_val / 12.0
+
+        r3 = s.get("ret_3m")
+        if r3 is not None and not pd.isna(r3):
+            try:
+                ret_3m = float(r3)
+            except (ValueError, TypeError):
+                ret_3m = wk52_val / 4.0
+        else:
+            ret_3m = wk52_val / 4.0
+
+        excess_1m = (ret_1m or 0.0) - (nifty_1m_ret or 0.0)
+        excess_3m = (ret_3m or 0.0) - (nifty_3m_ret or 0.0)
         raw_rs = (0.4 * excess_1m) + (0.6 * excess_3m)
+        if pd.isna(raw_rs):
+            raw_rs = 0.0
         raw_scores.append((raw_rs, s))
 
     # Rank into 1-99 percentile with deterministic tie-breakers (None-safe)
-    raw_scores.sort(key=lambda x: (x[0], x[1].get("wk52_return_pct") or 0, x[1].get("total_score") or 0, x[1].get("symbol") or ""))
+    def _rs_sort_key(x):
+        raw_val, item = x
+        v = raw_val if (raw_val is not None and not pd.isna(raw_val)) else -999999.0
+        wk = item.get("wk52_return_pct")
+        try:
+            wk_v = float(wk) if (wk is not None and not pd.isna(wk)) else 0.0
+        except (ValueError, TypeError):
+            wk_v = 0.0
+        tot = item.get("total_score")
+        try:
+            tot_v = float(tot) if (tot is not None and not pd.isna(tot)) else 0.0
+        except (ValueError, TypeError):
+            tot_v = 0.0
+        sym = str(item.get("symbol") or "")
+        return (v, wk_v, tot_v, sym)
+
+    raw_scores.sort(key=_rs_sort_key)
     n = len(raw_scores)
     for rank_idx, (raw_val, s) in enumerate(raw_scores, 1):
         rs_rating = int(round((rank_idx / max(1, n)) * 99))
@@ -937,8 +992,16 @@ def compute_fibonacci_levels(history: pd.DataFrame, ltp: float = None) -> dict:
     recent_highs = high_series.iloc[-lookback:]
     recent_lows = low_series.iloc[-lookback:]
 
-    swing_high = float(recent_highs.max())
-    swing_low = float(recent_lows.min())
+    # Retracement is only defined for an up-leg: find swing high first, then swing low BEFORE it
+    h_idx = int(recent_highs.values.argmax())
+    if h_idx < 3:  # swing high is too close to start of lookback window -> no prior up-leg to retrace
+        return {
+            "fib_high": None, "fib_low": None, "fib_382": None, "fib_500": None, "fib_618": None,
+            "fib_retrace_pct": None, "fib_status": "NONE", "fib_badge": "⚪ Fib N/A", "fib_pts": 0.0
+        }
+
+    swing_high = float(recent_highs.iloc[h_idx])
+    swing_low = float(recent_lows.iloc[:h_idx].min())
 
     if ltp is None or ltp <= 0:
         ltp = float(close_series.iloc[-1]) if not close_series.empty else swing_high
@@ -1208,8 +1271,8 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
     elif vol_spike >= 0.9:
         setup_pts += 2.0
 
-    # Normalize Setup Quality Score (0 to 100)
-    setup_score = round(min(100.0, max(0.0, (setup_pts / 60.0) * 100.0)), 1)
+    # Normalize Setup Quality Score (0 to 100 scale, calibrated to true ~115 max attainable raw pts)
+    setup_score = round(min(100.0, max(0.0, setup_pts)), 1)
 
 
     # ── 2. ENTRY QUALITY SCORE (Max 100 raw points → 0-100 scale) ──────────────
@@ -1317,9 +1380,13 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
     elif nifty_regime == "CHOPPY":
         combined_score = max(0.0, combined_score - 5.0)
 
-    # 61.8% Fib Breakdown Rule: Severe penalty if pullback went too deep
+    # 61.8% Fib Breakdown Rule: Penalty if pullback went too deep
+    is_above_ma200 = (ma200 is not None and ltp is not None and ltp >= ma200)
     if fib_info.get("fib_status") == "FIB_618_EXCEEDED":
-        combined_score = max(0.0, combined_score - 30.0)
+        if not is_above_ma200:
+            combined_score = max(0.0, combined_score - 30.0)
+        else:
+            combined_score = max(0.0, combined_score - 10.0)
 
     if ltp > 0 and ltp < 50.0:
         combined_score = max(0.0, combined_score - 25.0)
@@ -1328,11 +1395,11 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
 
 
     # ── 4. ACTION LABEL & BADGE ASSIGNMENT ─────────────────────────────────────
-    if fib_info.get("fib_status") == "FIB_618_EXCEEDED":
+    if fib_info.get("fib_status") == "FIB_618_EXCEEDED" and not is_above_ma200:
         swing_action = "REJECT — FIB 61.8% BROKEN"
         swing_badge = "⚠️ REJECT — FIB 61.8% BROKEN"
         swing_class = "badge-red"
-        swing_reason = f"Pullback too deep ({fib_info.get('fib_retrace_pct', 0):.1f}% retrace) — uptrend structure broken"
+        swing_reason = f"Pullback too deep ({fib_info.get('fib_retrace_pct', 0):.1f}% retrace) below 200-DMA — uptrend structure broken"
     elif nifty_regime == "CORRECTION" and setup_score < 60:
         swing_action = "AVOID — MARKET CORRECTION"
         swing_badge = "⛔ AVOID — MARKET CORRECTION"
@@ -1402,7 +1469,10 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
         "avwap_status": avwap_info.get("avwap_status"),
         "avwap_badge": avwap_badge if 'avwap_badge' in locals() else avwap_info.get("avwap_badge"),
         "has_rsi_div": rsi_div_info.get("has_rsi_div", False),
-        "rsi_div_badge": rsi_div_info.get("rsi_div_badge", "")
+        "rsi_div_badge": rsi_div_info.get("rsi_div_badge", ""),
+        "fib_pts": float(fib_info.get("fib_pts", 0.0)),
+        "avwap_pts": float(avwap_info.get("avwap_pts", 0.0)),
+        "rsi_div_pts": float(rsi_div_info.get("rsi_div_pts", 0.0))
     }
 
 
@@ -1663,8 +1733,15 @@ def detect_sr_breaks_and_retests(
         if not placed:
             clusters.append({"prices": [price], "indices": [idx]})
 
-    # Pick the best cluster: most tests first, then highest price (stronger resistance)
-    best_cluster = max(clusters, key=lambda c: (len(c["prices"]), np.mean(c["prices"])))
+    # B5 Fix: Restrict candidates to clusters near or overhead (-3% to +15% of curr_ltp)
+    valid_clusters = [c for c in clusters if (curr_ltp * 0.97 <= np.mean(c["prices"]) <= curr_ltp * 1.15)]
+    if not valid_clusters:
+        valid_clusters = [c for c in clusters if np.mean(c["prices"]) >= curr_ltp * 0.95]
+    if not valid_clusters:
+        valid_clusters = clusters
+
+    # Pick best cluster: most tests first, then nearest to current price
+    best_cluster = max(valid_clusters, key=lambda c: (len(c["prices"]), -abs(np.mean(c["prices"]) - curr_ltp)))
     res_level = round(float(np.mean(best_cluster["prices"])), 2)
     res_test_count = len(best_cluster["prices"])
 
@@ -1688,7 +1765,8 @@ def detect_sr_breaks_and_retests(
     sr_reason = ""
     base_score = 0.0
 
-    for b in range(1, min(freshness_bars + 5, n)):
+    # B3 Fix: search up to retest_window + 2 so retest setups 8-20 bars ago are fully detected
+    for b in range(1, min(retest_window + 2, n)):
         idx = n - b
         bar_close = closes[idx]
         prev_close = closes[idx - 1] if idx > 0 else bar_close
@@ -1696,7 +1774,8 @@ def detect_sr_breaks_and_retests(
         bar_low   = lows[idx]
         bar_high  = highs[idx]
 
-        if bar_close >= res_level and prev_close <= res_level * 1.01:
+        # B4 Fix: bar must genuinely break across resistance level
+        if bar_close >= res_level and prev_close <= res_level:
             # ── Volume confirmation: breakout bar must have meaningful volume ──
             bar_vol = volumes[idx]
             avg_vol_at_bar = float(vol_avg_arr[max(0, idx - 1)])
@@ -1714,8 +1793,9 @@ def detect_sr_breaks_and_retests(
                 break
 
     # Trigger A: FRESH BREAKOUT (1h: within 4 bars | daily: within 1 bar)
+    # B4 Fix: Tighten buy-eligible breakout to <= 2.0% above resistance
     if (breakout_idx is not None and breakout_bars_ago <= freshness_bars
-            and -0.5 <= dist_from_res_pct <= 6.0):
+            and -0.5 <= dist_from_res_pct <= 2.0):
         is_break_res = True
         sr_type = "BREAK_RES"
         tf_label = "1H" if use_1h else "Daily"
@@ -1726,6 +1806,17 @@ def detect_sr_breaks_and_retests(
                      f"\u20b9{res_level:.2f} resistance{tested_str} "
                      f"({dist_from_res_pct:+.1f}%) with volume & body confirmation")
         base_score = 55.0 if res_test_count >= 2 else 45.0  # bonus for multi-tested level
+
+    elif (breakout_idx is not None and breakout_bars_ago <= freshness_bars
+            and 2.0 < dist_from_res_pct <= 6.0):
+        sr_type = "BREAK_EXTENDED"
+        tf_label = "1H" if use_1h else "Daily"
+        sr_badge = f"⚡ Breakout Extended [{tf_label}]"
+        sr_badge_class = "badge-orange"
+        tested_str = f", tested {res_test_count}x" if res_test_count >= 2 else ""
+        sr_reason = (f"{'1H' if use_1h else 'Daily'} breakout extended "
+                     f"({dist_from_res_pct:+.1f}% above ₹{res_level:.2f}) — wait for retest")
+        base_score = 30.0
 
     # Trigger B: RETEST BUY — requires a prior confirmed breakout, then price returning
     # to +-0.8% of the broken resistance level (now acting as support)
@@ -2308,6 +2399,20 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
     elif de <= 0.8: lt_risk = "MODERATE"
     else: lt_risk = "HIGH"
 
+    # Unlike score_stock, this function coerces every absent fundamental to 0.0
+    # and applies no completeness weighting — so when the source returns no ROE,
+    # D/E, margin or growth (the case for ~99% of this universe), the business
+    # -quality half is scored as though the company genuinely posts zeros. The
+    # number is still the best available read, but it is not the same kind of
+    # number as one backed by real filings, and the page must be able to say so
+    # rather than presenting a zeros-based score as an assessment.
+    _fund_inputs = {
+        "roe_pct": scored.get("roe_pct"), "de_ratio": scored.get("de_ratio"),
+        "npm_pct": scored.get("npm_pct"), "rev_growth_pct": scored.get("rev_growth_pct"),
+        "pe": scored.get("pe"), "pb": scored.get("pb"),
+    }
+    _present = sum(1 for v in _fund_inputs.values() if v is not None)
+
     return {
         "sector_group": sec_group,
         "lt_quality_score": lt_quality_score,
@@ -2317,6 +2422,9 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
         "lt_valuation_score": lt_valuation_score,
         "lt_valuation_status": lt_val_status,
         "lt_risk_level": lt_risk,
+        "lt_fund_inputs_present": _present,
+        "lt_fund_inputs_total": len(_fund_inputs),
+        "lt_quality_confident": _present >= 3,
         **trend_res,
         **cycle_res
     }
@@ -2735,6 +2843,90 @@ INTRADAY_GATES: dict = {
 }
 
 
+# ─── Intraday ranking score ──────────────────────────────────────────────────
+# One definition of the composite, consumed by three places that must never
+# disagree: the Python ranker below, the `intraday_score` baked into each pick,
+# and the browser's live re-rank (injected as INTRADAY_SCORE_CONFIG, so the page
+# recomputes rank from the live LTP using these exact weights rather than a
+# hand-copied second formula).
+#
+# Each component is (raw value -> clamped to `cap` -> x `weight`). `max_pts` is
+# what a component contributes at its cap, so the weighted sum has a known
+# ceiling and `intraday_score` can be stated on a real 0-100 scale. Without a
+# fixed denominator the raw sum is unbounded and two stocks' scores are only
+# comparable by accident.
+# Every component is measured as distance from a neutral midpoint and is
+# earnable by BOTH sides, so a long's 70 and a short's 70 mean the same thing.
+# That matters for `momentum`, which the original formula scored as raw
+# `momentum * 0.3` for longs and `-momentum * 0.3` for shorts: since momentum is
+# 0-85 and never negative, a short could only ever *lose* points on it, holding
+# the whole short list ~30 points below the long list on a shared 0-100 scale.
+# Centring it on 50 is a constant offset within each side, so the ordering of
+# each list is unchanged — only the number shown becomes honest.
+INTRADAY_SCORE_COMPONENTS: tuple = (
+    # key          label            cap    weight   floor
+    ("day_move",  "Day move",        5.0,   4.0,    0.0),
+    ("volume",    "Volume",          3.0,   8.0,    0.0),
+    ("rsi",       "RSI extension",  24.0,   0.6,  -24.0),
+    ("momentum",  "Momentum",       50.0,   0.3,  -50.0),
+    ("rs",        "Rel. strength",  49.0,   0.2,  -49.0),
+)
+
+INTRADAY_SCORE_MAX_PTS: float = sum(cap * weight for _, _, cap, weight, _ in INTRADAY_SCORE_COMPONENTS)
+
+
+def _js_round(x: float, nd: int = 2) -> float:
+    """Round half-away-from-zero, the way JavaScript's Math.round does.
+
+    Python's built-in round() is half-to-even, so round(2.675, 2) and
+    Math.round(2.675*100)/100 disagree. That matters here because the browser
+    re-scores these same picks live: a 0.01 difference in one component is enough
+    to swap two adjacent cards, so the tab would show an order the server's own
+    ranking disagrees with, and the cards would visibly jump on every refresh.
+    """
+    f = 10 ** nd
+    return math.floor(x * f + 0.5) / f
+
+
+def intraday_score_components(direction: str, day_chg_pct: float, vol_spike: float,
+                              rsi: float, momentum: float, rs_rating: float) -> dict:
+    """Per-component points for one intraday candidate, plus the 0-100 composite.
+
+    `direction` flips every input's sign convention so a long and a short are
+    scored on the same scale: a -3% day on 2x volume is as strong a short as
+    +3% on 2x volume is a long.
+    """
+    is_buy = (direction or "BUY").upper() == "BUY"
+    raw = {
+        "day_move": abs(day_chg_pct) if (day_chg_pct > 0) == is_buy else 0.0,
+        "volume":   vol_spike,
+        "rsi":      (rsi - 50.0) if is_buy else (50.0 - rsi),
+        "momentum": (momentum - 50.0) if is_buy else (50.0 - momentum),
+        "rs":       (rs_rating - 50.0) if is_buy else (50.0 - rs_rating),
+    }
+    pts, total = {}, 0.0
+    for key, label, cap, weight, floor in INTRADAY_SCORE_COMPONENTS:
+        v = max(floor, min(cap, raw.get(key) or 0.0))
+        p = _js_round(v * weight, 2)
+        pts[key] = {"label": label, "raw": _js_round(raw.get(key) or 0.0, 2), "pts": p,
+                    "max_pts": _js_round(cap * weight, 2)}
+        total += p
+    score = max(0.0, min(100.0, (total / INTRADAY_SCORE_MAX_PTS) * 100.0)) if INTRADAY_SCORE_MAX_PTS else 0.0
+    return {"intraday_score": _js_round(score, 1), "score_pts": _js_round(total, 2),
+            "score_components": pts}
+
+
+def intraday_score_config() -> dict:
+    """The score definition in a shape the page's live re-rank can consume."""
+    return {
+        "components": [
+            {"key": k, "label": lbl, "cap": cap, "weight": w, "floor": f}
+            for k, lbl, cap, w, f in INTRADAY_SCORE_COMPONENTS
+        ],
+        "max_pts": round(INTRADAY_SCORE_MAX_PTS, 2),
+    }
+
+
 def intraday_candidate_gates_pass(s: dict) -> bool:
     """True when a scan row can carry an intraday position.
 
@@ -2772,8 +2964,12 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
     segment (standard with Indian discount brokers), not F&O — the separate
     F&O Options tab already covers options-based bearish plays.
 
-    Returns {"buy": [...up to top_n...], "sell": [...up to top_n...]}, ranked
-    by a composite of today's move size, volume confirmation, and RSI extension.
+    Returns {"buy": [...up to top_n...], "sell": [...up to top_n...]}, each pick
+    ranked by `intraday_score` — a 0-100 composite of today's move, volume
+    confirmation, RSI extension, momentum and relative strength, defined once in
+    INTRADAY_SCORE_COMPONENTS. Every pick carries that score, its per-component
+    breakdown, and an explicit `rank`, so the page can sort and re-rank on the
+    same number the selection used instead of trusting array order.
     """
     if not screener_results:
         return {"buy": [], "sell": []}
@@ -2801,6 +2997,12 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
     buy_candidates = []
     sell_candidates = []
 
+    # Detect if scan data represents early morning session or partial volume
+    all_vols = [s.get('volume_spike') or 0.0 for s in screener_results]
+    median_vol = sorted(all_vols)[len(all_vols) // 2] if all_vols else 1.0
+    is_early_session = median_vol < 0.3
+    min_vol_required = 1.1 if not is_early_session else 0.0
+
     for s in screener_results:
         ltp = s.get("ltp") or 0
         # Price, circuit class and traded value now live in INTRADAY_GATES so the
@@ -2817,7 +3019,12 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
         # where yfinance's .info degraded, which defeats the whole tab).
         raw_prev_close = s.get("prev_close")
         has_day_move = raw_prev_close is not None and raw_prev_close > 0
-        day_chg_pct = ((ltp - raw_prev_close) / raw_prev_close) * 100 if has_day_move else 0.0
+        # Rounded to the 2dp that `day_chg_pct` is published at, and scored from
+        # that same value. The browser re-scores from the published field, so
+        # scoring here off the full-precision number would put the two a hair
+        # apart -- 4.375779 vs 4.38 is 0.02 points, which is enough to swap two
+        # adjacent cards and make the tab disagree with its own ranking.
+        day_chg_pct = _js_round(((ltp - raw_prev_close) / raw_prev_close) * 100, 2) if has_day_move else 0.0
 
         rsi = s.get("rsi") or 50
         vol_spike = s.get("volume_spike") or 1.0
@@ -2837,25 +3044,23 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
 
         # Buy (long): today's up-move confirmed by volume (when known), RSI
         # building but not yet overbought, trend intact.
-        if (day_move_bullish and vol_spike >= 1.3
+        if (day_move_bullish and vol_spike >= min_vol_required
                 and 54 <= rsi <= 74 and dist_ma50_pct >= -1.0):
-            score = (min(day_chg_pct, 5) * 4 + min(vol_spike, 3) * 8
-                      + (rsi - 50) * 0.6 + momentum * 0.3 + (rs_rating - 50) * 0.2)
-            buy_candidates.append((score, s, day_chg_pct, dist_ma50_pct, has_day_move))
+            sc = intraday_score_components("BUY", day_chg_pct, vol_spike, rsi, momentum, rs_rating)
+            buy_candidates.append((sc["intraday_score"], s, day_chg_pct, dist_ma50_pct, has_day_move, sc))
 
         # Sell (short): today's down-move confirmed by volume (when known), RSI
         # breaking down but not yet oversold-exhausted, trend broken.
-        if (day_move_bearish and vol_spike >= 1.3
+        if (day_move_bearish and vol_spike >= min_vol_required
                 and 26 <= rsi <= 46 and dist_ma50_pct <= 1.0):
-            score = (min(abs(day_chg_pct), 5) * 4 + min(vol_spike, 3) * 8
-                      + (50 - rsi) * 0.6 + (-momentum) * 0.3 + (50 - rs_rating) * 0.2)
-            sell_candidates.append((score, s, day_chg_pct, dist_ma50_pct, has_day_move))
+            sc = intraday_score_components("SELL", day_chg_pct, vol_spike, rsi, momentum, rs_rating)
+            sell_candidates.append((sc["intraday_score"], s, day_chg_pct, dist_ma50_pct, has_day_move, sc))
 
     buy_candidates.sort(key=lambda x: x[0], reverse=True)
     sell_candidates.sort(key=lambda x: x[0], reverse=True)
 
-    def _build_pick(entry, direction):
-        _, s, day_chg_pct, dist_ma50_pct, has_day_move = entry
+    def _build_pick(entry, direction, rank):
+        _, s, day_chg_pct, dist_ma50_pct, has_day_move, sc = entry
         ltp = s.get("ltp") or 0
         raw_prev_close = s.get("prev_close")
         # Much tighter risk sizing than a swing trade — MIS is same-day only.
@@ -2883,7 +3088,17 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
             "volume_spike": s.get("volume_spike"),
             "dist_ma50_pct": round(dist_ma50_pct, 2),
             "rs_rating": s.get("rs_rating"),
+            "momentum": s.get("momentum"),
             "total_score": s.get("total_score"),
+            # The composite this tab is ranked on, 0-100, and the per-component
+            # breakdown behind it. `rank` is carried explicitly so the order is
+            # data rather than array position — the page re-sorts on it, and a
+            # live price move can change it without the list silently lying.
+            "intraday_score": sc["intraday_score"],
+            "score_pts": sc["score_pts"],
+            "score_components": sc["score_components"],
+            "rank": rank,
+            "rank_at_scan": rank,
             "stop_loss": stop_loss,
             "stop_loss_pct": risk_pct if direction == "SELL" else -risk_pct,
             "target1": target1,
@@ -2901,8 +3116,11 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
         }
 
     return {
-        "buy": [_build_pick(e, "BUY") for e in buy_candidates[:top_n]],
-        "sell": [_build_pick(e, "SELL") for e in sell_candidates[:top_n]],
+        "buy": [_build_pick(e, "BUY", i + 1) for i, e in enumerate(buy_candidates[:top_n])],
+        "sell": [_build_pick(e, "SELL", i + 1) for i, e in enumerate(sell_candidates[:top_n])],
+        # So the page can show how deep the qualifying pool was, not just the top N.
+        "buy_qualified": len(buy_candidates),
+        "sell_qualified": len(sell_candidates),
     }
 
 
@@ -3537,5 +3755,70 @@ def select_monthly_lt_watchlist_additions(screener_results: list[dict], existing
 
     candidates.sort(key=lambda x: x["combined_rank_score"], reverse=True)
     return candidates[:top_n]
+
+
+def run_selftest() -> bool:
+    import pandas as pd
+    import numpy as np
+    import datetime
+    print("Running screener_engine self-tests...")
+
+    # Test 1: History length guards in score_momentum
+    short_df = pd.DataFrame({"Close": [100.0] * 15, "Volume": [1000] * 15})
+    info = {"currentPrice": 100.0}
+    _, bd = score_momentum(info, short_df)
+    assert bd.get("ema20") is None, "EMA20 should be None for len < 20"
+    assert bd.get("ma50") is None, "MA50 should be None for len < 50"
+    assert bd.get("ma200") is None, "MA200 should be None for len < 200"
+
+    # Test 2: compute_fibonacci_levels chronological ordering
+    dates = pd.date_range("2026-01-01", periods=100)
+    prices = np.linspace(100, 200, 100)
+    history_df = pd.DataFrame({
+        "Close": prices,
+        "High": prices + 2,
+        "Low": prices - 2,
+        "Open": prices,
+        "Volume": [100000] * 100
+    }, index=dates)
+    fib = compute_fibonacci_levels(history_df, ltp=150.0)
+    assert fib.get("fib_status") is not None, "fib_status should be computed"
+
+    # Test 3: compute_swing_setup returns fib_pts, avwap_pts, rsi_div_pts and normalized setup_score
+    full_dates = pd.date_range("2025-01-01", periods=250)
+    np.random.seed(42)
+    full_prices = 100 + np.cumsum(np.random.normal(0.1, 1, 250))
+    full_df = pd.DataFrame({
+        "Close": full_prices,
+        "High": full_prices + 2,
+        "Low": full_prices - 2,
+        "Open": full_prices,
+        "Volume": [200000] * 250
+    }, index=full_dates)
+    stock_dict = {
+        "symbol": "TESTSTOCK",
+        "ltp": float(full_prices[-1]),
+        "volume_spike": 1.5,
+        "rsi": 55.0,
+        "trend": "Strong Uptrend",
+        "tech_score": 75.0,
+        "cap_category": "Large Cap"
+    }
+    setup = compute_swing_setup(stock_dict, full_df)
+    assert "fib_pts" in setup, "fib_pts must be present in setup"
+    assert "avwap_pts" in setup, "avwap_pts must be present in setup"
+    assert "rsi_div_pts" in setup, "rsi_div_pts must be present in setup"
+    assert 0 <= setup.get("setup_score", 0) <= 100, "setup_score must be normalized between 0 and 100"
+
+    print("[OK] All screener_engine self-tests PASSED successfully!")
+    return True
+
+
+if __name__ == "__main__":
+    import sys
+    if "--selftest" in sys.argv:
+        success = run_selftest()
+        sys.exit(0 if success else 1)
+
 
 

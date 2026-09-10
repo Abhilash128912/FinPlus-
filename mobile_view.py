@@ -341,7 +341,6 @@ function cardLt(row) {
 function tabCount(key) {
   var t = DATA.tabs[key];
   if (key === 'intraday') return (t.buy || []).length + (t.sell || []).length + (t.sr || []).length;
-  if (key === 'swing') return (t || []).length + (DATA.tabs.swing_sr || []).length;
   return (t || []).length;
 }
 
@@ -367,13 +366,7 @@ function render() {
                  : '<div class="empty">No stock is sitting on a volume-backed level with the '
                    + 'volume to turn off it and a worthwhile risk/reward. Rare by design.</div>');
   } else if (active === 'swing') {
-    var srb = DATA.tabs.swing_sr || [];
-    html += '<div class="sub">At a volume-backed support · buy only</div>' +
-      (srb.length ? srb.map(cardSr).join('')
-                  : '<div class="empty">Nothing is sitting on a volume-backed support with the '
-                    + 'volume to turn off it. Rare by design.</div>');
-    html += '<div class="sub">Ranked swing candidates</div>' +
-      ((t || []).length ? t.map(cardSwing).join('') : '<div class="empty">Nothing here right now.</div>');
+    html += (t || []).length ? t.map(cardSwing).join('') : '<div class="empty">Nothing here right now.</div>';
   } else {
     var rows = t || [];
     var card = active === 'penny' ? cardPenny : cardLt;

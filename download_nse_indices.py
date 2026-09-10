@@ -288,7 +288,7 @@ def main():
     # Merge remaining active equity shares from full NSE Master List (EQUITY_L.csv)
     if master_df is not None and sym_col_m in master_df.columns:
         series_col = next((c for c in master_df.columns if c.lower() in ["series", "srs"]), None)
-        name_col_m = next((c for c in master_df.columns if col.lower() in ["name of company", "company name", "name"]), None)
+        name_col_m = next((c for c in master_df.columns if c.lower() in ["name of company", "company name", "name"]), None)
         for _, row in master_df.iterrows():
             sym = str(row[sym_col_m]).strip().upper()
             if not sym or sym in ["SYMBOL", "NAN"]:
@@ -309,8 +309,11 @@ def main():
             added += 1
         
     if new_rows or delisted_symbols:
-        df_new = pd.DataFrame(new_rows) if new_rows else pd.DataFrame()
-        df_updated = pd.concat([df_existing, df_new], ignore_index=True) if not df_new.empty else df_existing.copy()
+        if new_rows:
+            df_new = pd.DataFrame(new_rows).dropna(how='all', axis=1)
+            df_updated = pd.concat([df_existing, df_new], ignore_index=True)
+        else:
+            df_updated = df_existing.copy()
         
         # Ensure Sr. sequential column exists
         if "Sr." in df_updated.columns:

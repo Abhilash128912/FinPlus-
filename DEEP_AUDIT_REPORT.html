@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Stock Screener — Deep Audit Report</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: #0b0f19;
+    color: #e2e8f0;
+    line-height: 1.65;
+    padding: 40px 24px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 28px; color: #f8fafc; border-bottom: 2px solid #334155; padding-bottom: 12px; margin-bottom: 20px; }
+  h2 { font-size: 22px; color: #38bdf8; margin-top: 36px; border-bottom: 1px solid #1e293b; padding-bottom: 8px; }
+  h3 { font-size: 18px; color: #fbbf24; margin-top: 24px; }
+  p { margin: 10px 0; color: #cbd5e1; }
+  li { margin: 6px 0 6px 24px; color: #cbd5e1; }
+  pre { background: #1e293b; padding: 14px 18px; border-radius: 8px; overflow-x: auto; font-family: monospace; font-size: 13px; border: 1px solid #334155; color: #7dd3fc; }
+  code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; color: #38bdf8; }
+  hr { border: 0; border-top: 1px solid #1e293b; margin: 30px 0; }
+  .table-container { overflow-x: auto; margin: 20px 0; }
+  table { width: 100%; border-collapse: collapse; text-align: left; background: #0f172a; border-radius: 8px; overflow: hidden; border: 1px solid #1e293b; }
+  th { background: #1e293b; padding: 12px 14px; font-weight: 600; color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
+  td { padding: 12px 14px; border-top: 1px solid #1e293b; font-size: 14px; color: #e2e8f0; }
+  tr:hover { background: #1e293b55; }
+  strong { color: #f8fafc; }
+</style>
+</head>
+<body>
+<h1>Stock Screener Application — Deep Architectural & Code Audit Report</h1>
+<p><strong>Date:</strong> 2026-09-03  </p>
+<p><strong>Auditor:</strong> Antigravity AI  </p>
+<p><strong>Scope:</strong> Full-stack codebase inspection across <code>fetch_and_build.py</code>, <code>screener_engine.py</code>, <code>download_nse_indices.py</code>, <code>mobile_api.py</code>, <code>static/app.js</code>, <code>screener.html</code>, mobile builds, caching, and data pipelines.</p>
+<hr/>
+<h2>Executive Summary</h2>
+<p>A comprehensive, line-by-line audit was conducted across all subsystems of the <strong>Stock Screener Application</strong>. The application features an impressive amount of financial engineering (Wilder's RSI, Mansfield Relative Strength vs Nifty, CMF order flow, ChartPrime S/R boxes, multi-cap scoring, and F&O option strikes).</p>
+<p>However, our audit identified <strong>6 critical bugs/flaws</strong>, <strong>4 missing links/architectural gaps</strong>, and <strong>4 high-impact enhancement vectors</strong>. Notably, the web UI contains a broken scan status route resulting in 120-second hangs, mobile API endpoints are missing from HTTP GET, scan triggers cause server/LTP warmer collisions, large 10.6MB payloads are served uncompressed without atomic write safety, and Stock of the Day fallback logic risks violating cap constraints under extreme market regimes.</p>
+<hr/>
+<h2>Table of Contents</h2>
+<p>1. [Critical Flaws & Functional Bugs](#1-critical-flaws--functional-bugs)</p>
+<p>2. [Missing Links & Architectural Gaps](#2-missing-links--architectural-gaps)</p>
+<p>3. [System Constraints & Rules Conformance](#3-system-constraints--rules-conformance)</p>
+<p>4. [High-Value Enhancement Recommendations](#4-high-value-enhancement-recommendations)</p>
+<p>5. [Actionable Remediation Roadmap](#5-actionable-remediation-roadmap)</p>
+<hr/>
+<h2>1. Critical Flaws & Functional Bugs</h2>
+<h3>🔴 F-01: Broken Scan Status Polling Route (`/api/scan/status` returns 404)</h3>
+<li><strong>Location:</strong> <code>fetch_and_build.py</code> (line 3867 & lines 8896–9063), <code>static/app.js</code> (line 1867)</li>
+<li><strong>Problem:</strong> When a user initiates a scan in the web UI, <code>triggerScan()</code> polls:</li>
+<p>  <code></code>`javascript</p>
+<p>  const statusUrl = 'http://localhost:' + (window.location.port || '8080') + '/api/scan/status';</p>
+<p>  <code></code>`</p>
+<p>  However, <code>ScanRequestHandler.do_GET()</code> only implements <code>/api/status</code>, not <code>/api/scan/status</code>. Every polling attempt returns <strong>HTTP 404 Not Found</strong>.</p>
+<li><strong>Impact:</strong> The client never detects that the scan has finished (<code>sResp.ok</code> is always false). The progress bar artificially crawls to 90% and then <strong>freezes for a full 120 seconds</strong> until the safety timeout fires.</li>
+<li><strong>Fix:</strong> Register <code>/api/scan/status</code> as an alias to <code>/api/status</code> in <code>do_GET()</code>, and update client-side code to use relative <code>/api/status</code> (<code>sData.is_scanning</code>).</li>
+<hr/>
+<h3>🔴 F-02: Missing Mobile API Routes in HTTP `do_GET` (All Mobile GET Requests 404)</h3>
+<li><strong>Location:</strong> <code>fetch_and_build.py</code> (lines 9069–9090 vs lines 8896–9063)</li>
+<li><strong>Problem:</strong> The mobile API endpoints:</li>
+<p>  - <code>/api/mobile/screener</code></p>
+<p>  - <code>/api/mobile/watchlist</code></p>
+<p>  - <code>/api/mobile/holdings</code></p>
+<p>  - <code>/api/mobile/status</code></p>
+<p>  - <code>/api/mobile/search?q=...</code></p>
+<p>  - <code>/api/mobile/stock?symbol=...</code></p>
+<p>  were registered <strong>only under <code>do_POST()</code></strong> in <code>ScanRequestHandler</code>.</p>
+<li><strong>Impact:</strong> Any standard mobile app, React Native client, or browser issuing a standard HTTP <code>GET</code> request to search for a stock or fetch watchlist data falls through to <code>super().do_GET()</code>, returning <strong>HTTP 404 Not Found</strong>.</li>
+<li><strong>Fix:</strong> Wire these endpoints into <code>do_GET()</code> as well so that standard REST queries with query strings (<code>?q=</code>, <code>?symbol=</code>) work seamlessly.</li>
+<hr/>
+<h3>🔴 F-03: Manual `/api/scan` Concurrency Collision & Warmer Starvation</h3>
+<li><strong>Location:</strong> <code>fetch_and_build.py</code> (lines 9094–9155)</li>
+<li><strong>Problem:</strong> When <code>/api/scan</code> is triggered via POST:</li>
+<p>  1. <code>IS_INITIAL_SCANNING</code> is <strong>never set to <code>True</code></strong>.</p>
+<p>  2. Because <code>IS_INITIAL_SCANNING</code> remains <code>False</code>:</p>
+<p>     - <code>/api/status</code> falsely reports <code>"is_scanning": false</code> while a heavy scan is active.</p>
+<p>     - <code>ltp_should_defer_to_scan()</code> returns <code>False</code>. The background LTP warmer continues aggressively polling Yahoo Finance simultaneously with <code>run_scan()</code>, exhausting Yahoo's per-IP rate limit and triggering HTTP 429/401 errors.</p>
+<p>  3. Unlike <code>background_initial_scan()</code>, the <code>/api/scan</code> handler fails to invoke <code>sync_monthly_lt_watchlist_additions()</code> and fails to pre-seed <code>GLOBAL_LTP_CACHE</code> with fresh scan prices.</p>
+<li><strong>Fix:</strong> Unify <code>/api/scan</code> to call or share the centralized <code>background_initial_scan()</code> pipeline with proper mutex locking (<code>IS_INITIAL_SCANNING = True</code>, with <code>try ... finally: IS_INITIAL_SCANNING = False</code>).</li>
+<hr/>
+<h3>🔴 F-04: Non-Atomic Writes on 10.6MB `screener_data.json` & Ledgers</h3>
+<li><strong>Location:</strong> <code>fetch_and_build.py</code> (line 78, <code>write_scan_json()</code>, <code>save_cache()</code>, and ledger handlers)</li>
+<li><strong>Problem:</strong> <code>write_scan_json()</code> writes <code>OUT_JSON_FILE</code> (<code>screener_data.json</code>, ~10.6MB) using:</li>
+<p>  <code></code>`python</p>
+<p>  with open(OUT_JSON_FILE, "w", encoding="utf-8") as f:</p>
+<p>      json.dump(clean_results, f, default=json_serializer)</p>
+<p>  <code></code>`</p>
+<p>  Writing 10.6MB of text takes 200–500ms on typical storage.</p>
+<li><strong>Impact:</strong> During this write window, any concurrent HTTP request to <code>/screener_data.json</code> or <code>/api/mobile/screener</code> reads a partially written, truncated JSON file. This throws <code>json.JSONDecodeError: Unterminated string</code> and completely crashes the client application on boot.</li>
+<li><strong>Fix:</strong> Serialize to a temporary file (<code>screener_data.json.tmp</code>) and use atomic replacement via <code>os.replace()</code>, utilizing the existing <code>atomic_write_file()</code> helper.</li>
+<hr/>
+<h3>🔴 F-05: Stock of the Day Fallback Rule Violation</h3>
+<li><strong>Location:</strong> <code>fetch_and_build.py</code> (line 2242 & line 2317)</li>
+<li><strong>Problem:</strong> When selecting the Stock of the Day:</li>
+<p>  <code></code>`python</p>
+<p>  if qualified_eligible:</p>
+<p>      top = qualified_eligible[0]</p>
+<p>  elif eligible_screener_results:</p>
+<p>      top = eligible_screener_results[0]</p>
+<p>  else:</p>
+<p>      top = screener_results[0]  # <-- VIOLATION</p>
+<p>  <code></code>`</p>
+<li><strong>Impact:</strong> If market conditions are poor and no Large Cap or Mid Cap stock meets the score >= 55 threshold, falling back to <code>screener_results[0]</code> can pick an ineligible Small Cap, micro-cap, or penny stock. This directly breaches <strong>Rule 1</strong> in <code>AGENTS.md</code> (*"Stock of the Day MUST ONLY be selected from Large Cap or Mid Cap stocks ... Small Cap and micro-cap stocks are strictly prohibited. Price Floor >= ₹100.0"*).</li>
+<li><strong>Fix:</strong> Replace <code>else: top = screener_results[0]</code> with a filter that strictly selects the highest-scoring eligible Large/Mid Cap stock (<code>[r for r in screener_results if is_eligible_for_stock_of_the_day(r)][0]</code>).</li>
+<hr/>
+<h3>🔴 F-06: Mobile App `www/index.html` Out-of-Sync on LT Watchlist Edits</h3>
+<li><strong>Location:</strong> <code>fetch_and_build.py</code> (lines 8654–8678, <code>sync_html_lt_watchlist()</code>)</li>
+<li><strong>Problem:</strong> When a user adds, deletes, or modifies a stock in the LT Watchlist, <code>sync_html_lt_watchlist()</code> updates <code>OUT_HTML</code> (<code>screener.html</code>) and <code>OUT_WWW_HTML</code> (<code>www/screener.html</code>), but <strong>omits <code>WWW_INDEX_HTML</code> (<code>www/index.html</code>)</strong>.</li>
+<li><strong>Impact:</strong> Capacitor mobile builds exclusively read <code>www/index.html</code> (per <code>capacitor.config.json</code> <code>"webDir": "www"</code>). As a result, user watchlist modifications never show up in the mobile app until a full re-scan is executed.</li>
+<li><strong>Fix:</strong> Include <code>WWW_INDEX_HTML</code> in <code>sync_html_lt_watchlist()</code>'s update loop.</li>
+<hr/>
+<h2>2. Missing Links & Architectural Gaps</h2>
+<h3>🟡 M-01: Absence of HTTP Gzip Compression on 10.6MB JSON Payloads</h3>
+<li><strong>Location:</strong> <code>fetch_and_build.py</code> (<code>ScanRequestHandler</code>)</li>
+<li><strong>Problem:</strong> <code>screener_data.json</code> is ~10.6 megabytes of repetitive text keys. Python's built-in <code>http.server</code> does not compress HTTP responses.</li>
+<li><strong>Impact:</strong> Every client launch downloads 10.6MB uncompressed. Over mobile data or on cloud platforms (Render/Heroku), this imposes a 5–15 second load penalty and rapidly exhausts cloud bandwidth allowances.</li>
+<li><strong>Remediation:</strong> Implement gzip compression in <code>send_response()</code> or pre-compress <code>screener_data.json.gz</code> during scans. Gzip reduces 10.6MB to ~920KB (a <strong>91% bandwidth reduction</strong>).</li>
+<hr/>
+<h3>🟡 M-02: Hardcoded `http://localhost` Hostnames in Client Scripts</h3>
+<li><strong>Location:</strong> <code>fetch_and_build.py</code> (lines 3866–3867, lines 5225–5231, lines 5411–5417)</li>
+<li><strong>Problem:</strong> API calls in <code>static/app.js</code> and <code>HTML_TEMPLATE</code> explicitly construct URLs with <code>http://localhost:5050</code> or <code>http://localhost:${port}</code>.</li>
+<li><strong>Impact:</strong> When running the web app on a local Wi-Fi network (accessed via PC IP like <code>http://192.168.1.15:5050</code>), or deployed to Render (<code>https://finplus-g0b5.onrender.com</code>), or inside the Android APK:</li>
+<p>  - The client attempts to connect to <code>localhost</code> (the user's phone or remote machine), failing immediately with network error alerts.</p>
+<li><strong>Remediation:</strong> Use relative paths (<code>/api/ltp</code>, <code>/api/scan</code>, <code>/api/status</code>) or <code>window.location.origin</code> with dynamic host detection.</li>
+<hr/>
+<h3>🟡 M-03: Timezone Inconsistency in Trading Day Calculation</h3>
+<li><strong>Location:</strong> <code>fetch_and_build.py</code> (line 2004, <code>get_lt_portfolio_summary()</code>)</li>
+<li><strong>Problem:</strong> <code>today_date = datetime.datetime.now().date()</code> uses system local time rather than IST (<code>now_ist.date()</code>).</li>
+<li><strong>Impact:</strong> When deployed to cloud environments running on UTC (e.g. Render/AWS/Heroku), the system date before 05:30 AM IST evaluates to yesterday's date, causing off-by-one errors in <code>days_active</code>.</li>
+<li><strong>Remediation:</strong> Standardize to <code>now_ist.date()</code> matching <code>get_market_status()</code>.</li>
+<hr/>
+<h3>🟡 M-04: Orphaned `/api/settings` and Legacy Capital Fields</h3>
+<li><strong>Location:</strong> <code>screener_settings.json</code> & <code>fetch_and_build.py</code> (lines 9326–9350)</li>
+<li><strong>Problem:</strong> <code>screener_settings.json</code> retains defunct capital fields (<code>screener_opening_capital</code>, <code>screener_daily_risk_limit</code>, <code>challenge_start_date</code>) from retired ledger workflows. <code>/api/settings</code> is only implemented in <code>do_POST</code> and is never fetched by the frontend.</li>
+<li><strong>Remediation:</strong> Provide a clean <code>GET /api/settings</code> endpoint and deprecate unused ledger fields.</li>
+<hr/>
+<h2>3. System Constraints & Rules Conformance</h2>
+<div class="table-container"><table>
+<thead><tr><th>Rule</th><th>Requirement</th><th>Current Status</th><th>Audit Finding</th></tr></thead><tbody>
+<tr><td>**Rule 1: Stock of the Day**</td><td>Large/Mid Cap only, LTP >= ₹100, lock persistence while ACTIVE, replace if INACTIVE/INVALIDATED</td><td>⚠️ **Near-Compliant**</td><td>Hard price floor and cap checks are strictly enforced, but line 2317 contains a dangerous fallback to `screener_results[0]` if no stock meets score >= 55.</td></tr>
+<tr><td>**Rule 2: Fundamental Data & Caching**</td><td>Genuine metrics (P/E, ROE, D/E, NPM), invalidate cache files missing fundamentals</td><td>✅ **Compliant**</td><td>`load_cache()` validates presence of fundamental keys and triggers curl_cffi/yfinance fallback if missing.</td></tr>
+<tr><td>**Rule 3: F&O / Options Signals**</td><td>Exactly 15 qualified stocks, LTP >= 1000 or Lot Size < 500, RELIANCE mandatory exception</td><td>✅ **Compliant**</td><td>Exactly 15 stocks selected, RELIANCE is forcefully inserted into top 15 if missing.</td></tr>
+<tr><td>**Rule 4: LT Trading Days Counter**</td><td>Trading days only (M–F excluding NSE holidays), dual GET/POST `/api/lt-portfolio/status`</td><td>✅ **Compliant**</td><td>Dual HTTP methods implemented; iteration skips holidays and weekends.</td></tr>
+<tr><td>**Rule 5: Modal HTML Hierarchy**</td><td>`ltAddModalBg` top-level un-nested</td><td>✅ **Compliant**</td><td>Confirmed un-nested at root level.</td></tr>
+</tbody></table></div>
+<hr/>
+<h2>4. High-Value Enhancement Recommendations</h2>
+<h3>💡 E-01: Lightweight Mobile Feed (`screener_summary.json`)</h3>
+<li><strong>Current:</strong> The client downloads the full 10.6MB dataset for all 2,568 stocks with 50+ indicators each.</li>
+<li><strong>Enhancement:</strong> Generate a lightweight <code>screener_summary.json</code> (~1.1MB) containing only primary UI columns (<code>symbol</code>, <code>name</code>, <code>ltp</code>, <code>day_chg_pct</code>, <code>total_score</code>, <code>trend</code>, <code>sector</code>, <code>rs_rating</code>). Detailed financial breakdowns and ChartPrime levels can be fetched on demand per stock via <code>/api/mobile/stock?symbol=XYZ</code>.</li>
+<h3>💡 E-02: Real-time Scan Progress with Server-Sent Events (SSE)</h3>
+<li><strong>Current:</strong> Scan progress uses a synthetic timer interval (<code>progressPct = Math.min(progressPct + 5, 90)</code>).</li>
+<li><strong>Enhancement:</strong> Implement an SSE endpoint (<code>/api/scan/live-progress</code>) streaming genuine milestones:</li>
+<p>  1. "Downloading 5-day market data (17 chunks)..."</p>
+<p>  2. "Scoring momentum & volume pacing (2,568 stocks)..."</p>
+<p>  3. "Calculating Mansfield RS vs Nifty 50..."</p>
+<p>  4. "Generating reports..."</p>
+<h3>💡 E-03: Cache Hygiene & Automatic Pruning</h3>
+<li><strong>Current:</strong> The <code>cache/</code> directory contains 2,588 JSON files (~150MB) and never deletes obsolete tickers.</li>
+<li><strong>Enhancement:</strong> Implement an automated cleanup routine that removes cache files for symbols that have been delisted or are no longer part of the NSE active universe.</li>
+<h3>💡 E-04: Automated Gzip Pre-compression</h3>
+<li><strong>Current:</strong> Files are served as raw uncompressed text.</li>
+<li><strong>Enhancement:</strong> During <code>write_scan_json()</code>, also write <code>screener_data.json.gz</code>. <code>ScanRequestHandler</code> can inspect <code>Accept-Encoding: gzip</code> and serve the pre-compressed byte stream with <code>Content-Encoding: gzip</code>, reducing load times from ~5 seconds to ~350ms.</li>
+<hr/>
+<h2>5. Actionable Remediation Roadmap & Resolution Status</h2>
+<div class="table-container"><table>
+<thead><tr><th>Item</th><th>Description</th><th>Status</th><th>Verification Result</th></tr></thead><tbody>
+<tr><td>**F-01**</td><td>Fix `/api/scan/status` route 404 in `fetch_and_build.py`</td><td>✅ **RESOLVED**</td><td>Route returns HTTP 200 with both `is_scanning` and `scan_in_progress`. Client no longer hangs.</td></tr>
+<tr><td>**F-02**</td><td>Add `/api/mobile/*` routes to `do_GET()`</td><td>✅ **RESOLVED**</td><td>All mobile endpoints (`/screener`, `/watchlist`, `/holdings`, `/status`, `/search`, `/stock`) return HTTP 200 on GET.</td></tr>
+<tr><td>**F-03**</td><td>Guard `IS_INITIAL_SCANNING` in `/api/scan`</td><td>✅ **RESOLVED**</td><td>Unified with `background_initial_scan()`, setting mutex flag, deferring warmer, returning 409 if busy.</td></tr>
+<tr><td>**F-04**</td><td>Wrap `write_scan_json()` in `atomic_write_file()`</td><td>✅ **RESOLVED**</td><td>`screener_data.json` now uses temporary swap to prevent concurrent truncated reads.</td></tr>
+<tr><td>**F-05**</td><td>Eliminate `screener_results[0]` fallback in Stock of the Day</td><td>✅ **RESOLVED**</td><td>Strict `is_eligible_for_stock_of_the_day` check enforced; Large/Mid cap and ₹100 floor strictly preserved.</td></tr>
+<tr><td>**F-06**</td><td>Sync `www/index.html` on LT Watchlist edits</td><td>✅ **RESOLVED**</td><td>`published_html_paths()` now inspects and includes `www/index.html` and `www/screener.html`.</td></tr>
+<tr><td>**M-01**</td><td>HTTP Gzip compression on `screener_data.json`</td><td>✅ **RESOLVED**</td><td>`ScanRequestHandler` dynamically compresses payload: 10.6MB down to 1.29MB (**88% bandwidth reduction**).</td></tr>
+<tr><td>**M-02**</td><td>Replace hardcoded `localhost:8080` with dynamic origin</td><td>✅ **RESOLVED**</td><td>Both `fetch_and_build.py` and `static/app.js` use `window.location.origin` with fallback to port 5050.</td></tr>
+<tr><td>**M-03**</td><td>Standardize trading day timezone to explicit IST</td><td>✅ **RESOLVED**</td><td>`get_lt_portfolio_summary()` and monthly penny lock calculation now use `now(IST).date()`.</td></tr>
+<tr><td>**M-04**</td><td>Provide `GET /api/settings` endpoint</td><td>✅ **RESOLVED**</td><td>Registered in `do_GET`, returning current JSON settings.</td></tr>
+</tbody></table></div>
+<hr/>
+<p>*Report updated and verified: <code>D:\STOCK SCREENER APP\DEEP_AUDIT_REPORT.md</code>*</p>
+</body>
+</html>

@@ -13,6 +13,7 @@ var SWING_SR = {};
 var LT_MONTHLY_PICKS = {};
 var LT_PORTFOLIO_SUMMARY = {};
 var TREND_CONFIG = { states: {}, uptrend: [], downtrend: '' };
+var INTRADAY_SCORE_CONFIG = { components: [], max_pts: 0 };
 
 // Volume-backed S/R verdicts, keyed by symbol. Only stocks with a real level
 // behind them appear; the swing radar's own score says nothing about levels, so
@@ -49,6 +50,25 @@ let lastLtpError = null;
 // badge has to tell them apart or a normal hourly scan reads as a broken feed.
 let ltpPaused = { active: false, resumesInSec: null };
 
+const NSE_HOLIDAYS_2026 = {
+  "2026-01-15": "Maharashtra Assembly Election / State Holiday",
+  "2026-01-26": "Republic Day",
+  "2026-03-03": "Holi",
+  "2026-03-26": "Id-Ul-Fitr (Ramzan Eid)",
+  "2026-04-03": "Good Friday",
+  "2026-04-14": "Dr. Baba Saheb Ambedkar Jayanti",
+  "2026-05-01": "Maharashtra Day",
+  "2026-05-28": "Bakri Id / Eid-Ul-Adha",
+  "2026-06-26": "Muharram",
+  "2026-08-15": "Independence Day",
+  "2026-10-02": "Mahatma Gandhi Jayanti",
+  "2026-10-20": "Dussehra",
+  "2026-11-08": "Diwali Laxmi Pujan (Muhurat Trading only 18:15-19:15 IST)",
+  "2026-11-10": "Diwali Balipratipada",
+  "2026-11-24": "Gurunanak Jayanti",
+  "2026-12-25": "Christmas"
+};
+
 function calculateCurrentMarketStatus() {
   const now = new Date();
   const istStr = now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
@@ -64,6 +84,35 @@ function calculateCurrentMarketStatus() {
   const eqCloseMins = 15 * 60 + 30; // 03:30 PM
   const mcxOpenMins = 9 * 60;       // 09:00 AM
   const mcxCloseMins = 23 * 60 + 30; // 11:30 PM
+
+  const yyyy = istDate.getFullYear();
+  const mm = String(istDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(istDate.getDate()).padStart(2, '0');
+  const dateKey = `${yyyy}-${mm}-${dd}`;
+  const holidayName = NSE_HOLIDAYS_2026[dateKey];
+
+  if (holidayName) {
+    if (dateKey === "2026-11-08" && tMins >= (18 * 60 + 15) && tMins <= (19 * 60 + 15)) {
+      return {
+        status: "LIVE_MARKET",
+        badge: "🟢 Muhurat Trading Session Live (18:15 - 19:15 IST)",
+        badge_class: "badge-green",
+        message: "Diwali Muhurat Trading session is ACTIVE (18:15 - 19:15 IST).",
+        is_open: true,
+        is_equity_open: true,
+        is_pre_market: false
+      };
+    }
+    return {
+      status: "HOLIDAY",
+      badge: `🔴 Market Closed (Holiday: ${holidayName})`,
+      badge_class: "badge-red",
+      message: `NSE/BSE equity closed today for ${holidayName}.`,
+      is_open: false,
+      is_equity_open: false,
+      is_pre_market: false
+    };
+  }
   
   if (isWeekend) {
     return {
@@ -140,7 +189,7 @@ function renderMarketStatusHeader() {
       MARKET_INFO.is_equity_open = currentMkt.is_equity_open;
       MARKET_INFO.is_pre_market = currentMkt.is_pre_market;
     }
-    container.innerHTML = `<span class="badge ${currentMkt.badge_class || 'badge-green'}" style="font-size:12px;padding:6px 14px;font-weight:700" title="${currentMkt.message}">${currentMkt.badge}</span>`;
+    container.innerHTML = `<span class="badge ${currentMkt.badge_class || 'badge-green'}" style="font-size:15px;padding:6px 14px;font-weight:700" title="${currentMkt.message}">${currentMkt.badge}</span>`;
     updateLtpBadgeStatus();
   }
 
@@ -330,7 +379,7 @@ function renderCommodityBar() {
 
     html += `
       <div class="commodity-card">
-        <span style="font-size:16px">${item.icon || '⛽'}</span>
+        <span style="font-size:19px">${item.icon || '⛽'}</span>
         <div>
           <div class="commodity-card-name">${item.name} <span class="commodity-card-price" style="color:${mcxColor}">${mcxPriceStr}</span></div>
           <div class="commodity-card-emas">${emaStr}${srcStr}${srStr}</div>
@@ -495,35 +544,6 @@ function renderSwingRadar() {
     rcEl.textContent = `Showing ${sorted.length} swing stocks matching current preset${filterNotice}`;
   }
 
-  // Volume-backed S/R setups. Same model and same card shape as the intraday tab,
-  // so a setup reads identically wherever it appears.
-  const srBox = document.getElementById('swingSrSetups');
-  if (srBox) {
-    const srRows = Object.keys(SWING_SR)
-      .map(sym => ({ sym, sr: SWING_SR[sym], row: allMtf.find(x => x.symbol === sym) }))
-      .filter(x => x.sr && x.sr.srv_signal === 'BUY')
-      .sort((a, b) => (b.sr.srv_strength || 0) - (a.sr.srv_strength || 0));
-    srBox.innerHTML = srRows.length ? srRows.map(({ sym, sr, row }) => `
-      <div style="background:var(--card);border:1px solid #10b98155;border-radius:12px;padding:12px">
-        <div style="display:flex;align-items:baseline;gap:8px">
-          <div style="font-size:15px;font-weight:700;color:#fff">${sym}</div>
-          <div style="font-size:10px;color:#34d399;border:1px solid #10b98155;border-radius:8px;padding:2px 7px">BUY ◆ ${(sr.srv_level_kind||'support').toUpperCase()}</div>
-          <div style="margin-left:auto;font-size:12px;color:var(--muted)">${(sr.srv_strength||0).toFixed(0)}/100</div>
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin:2px 0 8px">${((row&&row.name)||'').substring(0,32)}</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px">
-          <div><div style="color:#fff;font-weight:600">₹${sr.srv_entry ?? '–'}</div><div style="color:var(--muted);font-size:9px">ENTRY</div></div>
-          <div><div style="color:#f87171;font-weight:600">₹${sr.srv_stop ?? '–'}</div><div style="color:var(--muted);font-size:9px">STOP</div></div>
-          <div><div style="color:#34d399;font-weight:600">₹${sr.srv_target1 ?? '–'}</div><div style="color:var(--muted);font-size:9px">TARGET</div></div>
-          <div><div style="color:#fff">${sr.srv_rr ?? '–'}</div><div style="color:var(--muted);font-size:9px">R:R</div></div>
-          <div><div style="color:#fff">${sr.srv_level_vol ?? '–'}×</div><div style="color:var(--muted);font-size:9px">LEVEL VOL</div></div>
-          <div><div style="color:#fff">₹${sr.srv_support ?? '–'}</div><div style="color:var(--muted);font-size:9px">LEVEL</div></div>
-        </div>
-        <div style="font-size:10px;color:var(--muted);margin-top:8px">${sr.srv_reason || ''}</div>
-      </div>`).join('') :
-      '<div style="color:var(--muted);font-size:12px;padding:16px 2px">Nothing is sitting on a volume-backed level with the volume to turn off it. Rare by design — the momentum list below is not filtered by levels.</div>';
-  }
-
   // Update spotlight subtitle with the active preset name
   const presetLabelMap = {
     'all': 'All MTF',
@@ -535,22 +555,25 @@ function renderSwingRadar() {
     'quality': 'Quality + Momentum'
   };
   const subEl = document.getElementById('swingSpotlightSubtitle');
-  if (subEl) subEl.textContent = `(${presetLabelMap[swingPreset] || 'current preset'} · top 10)`;
+  if (subEl) subEl.textContent = `(${presetLabelMap[swingPreset] || 'current preset'} · top 10 BUY NOW)`;
 
-  // Top 10 Spotlight Cards (Top 10 highest swing_score stocks for current preset)
+  // Top 10 Spotlight Cards (Top 10 highest swing_score stocks with "BUY NOW" for current preset)
   const spotlight = document.getElementById('swingSpotlight');
   if (spotlight) {
-    // A level with real volume behind it outranks a high score with nothing under
-    // it. Within each group the existing ordering is untouched.
-    const top10 = [...sorted].sort((a, b) =>
-      ((swingSrOf(b) ? 1 : 0) - (swingSrOf(a) ? 1 : 0)) ||
+    // Only top quality stocks with genuine "BUY NOW" action should appear in the filtered 10 cards.
+    // Rank strictly by swing_score (highest conviction first), breaking ties by total_score,
+    // volume spike, and RS rating. Weaker stocks or stocks touching S/R levels without
+    // "BUY NOW" action are excluded from spotlight.
+    const buyNowCandidates = sorted.filter(s => s.swing_action === 'BUY NOW');
+    const top10 = [...buyNowCandidates].sort((a, b) =>
       (b.swing_score || 0) - (a.swing_score || 0) || 
       (b.total_score || 0) - (a.total_score || 0) || 
+      (b.volume_spike || 0) - (a.volume_spike || 0) ||
       (b.rs_rating || 0) - (a.rs_rating || 0) || 
       (a.symbol || '').localeCompare(b.symbol || '')
     ).slice(0, 10);
     if (top10.length === 0) {
-      spotlight.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px">No stocks match this filter.</div>';
+      spotlight.innerHTML = '<div style="color:var(--muted);font-size:16px;padding:20px">No "BUY NOW" swing setups match this filter.</div>';
     } else {
       spotlight.innerHTML = top10.map((s, i) => {
         const score = s.swing_score || 0;
@@ -569,61 +592,57 @@ function renderSwingRadar() {
         <div class="swing-card ${cardClass}" data-symbol="${s.symbol}" onclick="document.getElementById('fSearch').value='${s.symbol}';switchTab('screener');applyFilters()">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
             <div>
-              <div style="font-size:15px;font-weight:700;color:#fff">${i+1}. ${s.symbol}</div>
-              <div style="font-size:11px;color:var(--muted);margin-top:1px">${(s.name||'').substring(0,28)}</div>
+              <div style="font-size:18px;font-weight:700;color:#fff">${i+1}. ${s.symbol}</div>
+              <div class="swing-card-name" style="font-size:14px;color:var(--muted);margin-top:1px" title="${(s.name||'').replace(/"/g,'&quot;')}">${s.name||''}</div>
             </div>
             <div style="text-align:center">
               <div style="width:46px;height:46px;border-radius:50%;background:conic-gradient(${ringColor} ${score}%,rgba(255,255,255,0.06) 0);display:flex;align-items:center;justify-content:center">
-                <div style="width:34px;height:34px;border-radius:50%;background:var(--card);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">${score}</div>
+                <div style="width:34px;height:34px;border-radius:50%;background:var(--card);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff">${score}</div>
               </div>
             </div>
           </div>
-          <div style="font-size:11px;margin-bottom:8px;display:flex;gap:6px;align-items:center">
-            <span style="background:rgba(108,99,255,0.15);color:#a5b4fc;border:1px solid #6c63ff33;border-radius:10px;padding:3px 9px;font-weight:600">${s.swing_badge||'–'}</span>
-            <span class="badge ${rsVal>=80?'badge-green':rsVal>=60?'badge-green':rsVal>=40?'badge-gray':'badge-red'}" style="font-size:10px;font-weight:700">RS ${rsVal}</span>
+          <div style="font-size:14px;margin-bottom:8px;display:flex;gap:6px;align-items:center">
+            <span style="background:rgba(108,99,255,0.15);color:#a5b4fc;border:1px solid #6c63ff33;border-radius:10px;padding:3px 9px;font-weight:700">${s.swing_badge||'–'}</span>
+            <span class="badge ${rsVal>=80?'badge-green':rsVal>=60?'badge-green':rsVal>=40?'badge-gray':'badge-red'}" style="font-size:13px;font-weight:700">RS ${rsVal}</span>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;font-size:11px;margin-bottom:10px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;font-size:14px;margin-bottom:10px">
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
-              <div style="color:var(--muted);font-size:10px;display:flex;align-items:center;justify-content:center;gap:3px">LTP <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#10b981;box-shadow:0 0 4px #10b981"></span></div>
-              <div class="swing-ltp-val price" data-field="swing-ltp" style="font-weight:700;color:#fff;font-size:12px">₹${(s.ltp||0).toFixed(2)}</div>
-              ${s.day_chg_pct !== undefined ? `<div data-field="swing-day-chg" style="font-size:9px;font-weight:700;color:${s.day_chg_pct>=0?'#34d399':'#f87171'}">${s.day_chg_pct>=0?'+':''}${s.day_chg_pct.toFixed(2)}%</div>` : ''}
+              <div style="color:var(--muted);font-size:13px;display:flex;align-items:center;justify-content:center;gap:3px">LTP <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#10b981;box-shadow:0 0 4px #10b981"></span></div>
+              <div class="swing-ltp-val price" data-field="swing-ltp" style="font-weight:700;color:#fff;font-size:15px">₹${(s.ltp||0).toFixed(2)}</div>
+              ${s.day_chg_pct !== undefined ? `<div data-field="swing-day-chg" style="font-size:12px;font-weight:700;color:${s.day_chg_pct>=0?'#34d399':'#f87171'}">${s.day_chg_pct>=0?'+':''}${s.day_chg_pct.toFixed(2)}%</div>` : ''}
             </div>
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
-              <div style="color:var(--muted);font-size:10px">RS</div>
+              <div style="color:var(--muted);font-size:13px">RS</div>
               <div style="font-weight:700;color:${rsColor}">${rsVal}</div>
             </div>
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
-              <div style="color:var(--muted);font-size:10px">Vol</div>
+              <div style="color:var(--muted);font-size:13px">Vol</div>
               <div style="font-weight:700;color:${parseFloat(volStr)>=2?'#10b981':'#e2e8f0'}">${volStr}</div>
             </div>
             <div style="background:var(--card2);border-radius:6px;padding:5px;text-align:center">
-              <div style="color:var(--muted);font-size:10px">RSI</div>
+              <div style="color:var(--muted);font-size:13px">RSI</div>
               <div style="font-weight:700;color:#e2e8f0">${rsiStr}</div>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:14px">
             <div style="text-align:center">
-              <div style="color:#ef4444;font-size:10px">SL</div>
-              <div class="swing-sl">${slStr}<span style="font-size:9px;color:var(--muted)"> ${slPct}</span></div>
+              <div style="color:#ef4444;font-size:13px">SL</div>
+              <div class="swing-sl">${slStr}<span style="font-size:12px;color:var(--muted)"> ${slPct}</span></div>
             </div>
             <div style="text-align:center">
-              <div style="color:#10b981;font-size:10px">T1 (1:1.5)</div>
-              <div class="swing-t1">${t1Str}<span style="font-size:9px;color:var(--muted)"> ${t1Pct}</span></div>
+              <div style="color:#10b981;font-size:13px">T1 (1:1.5)</div>
+              <div class="swing-t1">${t1Str}<span style="font-size:12px;color:var(--muted)"> ${t1Pct}</span></div>
             </div>
             <div style="text-align:center">
-              <div style="color:#00d4aa;font-size:10px">T2 (1:2.5)</div>
+              <div style="color:#00d4aa;font-size:13px">T2 (1:2.5)</div>
               <div class="swing-t2">${t2Str}</div>
             </div>
           </div>
           <div style="display:flex;gap:6px;margin-top:8px;border-top:1px solid var(--border);padding-top:6px;align-items:center;justify-content:space-between">
-            <div style="font-size:10px;color:var(--muted)">${(() => {
-              const sr = swingSrOf(s);
-              if (sr) return `◆ at ${sr.srv_level_kind || 'support'} ₹${sr.srv_support ?? '–'} · level built on ${sr.srv_level_vol ?? '–'}× volume · R:R ${sr.srv_rr ?? '–'}`;
-              return `<span style="color:#f59e0b">⚠ no volume-backed level</span> · ${s.swing_reason || ''}`;
-            })()}</div>
+            <div style="font-size:13px;color:var(--muted)">${s.swing_reason || ''}</div>
             <div style="display:flex;gap:4px">
-              <button class="btn-add" onclick="event.stopPropagation();openSwingCalcModal('${s.symbol}')" style="padding:3px 8px;font-size:10px;background:var(--card2)">🧮 Calc</button>
-              <button class="btn-add" onclick="event.stopPropagation();addToWatchlist('${s.symbol}')" style="padding:3px 8px;font-size:10px;background:linear-gradient(135deg,#00d4aa,#10b981);color:#06060f;font-weight:700">⭐ +WL</button>
+              <button class="btn-add" onclick="event.stopPropagation();openSwingCalcModal('${s.symbol}')" style="padding:3px 8px;font-size:13px;background:var(--card2)">🧮 Calc</button>
+              <button class="btn-add" onclick="event.stopPropagation();addToWatchlist('${s.symbol}')" style="padding:3px 8px;font-size:13px;background:linear-gradient(135deg,#00d4aa,#10b981);color:#06060f;font-weight:700">⭐ +WL</button>
             </div>
           </div>
         </div>`;
@@ -647,23 +666,23 @@ function renderSwingRadar() {
     const volColor = (s.volume_spike||0) >= 2.0 ? '#10b981' : (s.volume_spike||0) >= 1.5 ? '#fbbf24' : '#94a3b8';
     return `<tr data-symbol="${s.symbol}">
       <td>${i+1}</td>
-      <td><strong style="color:#e2e8f0">${s.symbol}</strong><br><span style="font-size:10px;color:var(--muted)">${(s.cap_category||'')}</span></td>
-      <td><span style="font-weight:700;color:#a78bfa;font-size:15px">${s.swing_score||0}</span></td>
-      <td><span class="badge ${rsVal>=80?'badge-green':rsVal>=60?'badge-green':rsVal>=40?'badge-gray':'badge-red'}" style="font-size:11px;font-weight:700">RS ${rsVal}</span></td>
-      <td><span style="font-size:11px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:10px;padding:3px 8px;white-space:nowrap">${s.swing_badge||'–'}</span></td>
+      <td><strong style="color:#e2e8f0">${s.symbol}</strong><br><span style="font-size:13px;color:var(--muted)">${(s.cap_category||'')}</span></td>
+      <td><span style="font-weight:700;color:#a78bfa;font-size:18px">${s.swing_score||0}</span></td>
+      <td><span class="badge ${rsVal>=80?'badge-green':rsVal>=60?'badge-green':rsVal>=40?'badge-gray':'badge-red'}" style="font-size:14px;font-weight:700">RS ${rsVal}</span></td>
+      <td><span style="font-size:14px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:10px;padding:3px 8px;white-space:nowrap">${s.swing_badge||'–'}</span></td>
       <td><span class="price">₹${(s.ltp||0).toFixed(2)}</span></td>
-      <td style="color:${volColor};font-weight:600">${volStr}</td>
+      <td style="color:${volColor};font-weight:700">${volStr}</td>
       <td>${rsiStr}</td>
       <td>${(s.momentum||0).toFixed(0)}</td>
-      <td style="color:${cmfColor};font-weight:600">${cmfStr}<br><span style="font-size:10px;color:var(--muted)">${s.pa_badge||''}</span></td>
-      <td class="swing-sl">${s.swing_sl ? '₹' + s.swing_sl.toFixed(1) : '–'}<br><span style="font-size:10px;color:#ef4444">${s.swing_sl_pct||0}%</span></td>
-      <td class="swing-t1">${s.swing_t1 ? '₹' + s.swing_t1.toFixed(1) : '–'}<br><span style="font-size:10px;color:#10b981">+${s.swing_t1_pct||0}%</span></td>
-      <td class="swing-t2">${s.swing_t2 ? '₹' + s.swing_t2.toFixed(1) : '–'}<br><span style="font-size:10px;color:#00d4aa">+${s.swing_t2_pct||0}%</span></td>
-      <td style="font-size:11px;color:var(--muted);max-width:180px;white-space:normal">${s.swing_reason||'–'}</td>
+      <td style="color:${cmfColor};font-weight:700">${cmfStr}<br><span style="font-size:13px;color:var(--muted)">${s.pa_badge||''}</span></td>
+      <td class="swing-sl">${s.swing_sl ? '₹' + s.swing_sl.toFixed(1) : '–'}<br><span style="font-size:13px;color:#ef4444">${s.swing_sl_pct||0}%</span></td>
+      <td class="swing-t1">${s.swing_t1 ? '₹' + s.swing_t1.toFixed(1) : '–'}<br><span style="font-size:13px;color:#10b981">+${s.swing_t1_pct||0}%</span></td>
+      <td class="swing-t2">${s.swing_t2 ? '₹' + s.swing_t2.toFixed(1) : '–'}<br><span style="font-size:13px;color:#00d4aa">+${s.swing_t2_pct||0}%</span></td>
+      <td style="font-size:14px;color:var(--muted);max-width:180px;white-space:normal">${s.swing_reason||'–'}</td>
       <td>
         <div style="display:flex;gap:4px">
-          <button class="btn-add" onclick="openSwingCalcModal('${s.symbol}')" style="padding:3px 6px;font-size:10px;background:var(--card2)" title="Calculate Position Size">🧮</button>
-          <button class="btn-add" onclick="addToWatchlist('${s.symbol}')" style="padding:3px 6px;font-size:10px" title="Add to Watchlist">⭐</button>
+          <button class="btn-add" onclick="openSwingCalcModal('${s.symbol}')" style="padding:3px 6px;font-size:13px;background:var(--card2)" title="Calculate Position Size">🧮</button>
+          <button class="btn-add" onclick="addToWatchlist('${s.symbol}')" style="padding:3px 6px;font-size:13px" title="Add to Watchlist">⭐</button>
         </div>
       </td>
     </tr>`;
@@ -740,18 +759,18 @@ function renderSrBreakouts() {
       <!-- Header row -->
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;margin-top:4px">
         <div>
-          <div style="font-size:15px;font-weight:800;color:#fff">${s.symbol}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:1px">${(s.name||'').substring(0,26)} · ${s.cap_category||''}</div>
+          <div style="font-size:18px;font-weight:800;color:#fff">${s.symbol}</div>
+          <div class="sr-card-name" style="font-size:13px;color:var(--muted);margin-top:1px" title="${(s.name||'').replace(/"/g,'&quot;')}">${s.name||''} · ${s.cap_category||''}</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:11px;font-weight:700;color:${typeColor};background:rgba(0,0,0,0.25);border:1px solid ${typeBorder};border-radius:8px;padding:3px 8px;white-space:nowrap">${s.sr_badge||'–'}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:3px">₹${(s.ltp||0).toFixed(2)}</div>
+          <div style="font-size:14px;font-weight:700;color:${typeColor};background:rgba(0,0,0,0.25);border:1px solid ${typeBorder};border-radius:8px;padding:3px 8px;white-space:nowrap">${s.sr_badge||'–'}</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:3px">₹${(s.ltp||0).toFixed(2)}</div>
         </div>
       </div>
 
       <!-- SR Score bar -->
       <div style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-bottom:3px">
           <span>SR Score</span><span style="color:${scoreFill};font-weight:700">${scoreBar}</span>
         </div>
         <div style="background:rgba(255,255,255,0.07);border-radius:4px;height:5px;overflow:hidden">
@@ -760,35 +779,35 @@ function renderSrBreakouts() {
       </div>
 
       <!-- Key levels grid -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;margin-bottom:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:14px;margin-bottom:10px">
         <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:6px 8px">
-          <div style="color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.05em">Resistance</div>
-          <div style="color:#e2e8f0;font-weight:700;margin-top:1px">${resStr} <span style="color:${s.dist_from_res_pct!=null&&s.dist_from_res_pct>=0?'#10b981':'#fbbf24'};font-size:10px">${distStr}</span></div>
+          <div style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em">Resistance</div>
+          <div style="color:#e2e8f0;font-weight:700;margin-top:1px">${resStr} <span style="color:${s.dist_from_res_pct!=null&&s.dist_from_res_pct>=0?'#10b981':'#fbbf24'};font-size:13px">${distStr}</span></div>
         </div>
         <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:6px 8px">
-          <div style="color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.05em">Support</div>
+          <div style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em">Support</div>
           <div style="color:#e2e8f0;font-weight:700;margin-top:1px">${supStr}</div>
         </div>
         <div style="background:rgba(239,68,68,0.07);border-radius:8px;padding:6px 8px">
-          <div style="color:#fca5a5;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Stop Loss</div>
+          <div style="color:#fca5a5;font-size:12px;text-transform:uppercase;letter-spacing:.05em">Stop Loss</div>
           <div style="color:#ef4444;font-weight:700;margin-top:1px">${slStr}</div>
         </div>
         <div style="background:rgba(16,185,129,0.07);border-radius:8px;padding:6px 8px">
-          <div style="color:#6ee7b7;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Target 1 (1:2)</div>
+          <div style="color:#6ee7b7;font-size:12px;text-transform:uppercase;letter-spacing:.05em">Target 1 (1:2)</div>
           <div style="color:#10b981;font-weight:700;margin-top:1px">${t1Str}</div>
         </div>
       </div>
-      <div style="background:rgba(16,185,129,0.05);border:1px dashed rgba(16,185,129,0.2);border-radius:8px;padding:5px 8px;font-size:10px;color:var(--muted);margin-bottom:10px">
+      <div style="background:rgba(16,185,129,0.05);border:1px dashed rgba(16,185,129,0.2);border-radius:8px;padding:5px 8px;font-size:13px;color:var(--muted);margin-bottom:10px">
         🎯 Target 2 (1:3): <span style="color:#34d399;font-weight:700">${t2Str}</span>
       </div>
 
       <!-- Footer: RS + RSI + Reason -->
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-        <span style="font-size:11px;font-weight:700;color:${rsColor}">RS ${rsVal}</span>
-        <span style="font-size:10px;color:var(--muted)">RSI ${s.rsi ? s.rsi.toFixed(0) : '–'}</span>
-        <button onclick="event.stopPropagation();addToWatchlist('${s.symbol}')" style="font-size:10px;padding:2px 8px;border-radius:6px;border:1px solid rgba(108,99,255,0.4);background:rgba(108,99,255,0.1);color:#a5b4fc;cursor:pointer">⭐ Watch</button>
+        <span style="font-size:14px;font-weight:700;color:${rsColor}">RS ${rsVal}</span>
+        <span style="font-size:13px;color:var(--muted)">RSI ${s.rsi ? s.rsi.toFixed(0) : '–'}</span>
+        <button onclick="event.stopPropagation();addToWatchlist('${s.symbol}')" style="font-size:13px;padding:2px 8px;border-radius:6px;border:1px solid rgba(108,99,255,0.4);background:rgba(108,99,255,0.1);color:#a5b4fc;cursor:pointer">⭐ Watch</button>
       </div>
-      <div style="font-size:10px;color:var(--muted);margin-top:7px;line-height:1.4">${s.sr_reason||''}</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:7px;line-height:1.4">${s.sr_reason||''}</div>
     </div>`;
   }).join('');
 }
@@ -809,12 +828,12 @@ function openSwingCalcModal(symbol) {
     header.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div>
-          <div style="font-size:16px;font-weight:700;color:var(--white)">${stock.symbol}</div>
-          <div style="font-size:11px;color:var(--muted)">${stock.name || ''}</div>
+          <div style="font-size:19px;font-weight:700;color:var(--white)">${stock.symbol}</div>
+          <div style="font-size:14px;color:var(--muted)">${stock.name || ''}</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:16px;font-weight:700;color:var(--accent2)">₹${stock.ltp.toFixed(2)}</div>
-          <div style="font-size:11px;color:var(--muted)">LTP</div>
+          <div style="font-size:19px;font-weight:700;color:var(--accent2)">₹${stock.ltp.toFixed(2)}</div>
+          <div style="font-size:14px;color:var(--muted)">LTP</div>
         </div>
       </div>
     `;
@@ -868,32 +887,32 @@ function recalcSwingPosition() {
     if (qty <= 0) {
       resEl.innerHTML = `
         <div style="grid-column: 1 / -1; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); border-radius:10px; padding:14px; color:var(--text); text-align:center">
-          <div style="font-weight:700; color:#ef4444; font-size:13px; margin-bottom:4px">⚠️ Insufficient Capital to Buy 1 Share</div>
-          <div style="font-size:12px">Your entered capital (₹${capital.toLocaleString('en-IN')}) is less than the price of 1 share (₹${minRequired.toLocaleString('en-IN')}).</div>
-          <div style="font-size:11px; color:var(--muted); margin-top:6px">Minimum Capital Required: <strong>₹${minRequired.toLocaleString('en-IN')}</strong></div>
+          <div style="font-weight:700; color:#ef4444; font-size:16px; margin-bottom:4px">⚠️ Insufficient Capital to Buy 1 Share</div>
+          <div style="font-size:15px">Your entered capital (₹${capital.toLocaleString('en-IN')}) is less than the price of 1 share (₹${minRequired.toLocaleString('en-IN')}).</div>
+          <div style="font-size:14px; color:var(--muted); margin-top:6px">Minimum Capital Required: <strong>₹${minRequired.toLocaleString('en-IN')}</strong></div>
         </div>
       `;
     } else {
       resEl.innerHTML = `
         <div style="background:var(--card2);padding:10px;border-radius:8px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Shares to Buy</div>
-          <div style="font-size:18px;font-weight:700;color:var(--white)">${qty} ${qty === 1 ? 'Share' : 'Shares'}</div>
-          <div style="font-size:10px;color:var(--muted)">Est. Outlay: ₹${Math.round(totalCost).toLocaleString('en-IN')}</div>
+          <div style="font-size:13px;color:var(--muted);text-transform:uppercase">Shares to Buy</div>
+          <div style="font-size:21px;font-weight:700;color:var(--white)">${qty} ${qty === 1 ? 'Share' : 'Shares'}</div>
+          <div style="font-size:13px;color:var(--muted)">Est. Outlay: ₹${Math.round(totalCost).toLocaleString('en-IN')}</div>
         </div>
         <div style="background:var(--card2);padding:10px;border-radius:8px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Max Risk (SL)</div>
-          <div style="font-size:18px;font-weight:700;color:#ef4444">-₹${Math.round(maxRiskAmt).toLocaleString('en-IN')}</div>
-          <div style="font-size:10px;color:var(--muted)">SL @ ₹${slPrice.toFixed(1)} (-${maxRiskPct}%)</div>
+          <div style="font-size:13px;color:var(--muted);text-transform:uppercase">Max Risk (SL)</div>
+          <div style="font-size:21px;font-weight:700;color:#ef4444">-₹${Math.round(maxRiskAmt).toLocaleString('en-IN')}</div>
+          <div style="font-size:13px;color:var(--muted)">SL @ ₹${slPrice.toFixed(1)} (-${maxRiskPct}%)</div>
         </div>
         <div style="background:var(--card2);padding:10px;border-radius:8px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Target 1 Profit (+8%)</div>
-          <div style="font-size:18px;font-weight:700;color:#10b981">+₹${Math.round(profitT1).toLocaleString('en-IN')}</div>
-          <div style="font-size:10px;color:var(--muted)">Target: ₹${t1Price.toFixed(1)}</div>
+          <div style="font-size:13px;color:var(--muted);text-transform:uppercase">Target 1 Profit (+8%)</div>
+          <div style="font-size:21px;font-weight:700;color:#10b981">+₹${Math.round(profitT1).toLocaleString('en-IN')}</div>
+          <div style="font-size:13px;color:var(--muted)">Target: ₹${t1Price.toFixed(1)}</div>
         </div>
         <div style="background:var(--card2);padding:10px;border-radius:8px">
-          <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Target 2 Profit (+15%)</div>
-          <div style="font-size:18px;font-weight:700;color:#00d4aa">+₹${Math.round(profitT2).toLocaleString('en-IN')}</div>
-          <div style="font-size:10px;color:var(--muted)">Target: ₹${t2Price.toFixed(1)}</div>
+          <div style="font-size:13px;color:var(--muted);text-transform:uppercase">Target 2 Profit (+15%)</div>
+          <div style="font-size:21px;font-weight:700;color:#00d4aa">+₹${Math.round(profitT2).toLocaleString('en-IN')}</div>
+          <div style="font-size:13px;color:var(--muted)">Target: ₹${t2Price.toFixed(1)}</div>
         </div>
       `;
     }
@@ -1175,8 +1194,27 @@ function renderLtWatchlist() {
     const isRetired = (s.active === false);
     const isBought = (s.status === 'BOUGHT' || (s.holding && s.holding.qty > 0 && s.status !== 'BUY_NOW'));
     const holdingQty = (s.holding && s.holding.qty) ? s.holding.qty : 1;
-    const scoreVal = s.durability_score || 75;
-    const scoreColor = scoreVal >= 85 ? '#10b981' : scoreVal >= 75 ? '#60a5fa' : '#fbbf24';
+    // The Score column showed `durability_score`, which is a number typed into the
+    // add-stock form and defaulting to 75 — so a freshly added stock displayed a
+    // confident "75/100" that nothing had actually assessed. The engine's own
+    // sector-aware quality score is already on the row and was never rendered.
+    // Prefer the computed one; fall back to the manual figure and say which is which.
+    const computedQ = (s.lt_quality_score != null) ? s.lt_quality_score
+                    : (s.lt_gate_quality_score != null) ? s.lt_gate_quality_score : null;
+    const scoreVal = (computedQ != null) ? Math.round(computedQ) : (s.durability_score || 75);
+    const scoreIsComputed = (computedQ != null);
+    // The LT quality maths treats an absent ROE / D-E / margin as a real zero, so
+    // a score built on no filings is not the same claim as one built on six.
+    const qConfident = (s.lt_quality_confident !== false);
+    const qInputs = (s.lt_fund_inputs_present != null)
+      ? `${s.lt_fund_inputs_present}/${s.lt_fund_inputs_total || 6} inputs` : '';
+    const scoreColor = scoreVal >= 85 ? '#34d399' : scoreVal >= 75 ? '#60a5fa' : '#fbbf24';
+    const subScores = [
+      ['Growth', s.lt_growth_score], ['Value', s.lt_valuation_score],
+      ['Sustain', s.lt_sustainability_score], ['Entry', s.lt_entry_score]
+    ].filter(x => x[1] != null);
+    const subScoreStr = subScores.length
+      ? subScores.map(x => `${x[0]} ${Math.round(x[1])}`).join(' · ') : '';
     const statusBadgeCls = isBought ? 'badge-green' : (s.status === 'BUY_NOW' ? 'badge-green' : s.status === 'WAIT' ? 'badge-purple' : 'badge-gray');
     const statusBadgeText = s.status_badge || (isBought ? `🟢 BOUGHT (${holdingQty})` : (s.status === 'BUY_NOW' ? '🟢 BUY NOW' : s.status === 'WAIT' ? '🔵 WAIT' : '⬜ WATCHING'));
 
@@ -1192,46 +1230,49 @@ function renderLtWatchlist() {
     const rsiStr = s.rsi ? s.rsi.toFixed(0) : '—';
 
     const gttBtn = isAutoGtt
-      ? `<button onclick="promptGttEdit('${s.symbol}', ${gttVal || 0}, true)" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.3);color:#34d399;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px" title="⚡ Auto-Trailing 20-EMA / Support Target (Click to edit or set custom level)">⚡ ${gttStr}</button>`
-      : `<button onclick="promptGttEdit('${s.symbol}', ${gttVal || 0}, false)" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:#fbbf24;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px" title="📌 Fixed Manual Level (Click to edit or reset to auto)">📌 ${gttStr}</button>`;
+      ? `<button onclick="promptGttEdit('${s.symbol}', ${gttVal || 0}, true)" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.3);color:#34d399;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:14px" title="⚡ Auto-Trailing 20-EMA / Support Target (Click to edit or set custom level)">⚡ ${gttStr}</button>`
+      : `<button onclick="promptGttEdit('${s.symbol}', ${gttVal || 0}, false)" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:#fbbf24;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:14px" title="📌 Fixed Manual Level (Click to edit or reset to auto)">📌 ${gttStr}</button>`;
 
     return `
     <tr style="${isRetired ? 'opacity:0.5;background:rgba(0,0,0,0.2)' : ''}">
       <td>
-        <div style="font-weight:800;color:${scoreColor};font-size:14px">${scoreVal} <span style="font-size:10px;color:var(--muted)">/100</span></div>
+        <div style="font-weight:800;color:${scoreColor};font-size:19px" title="${scoreIsComputed ? 'Computed sector-aware LT quality score' : 'Manually entered durability score — not computed'}">${scoreVal} <span style="font-size:13px;color:var(--muted)">/100</span></div>
+        <div style="font-size:12px;margin-top:2px;font-weight:700;color:${scoreIsComputed ? (qConfident ? 'var(--muted)' : '#fbbf24') : 'var(--muted)'}" title="${scoreIsComputed ? (qConfident ? 'Computed from available fundamentals' : 'Low confidence: the source returned few or no fundamentals, and missing inputs are scored as zero') : 'Manually entered — not computed'}">${scoreIsComputed ? (qConfident ? 'computed' : '⚠ low confidence') : '✎ manual'}</div>
+        ${scoreIsComputed && qInputs ? `<div style="font-size:11.5px;color:var(--muted);opacity:.8">${qInputs}</div>` : ''}
+        ${subScoreStr ? `<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.3">${subScoreStr}</div>` : ''}
       </td>
       <td>
-        <div style="font-weight:700;color:#fff;font-size:14px">${s.symbol}</div>
-        <div style="font-size:10px;color:var(--muted)">${s.portfolio_role || ''}</div>
+        <div style="font-weight:700;color:#fff;font-size:17px">${s.symbol}</div>
+        <div style="font-size:13px;color:var(--muted)">${s.portfolio_role || ''}</div>
       </td>
-      <td><span class="badge ${s.type === 'PSU' ? 'badge-yellow' : 'badge-purple'}" style="font-size:10px">${s.type || 'Private'}</span></td>
-      <td><span style="font-size:11px;color:var(--text)">${s.sector || ''}</span></td>
+      <td><span class="badge ${s.type === 'PSU' ? 'badge-yellow' : 'badge-purple'}" style="font-size:13px">${s.type || 'Private'}</span></td>
+      <td><span style="font-size:14px;color:var(--text)">${s.sector || ''}</span></td>
       <td>
-        <span class="badge ${statusBadgeCls}" style="font-size:11px;font-weight:700" title="${s.status_reason || ''}">${statusBadgeText}</span>
+        <span class="badge ${statusBadgeCls}" style="font-size:14px;font-weight:700" title="${s.status_reason || ''}">${statusBadgeText}</span>
       </td>
       <td>
-        <span class="badge ${trendBadgeClass(s.trend)}" style="font-size:10px">
+        <span class="badge ${trendBadgeClass(s.trend)}" style="font-size:13px">
           ${s.trend_badge || s.trend || '—'}
         </span>
       </td>
-      <td><span style="font-size:11px;font-weight:600">${rsiStr}</span></td>
-      <td><strong style="color:#fff;font-size:13px">${ltpStr}</strong></td>
+      <td><span style="font-size:14px;font-weight:700">${rsiStr}</span></td>
+      <td><strong style="color:#fff;font-size:16px">${ltpStr}</strong></td>
       <td>${gttBtn}</td>
       <td>${distStr}</td>
-      <td><span style="font-size:11px;color:var(--muted)">${s.portfolio_role || '—'}</span></td>
+      <td><span style="font-size:14px;color:var(--muted)">${s.portfolio_role || '—'}</span></td>
       <td>
         <div style="display:flex;gap:6px">
           ${!isRetired ? `
             ${isBought ? `
-              <button onclick="openLtHoldingLogModal('${s.symbol}')" style="background:rgba(6,182,212,0.18);border:1px solid rgba(6,182,212,0.4);color:#22d3ee;font-weight:700;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="View Purchase Log & Holding details for ${s.symbol}">📋 Purchased (${holdingQty})</button>
-              <button onclick="openLtBuyModal('${s.symbol}', ${s.ltp || 0})" style="background:var(--card2);border:1px solid var(--border);color:#a7f3d0;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Add More / Pyramid">+ Add</button>
+              <button onclick="openLtHoldingLogModal('${s.symbol}')" style="background:rgba(6,182,212,0.18);border:1px solid rgba(6,182,212,0.4);color:#22d3ee;font-weight:700;font-size:13px;padding:3px 8px;border-radius:6px;cursor:pointer" title="View Purchase Log & Holding details for ${s.symbol}">📋 Purchased (${holdingQty})</button>
+              <button onclick="openLtBuyModal('${s.symbol}', ${s.ltp || 0})" style="background:var(--card2);border:1px solid var(--border);color:#a7f3d0;font-size:13px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Add More / Pyramid">+ Add</button>
             ` : `
-              <button onclick="openLtBuyModal('${s.symbol}', ${s.ltp || 0})" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#34d399;font-weight:700;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Record Buy Transaction for ${s.symbol}">🛒 Buy</button>
+              <button onclick="openLtBuyModal('${s.symbol}', ${s.ltp || 0})" style="background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#34d399;font-weight:700;font-size:13px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Record Buy Transaction for ${s.symbol}">🛒 Buy</button>
             `}
-            <button onclick="promptGttEdit('${s.symbol}', ${s.gtt_level || 0})" style="background:var(--card2);border:1px solid var(--border);color:var(--text);font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Edit GTT Level">✏️ GTT</button>
-            <button onclick="retireLtStock('${s.symbol}')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Soft-delete (Keep history)">🗑️ Retire</button>
+            <button onclick="promptGttEdit('${s.symbol}', ${s.gtt_level || 0})" style="background:var(--card2);border:1px solid var(--border);color:var(--text);font-size:13px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Edit GTT Level">✏️ GTT</button>
+            <button onclick="retireLtStock('${s.symbol}')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-size:13px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Soft-delete (Keep history)">🗑️ Retire</button>
           ` : `
-            <button onclick="reactivateLtStock('${s.symbol}')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#34d399;font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Reactivate Stock">🔄 Reactivate</button>
+            <button onclick="reactivateLtStock('${s.symbol}')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#34d399;font-size:13px;padding:3px 8px;border-radius:6px;cursor:pointer" title="Reactivate Stock">🔄 Reactivate</button>
           `}
         </div>
       </td>
@@ -1562,8 +1603,8 @@ function checkStartupScanStatus() {
         if (!banner) {
           const b = document.createElement('div');
           b.id = 'bgScanBanner';
-          b.style.cssText = 'background:linear-gradient(135deg,rgba(108,99,255,0.25),rgba(0,212,170,0.25));border-bottom:1.5px solid var(--accent);padding:10px 20px;text-align:center;font-size:13px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,0.3)';
-          b.innerHTML = `<span style="font-size:16px;animation:spin 1.5s linear infinite">⚡</span> <span>Full Stock &amp; Commodity Scan in Progress (2414 stocks)... Page will auto-reload when complete.</span>`;
+          b.style.cssText = 'background:linear-gradient(135deg,rgba(108,99,255,0.25),rgba(0,212,170,0.25));border-bottom:1.5px solid var(--accent);padding:10px 20px;text-align:center;font-size:16px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,0.3)';
+          b.innerHTML = `<span style="font-size:19px;animation:spin 1.5s linear infinite">⚡</span> <span>Full Stock &amp; Commodity Scan in Progress (2414 stocks)... Page will auto-reload when complete.</span>`;
           document.body.prepend(b);
         }
       } else {
@@ -1612,7 +1653,7 @@ function checkForFreshScan() {
 
       if (freshScanPoller) { clearInterval(freshScanPoller); freshScanPoller = null; }
       const b = document.createElement('div');
-      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:linear-gradient(135deg,rgba(108,99,255,0.95),rgba(0,212,170,0.95));color:#fff;padding:10px 20px;text-align:center;font-size:13px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,0.4)';
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:linear-gradient(135deg,rgba(108,99,255,0.95),rgba(0,212,170,0.95));color:#fff;padding:10px 20px;text-align:center;font-size:16px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,0.4)';
       b.textContent = '⚡ A newer scan just finished — refreshing with fresh data...';
       document.body.prepend(b);
       setTimeout(() => window.location.reload(), 2500);
@@ -1701,13 +1742,15 @@ async function fetchLiveLTPForSymbol(ticker) {
         clearTimeout(timeoutId);
         if (res.ok) {
           const data = await res.json();
+          const cleanTicker = ticker.replace('.NS', '');
+          const staleObj = data.stale || {};
+          const isStale = !!(data.is_stale || staleObj[ticker] || staleObj[cleanTicker] || staleObj[ticker + '.NS']);
           if (data && (data.price || data.ltp) && (data.price > 0 || data.ltp > 0)) {
-            return parseFloat(data.price || data.ltp);
+            return { price: parseFloat(data.price || data.ltp), isStale };
           }
           const pObj = data.ltps || data.prices || {};
-          const cleanTicker = ticker.replace('.NS', '');
           const p = pObj[ticker] || pObj[cleanTicker] || pObj[ticker + '.NS'];
-          if (p && p > 0) return parseFloat(p);
+          if (p && p > 0) return { price: parseFloat(p), isStale };
         }
       } catch (e) {}
     }
@@ -1723,7 +1766,7 @@ async function fetchLiveLTPForSymbol(ticker) {
     if (res.ok) {
       const data = await res.json();
       const meta = data.chart?.result?.[0]?.meta;
-      if (meta && meta.regularMarketPrice && meta.regularMarketPrice > 0) return meta.regularMarketPrice;
+      if (meta && meta.regularMarketPrice && meta.regularMarketPrice > 0) return { price: meta.regularMarketPrice, isStale: false };
     }
   } catch (e) {}
 
@@ -1743,9 +1786,9 @@ async function fetchLiveLTPForSymbol(ticker) {
         let data = null;
         try { data = JSON.parse(text); } catch(err) { data = null; }
         if (data) {
-          if (data.price && data.price > 0) return data.price;
+          if (data.price && data.price > 0) return { price: data.price, isStale: false };
           const meta = data.chart?.result?.[0]?.meta;
-          if (meta && meta.regularMarketPrice) return meta.regularMarketPrice;
+          if (meta && meta.regularMarketPrice) return { price: meta.regularMarketPrice, isStale: false };
         }
       }
     } catch (e) {}
@@ -2073,8 +2116,15 @@ async function refreshLiveLTP(manual = false) {
       }
       const chunk = unpolled.slice(i, i + chunkSize);
       await Promise.all(chunk.map(async ([sym, ticker]) => {
-        const p = await fetchLiveLTPForSymbol(ticker);
-        if (p && p > 0) fetchedPrices.set(sym, p);
+        const resObj = await fetchLiveLTPForSymbol(ticker);
+        if (resObj) {
+          const p = (typeof resObj === 'object' && resObj !== null) ? resObj.price : resObj;
+          const isStale = (typeof resObj === 'object' && resObj !== null) ? !!resObj.isStale : false;
+          if (p && p > 0) {
+            fetchedPrices.set(sym, p);
+            if (isStale) stalePrices.add(sym);
+          }
+        }
       }));
     }
   }
@@ -2120,9 +2170,27 @@ async function refreshLiveLTP(manual = false) {
         sc.ltp = newPrice;
         if (sc.gtt_breakout_level && sc.gtt_breakout_level > 0) {
           sc.dist_to_gtt_pct = Math.round(((sc.ltp - sc.gtt_breakout_level) / sc.gtt_breakout_level) * 10000) / 100;
-          if (sc.ltp >= sc.gtt_breakout_level && (sc.status === 'WAIT' || sc.swing_action === 'WAIT FOR BREAKOUT')) {
-            sc.status = 'BUY_NOW';
-            sc.swing_action = 'BUY NOW';
+          const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+          const currentMins = nowIST.getHours() * 60 + nowIST.getMinutes();
+          const isNearMarketClose = currentMins >= (15 * 60 + 15);
+
+          if (sc.ltp >= sc.gtt_breakout_level) {
+            if (isNearMarketClose) {
+              if (sc.status !== 'BUY_NOW' || sc.swing_action !== 'BUY NOW') {
+                sc.status = 'BUY_NOW';
+                sc.swing_action = 'BUY NOW';
+                statusChanged = true;
+              }
+            } else {
+              if (sc.swing_action !== 'LEVEL TOUCHED — AWAIT CLOSE') {
+                sc.status = 'WAIT';
+                sc.swing_action = 'LEVEL TOUCHED — AWAIT CLOSE';
+                statusChanged = true;
+              }
+            }
+          } else if (sc.ltp < sc.gtt_breakout_level && (sc.swing_action === 'BUY NOW' || sc.swing_action === 'LEVEL TOUCHED — AWAIT CLOSE')) {
+            sc.status = 'WAIT';
+            sc.swing_action = 'WAIT FOR BREAKOUT';
             statusChanged = true;
           }
         }
@@ -2161,8 +2229,24 @@ async function refreshLiveLTP(manual = false) {
         lt.ltp = newPrice;
         if (lt.gtt_breakout_level && lt.gtt_breakout_level > 0) {
           lt.dist_to_gtt_pct = Math.round(((lt.ltp - lt.gtt_breakout_level) / lt.gtt_breakout_level) * 10000) / 100;
-          if (lt.ltp >= lt.gtt_breakout_level && lt.status === 'WAIT') {
-            lt.status = 'BUY_NOW';
+          const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+          const currentMins = nowIST.getHours() * 60 + nowIST.getMinutes();
+          const isNearMarketClose = currentMins >= (15 * 60 + 15);
+
+          if (lt.ltp >= lt.gtt_breakout_level) {
+            if (isNearMarketClose) {
+              if (lt.status !== 'BUY_NOW') {
+                lt.status = 'BUY_NOW';
+                statusChanged = true;
+              }
+            } else {
+              if (lt.status !== 'LEVEL_TOUCHED') {
+                lt.status = 'LEVEL_TOUCHED';
+                statusChanged = true;
+              }
+            }
+          } else if (lt.ltp < lt.gtt_breakout_level && (lt.status === 'BUY_NOW' || lt.status === 'LEVEL_TOUCHED')) {
+            lt.status = 'WAIT';
             statusChanged = true;
           }
         }
@@ -2223,6 +2307,10 @@ async function refreshLiveLTP(manual = false) {
         if (idPick.prev_close && idPick.prev_close > 0) {
           idPick.day_chg_pct = Number((((newPrice - idPick.prev_close) / idPick.prev_close) * 100).toFixed(2));
           idPick.has_day_move = true;
+          // The day-move component is the one input that moves all session, so the
+          // score (and therefore the rank) has to be recomputed from the live price.
+          // Left alone, the tab keeps showing the rank the scan produced hours ago.
+          rescoreIntradayPick(idPick);
         }
         priceChanged = true;
         changedPriceMap.set(cleanSym, { oldPrice: oldP, newPrice, isUp: newPrice >= oldP });
@@ -2541,12 +2629,12 @@ function renderFnoTab() {
           <tr>
             <td><span class="fno-strike-val">₹${(s1||0).toLocaleString('en-IN')}</span></td>
             <td><span class="fno-strike-otm">${o1}% OTM</span></td>
-            <td style="color:#fbbf24;font-weight:600">${dir === 'PE' ? fmt(s.t1_price) + ' ▼' : '▲ ' + fmt(s.t1_price)}</td>
+            <td style="color:#fbbf24;font-weight:700">${dir === 'PE' ? fmt(s.t1_price) + ' ▼' : '▲ ' + fmt(s.t1_price)}</td>
           </tr>
           <tr>
             <td><span class="fno-strike-val">₹${(s2||0).toLocaleString('en-IN')}</span></td>
             <td><span class="fno-strike-otm">${o2}% OTM</span></td>
-            <td style="color:#10b981;font-weight:600">${dir === 'PE' ? fmt(s.t2_price) + ' ▼' : '▲ ' + fmt(s.t2_price)}</td>
+            <td style="color:#10b981;font-weight:700">${dir === 'PE' ? fmt(s.t2_price) + ' ▼' : '▲ ' + fmt(s.t2_price)}</td>
           </tr>
         </table>
         <!-- R/R on Underlying -->
@@ -2586,7 +2674,7 @@ function renderFnoTab() {
   container.innerHTML = `
     <div class="fno-header">
       <div class="fno-header-left">
-        <span style="font-size:28px">📊</span>
+        <span style="font-size:31px">📊</span>
         <div>
           <div class="fno-header-title">F&amp;O Weekly Options Signal</div>
           <div class="fno-header-sub">Strategy: OTM CE / PE &bull; Hold 5–7 Trading Days &bull; Monthly Contract</div>
@@ -2630,17 +2718,63 @@ function renderFnoTab() {
   `;
 }
 
+// Recompute one intraday pick's 0-100 score from its current field values, using
+// the weights the scan itself ranked on (INTRADAY_SCORE_CONFIG, injected from
+// screener_engine.INTRADAY_SCORE_COMPONENTS). Deriving it from that one config is
+// the point: a second formula written out here would be free to drift from the
+// ranking the engine produced, and nothing on screen would reveal it.
+function rescoreIntradayPick(p) {
+  const cfg = (typeof INTRADAY_SCORE_CONFIG !== 'undefined') ? INTRADAY_SCORE_CONFIG : null;
+  if (!cfg || !cfg.components || !cfg.components.length || !cfg.max_pts) return;
+
+  const isBuy = (p.direction || 'BUY').toUpperCase() === 'BUY';
+  const day = Number(p.day_chg_pct || 0);
+  const raw = {
+    day_move: ((day > 0) === isBuy) ? Math.abs(day) : 0,
+    volume:   Number(p.volume_spike || 0),
+    rsi:      isBuy ? (Number(p.rsi || 50) - 50) : (50 - Number(p.rsi || 50)),
+    momentum: isBuy ? (Number(p.momentum || 0) - 50) : (50 - Number(p.momentum || 0)),
+    rs:       isBuy ? (Number(p.rs_rating || 50) - 50) : (50 - Number(p.rs_rating || 50))
+  };
+
+  let total = 0;
+  const comps = {};
+  cfg.components.forEach(c => {
+    const v = Math.max(c.floor, Math.min(c.cap, raw[c.key] || 0));
+    const pts = Math.round(v * c.weight * 100) / 100;
+    comps[c.key] = { label: c.label, raw: Math.round((raw[c.key] || 0) * 100) / 100,
+                     pts: pts, max_pts: Math.round(c.cap * c.weight * 100) / 100 };
+    total += pts;
+  });
+
+  p.score_components = comps;
+  p.score_pts = Math.round(total * 100) / 100;
+  p.intraday_score = Math.round(Math.max(0, Math.min(100, (total / cfg.max_pts) * 100)) * 10) / 10;
+}
+
 // ── Intraday Buy/Sell Tab (Top 5 MIS long + Top 5 MIS short setups) ────
 function renderIntradayTab() {
   const container = document.getElementById('tab-intraday');
   if (!container) return;
 
   const data = (typeof INTRADAY_DATA !== 'undefined' && INTRADAY_DATA) ? INTRADAY_DATA : { buy: [], sell: [] };
-  const buys = data.buy || [];
-  const sells = data.sell || [];
+
+
+  // Rank is read off the score, not off array order: the list arrives ranked at
+  // scan time, but live prices move the day-move component all session, so the
+  // order on screen has to be derived from the current score or it quietly
+  // becomes a claim about a price that is no longer the price.
+  const rankSide = (arr) => (arr || [])
+    .slice()
+    .sort((a, b) => (b.intraday_score || 0) - (a.intraday_score || 0))
+    .map((s, i) => { s.rank = i + 1; return s; });
+
+  const buys = rankSide(data.buy);
+  const sells = rankSide(data.sell);
 
   function fmt(n) { return (n || n === 0) ? '₹' + Number(n).toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2}) : '-'; }
   function pillColor(v, goodAbove) { return v >= goodAbove ? '#4ade80' : v >= goodAbove * 0.6 ? '#fbbf24' : '#f87171'; }
+  function scoreColor(v) { return v >= 70 ? '#4ade80' : v >= 50 ? '#fbbf24' : '#f87171'; }
 
   function card(s) {
     const isBuy = s.direction === 'BUY';
@@ -2652,11 +2786,30 @@ function renderIntradayTab() {
       : '<span class="fno-signal-badge fno-signal-pe">▼ SELL (Short)</span>';
     const rsiCls = pillColor(isBuy ? s.rsi : (100 - s.rsi), 55);
     const volCls = pillColor(s.volume_spike, 1.5);
+
+    const score = Number(s.intraday_score || 0);
+    const scCls = scoreColor(score);
+    const moved = (s.rank_at_scan && s.rank !== s.rank_at_scan)
+      ? `<span style="color:var(--muted);font-size:13px;margin-left:5px">was #${s.rank_at_scan}</span>` : '';
+
+    // The breakdown is what makes a rank auditable: a 72 carried by volume alone
+    // is a different trade from a 72 with every component contributing.
+    const comps = s.score_components || {};
+    const compBars = Object.keys(comps).map(k => {
+      const c = comps[k];
+      const pct = c.max_pts ? Math.max(0, Math.min(100, (c.pts / c.max_pts) * 100)) : 0;
+      return `<div class="intraday-comp">
+        <span class="intraday-comp-label">${c.label}</span>
+        <span class="intraday-comp-track"><span class="intraday-comp-fill" style="width:${pct.toFixed(0)}%;background:${scCls}"></span></span>
+        <span class="intraday-comp-pts">${c.pts.toFixed(1)}<span style="color:var(--muted)">/${c.max_pts.toFixed(0)}</span></span>
+      </div>`;
+    }).join('');
+
     return `
     <div class="fno-card" data-symbol="${s.symbol}">
       <div class="fno-card-header">
         <div>
-          <div class="fno-card-sym">${s.symbol}</div>
+          <div class="fno-card-sym"><span class="intraday-rank">#${s.rank}</span>${s.symbol}${moved}</div>
           <div class="fno-card-name">${s.name || ''}</div>
         </div>
         <div class="fno-card-price">
@@ -2666,7 +2819,15 @@ function renderIntradayTab() {
       </div>
       <div class="fno-signal-row">
         ${dirBadge}
+        <span class="intraday-score-pill" style="background:${scCls}18;color:${scCls};border:1px solid ${scCls}44">
+          Score ${score.toFixed(1)}<span style="opacity:.65">/100</span>
+        </span>
       </div>
+      <div class="intraday-score-bar"><span style="width:${Math.max(0, Math.min(100, score)).toFixed(0)}%;background:${scCls}"></span></div>
+      <details class="intraday-breakdown">
+        <summary>Score breakdown</summary>
+        ${compBars}
+      </details>
       <div class="fno-section-title">Intraday Risk / Reward (MIS)</div>
       <div class="fno-rr-grid">
         <div class="fno-rr-cell">
@@ -2688,7 +2849,7 @@ function renderIntradayTab() {
         <span class="fno-tech-pill" style="background:#6c63ff18;color:#a5b4fc;border:1px solid #6c63ff44">50DMA ${s.dist_ma50_pct >= 0 ? '+' : ''}${s.dist_ma50_pct}%</span>
       </div>
       <div class="fno-lot-info" style="padding:10px 18px 16px">
-        <span style="color:var(--muted);font-size:11.5px">${s.rationale || ''}</span>
+        <span style="color:var(--muted);font-size:14px">${s.rationale || ''}</span>
       </div>
     </div>`;
   }
@@ -2699,16 +2860,16 @@ function renderIntradayTab() {
   container.innerHTML = `
     <div class="fno-header">
       <div class="fno-header-left">
-        <span style="font-size:28px">🎯</span>
+        <span style="font-size:31px">🎯</span>
         <div>
           <div class="fno-header-title">Intraday MIS Buy / Sell Setups</div>
-          <div class="fno-header-sub">Same-day square-off &bull; Ranked by today's move + volume confirmation &bull; Not investment advice</div>
+          <div class="fno-header-sub">Same-day square-off &bull; Ranked by intraday score (0-100: day move, volume, RSI, momentum, relative strength) &bull; Re-ranks on live price &bull; Not investment advice</div>
         </div>
       </div>
     </div>
-    <div class="fno-section-title" style="margin-top:4px">🟢 Top ${buys.length} Buy (Long) Setups</div>
+    <div class="fno-section-title" style="margin-top:4px">🟢 Top ${buys.length} Buy (Long) Setups${data.buy_qualified ? ` <span style="color:var(--muted);font-weight:500;font-size:14px">of ${data.buy_qualified} qualifying</span>` : ''}</div>
     <div class="fno-grid">${buyCards}</div>
-    <div class="fno-section-title" style="margin-top:24px">🔴 Top ${sells.length} Sell (Short) Setups</div>
+    <div class="fno-section-title" style="margin-top:24px">🔴 Top ${sells.length} Sell (Short) Setups${data.sell_qualified ? ` <span style="color:var(--muted);font-weight:500;font-size:14px">of ${data.sell_qualified} qualifying</span>` : ''}</div>
     <div class="fno-grid">${sellCards}</div>
   `;
 }
@@ -2740,7 +2901,7 @@ function renderLtMonthlyPicks() {
   const pillsHtml = batchSymbols.map(sym => {
     const inWl = (typeof ltWatchlist !== 'undefined') &&
       ltWatchlist.some(s => (s.symbol||'').toUpperCase() === sym.toUpperCase() && s.lt_monthly_batch);
-    return '<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;' +
+    return '<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:14px;font-weight:700;' +
       'background:' + (inWl ? 'rgba(16,185,129,0.15)' : 'rgba(100,116,139,0.15)') + ';' +
       'color:' + (inWl ? '#34d399' : '#94a3b8') + ';' +
       'border:1px solid ' + (inWl ? 'rgba(16,185,129,0.4)' : 'rgba(100,116,139,0.3)') + ';">' + sym + '</span>';
@@ -2750,11 +2911,11 @@ function renderLtMonthlyPicks() {
     '<div style="background:linear-gradient(135deg,rgba(99,102,241,0.10),rgba(139,92,246,0.08));' +
     'border:1px solid rgba(99,102,241,0.30);border-radius:12px;padding:14px 20px;margin-bottom:18px;' +
     'display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">' +
-    '<div style="font-size:22px;margin-top:2px">\uD83D\uDD12</div>' +
+    '<div style="font-size:25px;margin-top:2px">\uD83D\uDD12</div>' +
     '<div style="flex:1;min-width:200px">' +
-    '<div style="font-size:13px;font-weight:700;color:#c4b5fd;margin-bottom:4px">' +
+    '<div style="font-size:16px;font-weight:700;color:#c4b5fd;margin-bottom:4px">' +
     '\uD83D\uDD12 Monthly Auto-Picks Locked \u2014 ' + batchSize + ' stock' + (batchSize !== 1 ? 's' : '') + ' added to your LT Watchlist below</div>' +
-    '<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">' +
+    '<div style="font-size:14px;color:var(--muted);margin-bottom:8px">' +
     'Generated ' + fmtDate(generatedOn) + ' &bull; Locked until <strong style="color:#a5b4fc">' + fmtDate(lockedUntil) + '</strong>' +
     ' &bull; <strong style="color:' + (daysLeft > 7 ? '#34d399' : '#fbbf24') + '">' + daysLeft + ' day' + (daysLeft !== 1 ? 's' : '') + ' remaining</strong>' +
     ' &bull; LTP &lt; \u20b9600 &bull; Quality \u2265 70/100 &bull; See their BUY\u200bNOW/WAIT/WATCHING status in the watchlist table below</div>' +
@@ -2882,16 +3043,16 @@ function renderPennyStocksTab() {
     // Status Badge
     let statusBadgeHtml = '';
     if (isBought) {
-      statusBadgeHtml = `<span class="badge badge-green" style="font-size:10px;font-weight:700" title="Purchased on ${holding.buy_date || ''} (${holding.qty} shares @ ₹${parseFloat(holding.avg_price || 0).toFixed(2)})">🟢 BOUGHT (${holding.qty})</span>`;
+      statusBadgeHtml = `<span class="badge badge-green" style="font-size:13px;font-weight:700" title="Purchased on ${holding.buy_date || ''} (${holding.qty} shares @ ₹${parseFloat(holding.avg_price || 0).toFixed(2)})">🟢 BOUGHT (${holding.qty})</span>`;
     } else if (s.status_badge) {
       const cls = s.status_badge_class || (gateStatus === 'BUY_NOW' ? 'badge-green' : gateStatus === 'WAIT' ? 'badge-purple' : 'badge-gray');
-      statusBadgeHtml = `<span class="badge ${cls}" style="font-size:10px;font-weight:700" title="${s.status_reason || ''}">${s.status_badge}</span>`;
+      statusBadgeHtml = `<span class="badge ${cls}" style="font-size:13px;font-weight:700" title="${s.status_reason || ''}">${s.status_badge}</span>`;
     } else if (gateStatus === 'BUY_NOW') {
-      statusBadgeHtml = `<span class="badge badge-green" style="font-size:10px;font-weight:700" title="${s.status_reason || ''}">🟢 BUY NOW</span>`;
+      statusBadgeHtml = `<span class="badge badge-green" style="font-size:13px;font-weight:700" title="${s.status_reason || ''}">🟢 BUY NOW</span>`;
     } else if (gateStatus === 'WAIT') {
-      statusBadgeHtml = `<span class="badge badge-purple" style="font-size:10px;font-weight:700" title="${s.status_reason || ''}">🔵 WAIT</span>`;
+      statusBadgeHtml = `<span class="badge badge-purple" style="font-size:13px;font-weight:700" title="${s.status_reason || ''}">🔵 WAIT</span>`;
     } else {
-      statusBadgeHtml = `<span class="badge badge-gray" style="font-size:10px;font-weight:700" title="${s.status_reason || ''}">⬜ WATCHING</span>`;
+      statusBadgeHtml = `<span class="badge badge-gray" style="font-size:13px;font-weight:700" title="${s.status_reason || ''}">⬜ WATCHING</span>`;
     }
 
 
@@ -2900,16 +3061,16 @@ function renderPennyStocksTab() {
     // honest, whereas defaulting to a named state asserts something unmeasured.
     const trendText = s.trend_badge || s.trend || '—';
     const trendClass = trendBadgeClass(s.trend);
-    const cmfBadge = s.pa_badge ? `<div style="font-size:9px;margin-top:3px"><span class="badge ${s.pa_class || 'badge-gray'}" style="font-size:9px">${s.pa_badge}</span></div>` : '';
+    const cmfBadge = s.pa_badge ? `<div style="font-size:12px;margin-top:3px"><span class="badge ${s.pa_class || 'badge-gray'}" style="font-size:12px">${s.pa_badge}</span></div>` : '';
 
     // Support Target GTT
     const gttVal = s.auto_gtt || s.gtt_level;
     const gttStr = gttVal ? `₹${parseFloat(gttVal).toFixed(2)}` : '—';
     const distStr = s.dist_from_gtt_pct != null ? `${s.dist_from_gtt_pct <= 0 ? '' : '+'}${s.dist_from_gtt_pct.toFixed(1)}%` : '—';
     const gttBoxHtml = `
-      <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:10px">
-        <span style="color:var(--muted);font-weight:600">⚡ Support GTT Target:</span>
-        <span style="color:#34d399;font-weight:800">${gttStr} <span style="color:${s.dist_from_gtt_pct <= 0 ? '#10b981' : '#a5b4fc'};font-size:9px">(${distStr})</span></span>
+      <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:13px">
+        <span style="color:var(--muted);font-weight:700">⚡ Support GTT Target:</span>
+        <span style="color:#34d399;font-weight:800">${gttStr} <span style="color:${s.dist_from_gtt_pct <= 0 ? '#10b981' : '#a5b4fc'};font-size:12px">(${distStr})</span></span>
       </div>
     `;
 
@@ -2918,26 +3079,26 @@ function renderPennyStocksTab() {
     if (isBought) {
       actionBtnHtml = `
         <div style="margin-top:10px;display:flex;gap:8px">
-          <button onclick="openLtHoldingLogModal('${sym}')" style="flex:1;background:rgba(6,182,212,0.18);border:1px solid rgba(6,182,212,0.4);color:#22d3ee;font-weight:700;font-size:11px;padding:8px 12px;border-radius:8px;cursor:pointer" title="View Purchase Log for ${sym}">📋 Purchased (${holding.qty})</button>
-          <button onclick="openLtBuyModal('${sym}', ${ltp})" style="background:linear-gradient(135deg,#7c3aed,#c084fc);color:#fff;font-weight:700;font-size:11px;padding:8px 12px;border-radius:8px;border:none;cursor:pointer" title="Record additional SIP for ${sym}">+ Add SIP</button>
+          <button onclick="openLtHoldingLogModal('${sym}')" style="flex:1;background:rgba(6,182,212,0.18);border:1px solid rgba(6,182,212,0.4);color:#22d3ee;font-weight:700;font-size:14px;padding:8px 12px;border-radius:8px;cursor:pointer" title="View Purchase Log for ${sym}">📋 Purchased (${holding.qty})</button>
+          <button onclick="openLtBuyModal('${sym}', ${ltp})" style="background:linear-gradient(135deg,#7c3aed,#c084fc);color:#fff;font-weight:700;font-size:14px;padding:8px 12px;border-radius:8px;border:none;cursor:pointer" title="Record additional SIP for ${sym}">+ Add SIP</button>
         </div>
       `;
     } else if (gateStatus === 'BUY_NOW') {
       actionBtnHtml = `
         <div style="margin-top:10px">
-          <button onclick="openLtBuyModal('${sym}', ${ltp})" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;font-size:11px;padding:8px 12px;border-radius:8px;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(16,185,129,0.3)" title="Breakout confirmed at Support — Record Buy/SIP">🟢 BUY NOW / Record SIP</button>
+          <button onclick="openLtBuyModal('${sym}', ${ltp})" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;font-size:14px;padding:8px 12px;border-radius:8px;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(16,185,129,0.3)" title="Breakout confirmed at Support — Record Buy/SIP">🟢 BUY NOW / Record SIP</button>
         </div>
       `;
     } else if (gateStatus === 'WAIT') {
       actionBtnHtml = `
         <div style="margin-top:10px">
-          <button onclick="openLtBuyModal('${sym}', ${ltp})" style="width:100%;background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;font-weight:700;font-size:11px;padding:8px 12px;border-radius:8px;cursor:pointer" title="Coiling at support GTT ${gttStr} — Click if buying manual pullback">🔵 WAIT — Support GTT ${gttStr}</button>
+          <button onclick="openLtBuyModal('${sym}', ${ltp})" style="width:100%;background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;font-weight:700;font-size:14px;padding:8px 12px;border-radius:8px;cursor:pointer" title="Coiling at support GTT ${gttStr} — Click if buying manual pullback">🔵 WAIT — Support GTT ${gttStr}</button>
         </div>
       `;
     } else {
       actionBtnHtml = `
         <div style="margin-top:10px">
-          <button onclick="openLtBuyModal('${sym}', ${ltp})" style="width:100%;background:rgba(100,116,139,0.15);border:1px solid rgba(100,116,139,0.3);color:#94a3b8;font-weight:600;font-size:11px;padding:8px 12px;border-radius:8px;cursor:pointer" title="Trend not confirmed (${s.trend || 'Consolidation'}) — Avoid blind buy">⚠️ WATCHING (${s.trend || 'Consolidation'})</button>
+          <button onclick="openLtBuyModal('${sym}', ${ltp})" style="width:100%;background:rgba(100,116,139,0.15);border:1px solid rgba(100,116,139,0.3);color:#94a3b8;font-weight:700;font-size:14px;padding:8px 12px;border-radius:8px;cursor:pointer" title="Trend not confirmed (${s.trend || 'Consolidation'}) — Avoid blind buy">⚠️ WATCHING (${s.trend || 'Consolidation'})</button>
         </div>
       `;
     }
@@ -2948,17 +3109,17 @@ function renderPennyStocksTab() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
         <div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span style="font-size:10px;font-weight:800;color:#c084fc;background:rgba(192,132,252,0.12);padding:2px 8px;border-radius:12px">#${idx + 1} Top Penny</span>
+            <span style="font-size:13px;font-weight:800;color:#c084fc;background:rgba(192,132,252,0.12);padding:2px 8px;border-radius:12px">#${idx + 1} Top Penny</span>
             ${statusBadgeHtml}
-            <span class="badge ${trendClass}" style="font-size:10px">${trendText}</span>
+            <span class="badge ${trendClass}" style="font-size:13px">${trendText}</span>
           </div>
           ${cmfBadge}
-          <div style="font-size:18px;font-weight:800;color:#fff;margin-top:6px">${sym}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:1px">${(s.name || '').substring(0, 28)} · ${s.sector || 'Micro-Cap'}</div>
+          <div style="font-size:21px;font-weight:800;color:#fff;margin-top:6px">${sym}</div>
+          <div style="font-size:14px;color:var(--muted);margin-top:1px">${(s.name || '').substring(0, 28)} · ${s.sector || 'Micro-Cap'}</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:18px;font-weight:800;color:var(--accent2)">₹${ltp.toFixed(2)}</div>
-          <div style="font-size:10px;color:${(s.day_chg_pct || 0) >= 0 ? '#10b981' : '#ef4444'};margin-top:2px;font-weight:700">
+          <div style="font-size:21px;font-weight:800;color:var(--accent2)">₹${ltp.toFixed(2)}</div>
+          <div style="font-size:13px;color:${(s.day_chg_pct || 0) >= 0 ? '#10b981' : '#ef4444'};margin-top:2px;font-weight:700">
             ${(s.day_chg_pct || 0) >= 0 ? '+' : ''}${(s.day_chg_pct || 0).toFixed(2)}%
           </div>
         </div>
@@ -2970,20 +3131,20 @@ function renderPennyStocksTab() {
       <!-- Fundamental Metrics Grid -->
       <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;background:rgba(255,255,255,0.03);border-radius:10px;padding:8px;margin-bottom:10px;text-align:center">
         <div>
-          <div style="font-size:9px;color:var(--muted);text-transform:uppercase">ROE %</div>
-          <div style="font-size:12px;font-weight:700;color:#10b981;margin-top:2px">${roeVal}</div>
+          <div style="font-size:12px;color:var(--muted);text-transform:uppercase">ROE %</div>
+          <div style="font-size:15px;font-weight:700;color:#10b981;margin-top:2px">${roeVal}</div>
         </div>
         <div>
-          <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Debt/Equity</div>
-          <div style="font-size:12px;font-weight:700;color:#38bdf8;margin-top:2px">${deVal}</div>
+          <div style="font-size:12px;color:var(--muted);text-transform:uppercase">Debt/Equity</div>
+          <div style="font-size:15px;font-weight:700;color:#38bdf8;margin-top:2px">${deVal}</div>
         </div>
         <div>
-          <div style="font-size:9px;color:var(--muted);text-transform:uppercase">Margin</div>
-          <div style="font-size:12px;font-weight:700;color:#c084fc;margin-top:2px">${npmVal}</div>
+          <div style="font-size:12px;color:var(--muted);text-transform:uppercase">Margin</div>
+          <div style="font-size:15px;font-weight:700;color:#c084fc;margin-top:2px">${npmVal}</div>
         </div>
       </div>
 
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--muted);margin-bottom:10px;padding:0 2px">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);margin-bottom:10px;padding:0 2px">
         <span>Avg Vol (10d): <strong style="color:#fff">${volVal}</strong></span>
         <span>Quality Score: <strong style="color:var(--accent2)">${s.total_score || 0}/100</strong></span>
       </div>
@@ -2992,12 +3153,12 @@ function renderPennyStocksTab() {
       <div style="background:linear-gradient(135deg,rgba(124,58,237,0.12),rgba(192,132,252,0.08));border:1px solid rgba(192,132,252,0.25);border-radius:10px;padding:8px 12px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
-            <div style="font-size:9px;color:#c084fc;font-weight:700;text-transform:uppercase">Monthly SIP Outlay</div>
-            <div style="font-size:13px;font-weight:800;color:#fff;margin-top:1px">Buy ${sipQty} Share${sipQty > 1 ? 's' : ''} / mo</div>
+            <div style="font-size:12px;color:#c084fc;font-weight:700;text-transform:uppercase">Monthly SIP Outlay</div>
+            <div style="font-size:16px;font-weight:800;color:#fff;margin-top:1px">Buy ${sipQty} Share${sipQty > 1 ? 's' : ''} / mo</div>
           </div>
           <div style="text-align:right">
-            <div style="font-size:9px;color:var(--muted)">Est. Cost</div>
-            <div style="font-size:13px;font-weight:800;color:#34d399;margin-top:1px">₹${sipCost}</div>
+            <div style="font-size:12px;color:var(--muted)">Est. Cost</div>
+            <div style="font-size:16px;font-weight:800;color:#34d399;margin-top:1px">₹${sipCost}</div>
           </div>
         </div>
       </div>
@@ -3012,42 +3173,42 @@ function renderPennyStocksTab() {
     <div style="background:linear-gradient(135deg,#1e1035,#0f0a1e);border:1px solid #7c3aed;border-radius:16px;padding:22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
       <div>
         <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:24px">💎</span>
+          <span style="font-size:27px">💎</span>
           <div>
-            <div style="font-size:20px;font-weight:800;color:#c084fc">Quality Penny & Micro-Cap Wealth-Builder Screener</div>
-            <div style="font-size:12px;color:#a78bfa;margin-top:2px">Strict 6-Point Gate + Technical Entry Filter (Support GTT & CMF Accumulation/Distribution)</div>
+            <div style="font-size:23px;font-weight:800;color:#c084fc">Quality Penny & Micro-Cap Wealth-Builder Screener</div>
+            <div style="font-size:15px;color:#a78bfa;margin-top:2px">Strict 6-Point Gate + Technical Entry Filter (Support GTT & CMF Accumulation/Distribution)</div>
           </div>
         </div>
       </div>
       <div style="background:rgba(192,132,252,0.12);border:1px solid rgba(192,132,252,0.3);padding:8px 16px;border-radius:12px;text-align:right">
-        <div style="font-size:10px;color:#c084fc;text-transform:uppercase;font-weight:700">Qualified Penny Candidates</div>
-        <div style="font-size:20px;font-weight:900;color:#fff;margin-top:1px">${pennyList.length} Stocks Scanned</div>
+        <div style="font-size:13px;color:#c084fc;text-transform:uppercase;font-weight:700">Qualified Penny Candidates</div>
+        <div style="font-size:23px;font-weight:900;color:#fff;margin-top:1px">${pennyList.length} Stocks Scanned</div>
       </div>
     </div>
 
     <!-- Filter & SIP Budget Controller Row -->
     <div class="filters" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <span style="font-size:11px;color:var(--muted);font-weight:700;margin-right:2px">Gate Status:</span>
-        <button onclick="pennyFilterCategory='all';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='all'?'active':''}" style="padding:6px 12px;font-size:11px">↺ All (${pennyList.length})</button>
-        <button onclick="pennyFilterCategory='buy_now';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='buy_now'?'active':''}" style="padding:6px 12px;font-size:11px;border-color:#10b981;color:#34d399">🟢 BUY NOW (${buyNowCount})</button>
-        <button onclick="pennyFilterCategory='bought';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='bought'?'active':''}" style="padding:6px 12px;font-size:11px;border-color:#06b6d4;color:#22d3ee">🟢 BOUGHT (${boughtCount})</button>
-        <button onclick="pennyFilterCategory='wait';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='wait'?'active':''}" style="padding:6px 12px;font-size:11px;border-color:#6366f1;color:#a5b4fc">🔵 WAIT (${waitCount})</button>
-        <button onclick="pennyFilterCategory='watching';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='watching'?'active':''}" style="padding:6px 12px;font-size:11px;border-color:#64748b;color:#94a3b8">⬜ WATCHING (${watchingCount})</button>
+        <span style="font-size:14px;color:var(--muted);font-weight:700;margin-right:2px">Gate Status:</span>
+        <button onclick="pennyFilterCategory='all';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='all'?'active':''}" style="padding:6px 12px;font-size:14px">↺ All (${pennyList.length})</button>
+        <button onclick="pennyFilterCategory='buy_now';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='buy_now'?'active':''}" style="padding:6px 12px;font-size:14px;border-color:#10b981;color:#34d399">🟢 BUY NOW (${buyNowCount})</button>
+        <button onclick="pennyFilterCategory='bought';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='bought'?'active':''}" style="padding:6px 12px;font-size:14px;border-color:#06b6d4;color:#22d3ee">🟢 BOUGHT (${boughtCount})</button>
+        <button onclick="pennyFilterCategory='wait';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='wait'?'active':''}" style="padding:6px 12px;font-size:14px;border-color:#6366f1;color:#a5b4fc">🔵 WAIT (${waitCount})</button>
+        <button onclick="pennyFilterCategory='watching';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='watching'?'active':''}" style="padding:6px 12px;font-size:14px;border-color:#64748b;color:#94a3b8">⬜ WATCHING (${watchingCount})</button>
         <span style="border-left:1px solid var(--border);height:16px;margin:0 4px"></span>
-        <button onclick="pennyFilterCategory='debt_free';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='debt_free'?'active':''}" style="padding:6px 12px;font-size:11px">💎 Debt-Free</button>
-        <button onclick="pennyFilterCategory='high_roe';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='high_roe'?'active':''}" style="padding:6px 12px;font-size:11px">🔥 High ROE</button>
+        <button onclick="pennyFilterCategory='debt_free';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='debt_free'?'active':''}" style="padding:6px 12px;font-size:14px">💎 Debt-Free</button>
+        <button onclick="pennyFilterCategory='high_roe';renderPennyStocksTab()" class="tab ${pennyFilterCategory==='high_roe'?'active':''}" style="padding:6px 12px;font-size:14px">🔥 High ROE</button>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:11px;color:var(--muted);font-weight:700">Monthly SIP Amount (₹):</label>
+        <label style="font-size:14px;color:var(--muted);font-weight:700">Monthly SIP Amount (₹):</label>
         <input type="number" id="pennyBudgetInput" value="${budget}" min="50" max="5000" step="50"
                onchange="customPennyMonthlyBudget=parseFloat(this.value)||200;renderPennyStocksTab()"
-               style="background:var(--card);border:1px solid var(--border);color:#fff;padding:6px 10px;border-radius:8px;width:100px;font-size:12px;font-weight:700">
+               style="background:var(--card);border:1px solid var(--border);color:#fff;padding:6px 10px;border-radius:8px;width:100px;font-size:15px;font-weight:700">
       </div>
     </div>
 
     <!-- Cards Grid -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(310px, 1fr));gap:16px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(372px, 1fr));gap:16px">
       ${cardsHtml || '<div style="color:var(--muted);text-align:center;grid-column:1/-1;padding:40px">No penny stocks match this filter.</div>'}
     </div>
   `;
@@ -3095,16 +3256,16 @@ function renderHolidaysTab() {
     }
 
     return `<tr>
-      <td><strong style="color:var(--accent2);font-size:13px">${h.display}</strong></td>
-      <td><span style="color:var(--text);font-weight:600">${h.day}</span></td>
+      <td><strong style="color:var(--accent2);font-size:16px">${h.display}</strong></td>
+      <td><span style="color:var(--text);font-weight:700">${h.day}</span></td>
       <td>
         <div style="font-weight:700;display:flex;align-items:center;gap:8px">
           <span>${h.icon}</span>
           <span>${h.name}</span>
         </div>
-        ${h.note ? `<div style="font-size:11px;color:var(--warn);margin-top:2px">${h.note}</div>` : ''}
+        ${h.note ? `<div style="font-size:14px;color:var(--warn);margin-top:2px">${h.note}</div>` : ''}
       </td>
-      <td><span class="badge ${badgeClass}" style="font-size:11px;font-weight:700">${badgeLabel}</span></td>
+      <td><span class="badge ${badgeClass}" style="font-size:14px;font-weight:700">${badgeLabel}</span></td>
       <td><span class="badge badge-gray">${h.type}</span></td>
     </tr>`;
   }).join('');
@@ -3115,29 +3276,29 @@ function renderHolidaysTab() {
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
         <div>
           <div class="hero-badge-tag">📅 Official Market Calendar 2026</div>
-          <div style="font-size:24px;font-weight:800;color:var(--white);margin-top:4px">NSE & BSE Trading Holidays List (Y2026)</div>
-          <div style="font-size:13px;color:var(--muted);margin-top:4px">
+          <div style="font-size:27px;font-weight:800;color:var(--white);margin-top:4px">NSE & BSE Trading Holidays List (Y2026)</div>
+          <div style="font-size:16px;color:var(--muted);margin-top:4px">
             Official exchange holidays for Equity, Equity Derivatives, and SLB trading segments in India.
           </div>
         </div>
-        <div class="badge badge-purple" style="font-size:13px;font-weight:700;padding:8px 16px">
+        <div class="badge badge-purple" style="font-size:16px;font-weight:700;padding:8px 16px">
           🇮🇳 Indian Stock Markets (NSE / BSE)
         </div>
       </div>
 
       <!-- Quick Summary Stats Grid -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:18px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(216px,1fr));gap:12px;margin-top:18px">
         <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center">
-          <div style="font-size:24px;font-weight:800;color:var(--danger)">${weekdayHolidaysCount}</div>
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-top:2px">Weekday Trading Holidays</div>
+          <div style="font-size:27px;font-weight:800;color:var(--danger)">${weekdayHolidaysCount}</div>
+          <div style="font-size:14px;color:var(--muted);text-transform:uppercase;margin-top:2px">Weekday Trading Holidays</div>
         </div>
         <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center">
-          <div style="font-size:24px;font-weight:800;color:var(--warn)">${weekendHolidaysCount}</div>
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-top:2px">Weekend Holidays</div>
+          <div style="font-size:27px;font-weight:800;color:var(--warn)">${weekendHolidaysCount}</div>
+          <div style="font-size:14px;color:var(--muted);text-transform:uppercase;margin-top:2px">Weekend Holidays</div>
         </div>
         <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center">
-          <div style="font-size:24px;font-weight:800;color:#a5b4fc">1</div>
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-top:2px">Special Muhurat Session</div>
+          <div style="font-size:27px;font-weight:800;color:#a5b4fc">1</div>
+          <div style="font-size:14px;color:var(--muted);text-transform:uppercase;margin-top:2px">Special Muhurat Session</div>
         </div>
       </div>
     </div>
@@ -3171,28 +3332,28 @@ function renderTopPick() {
 
   const mktBannerHtml = (MARKET_INFO && MARKET_INFO.is_pre_market) ? `
     <div style="background:rgba(245, 158, 11, 0.12);border:1px solid rgba(245, 158, 11, 0.3);border-radius:12px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:14px">
-      <span style="font-size:24px">⏳</span>
+      <span style="font-size:27px">⏳</span>
       <div>
-        <div style="font-weight:700;color:var(--warn);font-size:14px">Pre-Market Session (${MARKET_INFO.time_str || ''}) — Market Closed</div>
-        <div style="font-size:12px;color:var(--text);margin-top:2px">
+        <div style="font-weight:700;color:var(--warn);font-size:17px">Pre-Market Session (${MARKET_INFO.time_str || ''}) — Market Closed</div>
+        <div style="font-size:15px;color:var(--text);margin-top:2px">
           Trading on NSE/BSE has not opened yet today. Today's official <strong>Stock of the Day</strong> and pick entry price will lock at <strong>09:15 AM IST</strong> when the market opens. Below is the current top candidate based on pre-market/previous close data.
         </div>
       </div>
     </div>` : (MARKET_INFO && MARKET_INFO.is_open) ? `
     <div style="background:rgba(16, 185, 129, 0.12);border:1px solid rgba(16, 185, 129, 0.3);border-radius:12px;padding:12px 18px;margin-bottom:18px;display:flex;align-items:center;gap:12px">
-      <span style="font-size:20px">🟢</span>
+      <span style="font-size:23px">🟢</span>
       <div>
-        <div style="font-weight:700;color:var(--green);font-size:13px">Live Market Session Active (09:15 - 15:30 IST)</div>
-        <div style="font-size:12px;color:var(--text);margin-top:2px">
+        <div style="font-weight:700;color:var(--green);font-size:16px">Live Market Session Active (09:15 - 15:30 IST)</div>
+        <div style="font-size:15px;color:var(--text);margin-top:2px">
           Today's official pick was locked at Market Open. Current price & live returns update automatically in real-time.
         </div>
       </div>
     </div>` : `
     <div style="background:rgba(239, 68, 68, 0.1);border:1px solid rgba(239, 68, 68, 0.25);border-radius:12px;padding:12px 18px;margin-bottom:18px;display:flex;align-items:center;gap:12px">
-      <span style="font-size:20px">🔴</span>
+      <span style="font-size:23px">🔴</span>
       <div>
-        <div style="font-weight:700;color:var(--danger);font-size:13px">${MARKET_INFO ? MARKET_INFO.badge : 'Market Closed'}</div>
-        <div style="font-size:12px;color:var(--text);margin-top:2px">
+        <div style="font-weight:700;color:var(--danger);font-size:16px">${MARKET_INFO ? MARKET_INFO.badge : 'Market Closed'}</div>
+        <div style="font-size:15px;color:var(--text);margin-top:2px">
           ${MARKET_INFO ? MARKET_INFO.message : 'Market is closed. Showing finalized daily picks.'}
         </div>
       </div>
@@ -3250,25 +3411,25 @@ function renderTopPick() {
     return `<tr>
       <td><strong style="color:var(--accent2)">${h.display_date || h.date}</strong></td>
       <td>
-        <div style="font-weight:700">${h.symbol} ${h.is_pre_market ? '<span style="font-size:10px;color:var(--warn)">(Candidate)</span>' : ''}</div>
-        <div style="font-size:11px;color:var(--muted)">${h.name || ''}</div>
+        <div style="font-weight:700">${h.symbol} ${h.is_pre_market ? '<span style="font-size:13px;color:var(--warn)">(Candidate)</span>' : ''}</div>
+        <div style="font-size:14px;color:var(--muted)">${h.name || ''}</div>
       </td>
       <td><span class="badge ${badgeClass}" title="${stReason}">${stBadge}</span></td>
       <td>${scoreBar(h.total_score || 0)}</td>
       <td>
         <div style="font-weight:700">₹${pickPrice.toFixed(2)}</div>
-        <div style="font-size:10px;color:var(--muted)">Market Open Entry</div>
+        <div style="font-size:13px;color:var(--muted)">Market Open Entry</div>
       </td>
       <td>
         <div style="font-weight:700;color:var(--text)">₹${sessionClose.toFixed(2)}</div>
-        <div style="font-size:10px;color:var(--muted)">Pick Day Close</div>
+        <div style="font-size:13px;color:var(--muted)">Pick Day Close</div>
       </td>
       <td><span class="price" style="font-weight:700">₹${curPrice.toFixed(2)}</span></td>
       <td>
         <span class="${dayCls}" style="font-weight:700">${dayChgAmt >= 0 ? '+' : ''}₹${dayChgAmt.toFixed(2)} (${dayChgPct >= 0 ? '+' : ''}${dayChgPct.toFixed(2)}%)</span>
       </td>
       <td>
-        <span class="${totalCls}" style="font-weight:800;font-size:13px">${totalPnlAmt >= 0 ? '+' : ''}₹${totalPnlAmt.toFixed(2)} (${totalPnlPct >= 0 ? '+' : ''}${totalPnlPct.toFixed(2)}%)</span>
+        <span class="${totalCls}" style="font-weight:800;font-size:16px">${totalPnlAmt >= 0 ? '+' : ''}₹${totalPnlAmt.toFixed(2)} (${totalPnlPct >= 0 ? '+' : ''}${totalPnlPct.toFixed(2)}%)</span>
       </td>
       <td>
         <button class="btn-add" onclick="openModal('${h.symbol}')">Detail</button>
@@ -3288,36 +3449,36 @@ function renderTopPick() {
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <div class="hero-badge-tag">🏆 Stock of the Day · ${TOP_PICK.display_date || TOP_PICK.date}</div>
           ${(TOP_PICK.streak_days && TOP_PICK.streak_days > 1) ? `
-          <span class="badge badge-yellow" style="font-weight:700;font-size:12px;padding:6px 12px">
+          <span class="badge badge-yellow" style="font-weight:700;font-size:15px;padding:6px 12px">
             ⭐ Streak: ${TOP_PICK.streak_days} Consecutive Days (#1 Pick)
           </span>` : `
-          <span class="badge badge-purple" style="font-weight:700;font-size:12px;padding:6px 12px">
+          <span class="badge badge-purple" style="font-weight:700;font-size:15px;padding:6px 12px">
             ✨ ${isPreMktActive ? "Today's #1 Candidate" : "Today's #1 Highest-Scoring Stock"}
           </span>`}
-          <span class="badge ${isPreMktActive ? 'badge-yellow' : (TOP_PICK.status === 'INVALIDATED' ? 'badge-yellow' : TOP_PICK.status === 'INACTIVE' ? 'badge-red' : 'badge-green')}" style="font-weight:700;font-size:12px;padding:6px 12px">
+          <span class="badge ${isPreMktActive ? 'badge-yellow' : (TOP_PICK.status === 'INVALIDATED' ? 'badge-yellow' : TOP_PICK.status === 'INACTIVE' ? 'badge-red' : 'badge-green')}" style="font-weight:700;font-size:15px;padding:6px 12px">
             ${isPreMktActive ? '⏳ PENDING MARKET OPEN' : (TOP_PICK.status_badge && TOP_PICK.status !== 'PENDING' ? TOP_PICK.status_badge : '🟢 ACTIVE')}
           </span>
         </div>
-        <div class="badge ${TOP_PICK.tech_class || 'badge-green'}" style="font-size:14px;font-weight:800;padding:8px 18px;border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,0.3);letter-spacing:0.02em">
+        <div class="badge ${TOP_PICK.tech_class || 'badge-green'}" style="font-size:17px;font-weight:800;padding:8px 18px;border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,0.3);letter-spacing:0.02em">
           ${TOP_PICK.tech_rating || '🟢 Strong Uptrend'}
         </div>
       </div>
 
       ${showStatusWarning ? `
-      <div class="alert-row alert-SELL" style="margin-bottom:14px;padding:10px 14px;font-size:13px">
+      <div class="alert-row alert-SELL" style="margin-bottom:14px;padding:10px 14px;font-size:16px">
         <span>⚠️</span>
         <div>
           <strong>Stock of the Day Status: ${TOP_PICK.status}</strong> — ${TOP_PICK.status_reason || 'Quality score dropped below qualification threshold.'}
-          <div style="font-size:11px;margin-top:2px;color:var(--text)">If this stock re-qualifies (Score ≥55, Strength ≥50), its status will automatically restore back to 🟢 ACTIVE.</div>
+          <div style="font-size:14px;margin-top:2px;color:var(--text)">If this stock re-qualifies (Score ≥55, Strength ≥50), its status will automatically restore back to 🟢 ACTIVE.</div>
         </div>
       </div>
       ` : ''}
 
       <div class="hero-grid">
         <div>
-          <div style="font-size:28px;font-weight:800;color:var(--white)">${TOP_PICK.symbol} <span style="font-size:16px;font-weight:400;color:var(--muted)">— ${TOP_PICK.name || ''}</span></div>
-          <div style="font-size:13px;color:var(--accent2);margin-top:2px">${TOP_PICK.sector || ''}</div>
-          <div style="font-size:26px;font-weight:700;margin:12px 0">
+          <div style="font-size:31px;font-weight:800;color:var(--white)">${TOP_PICK.symbol} <span style="font-size:19px;font-weight:500;color:var(--muted)">— ${TOP_PICK.name || ''}</span></div>
+          <div style="font-size:16px;color:var(--accent2);margin-top:2px">${TOP_PICK.sector || ''}</div>
+          <div style="font-size:29px;font-weight:700;margin:12px 0">
             <span class="price">₹${heroCurrentPrice.toFixed(2)}</span>
           </div>
 
@@ -3331,8 +3492,8 @@ function renderTopPick() {
 
           <!-- ⚡ Overnight Price Fluctuation & Gap Analysis Card -->
           <div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px;margin:14px 0">
-            <div style="font-size:12px;font-weight:700;color:var(--accent2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">⚡ Overnight Price Fluctuation & Gap Analysis</div>
-            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:13px">
+            <div style="font-size:15px;font-weight:700;color:var(--accent2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">⚡ Overnight Price Fluctuation & Gap Analysis</div>
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:16px">
               <div><span style="color:var(--muted)">Prev Session Close:</span> <strong>₹${heroPrevClose ? heroPrevClose.toFixed(2) : '—'}</strong></div>
               <div><span style="color:var(--muted)">Pick Price (Open Entry):</span> <strong>₹${(TOP_PICK.ltp_at_pick || heroCurrentPrice).toFixed(2)}</strong></div>
               <div><span style="color:var(--muted)">Overnight Fluctuation:</span> <span class="badge ${heroGapCls}" style="font-weight:700">${heroGapHtml}</span></div>
@@ -3341,105 +3502,105 @@ function renderTopPick() {
 
           <!-- 🎯 7-Day Swing Trade Plan Card -->
           <div style="background:linear-gradient(135deg, rgba(16,185,129,0.1), rgba(108,99,255,0.1));border:1.5px solid var(--green);border-radius:14px;padding:16px;margin:14px 0;box-shadow:0 4px 16px rgba(16,185,129,0.15)">
-            <div style="font-size:13px;font-weight:800;color:var(--green);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <div style="font-size:16px;font-weight:800;color:var(--green);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
               <span>🎯 Recommended 7-Day Swing Trade Plan</span>
-              <span class="badge badge-green" style="font-size:11px;font-weight:700">Timeframe: 3 to 7 Trading Days</span>
+              <span class="badge badge-green" style="font-size:14px;font-weight:700">Timeframe: 3 to 7 Trading Days</span>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;text-align:center">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;text-align:center">
               <div style="background:var(--card);border:1px solid var(--border);padding:10px;border-radius:10px">
-                <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:700">Suggested Entry</div>
-                <div style="font-size:17px;font-weight:800;color:var(--white);margin-top:2px">₹${(TOP_PICK.ltp || TOP_PICK.ltp_at_pick || 0).toFixed(2)}</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">Market Price / Breakout</div>
+                <div style="font-size:13px;color:var(--muted);text-transform:uppercase;font-weight:700">Suggested Entry</div>
+                <div style="font-size:20px;font-weight:800;color:var(--white);margin-top:2px">₹${(TOP_PICK.ltp || TOP_PICK.ltp_at_pick || 0).toFixed(2)}</div>
+                <div style="font-size:13px;color:var(--muted);margin-top:2px">Market Price / Breakout</div>
               </div>
               <div style="background:var(--card);border:1px solid var(--danger);padding:10px;border-radius:10px">
-                <div style="font-size:10px;color:var(--danger);text-transform:uppercase;font-weight:700">Stop Loss (SL)</div>
-                <div style="font-size:17px;font-weight:800;color:var(--danger);margin-top:2px">₹${TOP_PICK.stop_loss != null ? TOP_PICK.stop_loss.toFixed(2) : '—'}</div>
-                <div style="font-size:10px;color:var(--danger);margin-top:2px">${TOP_PICK.stop_loss_pct || 0}% Below Entry</div>
+                <div style="font-size:13px;color:var(--danger);text-transform:uppercase;font-weight:700">Stop Loss (SL)</div>
+                <div style="font-size:20px;font-weight:800;color:var(--danger);margin-top:2px">₹${TOP_PICK.stop_loss != null ? TOP_PICK.stop_loss.toFixed(2) : '—'}</div>
+                <div style="font-size:13px;color:var(--danger);margin-top:2px">${TOP_PICK.stop_loss_pct || 0}% Below Entry</div>
               </div>
               <div style="background:var(--card);border:1px solid var(--green);padding:10px;border-radius:10px">
-                <div style="font-size:10px;color:var(--green);text-transform:uppercase;font-weight:700">Target 1 (1:1.5 R:R)</div>
-                <div style="font-size:17px;font-weight:800;color:var(--green);margin-top:2px">₹${TOP_PICK.target1 != null ? TOP_PICK.target1.toFixed(2) : '—'}</div>
-                <div style="font-size:10px;color:var(--green);margin-top:2px">+${TOP_PICK.target1_pct || 0}% Upside</div>
+                <div style="font-size:13px;color:var(--green);text-transform:uppercase;font-weight:700">Target 1 (1:1.5 R:R)</div>
+                <div style="font-size:20px;font-weight:800;color:var(--green);margin-top:2px">₹${TOP_PICK.target1 != null ? TOP_PICK.target1.toFixed(2) : '—'}</div>
+                <div style="font-size:13px;color:var(--green);margin-top:2px">+${TOP_PICK.target1_pct || 0}% Upside</div>
               </div>
               <div style="background:var(--card);border:1px solid var(--purple);padding:10px;border-radius:10px">
-                <div style="font-size:10px;color:var(--purple);text-transform:uppercase;font-weight:700">Target 2 (1:2.5 R:R)</div>
-                <div style="font-size:17px;font-weight:800;color:var(--purple);margin-top:2px">₹${TOP_PICK.target2 != null ? TOP_PICK.target2.toFixed(2) : '—'}</div>
-                <div style="font-size:10px;color:var(--purple);margin-top:2px">+${TOP_PICK.target2_pct || 0}% Upside</div>
+                <div style="font-size:13px;color:var(--purple);text-transform:uppercase;font-weight:700">Target 2 (1:2.5 R:R)</div>
+                <div style="font-size:20px;font-weight:800;color:var(--purple);margin-top:2px">₹${TOP_PICK.target2 != null ? TOP_PICK.target2.toFixed(2) : '—'}</div>
+                <div style="font-size:13px;color:var(--purple);margin-top:2px">+${TOP_PICK.target2_pct || 0}% Upside</div>
               </div>
             </div>
           </div>
 
           <!-- Technical Analysis Dashboard Grid -->
           <div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:16px;margin:14px 0">
-            <div style="font-size:12px;font-weight:700;color:var(--accent2);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.05em">⚡ Technical Analysis & Trend Setup</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px">
+            <div style="font-size:15px;font-weight:700;color:var(--accent2);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.05em">⚡ Technical Analysis & Trend Setup</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(156px,1fr));gap:10px">
               <div class="modal-metric">
                 <div class="lbl">50-Day MA</div>
                 <div class="val">₹${TOP_PICK.ma50 != null ? TOP_PICK.ma50.toFixed(2) : '—'}</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">${TOP_PICK.dist_ma50_pct != null ? (TOP_PICK.dist_ma50_pct >= 0 ? '🟢 +' : '🔴 ') + TOP_PICK.dist_ma50_pct + '% vs 50MA' : '—'}</div>
+                <div style="font-size:13px;color:var(--muted);margin-top:2px">${TOP_PICK.dist_ma50_pct != null ? (TOP_PICK.dist_ma50_pct >= 0 ? '🟢 +' : '🔴 ') + TOP_PICK.dist_ma50_pct + '% vs 50MA' : '—'}</div>
               </div>
               <div class="modal-metric">
                 <div class="lbl">200-Day MA</div>
                 <div class="val">₹${TOP_PICK.ma200 != null ? TOP_PICK.ma200.toFixed(2) : '—'}</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">${TOP_PICK.dist_ma200_pct != null ? (TOP_PICK.dist_ma200_pct >= 0 ? '🟢 +' : '🔴 ') + TOP_PICK.dist_ma200_pct + '% vs 200MA' : '—'}</div>
+                <div style="font-size:13px;color:var(--muted);margin-top:2px">${TOP_PICK.dist_ma200_pct != null ? (TOP_PICK.dist_ma200_pct >= 0 ? '🟢 +' : '🔴 ') + TOP_PICK.dist_ma200_pct + '% vs 200MA' : '—'}</div>
               </div>
               <div class="modal-metric">
                 <div class="lbl">RSI (14-Day)</div>
                 <div class="val" style="color:var(--accent2)">${TOP_PICK.rsi != null ? TOP_PICK.rsi.toFixed(1) : '—'}</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">${TOP_PICK.rsi_status || 'Neutral'}</div>
+                <div style="font-size:13px;color:var(--muted);margin-top:2px">${TOP_PICK.rsi_status || 'Neutral'}</div>
               </div>
               <div class="modal-metric">
                 <div class="lbl">52W Channel</div>
                 <div class="val">₹${TOP_PICK.week_high_52 != null ? TOP_PICK.week_high_52.toFixed(2) : '—'}</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">${TOP_PICK.dist_52w_high_pct != null ? TOP_PICK.dist_52w_high_pct + '% from High' : '—'}</div>
+                <div style="font-size:13px;color:var(--muted);margin-top:2px">${TOP_PICK.dist_52w_high_pct != null ? TOP_PICK.dist_52w_high_pct + '% from High' : '—'}</div>
               </div>
               <div class="modal-metric">
                 <div class="lbl">Vol Spike</div>
                 <div class="val">${TOP_PICK.volume_spike != null ? TOP_PICK.volume_spike.toFixed(2) + 'x' : '—'}</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">10d Avg Volume</div>
+                <div style="font-size:13px;color:var(--muted);margin-top:2px">10d Avg Volume</div>
               </div>
             </div>
           </div>
 
           <!-- 🌊 Institutional Money Flow & Price Action Breakdown Card -->
           <div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:16px;margin:14px 0">
-            <div style="font-size:12px;font-weight:700;color:var(--accent2);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.05em">🌊 Institutional Order Flow & Price Action Analysis</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px">
+            <div style="font-size:15px;font-weight:700;color:var(--accent2);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.05em">🌊 Institutional Order Flow & Price Action Analysis</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(156px,1fr));gap:10px">
               <div class="modal-metric">
                 <div class="lbl">Money Flow (CMF)</div>
                 <div class="val" style="color:${(TOP_PICK.cmf || 0) >= 0.05 ? '#10b981' : (TOP_PICK.cmf || 0) <= -0.05 ? '#ef4444' : '#fbbf24'}">${TOP_PICK.cmf != null ? (TOP_PICK.cmf >= 0 ? '+' : '') + TOP_PICK.cmf.toFixed(3) : '0.000'}</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">${(TOP_PICK.cmf || 0) >= 0.10 ? '🟢 Accumulation' : (TOP_PICK.cmf || 0) <= -0.10 ? '🔴 Distribution' : '🔵 Neutral Flow'}</div>
+                <div style="font-size:13px;color:var(--muted);margin-top:2px">${(TOP_PICK.cmf || 0) >= 0.10 ? '🟢 Accumulation' : (TOP_PICK.cmf || 0) <= -0.10 ? '🔴 Distribution' : '🔵 Neutral Flow'}</div>
               </div>
               <div class="modal-metric">
                 <div class="lbl">Buyer Control (CLV)</div>
                 <div class="val" style="color:${(TOP_PICK.clv || 0.5) >= 0.65 ? '#10b981' : '#a5b4fc'}">${TOP_PICK.clv != null ? Math.round((TOP_PICK.clv || 0.5) * 100) + '%' : '50%'}</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">${(TOP_PICK.clv || 0.5) >= 0.65 ? '🟢 Buyer Control' : '⚪ Neutral Close'}</div>
+                <div style="font-size:13px;color:var(--muted);margin-top:2px">${(TOP_PICK.clv || 0.5) >= 0.65 ? '🟢 Buyer Control' : '⚪ Neutral Close'}</div>
               </div>
               <div class="modal-metric">
                 <div class="lbl">Market Structure</div>
-                <div class="val" style="font-size:13px;color:var(--white)">${TOP_PICK.market_structure || 'HH/HL Structure'}</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">20-Bar Trend</div>
+                <div class="val" style="font-size:16px;color:var(--white)">${TOP_PICK.market_structure || 'HH/HL Structure'}</div>
+                <div style="font-size:13px;color:var(--muted);margin-top:2px">20-Bar Trend</div>
               </div>
               <div class="modal-metric">
                 <div class="lbl">Price Action Pattern</div>
-                <div class="val" style="font-size:13px;color:var(--accent2)">${TOP_PICK.pa_pattern || 'No Key Trigger'}</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">FVG / Rejection</div>
+                <div class="val" style="font-size:16px;color:var(--accent2)">${TOP_PICK.pa_pattern || 'No Key Trigger'}</div>
+                <div style="font-size:13px;color:var(--muted);margin-top:2px">FVG / Rejection</div>
               </div>
             </div>
           </div>
 
           ${highlightsHtml ? `
           <div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:14px">
-            <div style="font-size:12px;font-weight:700;color:var(--accent2);margin-bottom:8px;text-transform:uppercase">Key Selection Thesis</div>
-            <ul style="list-style:none;font-size:13px;color:var(--text)">${highlightsHtml}</ul>
+            <div style="font-size:15px;font-weight:700;color:var(--accent2);margin-bottom:8px;text-transform:uppercase">Key Selection Thesis</div>
+            <ul style="list-style:none;font-size:16px;color:var(--text)">${highlightsHtml}</ul>
           </div>
           ` : ''}
 
           <div style="display:flex;gap:12px;margin-top:18px">
-            <button class="btn-add" onclick="addToWl('${TOP_PICK.symbol}')" ${inWl ? 'disabled' : ''} style="padding:10px 18px;font-size:13px">
+            <button class="btn-add" onclick="addToWl('${TOP_PICK.symbol}')" ${inWl ? 'disabled' : ''} style="padding:10px 18px;font-size:16px">
               ${inWl ? '✓ In Watchlist' : '⭐ Add Today\'s Pick to Watchlist'}
             </button>
-            <button class="btn-add" onclick="openModal('${TOP_PICK.symbol}')" style="background:var(--card2);border:1px solid var(--border);padding:10px 18px;font-size:13px">
+            <button class="btn-add" onclick="openModal('${TOP_PICK.symbol}')" style="background:var(--card2);border:1px solid var(--border);padding:10px 18px;font-size:16px">
               📊 Full Analysis
             </button>
           </div>
@@ -3448,7 +3609,7 @@ function renderTopPick() {
         <div style="display:flex;flex-direction:column;gap:12px">
           <div class="hero-score-ring">
             <div class="hero-score-val" style="color:${scoreColor(TOP_PICK.total_score)}">${TOP_PICK.total_score.toFixed(0)}</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:6px;text-transform:uppercase;letter-spacing:0.05em">Overall Quality Score</div>
+            <div style="font-size:14px;color:var(--muted);margin-top:6px;text-transform:uppercase;letter-spacing:0.05em">Overall Quality Score</div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
             <div class="wl-score-box"><div class="val" style="color:${scoreColor(TOP_PICK.strength)}">${TOP_PICK.strength.toFixed(0)}</div><div class="lbl">Strength</div></div>
@@ -3461,7 +3622,7 @@ function renderTopPick() {
 
     <!-- Daily Picks History Table -->
     <div style="margin-top:30px">
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+      <h3 style="font-size:19px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px">
         <span>📜</span><span>Daily Top Picks History & Performance</span>
       </h3>
       <div class="table-wrap">
@@ -3497,7 +3658,29 @@ function scoreColor(s) {
   return '#ef4444';
 }
 
-function scoreBar(val, max=100) {
+// True when the source actually returned at least one input behind a fundamental
+// score. Prefers the flag the engine emits, but falls back to inspecting the
+// breakdown so the page tells the truth against scan data written before that
+// flag existed, rather than waiting a full re-scan to stop showing a false zero.
+function fundAvailable(flag, breakdown) {
+  if (flag === true || flag === false) return flag;
+  if (!breakdown || typeof breakdown !== 'object') return true;
+  const inputs = Object.keys(breakdown).filter(k => !k.endsWith('_pts'));
+  if (!inputs.length) return true;
+  return inputs.some(k => breakdown[k] !== null && breakdown[k] !== undefined);
+}
+
+function scoreBar(val, max=100, available=true) {
+  // "Not measured" and "measured as zero" are different facts and must not share
+  // a cell. yfinance returns no fundamentals for ~99% of this universe, so
+  // Strength and Value arrive as 0 carrying zero weight in the total — painting
+  // that as a red 0 reads as "terrible fundamentals" when it means "unknown".
+  if (available === false || val == null) {
+    return `<div class="score-bar-wrap" title="No fundamental data available from the source for this stock — it carried no weight in the total score">
+      <div class="score-bar"><div class="score-fill score-fill-na"></div></div>
+      <div class="score-num score-num-na">n/a</div>
+    </div>`;
+  }
   const c = scoreColor(val);
   return `<div class="score-bar-wrap">
     <div class="score-bar"><div class="score-fill" style="width:${val}%;background:${c}"></div></div>
@@ -3599,18 +3782,25 @@ function applyFilters() {
   const trend    = document.getElementById('fTrend').value;
 
   filteredData = SCREENER_DATA.filter(s => {
-    if (!search && qual === 'qualified' && !s.qualified) return false;
-    if (!search && qual === 'watch' && s.total_score < 45) return false;
+    if (qual === 'qualified' && !s.qualified) return false;
+    if (qual === 'watch' && s.total_score < 45) return false;
 
     if (search && !matchSearch(s, search)) return false;
 
     if (sector !== 'all' && s.sector !== sector) return false;
 
     if (mcap !== 'all') {
-      const mc = s.market_cap || 0;
-      if (mcap === 'large' && mc < 200000000000) return false;
-      if (mcap === 'mid' && (mc < 50000000000 || mc >= 200000000000)) return false;
-      if (mcap === 'small' && (mc <= 0 || mc >= 50000000000)) return false;
+      const capCat = (s.cap_category || '').toLowerCase();
+      if (mcap === 'large') {
+        if (capCat) { if (!capCat.includes('large')) return false; }
+        else if ((s.market_cap || 0) < 200000000000) return false;
+      } else if (mcap === 'mid') {
+        if (capCat) { if (!capCat.includes('mid')) return false; }
+        else { const mc = s.market_cap || 0; if (mc < 50000000000 || mc >= 200000000000) return false; }
+      } else if (mcap === 'small') {
+        if (capCat) { if (!capCat.includes('small')) return false; }
+        else { const mc = s.market_cap || 0; if (mc <= 0 || mc >= 50000000000) return false; }
+      }
     }
 
     if (trend === 'uptrend_downtrend') {
@@ -3622,7 +3812,18 @@ function applyFilters() {
     return true;
   });
 
-  filteredData.sort((a,b) => sortDir * ((a[sortCol]??-999) - (b[sortCol]??-999)));
+  filteredData.sort((a, b) => {
+    let va = a[sortCol];
+    let vb = b[sortCol];
+    if (typeof va === 'string' || typeof vb === 'string') {
+      const sa = String(va || '');
+      const sb = String(vb || '');
+      return sortDir * sa.localeCompare(sb);
+    }
+    if (va == null) va = -999999;
+    if (vb == null) vb = -999999;
+    return sortDir * (va - vb);
+  });
   renderTable();
   document.getElementById('resultCount').textContent = `Showing ${filteredData.length} stocks`;
 
@@ -3645,9 +3846,9 @@ function renderSearchQuickView(search) {
 
   if (!match) {
     container.innerHTML = `
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;font-size:13px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;font-size:16px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div>🔍 No local match for "<strong>${search}</strong>" in current Nifty universe.</div>
-        <button onclick="openAddLtStockModal()" style="background:linear-gradient(135deg,#6c63ff,#00d4aa);color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">➕ Search &amp; Add "${search.toUpperCase()}" via Yahoo Finance</button>
+        <button onclick="openAddLtStockModal()" style="background:linear-gradient(135deg,#6c63ff,#00d4aa);color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer">➕ Search &amp; Add "${search.toUpperCase()}" via Yahoo Finance</button>
       </div>`;
     return;
   }
@@ -3660,31 +3861,31 @@ function renderSearchQuickView(search) {
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
         <div>
           <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:20px;font-weight:800;color:var(--white)">${match.symbol}</span>
-            <span style="font-size:13px;color:var(--muted)">— ${match.name||''}</span>
+            <span style="font-size:23px;font-weight:800;color:var(--white)">${match.symbol}</span>
+            <span style="font-size:16px;color:var(--muted)">— ${match.name||''}</span>
             <span class="badge ${match.tech_class || 'badge-green'}" style="font-weight:700">${trendBadge}</span>
           </div>
-          <div style="font-size:12px;color:var(--accent2);margin-top:2px">${match.sector||''}</div>
+          <div style="font-size:15px;color:var(--accent2);margin-top:2px">${match.sector||''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
           <div>
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase">LTP Price</div>
-            <div style="font-size:22px;font-weight:800;color:var(--white)">₹${match.ltp.toFixed(2)}</div>
+            <div style="font-size:13px;color:var(--muted);text-transform:uppercase">LTP Price</div>
+            <div style="font-size:25px;font-weight:800;color:var(--white)">₹${match.ltp.toFixed(2)}</div>
           </div>
           <div>
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Total Score</div>
-            <div style="font-size:22px;font-weight:800;color:${scoreColor(match.total_score)}">${match.total_score.toFixed(0)} <span style="font-size:11px;font-weight:400;color:var(--muted)">/ 100</span></div>
+            <div style="font-size:13px;color:var(--muted);text-transform:uppercase">Total Score</div>
+            <div style="font-size:25px;font-weight:800;color:${scoreColor(match.total_score)}">${match.total_score.toFixed(0)} <span style="font-size:14px;font-weight:500;color:var(--muted)">/ 100</span></div>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="btn-add" onclick="openModal('${match.symbol}')" style="padding:8px 14px;font-size:12px">📊 Full Metrics & Analysis</button>
-            <button class="btn-add" onclick="addToWl('${match.symbol}')" ${inWl?'disabled':''} style="background:var(--card2);border:1px solid var(--border);padding:8px 14px;font-size:12px">
+            <button class="btn-add" onclick="openModal('${match.symbol}')" style="padding:8px 14px;font-size:15px">📊 Full Metrics & Analysis</button>
+            <button class="btn-add" onclick="addToWl('${match.symbol}')" ${inWl?'disabled':''} style="background:var(--card2);border:1px solid var(--border);padding:8px 14px;font-size:15px">
               ${inWl ? '✓ In Watchlist' : '+ Add to Watchlist'}
             </button>
           </div>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:12px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:15px">
         <div><span style="color:var(--muted)">Strength:</span> <strong style="color:${scoreColor(match.strength)}">${match.strength.toFixed(0)}</strong></div>
         <div><span style="color:var(--muted)">Value:</span> <strong style="color:${scoreColor(match.value)}">${match.value.toFixed(0)}</strong></div>
         <div><span style="color:var(--muted)">Momentum:</span> <strong style="color:${scoreColor(match.momentum)}">${match.momentum.toFixed(0)}</strong></div>
@@ -3770,7 +3971,7 @@ function renderTable() {
         : `<span class="badge badge-red">🔴 Avoid</span>`;
 
     const rsVal = s.rs_rating || 50;
-    const rsBadge = `<span class="badge ${rsVal>=80?'badge-green':rsVal>=60?'badge-green':rsVal>=40?'badge-gray':'badge-red'}" style="font-size:11px;font-weight:700">RS ${rsVal}</span>`;
+    const rsBadge = `<span class="badge ${rsVal>=80?'badge-green':rsVal>=60?'badge-green':rsVal>=40?'badge-gray':'badge-red'}" style="font-size:14px;font-weight:700">RS ${rsVal}</span>`;
 
     return `<tr data-symbol="${s.symbol}" data-ticker="${s.ticker || (s.symbol + '.NS')}">
       <td>
@@ -3781,8 +3982,8 @@ function renderTable() {
       <td><span class="price">₹${s.ltp.toFixed(2)}</span></td>
       <td>${scoreBar(s.total_score)}</td>
       <td>${rsBadge}</td>
-      <td>${scoreBar(s.strength)}</td>
-      <td>${scoreBar(s.value)}</td>
+      <td>${scoreBar(s.strength, 100, fundAvailable(s.strength_available, s.strength_breakdown))}</td>
+      <td>${scoreBar(s.value, 100, fundAvailable(s.value_available, s.value_breakdown))}</td>
       <td>${scoreBar(s.momentum)}</td>
       <td>${fmt(s.pe,'',1)}</td>
       <td>${fmt(s.roe_pct,'%')}</td>
@@ -3791,8 +3992,8 @@ function renderTable() {
       <td>${fmt(s.wk52_return_pct,'%')}</td>
       <td>${fmt(s.rsi,'',0)}</td>
       <td>${s.volume_spike != null ? fmt(s.volume_spike, 'x', 2) : fmt(null)}</td>
-      <td><span class="badge ${s.pa_class || 'badge-gray'}" style="font-size:10px;white-space:nowrap" title="${s.pa_pattern || ''}">${s.pa_badge || '⚪ Neutral Flow'}</span></td>
-      <td><span class="badge ${s.tech_class || 'badge-yellow'}" style="font-size:11px;white-space:nowrap" title="${s.tech_trend || ''}">${s.tech_rating || s.tech_badge || '🟡 Rangebound'}</span></td>
+      <td><span class="badge ${s.pa_class || 'badge-gray'}" style="font-size:13px;white-space:nowrap" title="${s.pa_pattern || ''}">${s.pa_badge || '⚪ Neutral Flow'}</span></td>
+      <td><span class="badge ${s.tech_class || 'badge-yellow'}" style="font-size:14px;white-space:nowrap" title="${s.tech_trend || ''}">${s.tech_rating || s.tech_badge || '🟡 Rangebound'}</span></td>
       <td>${badge}</td>
       <td>
         <button class="btn btn-sm ${inWlSet ? 'btn-danger' : 'btn-primary'}"
@@ -4055,7 +4256,7 @@ function renderWatchlist() {
       if (wlSortCol === c) {
         el.innerHTML = wlSortDir === -1 ? ' <b style="color:var(--accent2)">▼</b>' : ' <b style="color:var(--accent2)">▲</b>';
       } else {
-        el.innerHTML = ' <span style="opacity:0.35;font-size:10px">↕</span>';
+        el.innerHTML = ' <span style="opacity:0.35;font-size:13px">↕</span>';
       }
     }
   });
@@ -4126,37 +4327,37 @@ function renderWatchlist() {
             <div>
               <div style="display:flex;align-items:center;gap:8px">
                 <div class="wl-sym">${w.symbol}</div>
-                <span class="badge ${sigClass}" style="font-weight:700;font-size:11px">${sigBadge}</span>
+                <span class="badge ${sigClass}" style="font-weight:700;font-size:14px">${sigBadge}</span>
               </div>
               <div class="wl-name">${w.name||''}</div>
-              <div class="wl-name" style="margin-top:2px;color:var(--accent2);font-size:11px">${w.sector||''} ${sigReason ? '· ' + sigReason : ''}</div>
-              <div onclick="editQtyModal('${w.symbol}')" title="Click to edit quantity or buy price for ${w.symbol}" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-top:6px;background:var(--card2);padding:4px 8px;border-radius:6px;border:1px solid #6c63ff44;cursor:pointer;user-select:none" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='#6c63ff44'">
+              <div class="wl-name" style="margin-top:2px;color:var(--accent2);font-size:14px">${w.sector||''} ${sigReason ? '· ' + sigReason : ''}</div>
+              <div onclick="editQtyModal('${w.symbol}')" title="Click to edit quantity or buy price for ${w.symbol}" style="display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--muted);margin-top:6px;background:var(--card2);padding:4px 8px;border-radius:6px;border:1px solid #6c63ff44;cursor:pointer;user-select:none" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='#6c63ff44'">
                 <span>Holdings:</span>
-                <button onclick="event.stopPropagation();adjustQty('${w.symbol}', -1)" title="Decrease Quantity" style="padding:0 6px;height:18px;line-height:16px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-weight:700;font-size:11px">-</button>
+                <button onclick="event.stopPropagation();adjustQty('${w.symbol}', -1)" title="Decrease Quantity" style="padding:0 6px;height:18px;line-height:16px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-weight:700;font-size:14px">-</button>
                 <b style="color:var(--white);font-weight:700">${w.qty||1} Qty</b>
-                <button onclick="event.stopPropagation();adjustQty('${w.symbol}', 1)" title="Increase Quantity" style="padding:0 6px;height:18px;line-height:16px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-weight:700;font-size:11px">+</button>
+                <button onclick="event.stopPropagation();adjustQty('${w.symbol}', 1)" title="Increase Quantity" style="padding:0 6px;height:18px;line-height:16px;border-radius:3px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-weight:700;font-size:14px">+</button>
                 <span>@ <b style="color:var(--white)">₹${w.avg_cost?w.avg_cost.toFixed(2):'0.00'}</b></span>
-                <span style="color:#a5b4fc;font-weight:600;font-size:10px;margin-left:2px">✏️ Edit</span>
+                <span style="color:#a5b4fc;font-weight:700;font-size:13px;margin-left:2px">✏️ Edit</span>
               </div>
             </div>
             <div style="text-align:right">
               <div class="wl-ltp">${w.ltp?'₹'+w.ltp.toFixed(2):'—'}</div>
-              ${pnl!=null?`<div class="wl-pnl ${pnl>=0?'pos':'neg'}" style="font-size:12px">${pnl>=0?'+':''}₹${pnl.toFixed(2)} (${pnlPct.toFixed(2)}%)</div>`:''}
+              ${pnl!=null?`<div class="wl-pnl ${pnl>=0?'pos':'neg'}" style="font-size:15px">${pnl>=0?'+':''}₹${pnl.toFixed(2)} (${pnlPct.toFixed(2)}%)</div>`:''}
             </div>
           </div>
 
           <div style="display:flex;align-items:center;justify-content:space-between;background:var(--card2);padding:10px 14px;border-radius:10px;border:1px solid var(--border);margin-bottom:12px">
             <div>
-              <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Quality Score</div>
-              <div style="font-size:20px;font-weight:800;color:${scoreColor(w.current_score||0)}">${(w.current_score||0).toFixed(0)} <span style="font-size:11px;font-weight:400;color:var(--muted)">/ 100</span></div>
+              <div style="font-size:13px;color:var(--muted);text-transform:uppercase">Quality Score</div>
+              <div style="font-size:23px;font-weight:800;color:${scoreColor(w.current_score||0)}">${(w.current_score||0).toFixed(0)} <span style="font-size:14px;font-weight:500;color:var(--muted)">/ 100</span></div>
             </div>
             <div style="text-align:center">
-              <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Strength</div>
-              <div style="font-size:15px;font-weight:700;color:${scoreColor(w.current_strength||0)}">${(w.current_strength||0).toFixed(0)}</div>
+              <div style="font-size:13px;color:var(--muted);text-transform:uppercase">Strength</div>
+              <div style="font-size:18px;font-weight:700;color:${scoreColor(w.current_strength||0)}">${(w.current_strength||0).toFixed(0)}</div>
             </div>
             <div style="text-align:center">
-              <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Momentum</div>
-              <div style="font-size:15px;font-weight:700;color:${scoreColor(w.current_momentum||0)}">${(w.current_momentum||0).toFixed(0)}</div>
+              <div style="font-size:13px;color:var(--muted);text-transform:uppercase">Momentum</div>
+              <div style="font-size:18px;font-weight:700;color:${scoreColor(w.current_momentum||0)}">${(w.current_momentum||0).toFixed(0)}</div>
             </div>
           </div>
 
@@ -4164,12 +4365,12 @@ function renderWatchlist() {
 
           <!-- Collapsible Details & Metrics Drawer -->
           <details style="margin-bottom:12px;cursor:pointer">
-            <summary style="font-size:12px;font-weight:600;color:var(--accent2);outline:none;user-select:none;padding:4px 0">
+            <summary style="font-size:15px;font-weight:700;color:var(--accent2);outline:none;user-select:none;padding:4px 0">
               🔍 Details & Metrics (ROE, D/E, RSI, News)
             </summary>
             <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-              ${scoreChange!=null?`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">
-                Score since entry: <span class="${scCls}" style="font-weight:600">${scoreChange>0?'+':''}${scoreChange} pts</span> (Entry: ${w.score_at_entry})
+              ${scoreChange!=null?`<div style="font-size:14px;color:var(--muted);margin-bottom:8px">
+                Score since entry: <span class="${scCls}" style="font-weight:700">${scoreChange>0?'+':''}${scoreChange} pts</span> (Entry: ${w.score_at_entry})
               </div>`:''}
 
               <div class="wl-metrics">
@@ -4184,11 +4385,11 @@ function renderWatchlist() {
 
               ${(w.news && w.news.length > 0) ? `
               <div style="margin-top:8px">
-                <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px">📰 Related News</div>
+                <div style="font-size:14px;font-weight:700;color:var(--muted);margin-bottom:6px">📰 Related News</div>
                 <div style="display:flex;flex-direction:column;gap:6px;max-height:120px;overflow-y:auto">
                   ${w.news.slice(0, 2).map(n => `
-                    <div style="background:var(--card2);padding:6px 8px;border-radius:6px;font-size:11px;border:1px solid var(--border)">
-                      <a href="${n.url}" target="_blank" style="color:var(--text);text-decoration:none;font-weight:500;display:block;line-height:1.3">
+                    <div style="background:var(--card2);padding:6px 8px;border-radius:6px;font-size:14px;border:1px solid var(--border)">
+                      <a href="${n.url}" target="_blank" style="color:var(--text);text-decoration:none;font-weight:600;display:block;line-height:1.3">
                         ${n.title}
                       </a>
                     </div>
@@ -4201,7 +4402,7 @@ function renderWatchlist() {
 
           <div class="wl-footer" style="justify-content:flex-end">
             <div style="display:flex;gap:6px">
-              <button class="btn-add" onclick="openModal('${w.symbol}')" style="padding:4px 10px;font-size:11px">Analysis</button>
+              <button class="btn-add" onclick="openModal('${w.symbol}')" style="padding:4px 10px;font-size:14px">Analysis</button>
               <button class="btn-remove" onclick="removeFromWl('${w.symbol}')">Remove</button>
             </div>
           </div>
@@ -4224,7 +4425,7 @@ function renderWatchlist() {
         return `<tr data-symbol="${w.symbol}">
           <td>
             <div style="font-weight:700">${w.symbol}</div>
-            <div style="font-size:11px;color:var(--muted)">${w.name||''}</div>
+            <div style="font-size:14px;color:var(--muted)">${w.name||''}</div>
           </td>
           <td><span class="badge ${sigClass}" style="font-weight:700">${sigBadge}</span></td>
           <td><span class="price">₹${w.ltp ? w.ltp.toFixed(2) : '—'}</span></td>
@@ -4235,9 +4436,9 @@ function renderWatchlist() {
           <td>${fmt(w.de_ratio, '', 2)}</td>
           <td>${fmt(w.rsi, '', 0)}</td>
           <td>
-            <button onclick="editQtyModal('${w.symbol}')" title="Edit Quantity & Buy Price" style="padding:4px 8px;font-size:11px;margin-right:4px;border-radius:4px;border:1px solid #6c63ff55;background:linear-gradient(135deg,#6c63ff22,#00d4aa22);color:#a5b4fc;cursor:pointer;font-weight:600">✏️ Qty</button>
-            <button class="btn-add" onclick="openModal('${w.symbol}')" style="padding:4px 8px;font-size:11px;margin-right:4px">Detail</button>
-            <button class="btn-remove" onclick="removeFromWl('${w.symbol}')" style="padding:4px 8px;font-size:11px">✕</button>
+            <button onclick="editQtyModal('${w.symbol}')" title="Edit Quantity & Buy Price" style="padding:4px 8px;font-size:14px;margin-right:4px;border-radius:4px;border:1px solid #6c63ff55;background:linear-gradient(135deg,#6c63ff22,#00d4aa22);color:#a5b4fc;cursor:pointer;font-weight:700">✏️ Qty</button>
+            <button class="btn-add" onclick="openModal('${w.symbol}')" style="padding:4px 8px;font-size:14px;margin-right:4px">Detail</button>
+            <button class="btn-remove" onclick="removeFromWl('${w.symbol}')" style="padding:4px 8px;font-size:14px">✕</button>
           </td>
         </tr>`;
       }).join('');
@@ -4255,16 +4456,16 @@ function openModal(symbol) {
   document.getElementById('modal').innerHTML = `
     <button class="modal-close" onclick="closeModal()">✕</button>
     <h3>${s.symbol}</h3>
-    <div style="color:var(--muted);font-size:13px;margin-bottom:4px">${s.name||''} · ${s.sector||''}</div>
-    <div style="font-size:22px;font-weight:700;margin:8px 0">₹${s.ltp.toFixed(2)}</div>
+    <div style="color:var(--muted);font-size:16px;margin-bottom:4px">${s.name||''} · ${s.sector||''}</div>
+    <div style="font-size:25px;font-weight:700;margin:8px 0">₹${s.ltp.toFixed(2)}</div>
 
     <div style="margin:12px 0">
       <div style="display:flex;gap:12px;margin-bottom:8px">
         ${['Total Score','Strength','Value','Momentum'].map((l,i)=>{
           const v=[s.total_score,s.strength,s.value,s.momentum][i];
           return `<div style="flex:1;background:var(--card2);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:20px;font-weight:700;color:${scoreColor(v)}">${v.toFixed(0)}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px">${l}</div>
+            <div style="font-size:23px;font-weight:700;color:${scoreColor(v)}">${v.toFixed(0)}</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:2px">${l}</div>
           </div>`;
         }).join('')}
       </div>
@@ -4290,18 +4491,18 @@ function openModal(symbol) {
 
     ${(s.corporate_actions && s.corporate_actions.length > 0) ? `
     <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
-      <h4 style="font-size:14px;font-weight:600;margin-bottom:10px;color:var(--accent)">🎁 Corporate Actions</h4>
+      <h4 style="font-size:17px;font-weight:700;margin-bottom:10px;color:var(--accent)">🎁 Corporate Actions</h4>
       <div style="display:flex;flex-direction:column;gap:8px;max-height:180px;overflow-y:auto;padding-right:4px">
         ${s.corporate_actions.map(ca => `
           <div style="background:var(--card2);padding:10px;border-radius:8px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
             <div>
-              <div style="font-size:13px;font-weight:600;color:var(--white)">${ca.subject || ca.purpose || 'Corporate Action'}</div>
-              <div style="font-size:11px;color:var(--muted);margin-top:2px">
-                Ex-Date: <span style="color:var(--accent2);font-weight:600">${ca.ex_date || 'N/A'}</span>
+              <div style="font-size:16px;font-weight:700;color:var(--white)">${ca.subject || ca.purpose || 'Corporate Action'}</div>
+              <div style="font-size:14px;color:var(--muted);margin-top:2px">
+                Ex-Date: <span style="color:var(--accent2);font-weight:700">${ca.ex_date || 'N/A'}</span>
                 ${ca.record_date ? ` · Record Date: ${ca.record_date}` : ''}
               </div>
             </div>
-            <span style="font-size:10px;padding:3px 8px;border-radius:12px;font-weight:700;background:rgba(255,193,7,0.15);color:#ffc107;border:1px solid rgba(255,193,7,0.3)">
+            <span style="font-size:13px;padding:3px 8px;border-radius:12px;font-weight:700;background:rgba(255,193,7,0.15);color:#ffc107;border:1px solid rgba(255,193,7,0.3)">
               ${ca.type || 'ACTION'}
             </span>
           </div>
@@ -4312,18 +4513,18 @@ function openModal(symbol) {
 
     ${(s.news && s.news.length > 0) ? `
     <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
-      <h4 style="font-size:14px;font-weight:600;margin-bottom:10px;color:var(--accent2)">📰 Related News</h4>
+      <h4 style="font-size:17px;font-weight:700;margin-bottom:10px;color:var(--accent2)">📰 Related News</h4>
       <div style="display:flex;flex-direction:column;gap:10px;max-height:250px;overflow-y:auto;padding-right:4px">
         ${s.news.map(n => {
           const pubTime = n.pubDate ? new Date(n.pubDate).toLocaleDateString() : '';
           const provider = n.provider ? ` · ${n.provider}` : '';
-          const summary = n.summary ? `<p style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4">${n.summary}</p>` : '';
+          const summary = n.summary ? `<p style="font-size:15px;color:var(--muted);margin-top:4px;line-height:1.4">${n.summary}</p>` : '';
           return `
             <div style="background:var(--card2);padding:10px;border-radius:8px;border:1px solid var(--border)">
-              <a href="${n.url}" target="_blank" style="color:var(--white);text-decoration:none;font-weight:500;font-size:13px;display:block;line-height:1.4" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--white)'">
+              <a href="${n.url}" target="_blank" style="color:var(--white);text-decoration:none;font-weight:600;font-size:16px;display:block;line-height:1.4" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--white)'">
                 ${n.title}
               </a>
-              <div style="font-size:11px;color:var(--muted);margin-top:4px">
+              <div style="font-size:14px;color:var(--muted);margin-top:4px">
                 ${pubTime}${provider}
               </div>
               ${summary}
@@ -4334,7 +4535,7 @@ function openModal(symbol) {
     </div>
     ` : `
     <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
-      <p style="color:var(--muted);font-size:12px">No recent news found for this stock.</p>
+      <p style="color:var(--muted);font-size:15px">No recent news found for this stock.</p>
     </div>
     `}
 
@@ -4565,7 +4766,7 @@ function renderLtPortfolioSummary(summary) {
             <td style="padding:8px">₹${h.market_value.toFixed(2)}</td>
             <td style="padding:8px;font-weight:700;color:${pnlCls}">${h.unrealized_pnl >= 0 ? '+' : ''}₹${h.unrealized_pnl.toFixed(2)} (${h.unrealized_pnl_pct >= 0 ? '+' : ''}${h.unrealized_pnl_pct.toFixed(1)}%)</td>
             <td style="padding:8px">
-              <button onclick="openLtSellModal('${h.symbol}', ${h.qty}, ${h.avg_price}, ${h.live_price})" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#ef4444;font-weight:700;font-size:11px;padding:3px 8px;border-radius:6px;cursor:pointer">🔴 Sell</button>
+              <button onclick="openLtSellModal('${h.symbol}', ${h.qty}, ${h.avg_price}, ${h.live_price})" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#ef4444;font-weight:700;font-size:14px;padding:3px 8px;border-radius:6px;cursor:pointer">🔴 Sell</button>
             </td>
           </tr>
         `;
