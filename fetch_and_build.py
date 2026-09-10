@@ -351,6 +351,36 @@ def hot_symbols_to_refresh() -> list:
     return [s for s, _ in ranked[:LTP_MAX_BATCH]]
 
 
+LTP_POOL = None
+LTP_POOL_LOCK = threading.Lock()
+
+
+def ltp_worker_count() -> int:
+    """Warmer concurrency, sized to the host rather than fixed at 12.
+
+    Overridable with SCREENER_LTP_WORKERS. Four per core keeps a network-bound
+    pool busy without leaving the request handler fighting the warmer for the
+    GIL on a one-vCPU box.
+    """
+    env = os.environ.get("SCREENER_LTP_WORKERS")
+    if env and env.isdigit() and int(env) > 0:
+        return min(16, int(env))
+    return max(2, min(12, (os.cpu_count() or 2) * 4))
+
+
+def _ltp_pool() -> "concurrent.futures.ThreadPoolExecutor":
+    """The warmer's long-lived thread pool, created on first use."""
+    global LTP_POOL
+    if LTP_POOL is None:
+        with LTP_POOL_LOCK:
+            if LTP_POOL is None:
+                n = ltp_worker_count()
+                LTP_POOL = concurrent.futures.ThreadPoolExecutor(
+                    max_workers=n, thread_name_prefix="ltp-warm")
+                log(f"  LTP warmer pool: {n} workers ({os.cpu_count()} cores visible)")
+    return LTP_POOL
+
+
 def background_ltp_warmer():
     """Continuously refresh cached prices for the symbols the UI is polling.
 
@@ -373,10 +403,20 @@ def background_ltp_warmer():
             if not symbols:
                 continue
 
-            # A1 Fix: Fast parallel quote-only fetcher (10-12 workers)
-            workers = min(12, max(2, len(symbols)))
-            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
-                prices_res = list(ex.map(lambda s: (s, fetch_live_price_only(s, bypass_cache=True)), symbols))
+            # A1 Fix: Fast parallel quote-only fetcher.
+            #
+            # The pool is created once and reused. It used to be built and torn
+            # down inside every cycle -- twelve OS threads spawned and joined
+            # every five seconds, all day, which is pure overhead on top of the
+            # actual fetching.
+            #
+            # Worker count follows the host. TLS handshakes and JSON parsing hold
+            # the GIL even though the sockets do not, so twelve of them at once
+            # is fine on the 12-core laptop and starves the HTTP handler on
+            # Render's single shared vCPU -- where this process also has to stay
+            # responsive to the phone.
+            ex = _ltp_pool()
+            prices_res = list(ex.map(lambda s: (s, fetch_live_price_only(s, bypass_cache=True)), symbols))
 
             now = time.time()
             updated_any = False
@@ -6058,7 +6098,24 @@ function updateDomPricesInPlace(changedMap) {
   }
 }
 
+// Guards against overlapping polls. The interval is 10s by default but the
+// fetch is allowed 20s before it aborts, so a slow stretch could put two
+// requests in flight for the same symbols — each one making the next slower.
+// A tick that arrives while one is running is dropped; the following tick picks
+// up the newer prices anyway, so nothing is lost by skipping.
+let ltpFetchInFlight = false;
+
 async function refreshLiveLTP(manual = false) {
+  if (ltpFetchInFlight && !manual) return;
+  ltpFetchInFlight = true;
+  try {
+    await _refreshLiveLTP(manual);
+  } finally {
+    ltpFetchInFlight = false;
+  }
+}
+
+async function _refreshLiveLTP(manual = false) {
   const dot = document.getElementById('ltpStatusDot');
   const txt = document.getElementById('ltpStatusText');
   if (dot) dot.classList.add('updating');
@@ -10035,6 +10092,37 @@ def sync_html_lt_watchlist():
         log(f"⚠ Could not sync LT_WATCHLIST in HTML: {e}")
 
 
+_PAGE_CACHE: dict = {"stat": None, "bytes": None}
+_PAGE_CACHE_LOCK = threading.Lock()
+
+
+def _cached_page_bytes():
+    """screener.html from memory, refreshed when the file changes on disk.
+
+    Keyed on (mtime, size) so a rebuild is picked up on the next request without
+    a restart, while repeat requests cost no disk I/O at all.
+    """
+    try:
+        st = os.stat(OUT_HTML)
+        key = (st.st_mtime_ns, st.st_size)
+    except Exception:
+        return None
+    cached = _PAGE_CACHE
+    if cached["stat"] == key and cached["bytes"]:
+        return cached["bytes"]
+    with _PAGE_CACHE_LOCK:
+        if _PAGE_CACHE["stat"] == key and _PAGE_CACHE["bytes"]:
+            return _PAGE_CACHE["bytes"]
+        try:
+            with open(OUT_HTML, 'rb') as f:
+                data = f.read()
+        except Exception:
+            return None
+        _PAGE_CACHE["stat"] = key
+        _PAGE_CACHE["bytes"] = data
+        return data
+
+
 class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
     def handle_ltp_request(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -10270,13 +10358,10 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path in ('/', '/index.html'):
-            content = None
-            if os.path.exists(OUT_HTML):
-                try:
-                    with open(OUT_HTML, 'rb') as f:
-                        content = f.read()
-                except Exception:
-                    content = None
+            # Served from memory, re-read only when the file's mtime/size change.
+            # This used to read the whole 217 KB page off disk on every single
+            # request; the page is also the thing the phone reloads most.
+            content = _cached_page_bytes()
 
             if not content or len(content) < 1000:
                 time.sleep(0.3)

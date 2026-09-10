@@ -1957,7 +1957,24 @@ function updateDomPricesInPlace(changedMap) {
   }
 }
 
+// Guards against overlapping polls. The interval is 10s by default but the
+// fetch is allowed 20s before it aborts, so a slow stretch could put two
+// requests in flight for the same symbols — each one making the next slower.
+// A tick that arrives while one is running is dropped; the following tick picks
+// up the newer prices anyway, so nothing is lost by skipping.
+let ltpFetchInFlight = false;
+
 async function refreshLiveLTP(manual = false) {
+  if (ltpFetchInFlight && !manual) return;
+  ltpFetchInFlight = true;
+  try {
+    await _refreshLiveLTP(manual);
+  } finally {
+    ltpFetchInFlight = false;
+  }
+}
+
+async function _refreshLiveLTP(manual = false) {
   const dot = document.getElementById('ltpStatusDot');
   const txt = document.getElementById('ltpStatusText');
   if (dot) dot.classList.add('updating');
