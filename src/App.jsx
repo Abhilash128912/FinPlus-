@@ -541,13 +541,14 @@ export default function App() {
       const symQueryWithNS = heldSymbols.map(s => s.endsWith('.NS') ? s : `${s}.NS`).join(',');
       const symQueryPlain = heldSymbols.join(',');
       
+      // This app gets its prices from its own backend only. It used to fall back
+      // to the stock screener's /api/ltp (localhost:5000 and the screener's
+      // Render service), which made a P&L page that could not show a price until
+      // a completely separate application was running. The two are independent.
       const endpoints = [
-        `http://localhost:5000/api/ltp?ticker=${encodeURIComponent(symQueryWithNS)}`,
-        `http://127.0.0.1:5000/api/ltp?ticker=${encodeURIComponent(symQueryWithNS)}`,
         `http://localhost:8000/api/investment/yfinance-prices?symbols=${encodeURIComponent(symQueryPlain)}`,
         `http://127.0.0.1:8000/api/investment/yfinance-prices?symbols=${encodeURIComponent(symQueryPlain)}`,
-        `https://finplus.onrender.com/api/investment/yfinance-prices?symbols=${encodeURIComponent(symQueryPlain)}`,
-        `https://finplus-g0b5.onrender.com/api/ltp?ticker=${encodeURIComponent(symQueryWithNS)}`
+        `https://finplus.onrender.com/api/investment/yfinance-prices?symbols=${encodeURIComponent(symQueryPlain)}`
       ];
 
       for (const ep of endpoints) {

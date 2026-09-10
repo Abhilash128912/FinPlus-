@@ -82,12 +82,10 @@ export function useRiskDesk({ externalLtps = {}, positions = [] } = {}) {
       if (inFlight.current) return;
       inFlight.current = true;
       const plain = symbols.join(',');
-      const withNs = symbols.map(s => (s.includes('=') || s.startsWith('^') || s.endsWith('.NS') ? s : `${s}.NS`)).join(',');
       const endpoints = [
         `http://localhost:8000/api/investment/yfinance-prices?symbols=${encodeURIComponent(plain)}`,
         `http://127.0.0.1:8000/api/investment/yfinance-prices?symbols=${encodeURIComponent(plain)}`,
-        `https://finplus.onrender.com/api/investment/yfinance-prices?symbols=${encodeURIComponent(plain)}`,
-        `http://localhost:5000/api/ltp?ticker=${encodeURIComponent(withNs)}`
+        `https://finplus.onrender.com/api/investment/yfinance-prices?symbols=${encodeURIComponent(plain)}`
       ];
       for (const ep of endpoints) {
         try {
