@@ -79,7 +79,7 @@ const optCharges = estimateCharges({
   entryPrice: 100, exitPrice: 90, quantity: 2, lotSize: 75, date: '2026-09-04'
 });
 ok('option brokerage flat 20 x 2 legs', near(optCharges.breakdown.brokerage, 40), String(optCharges.breakdown.brokerage));
-ok('option lot size multiplies turnover', near(optCharges.breakdown.stt, 90 * 150 * 0.001), String(optCharges.breakdown.stt));
+ok('option lot size multiplies turnover', near(optCharges.breakdown.stt, 90 * 150 * 0.0015), String(optCharges.breakdown.stt));
 
 const zerDeliv = estimateCharges({
   profiles: SEED_CHARGE_PROFILES, broker: 'ZERODHA', product: 'EQ_DELIVERY',

@@ -72,6 +72,7 @@ export default function RiskSetup({ desk, onReset }) {
     setF(p => ({
       ...p,
       ...BRIEF_DEFAULTS,
+      accrualStartDate: '2026-09-04',
       allocations: { ...BRIEF_DEFAULTS.allocations },
       segmentSL: { ...BRIEF_DEFAULTS.segmentSL },
       segmentBroker: { ...BRIEF_DEFAULTS.segmentBroker },

@@ -61,40 +61,41 @@ ok('day 7: Natural Gas still locked', at('2026-09-13').byId.NATURAL_GAS.unlocked
 
 console.log('\n=== 4. WIN keeps the counter ===');
 const afterWin = at('2026-09-14', [win('INTRADAY', '2026-09-10', 500)]);
-ok('win does NOT reset counter', afterWin.byId.INTRADAY.counter === 200, String(afterWin.byId.INTRADAY.counter));
+ok('win adds profit to counter (200 + 500 = 700)', afterWin.byId.INTRADAY.counter === 700, String(afterWin.byId.INTRADAY.counter));
 ok('win keeps it unlocked', afterWin.byId.INTRADAY.unlocked === true);
-ok('win does not touch capital', afterWin.byId.INTRADAY.capital === 200, String(afterWin.byId.INTRADAY.capital));
+ok('win adds profit to capital', afterWin.byId.INTRADAY.capital === 700, String(afterWin.byId.INTRADAY.capital));
 ok('win counted in record', afterWin.byId.INTRADAY.winCount === 1 && afterWin.byId.INTRADAY.lossCount === 0);
-ok('describeOutcome win = RETAINED', describeOutcome({ segment: 'INTRADAY', _pnl: { net: 500 } }, cfg).counterEffect === 'RETAINED');
+ok('describeOutcome win = PROFIT_ADDED', describeOutcome({ segment: 'INTRADAY', _pnl: { net: 500 } }, cfg).counterEffect === 'PROFIT_ADDED');
 
-console.log('\n=== 5. LOSS resets counter + hits capital ===');
+console.log('\n=== 5. LOSS deducts from accumulated capital (loss + charges) ===');
 const afterLoss = at('2026-09-14', [loss('INTRADAY', '2026-09-10', 120)]);
-// lost on day 4; counter restarts day 5..8 = 4 days x 25 = 100
-ok('counter restarts day AFTER the loss', afterLoss.byId.INTRADAY.counter === 100, String(afterLoss.byId.INTRADAY.counter));
-ok('loss day itself credits nothing', at('2026-09-10', [loss('INTRADAY', '2026-09-10', 120)]).byId.INTRADAY.counter === 0);
+// accrued 200 on day 8; loss 120 deducted from accumulated capital => counter = 80
+ok('counter has loss deducted from accumulated capital', afterLoss.byId.INTRADAY.counter === 80, String(afterLoss.byId.INTRADAY.counter));
+ok('loss day deducts from accrued on that day (100 - 120 => 0)', at('2026-09-10', [loss('INTRADAY', '2026-09-10', 120)]).byId.INTRADAY.counter === 0);
 ok('capital = accrued 200 - loss 120 = 80', afterLoss.byId.INTRADAY.capital === 80, String(afterLoss.byId.INTRADAY.capital));
 ok('accrued total unaffected by loss', afterLoss.byId.INTRADAY.totalAccrued === 200);
 ok('loss booked to segment', afterLoss.byId.INTRADAY.lossTotal === 120);
 ok('lastLossDate recorded', afterLoss.byId.INTRADAY.lastLossDate === '2026-09-10');
-ok('describeOutcome loss = RESET', describeOutcome({ segment: 'INTRADAY', _pnl: { net: -120 } }, cfg).counterEffect === 'RESET');
+ok('describeOutcome loss = DEDUCTED', describeOutcome({ segment: 'INTRADAY', _pnl: { net: -120 } }, cfg).counterEffect === 'DEDUCTED');
 ok('capital effect is the ACTUAL net loss', describeOutcome({ segment: 'INTRADAY', _pnl: { net: -120 } }, cfg).capitalEffect === -120);
 
 const twoLosses = at('2026-09-20', [loss('INTRADAY', '2026-09-10', 100), loss('INTRADAY', '2026-09-16', 90)]);
-ok('most recent loss drives the reset', twoLosses.byId.INTRADAY.lastLossDate === '2026-09-16');
-ok('counter = 4 days since 16th = 100', twoLosses.byId.INTRADAY.counter === 100, String(twoLosses.byId.INTRADAY.counter));
+ok('both losses deduct from accumulated capital (350 - 190 = 160)', twoLosses.byId.INTRADAY.counter === 160, String(twoLosses.byId.INTRADAY.counter));
 ok('both losses hit capital (350-190=160)', twoLosses.byId.INTRADAY.capital === 160, String(twoLosses.byId.INTRADAY.capital));
 
 console.log('\n=== 6. Long Term is exempt ===');
 const ltLoss = at('2026-09-20', [loss('LONG_TERM', '2026-09-12', 400)]);
 ok('LT counter NOT reset by a loss', ltLoss.byId.LONG_TERM.counter === 700, String(ltLoss.byId.LONG_TERM.counter));
-ok('LT capital NOT reduced', ltLoss.byId.LONG_TERM.capital === 700, String(ltLoss.byId.LONG_TERM.capital));
+ok('LT capital NOT reduced by trade loss', ltLoss.byId.LONG_TERM.capital === 700, String(ltLoss.byId.LONG_TERM.capital));
 ok('LT booked losses = 0', ltLoss.byId.LONG_TERM.lossTotal === 0);
 ok('LT loss still visible as unbooked', ltLoss.byId.LONG_TERM.unbookedLossTotal === 400);
 ok('LT lastLossDate stays null', ltLoss.byId.LONG_TERM.lastLossDate === null);
 ok('LT booksLosses flag false', ltLoss.byId.LONG_TERM.booksLosses === false);
 ok('describeOutcome LT loss exempt', describeOutcome({ segment: 'LONG_TERM', _pnl: { net: -400 } }, cfg).counterEffect === 'RETAINED');
-// contrast: same loss in a booking segment
-ok('non-LT segment DOES reset', at('2026-09-20', [loss('SWING', '2026-09-12', 400)]).byId.SWING.lastLossDate === '2026-09-12');
+// contrast: LT with positions keeps invested capital negative
+const ltWithPos = buildAccrualState({ trades: [], config: cfg, asOf: '2026-09-20', positions: [{ segment: 'LT', shares: 2, buyPrice: 126.84 }] });
+ok('LT invested capital is negative', ltWithPos.byId.LONG_TERM.capital === -253.68, String(ltWithPos.byId.LONG_TERM.capital));
+ok('LT investedAmount exposed', ltWithPos.byId.LONG_TERM.investedAmount === 253.68);
 
 console.log('\n=== 7. No monthly reset — accrual is continuous ===');
 const oct = at('2026-10-07');
@@ -140,12 +141,12 @@ const gEarly = checkAccrualGate({ laneId: 'INTRADAY', plannedTotalRisk: 10, accr
 ok('before start date => blocked', !gEarly.ok && gEarly.reasons.some(r => r.code === 'ACCRUAL_NOT_STARTED'));
 
 console.log('\n=== 10. Loss locks you out for exactly the right number of days ===');
-const lossDay = '2026-09-20';
+const lossDay = '2026-09-10';
 const relock = at(lossDay, [loss('INTRADAY', lossDay, 100)]);
-ok('day of loss: counter 0, locked', relock.byId.INTRADAY.counter === 0 && relock.byId.INTRADAY.unlocked === false);
-ok('needs 4 days again', relock.byId.INTRADAY.daysToUnlock === 4, String(relock.byId.INTRADAY.daysToUnlock));
-const relock4 = at('2026-09-24', [loss('INTRADAY', lossDay, 100)]);
-ok('4 days later: unlocked again', relock4.byId.INTRADAY.unlocked === true && relock4.byId.INTRADAY.counter === 100);
+ok('loss consumes full accrued: counter 0, locked', relock.byId.INTRADAY.counter === 0 && relock.byId.INTRADAY.unlocked === false);
+ok('needs 4 days again to accrue 100', relock.byId.INTRADAY.daysToUnlock === 4, String(relock.byId.INTRADAY.daysToUnlock));
+const relock4 = at('2026-09-14', [loss('INTRADAY', lossDay, 100)]);
+ok('4 days later: unlocked again with 100', relock4.byId.INTRADAY.unlocked === true && relock4.byId.INTRADAY.counter === 100);
 
 console.log('\n=== 11. Capital can go negative and is flagged ===');
 const deep = at('2026-09-10', [loss('INTRADAY', '2026-09-09', 500)]);
@@ -254,10 +255,12 @@ ok('max position = counter / 5%', near(sw.maxPositionValue, sw.counter / 0.05, 0
 
 const swDay3 = L('2026-09-08').byId.SWING;
 ok('bigger counter allows a bigger position', swDay3.maxPositionValue > sw.maxPositionValue);
-ok('Swing gate passes within the counter',
-  checkAccrualGate({ laneId: 'SWING', plannedTotalRisk: sw.counter - 1, accrualState: L('2026-09-04'), config: liveCfg }).ok);
+ok('Swing gate passes on day 3 when unlocked',
+  checkAccrualGate({ laneId: 'SWING', plannedTotalRisk: 50, accrualState: L('2026-09-08'), config: liveCfg }).ok);
+ok('Swing gate blocks on day 1 while locked',
+  !checkAccrualGate({ laneId: 'SWING', plannedTotalRisk: sw.counter - 1, accrualState: L('2026-09-04'), config: liveCfg }).ok);
 ok('Swing gate blocks beyond the counter',
-  !checkAccrualGate({ laneId: 'SWING', plannedTotalRisk: sw.counter + 500, accrualState: L('2026-09-04'), config: liveCfg }).ok);
+  !checkAccrualGate({ laneId: 'SWING', plannedTotalRisk: swDay3.counter + 500, accrualState: L('2026-09-08'), config: liveCfg }).ok);
 ok('Swing never reports NO_THRESHOLD',
   !checkAccrualGate({ laneId: 'SWING', plannedTotalRisk: 10, accrualState: L('2026-09-04'), config: liveCfg })
     .reasons.some(r => r.code === 'NO_THRESHOLD'));
@@ -284,10 +287,10 @@ ok('segment is unlocked before the loss', beforeIt.unlocked === true);
 ok('no lastLossDate before the loss', beforeIt.lastLossDate === null);
 ok('booked losses are zero before the loss', beforeIt.lossTotal === 0);
 
-ok('counter resets on the loss day', onIt.counter === 0, String(onIt.counter));
+ok('counter has loss deducted on the loss day', near(onIt.counter, 136.36 - 118.40), String(onIt.counter));
 ok('capital drops on the loss day', near(onIt.capital, 136.36 - 118.40), String(onIt.capital));
 ok('loss is booked from that day', near(onIt.lossTotal, 118.40));
-ok('accrual restarts the next day', near(afterIt.counter, 34.09), String(afterIt.counter));
+ok('accrual continues next day with loss deducted', near(afterIt.counter, 170.45 - 118.40), String(afterIt.counter));
 
 console.log('');
 console.log('=== 17. Swing capped at the Intraday figure ===');

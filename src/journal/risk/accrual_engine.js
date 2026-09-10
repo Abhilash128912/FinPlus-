@@ -158,7 +158,7 @@ const isClosedTrade = t =>
  * @param {object} config
  * @param {string} asOf      ISO date to evaluate at (defaults to today)
  */
-export function buildAccrualState({ trades = [], config = DEFAULT_CONFIG, asOf = null }) {
+export function buildAccrualState({ trades = [], config = DEFAULT_CONFIG, asOf = null, positions = [] }) {
   const today = asOf || todayIso();
   const startDate = String(config?.accrualStartDate || '').slice(0, 10);
   const basis = config?.accrualBasis === 'WEEKDAYS' ? 'WEEKDAYS' : 'CALENDAR';
@@ -195,8 +195,10 @@ export function buildAccrualState({ trades = [], config = DEFAULT_CONFIG, asOf =
       .sort((a, b) =>
         String(a.exit_date || a.entry_date).localeCompare(String(b.exit_date || b.entry_date))
       );
+    const winning = laneTrades
+      .filter(t => Number(t?._pnl?.net ?? t?.net_pnl ?? 0) > 0);
 
-    // LT never resets and never books, so its loss list is informational only.
+    // LT never resets and never books losses, cash is in assets.
     const resettingLosses = books ? losing : [];
     const lastLoss = resettingLosses[resettingLosses.length - 1] || null;
     const lastLossDate = lastLoss ? String(lastLoss.exit_date || lastLoss.entry_date).slice(0, 10) : null;
@@ -207,21 +209,36 @@ export function buildAccrualState({ trades = [], config = DEFAULT_CONFIG, asOf =
     const lossTotal = r2(
       resettingLosses.reduce((s, t) => s + Math.abs(Number(t?._pnl?.net ?? t?.net_pnl ?? 0)), 0)
     );
+    const gainTotal = r2(
+      books ? winning.reduce((s, t) => s + Number(t?._pnl?.net ?? t?.net_pnl ?? 0), 0) : 0
+    );
     // Losses recorded but deliberately NOT charged to capital (Long Term).
     const unbookedLossTotal = books
       ? 0
       : r2(losing.reduce((s, t) => s + Math.abs(Number(t?._pnl?.net ?? t?.net_pnl ?? 0)), 0));
 
     const openingDeduction = openingDeductionFor(laneId, config);
-    const capital = r2(totalAccrued - lossTotal - openingDeduction);
 
-    // Counter restarts the day AFTER a booked loss; otherwise runs from day one.
-    const counterDays = !startedYet
-      ? 0
-      : lastLossDate
-        ? accrualDays(lastLossDate, today, false, basis)
-        : accrualDays(startDate, today, true, basis);
-    const counter = r2(rate * counterDays);
+    // For Long Term: cash is in assets. Show invested capital as negative amount.
+    const segPositions = (positions || []).filter(p => p && (p.segment === 'LT' || p.segment === 'LONG_TERM'));
+    const ltInvested = laneId === 'LONG_TERM'
+      ? r2(segPositions.reduce((s, p) => s + (Number(p.shares) || 0) * (Number(p.buyPrice) || 0), 0))
+      : 0;
+
+    // Capital:
+    // For LT: invested capital is negative (-ltInvested) representing funds deployed into assets;
+    // For trading lanes: total accrued minus actual net losses (loss + charges) plus gains.
+    const capital = laneId === 'LONG_TERM' && ltInvested > 0
+      ? r2(-ltInvested)
+      : r2(totalAccrued - lossTotal + gainTotal - openingDeduction);
+
+    // Available capital at hand (counter):
+    // For LT: cash is in assets, old accrual logic is kept.
+    // For trading lanes: outflows including charges are properly deducted from accumulated capital!
+    const counter = laneId === 'LONG_TERM'
+      ? totalAccrued
+      : r2(Math.max(0, totalAccrued - lossTotal + gainTotal - openingDeduction));
+    const counterDays = totalDays;
 
     const unlocked = threshold === null
       ? (slPercent ? counter > 0.001 : null)  // uncapped percentage lane: any accrual works
@@ -235,7 +252,7 @@ export function buildAccrualState({ trades = [], config = DEFAULT_CONFIG, asOf =
       ? r2(Math.min(cappedRisk || Infinity, counter) / (slPercent / 100))
       : null;
 
-    const wins = laneTrades.filter(t => Number(t?._pnl?.net ?? t?.net_pnl ?? 0) > 0).length;
+    const wins = winning.length;
 
     return {
       id: laneId,
@@ -257,8 +274,10 @@ export function buildAccrualState({ trades = [], config = DEFAULT_CONFIG, asOf =
       counter,
       counterDays,
       capital,
+      investedAmount: ltInvested,
       openingDeduction,
       lossTotal,
+      gainTotal,
       unbookedLossTotal,
       lastLossDate,
       unlocked,
@@ -314,22 +333,20 @@ export function checkAccrualGate({ laneId, plannedTotalRisk, accrualState, confi
       message: `Accrual has not started yet — it begins ${lane.startDate || '(no start date set)'}.`
     });
   }
-  if (lane.slPercent) {
-    if (!(lane.counter > 0.001)) {
-      reasons.push({
-        code: 'COUNTER_EMPTY',
-        message: `${lane.label} has nothing accrued yet.`
-      });
-    }
-  } else if (lane.threshold === null) {
+  if (lane.threshold !== null && !lane.unlocked) {
+    reasons.push({
+      code: 'COUNTER_LOCKED',
+      message: `${lane.label} counter is ₹${lane.counter.toFixed(2)} of the ₹${lane.threshold.toFixed(2)} needed — ₹${lane.shortfall.toFixed(2)} short, about ${lane.daysToUnlock} more day${lane.daysToUnlock === 1 ? '' : 's'}.`
+    });
+  } else if (lane.threshold === null && !lane.slPercent) {
     reasons.push({
       code: 'NO_THRESHOLD',
       message: `${lane.label} has no stop-loss set, so there is nothing to unlock against. Set it on the Setup screen.`
     });
-  } else if (!lane.unlocked) {
+  } else if (lane.slPercent && !(lane.counter > 0.001)) {
     reasons.push({
-      code: 'COUNTER_LOCKED',
-      message: `${lane.label} counter is ₹${lane.counter.toFixed(2)} of the ₹${lane.threshold.toFixed(2)} needed — ₹${lane.shortfall.toFixed(2)} short, about ${lane.daysToUnlock} more day${lane.daysToUnlock === 1 ? '' : 's'}.`
+      code: 'COUNTER_EMPTY',
+      message: `${lane.label} has nothing accrued yet.`
     });
   }
 
@@ -352,7 +369,7 @@ export function describeOutcome(trade, config = DEFAULT_CONFIG) {
   const net = Number(trade?._pnl?.net ?? trade?.net_pnl ?? 0);
   const books = booksLosses(trade?.segment, config);
   if (net > 0) {
-    return { kind: 'WIN', counterEffect: 'RETAINED', capitalEffect: 0, note: 'Counter retained — risk was not spent.' };
+    return { kind: 'WIN', counterEffect: 'PROFIT_ADDED', capitalEffect: r2(net), note: `Profit of ₹${net.toFixed(2)} added to accumulated capital.` };
   }
   if (net < 0) {
     if (!books) {
@@ -360,14 +377,14 @@ export function describeOutcome(trade, config = DEFAULT_CONFIG) {
         kind: 'LOSS',
         counterEffect: 'RETAINED',
         capitalEffect: 0,
-        note: 'Long Term is exempt — counter kept, no capital deduction, not booked against the segment.'
+        note: 'Long Term is exempt — cash is in assets, counter kept, no capital deduction.'
       };
     }
     return {
       kind: 'LOSS',
-      counterEffect: 'RESET',
+      counterEffect: 'DEDUCTED',
       capitalEffect: r2(net),
-      note: `Counter reset to zero; ₹${Math.abs(net).toFixed(2)} deducted from segment capital.`
+      note: `₹${Math.abs(net).toFixed(2)} (loss + charges) deducted from accumulated capital.`
     };
   }
   return { kind: 'FLAT', counterEffect: 'RETAINED', capitalEffect: 0, note: 'Break-even — counter retained.' };

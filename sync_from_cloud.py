@@ -7,8 +7,25 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PORTFOLIO_FILE = os.path.join(BASE_DIR, "finplus_portfolio_backup.json")
 JOURNAL_FILE = os.path.join(BASE_DIR, "finplus_journal_data.json")
 
+API_KEY_FILE = os.path.join(BASE_DIR, "finplus_api_key.txt")
+
+def get_api_key():
+    key = os.environ.get("FINPLUS_API_KEY", "").strip()
+    if not key and os.path.exists(API_KEY_FILE):
+        try:
+            with open(API_KEY_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip().startswith("FINPLUS_API_KEY"):
+                        key = line.split("=")[1].strip()
+                        break
+        except Exception:
+            pass
+    return key
+
 def sync():
     print("[1/2] Synchronizing with Render Cloud (https://finplus.onrender.com)...")
+    api_key = get_api_key()
+    headers = {"X-Finplus-Key": api_key} if api_key else {}
     
     # Load current local portfolio backup if present
     master_data = None
@@ -22,7 +39,7 @@ def sync():
     # Try fetching from Render Cloud
     cloud_data = None
     try:
-        res = requests.get("https://finplus.onrender.com/api/backup/load", timeout=8)
+        res = requests.get("https://finplus.onrender.com/api/backup/load", headers=headers, timeout=8)
         if res.status_code == 200:
             resp_json = res.json()
             if resp_json and resp_json.get("status") == "success" and resp_json.get("data"):
@@ -33,8 +50,8 @@ def sync():
     local_saved_at = int(master_data.get("savedAt", 0)) if master_data else 0
     cloud_saved_at = int(cloud_data.get("savedAt", 0)) if cloud_data else 0
 
-    local_is_fresh = bool(master_data and (master_data.get("isFreshStart") or master_data.get("savedAt", 0) >= 1788500000000))
-    cloud_is_fresh = bool(cloud_data and (cloud_data.get("isFreshStart") or cloud_data.get("savedAt", 0) >= 1788500000000))
+    local_is_fresh = bool(master_data and master_data.get("isFreshStart"))
+    cloud_is_fresh = bool(cloud_data and cloud_data.get("isFreshStart"))
 
     if cloud_data and not local_is_fresh:
         if not master_data or cloud_saved_at >= local_saved_at:
@@ -118,7 +135,7 @@ def sync():
             cloud_payload["force_reset"] = True
             cloud_payload["reset"] = True
             cloud_payload["isFreshStart"] = True
-        requests.post("https://finplus.onrender.com/api/backup/save", json=cloud_payload, timeout=10)
+        requests.post("https://finplus.onrender.com/api/backup/save", json=cloud_payload, headers=headers, timeout=10)
         print(" -> Render Cloud dataset successfully synced.")
     except Exception as e:
         print(f" -> Cloud sync notice: {e}")

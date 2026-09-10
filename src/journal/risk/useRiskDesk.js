@@ -26,7 +26,7 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function useRiskDesk({ externalLtps = {} } = {}) {
+export function useRiskDesk({ externalLtps = {}, positions = [] } = {}) {
   const [store, setStore] = useState(() => loadRiskStore());
   const [monthKey, setMonthKey] = useState(() => {
     const initial = loadRiskStore();
@@ -135,8 +135,8 @@ export function useRiskDesk({ externalLtps = {} } = {}) {
   );
 
   const accrualState = useMemo(
-    () => buildAccrualState({ trades: allTrades, config }),
-    [allTrades, config]
+    () => buildAccrualState({ trades: allTrades, config, positions }),
+    [allTrades, config, positions]
   );
 
   const month = useMemo(

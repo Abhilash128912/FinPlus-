@@ -21,3 +21,11 @@ finplus_api_key*
 .env
 .env.*
 local.properties
+
+# Local pre-edit backups — full copies of the source tree / files, made by
+# tooling before a risky edit. Useful on disk, noise in the repo.
+_backup_src_*/
+*.bak_*
+
+# Local assistant workspace (this repo is public)
+.claude/

@@ -9,8 +9,8 @@ echo.
 
 cd /d "%~dp0"
 
-echo  [1/4] Terminating stale background processes on ports 3000 ^& 8000...
-
+echo  [1/5] Terminating stale background processes on ports 3000 ^& 8000...
+ 
 :: Kill any stale process on port 3000 (Vite)
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":3000" ^| findstr "LISTENING"') do (
     echo    - Killing process PID %%P on port 3000
@@ -24,7 +24,7 @@ for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8000" ^| findstr "LISTENING
 )
 
 echo.
-echo  [2/4] Purging all local build ^& browser bundle caches...
+echo  [2/5] Purging all local build ^& browser bundle caches...
 if exist node_modules\.vite (
     echo    - Deleting node_modules\.vite ...
     rmdir /s /q node_modules\.vite 2>nul
@@ -45,11 +45,16 @@ if exist .cache (
 echo  Done purging local cache.
 echo.
 
-echo  [3/4] Fetching latest live portfolio dataset from Render Cloud...
+echo  [3/5] Fetching latest live portfolio dataset from Render Cloud...
 python sync_from_cloud.py 2>nul || py sync_from_cloud.py 2>nul
 
 echo.
-echo  [4/4] Launching fresh web server with --force flag (bypasses all browser cache)...
+echo  [4/5] Starting local FastAPI backend on port 8000...
+start "Finplus Local Backend" /min cmd /c "python backend.py || py backend.py"
+timeout /t 2 >nul 2>&1 || ping 127.0.0.1 -n 3 >nul
+
+echo.
+echo  [5/5] Launching fresh web server with --force flag (bypasses all browser cache)...
 echo.
 echo  ============================================================
 echo   App will open on http://localhost:3000 automatically.
@@ -58,9 +63,7 @@ echo   If you still see old cached UI, press Ctrl + Shift + R on your browser.
 echo  ============================================================
 echo.
 
-:: Open browser explicitly after launching Vite server
-start "" "http://localhost:3000"
-
+:: Vite automatically opens http://localhost:3000 when ready (configured in vite.config.js)
 call npm.cmd run dev -- --force
 if %errorlevel% neq 0 (
     echo.

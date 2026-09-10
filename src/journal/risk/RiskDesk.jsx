@@ -12,8 +12,8 @@ import RiskSetup from './RiskSetup.jsx';
  * `externalLtps` is the existing App.jsx held-stock price map, passed in read-only.
  * That poller is not modified; this module adds its own for its own symbols.
  */
-export default function RiskDesk({ view = 'dashboard', externalLtps = {} }) {
-  const desk = useRiskDesk({ externalLtps });
+export default function RiskDesk({ view = 'dashboard', externalLtps = {}, positions = [] }) {
+  const desk = useRiskDesk({ externalLtps, positions });
   const [sub, setSub] = useState(view);
 
   const TABS = [

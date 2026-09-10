@@ -41,6 +41,15 @@ function migrate(store) {
   // Obsolete keys from the monthly-pool model, superseded by the daily counter
   // and openingDeductions. Dropped so stale values cannot resurface.
   delete merged.config.september;
+  if (!merged.config.accrualStartDate || merged.config.accrualStartDate === '2026-09-07') {
+    merged.config.accrualStartDate = '2026-09-04';
+  }
+  if (merged.config.segmentSL && !Number(merged.config.segmentSL.SWING)) {
+    merged.config.segmentSL.SWING = 100;
+  }
+  if (!merged.config.swingDefaultSL) {
+    merged.config.swingDefaultSL = 100;
+  }
   if (!Array.isArray(merged.months) || merged.months.length === 0) merged.months = base.months;
   if (!Array.isArray(merged.broker_charge_profiles) || merged.broker_charge_profiles.length === 0) {
     merged.broker_charge_profiles = base.broker_charge_profiles;

@@ -28,10 +28,10 @@ ok('equity intraday STT = 11,000 x 0.025% = 2.75',
   near(est('INDMONEY', PRODUCTS.EQ_INTRADAY).stt, 2.75), String(est('INDMONEY', PRODUCTS.EQ_INTRADAY).stt));
 ok('equity delivery STT = 21,000 x 0.1% = 21.00',
   near(est('INDMONEY', PRODUCTS.EQ_DELIVERY).stt, 21.00), String(est('INDMONEY', PRODUCTS.EQ_DELIVERY).stt));
-ok('index options STT = 11,000 x 0.1% = 11.00',
-  near(est('INDMONEY', PRODUCTS.INDEX_OPTION).stt, 11.00), String(est('INDMONEY', PRODUCTS.INDEX_OPTION).stt));
-ok('stock options STT = 11,000 x 0.1% = 11.00',
-  near(est('INDMONEY', PRODUCTS.STOCK_OPTION).stt, 11.00), String(est('INDMONEY', PRODUCTS.STOCK_OPTION).stt));
+ok('index options STT = 11,000 x 0.15% = 16.50',
+  near(est('INDMONEY', PRODUCTS.INDEX_OPTION).stt, 16.50), String(est('INDMONEY', PRODUCTS.INDEX_OPTION).stt));
+ok('stock options STT = 11,000 x 0.15% = 16.50',
+  near(est('INDMONEY', PRODUCTS.STOCK_OPTION).stt, 16.50), String(est('INDMONEY', PRODUCTS.STOCK_OPTION).stt));
 ok('MCX futures CTT = 11,000 x 0.01% = 1.10  (Natural Gas, Crude)',
   near(est('INDMONEY', PRODUCTS.MCX_FUTURE).stt, 1.10), String(est('INDMONEY', PRODUCTS.MCX_FUTURE).stt));
 ok('MCX options CTT = 11,000 x 0.05% = 5.50',
@@ -58,8 +58,11 @@ console.log('');
 console.log('=== Delivery DP charges differ by broker ===');
 ok('INDmoney delivery DP = 14.75', near(est('INDMONEY', PRODUCTS.EQ_DELIVERY).dp_charges, 14.75));
 ok('Zerodha delivery DP = 15.34', near(est('ZERODHA', PRODUCTS.EQ_DELIVERY).dp_charges, 15.34));
-ok('Zerodha delivery exchange rate differs from INDmoney',
-  est('ZERODHA', PRODUCTS.EQ_DELIVERY).exchange_txn !== est('INDMONEY', PRODUCTS.EQ_DELIVERY).exchange_txn);
+// The exchange charge is set by NSE, not the broker, so it must be IDENTICAL.
+// The old assertion demanded they differ, which locked in a wrong INDmoney rate.
+ok('exchange charge is broker-independent (NSE sets it)',
+  near(est('ZERODHA', PRODUCTS.EQ_DELIVERY).exchange_txn, est('INDMONEY', PRODUCTS.EQ_DELIVERY).exchange_txn),
+  `${est('ZERODHA', PRODUCTS.EQ_DELIVERY).exchange_txn} vs ${est('INDMONEY', PRODUCTS.EQ_DELIVERY).exchange_txn}`);
 
 console.log('');
 console.log('=== 3-Pillar delivery calculators (App.jsx) ===');

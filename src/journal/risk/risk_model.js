@@ -58,13 +58,13 @@ export const DEFAULT_CONFIG = {
   dailyRiskLimit: 0,
   maxPositionsPerDay: 1,
   maxPositionsExceptional: 2,
-  swingDefaultSL: null,
+  swingDefaultSL: 100,
   longTermBroker: null,
 
   // ── Daily risk-counter engine ──────────────────────────────────────────
   // Each segment accrues (allocation / accrualDivisor) per day, continuously.
   // A segment unlocks once its counter reaches that segment's stop-loss.
-  accrualStartDate: null,   // no accrual until the user picks a start date
+  accrualStartDate: '2026-09-04',   // starts Friday 2026-09-04
   accrualDivisor: 22,       // trading days a monthly allocation is spread over
   accrualBasis: 'WEEKDAYS', // 'WEEKDAYS' skips Sat/Sun; 'CALENDAR' accrues daily
   // Losses reduce segment capital and are booked to the segment — except LT.

@@ -49,17 +49,57 @@ const FRESH_START_TAG = 'finplus_fresh_start_20260907_v2';
 // Exchanges revise lot sizes periodically, so every value here is a starting
 // point the user can edit in the form; the override is saved per device.
 const LOT_SIZE_KEY = 'finplus_lot_sizes';
+// `cash: true` marks an instrument that trades in shares, not contracts. Equity
+// in the cash segment has no lot at all -- you buy 37 shares, not "37 lots of 1"
+// -- so the lots x lot-size triplet is three boxes describing one number, and a
+// dropdown reading "lot 1" invites the question of what a lot even is here.
+// `stockSymbols: true` marks the ones whose symbol is an NSE stock, so the
+// symbol box knows when to offer suggestions (NIFTY and crude oil are not
+// looked up in a stock universe).
 const DEFAULT_INSTRUMENTS = [
   { id: 'NIFTY',        label: 'NIFTY Options',        lot: 65,   hint: 'e.g. NIFTY 24500 CE' },
   { id: 'BANKNIFTY',    label: 'BANK NIFTY Options',   lot: 35,   hint: 'e.g. BANKNIFTY 52000 PE' },
   { id: 'FINNIFTY',     label: 'FIN NIFTY Options',    lot: 65,   hint: 'e.g. FINNIFTY 23000 CE' },
-  { id: 'STOCK_OPTION', label: 'Stock Options',        lot: 1,    hint: 'e.g. RELIANCE 1400 CE' },
+  { id: 'STOCK_OPTION', label: 'Stock Options',        lot: 1,    hint: 'e.g. RELIANCE 1400 CE', stockSymbols: true },
   { id: 'CRUDEOIL',     label: 'Crude Oil (MCX)',      lot: 100,  hint: 'e.g. CRUDEOIL SEP FUT' },
   { id: 'CRUDEOILM',    label: 'Crude Oil Mini (MCX)', lot: 10,   hint: 'e.g. CRUDEOILM SEP FUT' },
   { id: 'NATURALGAS',   label: 'Natural Gas (MCX)',    lot: 1250, hint: 'e.g. NATURALGAS SEP FUT' },
   { id: 'NATGASMINI',   label: 'Natural Gas Mini',     lot: 250,  hint: 'e.g. NATGASMINI SEP FUT' },
-  { id: 'INTRADAY_EQ',  label: 'Intraday Equity',      lot: 1,    hint: 'e.g. SBIN' },
+  { id: 'INTRADAY_EQ',  label: 'Intraday Equity (shares)', lot: 1, hint: 'e.g. SBIN', cash: true, stockSymbols: true },
 ];
+
+// Ranked in tiers, best first. The tiers matter: a flat "symbol or name contains
+// the query" put Aditya Birla Real Estate above half the Tata group for "TAT",
+// because "esTATe" contains it. A match at the start of a word is what someone
+// typing two or three letters actually means.
+//   1. symbol starts with the query      TAT -> TATACHEM
+//   2. a word of the name starts with it TAT -> Tata Capital
+//   3. symbol contains it                REL -> ABREL
+//   4. name contains it mid-word         TAT -> Real Estate   (last resort)
+const matchSymbols = (query, universe) => {
+  const q = String(query || '').trim().toUpperCase();
+  if (!q || !universe || !universe.length) return [];
+  const symStart = [], nameWordStart = [], symContains = [], nameContains = [];
+  for (const item of universe) {
+    const sym = (item.symbol || '').toUpperCase();
+    const name = (item.name || '').toUpperCase();
+    if (sym.startsWith(q)) symStart.push(item);
+    else if (name.split(/[^A-Z0-9]+/).some(w => w.startsWith(q))) nameWordStart.push(item);
+    else if (sym.includes(q)) symContains.push(item);
+    else if (name.includes(q)) nameContains.push(item);
+    if (symStart.length >= 10) break;
+  }
+  return [...symStart, ...nameWordStart, ...symContains, ...nameContains].slice(0, 10);
+};
+
+// An options symbol is "RELIANCE 1400 CE" -- only the first word is the stock, so
+// suggestions must match on that and stop once a strike has been typed.
+const optSymbolQuery = (value) => {
+  const v = String(value || '').trim();
+  if (!v) return '';
+  if (/\s/.test(v)) return '';
+  return v;
+};
 const readLotSizes = () => {
   try {
     const saved = JSON.parse(localStorage.getItem(LOT_SIZE_KEY) || '{}');
@@ -229,6 +269,7 @@ export default function App() {
   const [showAddOptionModal, setShowAddOptionModal] = useState(false);
   const [optEntryDate, setOptEntryDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [optInstrument, setOptInstrument] = useState('');
+  const [showOptSuggestions, setShowOptSuggestions] = useState(false);
   const [optQty, setOptQty] = useState(() => String(readLotSizes().find(i => i.id === 'NIFTY')?.lot || 65));
   const [optEntryPrice, setOptEntryPrice] = useState('');
   const [optFundedBy, setOptFundedBy] = useState('SWING'); // Mandatory: 'SWING', 'LT', 'PENNY', 'GENERAL'
@@ -239,6 +280,7 @@ export default function App() {
   const [optExitDate, setOptExitDate] = useState('');
   const [optExitPrice, setOptExitPrice] = useState('');
   const [optNotes, setOptNotes] = useState('');
+  const [optCharges, setOptCharges] = useState('40');
 
   // Modal: Close Options Trade State
   const [closeOptionTrade, setCloseOptionTrade] = useState(null);
@@ -533,45 +575,43 @@ export default function App() {
       setIsLtpLoading(false);
     };
 
-    fetchLivePrices();
-    const timer = setInterval(fetchLivePrices, 20000);
-    return () => clearInterval(timer);
+    // Poll fast only while NSE is actually open. The old build ran every 20s
+    // around the clock; with six endpoints tried in sequence at a 4s timeout
+    // each, one cycle could take 24s and overlap the next, and off-session it
+    // was hammering the price sources for a number that cannot change.
+    let cancelled = false;
+    let timer = null;
+    const nseIsOpen = () => {
+      const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const day = ist.getDay();
+      if (day === 0 || day === 6) return false;
+      const mins = ist.getHours() * 60 + ist.getMinutes();
+      return mins >= 9 * 60 + 15 && mins <= 15 * 60 + 30;
+    };
+    const tick = async () => {
+      if (cancelled) return;
+      const open = nseIsOpen();
+      if (open) await fetchLivePrices();
+      if (!cancelled) timer = setTimeout(tick, open ? 20000 : 300000);
+    };
+    fetchLivePrices();                       // one fetch on mount either way
+    timer = setTimeout(tick, 20000);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [positions]);
 
   // ══════════════════════════════════════════════════════════════
   // ZONE 3: ALL COMPUTED MEMOS (Strictly After States & Effects)
   // ══════════════════════════════════════════════════════════════
-  // Search suggestions for New Buy Modal
-  const stockSuggestions = useMemo(() => {
-    const q = formTicker.trim().toUpperCase();
-    if (!q || q.length < 1 || !stockUniverse.length) return [];
-    const exactSym = [];
-    const nameMatches = [];
-    for (const item of stockUniverse) {
-      const sym = (item.symbol || '').toUpperCase();
-      const name = (item.name || '').toUpperCase();
-      if (sym.startsWith(q)) exactSym.push(item);
-      else if (sym.includes(q) || name.includes(q)) nameMatches.push(item);
-      if (exactSym.length + nameMatches.length >= 15) break;
-    }
-    return [...exactSym, ...nameMatches].slice(0, 10);
-  }, [formTicker, stockUniverse]);
-
-  // Search suggestions for Past Closed Trade Modal
-  const pastSoldSuggestions = useMemo(() => {
-    const q = pastSoldTicker.trim().toUpperCase();
-    if (!q || q.length < 1 || !stockUniverse.length) return [];
-    const exactSym = [];
-    const nameMatches = [];
-    for (const item of stockUniverse) {
-      const sym = (item.symbol || '').toUpperCase();
-      const name = (item.name || '').toUpperCase();
-      if (sym.startsWith(q)) exactSym.push(item);
-      else if (sym.includes(q) || name.includes(q)) nameMatches.push(item);
-      if (exactSym.length + nameMatches.length >= 15) break;
-    }
-    return [...exactSym, ...nameMatches].slice(0, 10);
-  }, [pastSoldTicker, stockUniverse]);
+  // One matcher for every symbol box on the page. This was two identical copies
+  // (New Buy, Past Closed Trade); the F&O box needed a third, and three copies of
+  // a ranking rule is three places for it to drift.
+  const stockSuggestions = useMemo(
+    () => matchSymbols(formTicker, stockUniverse), [formTicker, stockUniverse]);
+  const pastSoldSuggestions = useMemo(
+    () => matchSymbols(pastSoldTicker, stockUniverse), [pastSoldTicker, stockUniverse]);
+  const optSymbolSuggestions = useMemo(
+    () => matchSymbols(optSymbolQuery(optInstrument), stockUniverse),
+    [optInstrument, stockUniverse]);
 
   // ── Capital Engine Math (Nearest Rupee Rounding) ──
   const capitalMath = useMemo(() => {
@@ -715,6 +755,35 @@ export default function App() {
 
   // ── Universal Segment Data Engine (Section 2 & 3 Universal Segment Formulas) ──
   const segmentLedgers = useMemo(() => {
+    // ── Options cash, per funding segment ────────────────────────────────────
+    // Buying an option spends real broker cash and closing one returns it. That
+    // movement used to touch nothing: options.freeCash was hardcoded to 0 and the
+    // premium was never deducted from any segment, so cash committed to F&O simply
+    // vanished from the books.
+    //
+    // Options are funded out of Swing (that is where cash frees up when a swing
+    // trade closes). A trade may name its own source via `fundedBy`; anything
+    // unlabelled falls to SWING.
+    const optionsCashBySegment = { SWING: 0, LT: 0, PENNY: 0 };
+    optionsTrades.forEach(o => {
+      const seg = String(o.fundedBy || 'SWING').toUpperCase();
+      if (!(seg in optionsCashBySegment)) return;
+      const qty = Number(o.qty) || 0;
+      const entryP = Number(o.entryPrice) || 0;
+      const chg = Number(o.charges) || 0;
+      if (o.status === 'CLOSED') {
+        // Round trip complete: premium paid came back plus or minus the result.
+        const exitP = Number(o.exitPrice) || 0;
+        const netPnl = o.netPnl !== undefined && o.netPnl !== null
+          ? Number(o.netPnl)
+          : ((exitP - entryP) * qty - chg);
+        optionsCashBySegment[seg] += netPnl;
+      } else {
+        // Still open: the premium is out of the bank and sitting in the position.
+        optionsCashBySegment[seg] -= (qty * entryP);
+      }
+    });
+
     const processSegment = (segmentKey, defaultBroker) => {
       let injected = 0;
       let withdrawn = 0;
@@ -733,9 +802,18 @@ export default function App() {
       let openBuySideCharges = 0;
       let openEstExitCharges = 0;
 
+      let unpricedCount = 0;
+      const unpricedSymbols = [];
       segPositions.forEach(p => {
         const cleanSym = p.ticker.replace('.NS', '').trim().toUpperCase();
-        let ltp = liveLtps[cleanSym] || p.buyPrice;
+        // A missing live price must NOT fall back to the buy price. Doing that
+        // makes unrealised P&L exactly zero, so a dead feed is indistinguishable
+        // from a genuinely flat position. Fall back for valuation so the total is
+        // still a number, but COUNT it so the UI can say the total is incomplete.
+        const livePrice = liveLtps[cleanSym];
+        const hasLive = typeof livePrice === 'number' && livePrice > 0;
+        if (!hasLive) { unpricedCount++; unpricedSymbols.push(cleanSym); }
+        const ltp = hasLive ? livePrice : p.buyPrice;
 
         const val = p.shares * ltp;
         const buyCost = p.shares * p.buyPrice;
@@ -786,10 +864,23 @@ export default function App() {
 
       const totalBuyValue = costOfOpenHoldings + totalClosedBuyCost;
       const totalChargesPaid = openBuySideCharges + totalClosedCharges;
-      const calculatedFreeCash = (injected - withdrawn) - totalBuyValue + totalSellProceeds - totalChargesPaid + netAdjustments;
+      // Options funded from this segment: open premium is cash out, closed trades
+      // return their net result. Zero for a segment that funds no options.
+      const optionsCashEffect = optionsCashBySegment[segmentKey] || 0;
+      const calculatedFreeCash = (injected - withdrawn) - totalBuyValue + totalSellProceeds - totalChargesPaid + netAdjustments + optionsCashEffect;
 
       const manualInputStr = segmentKey === 'SWING' ? swingFreeCashInput : segmentKey === 'LT' ? ltFreeCashInput : pennyFreeCashInput;
-      const freeCash = manualInputStr !== '' ? (parseFloat(manualInputStr) || 0) : Math.max(0, calculatedFreeCash);
+      const hasManual = manualInputStr !== '' && manualInputStr !== null && manualInputStr !== undefined;
+      const manualFreeCash = hasManual ? (parseFloat(manualInputStr) || 0) : null;
+      // The calculated figure is never clamped at zero any more. A negative value
+      // means the ledger says you have spent more than you put in - which is
+      // exactly the signal an end-of-day reconciliation exists to surface, and
+      // Math.max(0, ...) was throwing it away.
+      const freeCash = hasManual ? manualFreeCash : calculatedFreeCash;
+      // No capital events recorded means the calculation has no opening balance
+      // to work from, so its output is not meaningful yet.
+      const capitalLedgerEmpty = (injected === 0 && withdrawn === 0);
+      const freeCashVariance = hasManual ? Number((manualFreeCash - calculatedFreeCash).toFixed(2)) : 0;
 
       const segmentNetWorth = freeCash + holdingsValue;
       const unrealizedPnl = holdingsValue - costOfOpenHoldings;
@@ -802,7 +893,14 @@ export default function App() {
         withdrawn,
         netCapitalContributed,
         freeCash,
-        calculatedFreeCash: Math.max(0, calculatedFreeCash),
+        calculatedFreeCash,
+        manualFreeCash,
+        freeCashSource: hasManual ? 'MANUAL' : 'CALCULATED',
+        freeCashVariance,
+        capitalLedgerEmpty,
+        unpricedCount,
+        unpricedSymbols,
+        optionsCashEffect,
         holdingsValue,
         costOfOpenHoldings,
         realizedPnl,
@@ -834,24 +932,56 @@ export default function App() {
 
       if (o.status === 'CLOSED') {
         optionsClosedCount++;
-        const pnl = Number(o.netPnl) || ((exitP - entryP) * qty - chg);
+        const pnl = o.netPnl !== undefined && o.netPnl !== null
+          ? Number(o.netPnl)
+          : ((exitP - entryP) * qty - chg);
         optionsRealizedPnl += pnl;
       } else {
         optionsOpenCount++;
         optionsCapitalUsed += cap;
+        // Mark to market when a live premium is known, otherwise hold at cost.
         optionsOpenValuation += exitP > 0 ? (exitP * qty) : cap;
       }
     });
 
+    // Where the money came from, for display on the options card.
+    const optionsFundedFrom = Object.entries(optionsCashBySegment)
+      .filter(([, v]) => Math.abs(v) > 0.005)
+      .map(([k]) => k);
+
+    // Exit cost for an open option is NOT a flat Rs 40. On the sell leg you also
+    // pay STT at 0.15% of premium plus 0.03553% exchange charge and GST on it,
+    // which on a Rs 2,00,000 premium is about Rs 400 - ten times the old figure.
+    const OPT_STT_SELL = 0.0015;
+    const OPT_EXCH = 0.0003553;
+    const optionsExitCharges = optionsTrades.reduce((acc, o) => {
+      if (o.status === 'CLOSED') return acc;
+      const qty = Number(o.qty) || 0;
+      const px = Number(o.exitPrice) > 0 ? Number(o.exitPrice) : Number(o.entryPrice) || 0;
+      const sellTurnover = qty * px;
+      const brokerage = 20;
+      const exch = sellTurnover * OPT_EXCH;
+      const stt = sellTurnover * OPT_STT_SELL;
+      const sebi = sellTurnover * 0.000001;
+      return acc + brokerage + stt + exch + sebi + ((brokerage + exch + sebi) * 0.18);
+    }, 0);
+
     const options = {
       broker: 'Zerodha Kite (F&O)',
+      // Options hold no cash of their own - the premium is drawn from, and
+      // returned to, the funding segment's free cash (Swing by default).
       freeCash: 0,
+      fundedFrom: optionsFundedFrom.length ? optionsFundedFrom.join(', ') : 'SWING',
+      cashDrawnFromSegments: { ...optionsCashBySegment },
       holdingsValue: optionsOpenValuation,
       costOfOpenHoldings: optionsCapitalUsed,
       realizedPnl: optionsRealizedPnl,
       unrealizedPnl: optionsOpenValuation - optionsCapitalUsed,
-      estExitCharges: optionsOpenCount * 40,
-      segmentNetWorth: optionsOpenValuation + optionsRealizedPnl,
+      estExitCharges: optionsExitCharges,
+      // Net worth is what you HOLD, not what you have earned. Realised option
+      // P&L has already been paid into a broker cash balance; counting it here
+      // as well inflated the grand total by the whole realised figure.
+      segmentNetWorth: optionsOpenValuation,
       openCount: optionsOpenCount,
       closedCount: optionsClosedCount
     };
@@ -1121,14 +1251,10 @@ export default function App() {
       notes: formNotes.trim()
     };
 
-    // Deduct buy capital from the segment's broker free cash
-    if (finalSegment === 'SWING') {
-      setSwingFreeCashInput(prev => Math.max(0, (parseFloat(prev || '0') || 0) - requiredCapital).toFixed(2));
-    } else if (finalSegment === 'LT') {
-      setLtFreeCashInput(prev => Math.max(0, (parseFloat(prev || '0') || 0) - requiredCapital).toFixed(2));
-    } else if (finalSegment === 'PENNY') {
-      setPennyFreeCashInput(prev => Math.max(0, (parseFloat(prev || '0') || 0) - requiredCapital).toFixed(2));
-    }
+    // Free cash is derived, not written here. calculatedFreeCash already
+    // subtracts the cost of every open position, so recording the buy above is
+    // the deduction. See the note in handleSellSubmit for why writing to the
+    // manual box is harmful.
 
     setPositions(prev => [newPos, ...prev]);
     setShowAddModal(false);
@@ -1273,28 +1399,26 @@ export default function App() {
 
     setSoldHistory(prev => [soldRecord, ...prev]);
 
-    // Net cash actually recovered from this sale (turnover minus brokerage/taxes)
+    // Net cash actually recovered from this sale (turnover minus brokerage/taxes).
+    // Reported in the toast; the segment ledger derives it from soldHistory.
     const netProceeds = soldRecord.turnover - charges.total;
 
-    // ── AUTOMATIC FREE BROKER CASH RECYCLING ──
-    // Always add net sale proceeds to the broker free cash for that segment.
-    // Use 0 as base when the field is blank (never clear on sell — that caused free cash to disappear).
-    if (sellModalPos.segment === 'SWING') {
-      setSwingFreeCashInput(prev => {
-        const base = parseFloat(prev || '0') || 0;
-        return (Math.max(0, base + netProceeds)).toFixed(2);
-      });
-    } else if (sellModalPos.segment === 'LT') {
-      setLtFreeCashInput(prev => {
-        const base = parseFloat(prev || '0') || 0;
-        return (Math.max(0, base + netProceeds)).toFixed(2);
-      });
-    } else if (sellModalPos.segment === 'PENNY') {
-      setPennyFreeCashInput(prev => {
-        const base = parseFloat(prev || '0') || 0;
-        return (Math.max(0, base + netProceeds)).toFixed(2);
-      });
-    }
+    // ── FREE CASH ──
+    // Nothing is written to the manual free-cash override here, deliberately.
+    //
+    // The segment formula already does this: calculatedFreeCash adds
+    // totalSellProceeds and subtracts totalClosedCharges for every row in
+    // soldHistory, so recording the sale above IS the cash recycling.
+    //
+    // Writing the proceeds into the manual override as well did two harmful
+    // things: it counted the sale twice across the two code paths, and - worse -
+    // it left the override permanently populated. Once that field is non-empty
+    // the segment ignores calculatedFreeCash entirely, so from the first sale
+    // onward free cash no longer responded to buys, capital injections,
+    // withdrawals or broker adjustments. It only ever went up.
+    //
+    // The override now means one thing only: "this is the balance my broker
+    // actually shows", used to reconcile against the calculated figure.
 
     if (isFullSell) {
       setPositions(prev => prev.filter(p => p.id !== sellModalPos.id));
@@ -1329,40 +1453,17 @@ export default function App() {
       notes: capEventNotes.trim() || defaultNote
     };
 
-    // Update free cash balance according to adjustment event
-    const isAddition = capEventType === 'INJECTION' || capEventType === 'ADJUSTMENT_GAIN';
-    if (capEventSegment === 'SWING') {
-      setSwingFreeCashInput(prev => {
-        const base = parseFloat(prev || '0') || 0;
-        return isAddition ? (base + amt).toFixed(2) : Math.max(0, base - amt).toFixed(2);
-      });
-    } else if (capEventSegment === 'LT') {
-      setLtFreeCashInput(prev => {
-        const base = parseFloat(prev || '0') || 0;
-        return isAddition ? (base + amt).toFixed(2) : Math.max(0, base - amt).toFixed(2);
-      });
-    } else if (capEventSegment === 'PENNY') {
-      setPennyFreeCashInput(prev => {
-        const base = parseFloat(prev || '0') || 0;
-        return isAddition ? (base + amt).toFixed(2) : Math.max(0, base - amt).toFixed(2);
-      });
-    } else if (capEventSegment === 'ALL') {
-      const swingShare = Math.round(amt * (swingPct / 100));
-      const ltShare = Math.round(amt * (ltPct / 100));
-      const pennyShare = Math.round(amt * (pennyPct / 100));
-      setSwingFreeCashInput(prev => {
-        const base = parseFloat(prev || '0') || 0;
-        return isAddition ? (base + swingShare).toFixed(2) : Math.max(0, base - swingShare).toFixed(2);
-      });
-      setLtFreeCashInput(prev => {
-        const base = parseFloat(prev || '0') || 0;
-        return isAddition ? (base + ltShare).toFixed(2) : Math.max(0, base - ltShare).toFixed(2);
-      });
-      setPennyFreeCashInput(prev => {
-        const base = parseFloat(prev || '0') || 0;
-        return isAddition ? (base + pennyShare).toFixed(2) : Math.max(0, base - pennyShare).toFixed(2);
-      });
-    }
+    // Free cash is derived from capitalLedger, not written here.
+    //
+    // These handlers used to mirror every event into the manual free-cash box.
+    // That box is now one thing only: the balance your BROKER actually shows.
+    // Keeping the app's own answer separate is what makes an end-of-day
+    // reconciliation possible - if the app maintains both numbers they can never
+    // disagree, and a real discrepancy stays invisible.
+    //
+    // The mirroring was also lossy: it clamped at zero, ignored charges and
+    // broker adjustments, and rounded each share of an "ALL" event separately so
+    // the three segments did not add back to the amount entered.
 
     setCapitalLedger(prev => [newEvent, ...prev]);
     setShowCapModal(false);
@@ -1395,16 +1496,20 @@ export default function App() {
       return o;
     }));
 
-    // Recycle capital proceeds back to the origin funding pillar
-    const turnover = exitP * qty;
-    const netProceeds = Math.max(0, turnover - chg);
-    if (closeOptionTrade.fundedBy === 'SWING') {
-      setSwingFreeCashInput(prev => (Math.max(0, (parseFloat(prev || '0') || 0) + netProceeds)).toFixed(2));
-    } else if (closeOptionTrade.fundedBy === 'LT') {
-      setLtFreeCashInput(prev => (Math.max(0, (parseFloat(prev || '0') || 0) + netProceeds)).toFixed(2));
-    } else if (closeOptionTrade.fundedBy === 'PENNY') {
-      setPennyFreeCashInput(prev => (Math.max(0, (parseFloat(prev || '0') || 0) + netProceeds)).toFixed(2));
-    }
+    // Cash is handled by the segment ledger, not written here.
+    //
+    // This block used to add the FULL sale value (exit x qty - charges) to the
+    // funding segment's manual free-cash box. Two separate errors:
+    //
+    //   1. The premium was never deducted when the option was bought, so closing
+    //      one credited the entire sale value as brand-new cash. A round trip
+    //      that lost money still made the books richer.
+    //   2. Writing to the manual box latched the override on, after which the
+    //      segment ignored its own calculation for good.
+    //
+    // segmentLedgers now tracks options cash properly: an open position holds the
+    // premium out of the funding segment, and a closed one returns exactly its
+    // net P&L. Recording the close above is all that is needed.
 
     setCloseOptionTrade(null);
     showToast(`⚡ Options contract closed! Net P&L: ${netPnl >= 0 ? '+' : ''}₹${netPnl.toFixed(2)} (Recycled into ${closeOptionTrade.fundedBy || 'SWING'} Free Cash).`);
@@ -1608,6 +1713,9 @@ export default function App() {
               </button>
             </div>
           </div>
+
+          {/* Reconciliation banner: does the app's cash agree with the broker's? */}
+          <ReconciliationBanner ledgers={segmentLedgers} split={{ swingPct, ltPct, pennyPct }} />
 
           {/* Section 2e: Per-Segment Audit Breakdown Grid (Unblended 4-Line Metrics) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
@@ -2482,7 +2590,7 @@ export default function App() {
 
         {/* ── TAB: RISK DESK — opportunity-based fund & risk manager ── */}
         {activeTab === 'riskdesk' && (
-          <RiskDesk externalLtps={liveLtps} />
+          <RiskDesk externalLtps={liveLtps} positions={positions} />
         )}
 
         {activeTab === 'settings' && (
@@ -3524,9 +3632,68 @@ export default function App() {
                   <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>ENTRY DATE</label>
                   <input type="date" value={optEntryDate} onChange={e => setOptEntryDate(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', padding: '10px', borderRadius: '8px' }} />
                 </div>
-                <div>
+                <div style={{ position: 'relative' }}>
                   <label style={{ fontSize: '11px', color: '#c084fc', fontWeight: 700, display: 'block', marginBottom: '4px' }}>INSTRUMENT SYMBOL</label>
-                  <input type="text" placeholder={instruments.find(i => i.id === optInstrumentType)?.hint || 'e.g. NIFTY 24500 CE'} value={optInstrument} onChange={e => setOptInstrument(e.target.value)} required style={{ width: '100%', background: '#090d16', border: '1px solid #c084fc', color: '#c084fc', padding: '10px', borderRadius: '8px', fontWeight: 900 }} />
+                  <input
+                    type="text"
+                    placeholder={instruments.find(i => i.id === optInstrumentType)?.hint || 'e.g. NIFTY 24500 CE'}
+                    value={optInstrument}
+                    autoComplete="off"
+                    onChange={e => { setOptInstrument(e.target.value.toUpperCase()); setShowOptSuggestions(true); }}
+                    onFocus={() => setShowOptSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowOptSuggestions(false), 150)}
+                    required
+                    style={{ width: '100%', background: '#090d16', border: '1px solid #c084fc', color: '#c084fc', padding: '10px', borderRadius: '8px', fontWeight: 900 }}
+                  />
+
+                  {/* Only for instruments whose symbol is an NSE stock: NIFTY and
+                      crude oil are not looked up in a stock universe. */}
+                  {showOptSuggestions
+                    && instruments.find(i => i.id === optInstrumentType)?.stockSymbols
+                    && optSymbolSuggestions.length > 0 && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000,
+                      background: '#0b1120', border: '1.5px solid #c084fc', borderRadius: '8px',
+                      marginTop: '4px', maxHeight: '220px', overflowY: 'auto',
+                      boxShadow: '0 12px 30px rgba(0,0,0,0.8)'
+                    }}>
+                      {optSymbolSuggestions.map((item, idx) => (
+                        <div
+                          key={item.symbol || idx}
+                          onMouseDown={e => {
+                            e.preventDefault();
+                            const inst = instruments.find(i => i.id === optInstrumentType);
+                            // For a stock option the symbol is only the first word
+                            // ("RELIANCE 1400 CE"), so leave a trailing space and
+                            // let him keep typing the strike.
+                            setOptInstrument(inst?.cash ? item.symbol : item.symbol + ' ');
+                            if (inst?.cash && item.ltp > 0 && !optEntryPrice) {
+                              setOptEntryPrice(String(item.ltp));
+                            }
+                            setShowOptSuggestions(false);
+                          }}
+                          style={{
+                            padding: '10px 14px', cursor: 'pointer',
+                            borderBottom: idx < optSymbolSuggestions.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(192,132,252,0.15)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 900, color: '#c084fc', fontSize: '13px' }}>{item.symbol}</div>
+                            <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '1px' }}>{item.name}</div>
+                          </div>
+                          {item.ltp > 0 && (
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: '12px', fontWeight: 800, color: '#10b981' }}>₹{Number(item.ltp).toFixed(2)}</div>
+                              <div style={{ fontSize: '9px', color: '#94a3b8' }}>Latest LTP</div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3538,16 +3705,35 @@ export default function App() {
                     const id = e.target.value;
                     setOptInstrumentType(id);
                     const inst = instruments.find(i => i.id === id);
-                    if (inst) setOptQty(String(inst.lot * (parseInt(optLots, 10) || 1)));
+                    if (inst && !inst.cash) setOptQty(String(inst.lot * (parseInt(optLots, 10) || 1)));
+                    if (inst && inst.cash) setOptLots('1');
                   }}
                   style={{ width: '100%', background: '#090d16', border: '1.5px solid #c084fc', color: '#c084fc', padding: '10px', borderRadius: '8px', fontWeight: 900 }}
                 >
                   {instruments.map(i => (
-                    <option key={i.id} value={i.id}>{i.label} — lot {i.lot}</option>
+                    <option key={i.id} value={i.id}>
+                      {i.cash ? i.label : `${i.label} — lot ${i.lot}`}
+                    </option>
                   ))}
                 </select>
               </div>
 
+              {instruments.find(i => i.id === optInstrumentType)?.cash ? (
+                /* Cash equity has no contract: one box, in shares. */
+                <div>
+                  <label style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 800, display: 'block', marginBottom: '4px' }}>QUANTITY (shares)</label>
+                  <input
+                    type="number" min="1" step="1"
+                    value={optQty}
+                    onChange={e => { setOptQty(e.target.value); setOptLots('1'); }}
+                    required placeholder="e.g. 50"
+                    style={{ width: '100%', background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.35)', color: '#38bdf8', padding: '10px', borderRadius: '8px', fontWeight: 900 }}
+                  />
+                  <div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>
+                    Equity in the cash segment is bought in shares, not lots &mdash; enter the number of shares.
+                  </div>
+                </div>
+              ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>LOTS</label>
@@ -3588,9 +3774,12 @@ export default function App() {
                   />
                 </div>
               </div>
+              )}
+              {!instruments.find(i => i.id === optInstrumentType)?.cash && (
               <div style={{ fontSize: '10px', color: '#64748b', marginTop: '-8px' }}>
                 Lot size is editable and saved for next time. Verify against your broker &mdash; exchanges revise contract sizes.
               </div>
+              )}
 
               <div>
                 <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>ENTRY PRICE (₹)</label>
@@ -3993,5 +4182,102 @@ export default function App() {
       )}
 
       </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ReconciliationBanner
+//
+// The whole point of this app is that at end of day the broker's real cash
+// balance agrees with the app's. Three things silently break that agreement and
+// none of them used to be visible anywhere:
+//
+//   1. A manual free-cash override hides whatever the ledger actually computes.
+//   2. An empty capital ledger means the calculation has no opening balance, so
+//      its answer is meaningless rather than merely wrong.
+//   3. A position with no live price is valued at its buy price, so the total
+//      looks precise while quietly excluding that holding's real movement.
+//
+// This surfaces all three in one place instead of leaving them to be discovered
+// by a number that will not tie out.
+// ─────────────────────────────────────────────────────────────────────────────
+function ReconciliationBanner({ ledgers, split }) {
+  if (!ledgers) return null;
+  const segs = [
+    { key: 'swing', label: 'Swing', data: ledgers.swing },
+    { key: 'lt', label: 'Long-Term', data: ledgers.lt },
+    { key: 'penny', label: 'Penny SIP', data: ledgers.penny }
+  ].filter(x => x.data);
+
+  const money = n => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const pctTotal = (Number(split?.swingPct) || 0) + (Number(split?.ltPct) || 0) + (Number(split?.pennyPct) || 0);
+
+  const issues = [];
+  if (Math.abs(pctTotal - 100) > 0.01) {
+    issues.push(`Segment allocation adds up to ${pctTotal}%, not 100%. Any capital logged against "ALL" is split by these percentages, so ${pctTotal > 100 ? 'money is being created' : 'money is being lost'} on every such entry.`);
+  }
+  segs.forEach(({ label, data }) => {
+    if (data.capitalLedgerEmpty) {
+      issues.push(`${label}: no capital injections or withdrawals recorded, so calculated free cash has no opening balance to work from.`);
+    }
+    if (data.freeCashSource === 'MANUAL' && Math.abs(data.freeCashVariance) >= 1) {
+      issues.push(`${label}: your entered balance differs from the ledger by ${money(Math.abs(data.freeCashVariance))} (${data.freeCashVariance > 0 ? 'broker higher' : 'ledger higher'}).`);
+    }
+    if (data.unpricedCount > 0) {
+      issues.push(`${label}: no live price for ${data.unpricedSymbols.join(', ')} — valued at cost, so unrealised P&L excludes them.`);
+    }
+    if (data.optionsCashEffect && Math.abs(data.optionsCashEffect) >= 1) {
+      const v = data.optionsCashEffect;
+      issues.push(`${label}: ${v < 0 ? money(Math.abs(v)) + ' of cash is currently tied up in open option premium' : money(v) + ' of realised option P&L has been returned to this segment'}.`);
+    }
+  });
+
+  const clean = issues.length === 0;
+
+  return (
+    <div style={{
+      background: clean ? 'rgba(16,185,129,0.08)' : 'rgba(245,158,11,0.08)',
+      border: `1px solid ${clean ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.4)'}`,
+      borderRadius: '12px', padding: '14px 16px', marginBottom: '14px'
+    }}>
+      <div style={{ fontSize: '12px', fontWeight: 900, color: clean ? '#10b981' : '#f59e0b',
+                    textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>
+        {clean ? '✅ Cash reconciles' : '⚠️ Cash reconciliation — attention needed'}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: issues.length ? '12px' : 0 }}>
+        {segs.map(({ key, label, data }) => (
+          <div key={key} style={{ background: 'rgba(15,23,42,0.6)', borderRadius: '8px', padding: '10px 12px' }}>
+            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 800 }}>{label}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginTop: '5px' }}>
+              <span style={{ color: '#64748b' }}>Ledger says</span>
+              <strong style={{ color: data.calculatedFreeCash < 0 ? '#f87171' : '#e2e8f0' }}>
+                {money(data.calculatedFreeCash)}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginTop: '3px' }}>
+              <span style={{ color: '#64748b' }}>You entered</span>
+              <strong style={{ color: data.freeCashSource === 'MANUAL' ? '#38bdf8' : '#475569' }}>
+                {data.freeCashSource === 'MANUAL' ? money(data.manualFreeCash) : 'not set'}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginTop: '3px',
+                          borderTop: '1px solid rgba(148,163,184,0.15)', paddingTop: '4px' }}>
+              <span style={{ color: '#64748b' }}>Difference</span>
+              <strong style={{ color: Math.abs(data.freeCashVariance) < 1 ? '#10b981' : '#f59e0b' }}>
+                {data.freeCashSource === 'MANUAL' ? money(data.freeCashVariance) : '—'}
+              </strong>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {issues.length > 0 && (
+        <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '11.5px', color: '#fcd34d', lineHeight: 1.7 }}>
+          {issues.map((t, i) => <li key={i}>{t}</li>)}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -46,7 +46,9 @@ const NSE_EQ_INTRADAY = {
 
 const NSE_OPTION = {
   brokerage: { type: 'flat_per_order', amount: 20 },
-  stt: { type: 'pct', pct: 0.001, on: 'sell' },
+  // 0.15% on the sell side, on premium (Zerodha rate card, verified 10 Sep 2026).
+  // This sat at 0.1% and understated the cost of every option sell by a third.
+  stt: { type: 'pct', pct: 0.0015, on: 'sell' },
   exchange_txn: { type: 'pct', pct: 0.0003553, on: 'total' },
   sebi: SEBI_RULE,
   stamp_duty: { type: 'pct', pct: 0.00003, on: 'buy' },
@@ -88,7 +90,8 @@ export const SEED_CHARGE_PROFILES = [
       [PRODUCTS.EQ_DELIVERY]: {
         brokerage: { type: 'none' },
         stt: { type: 'pct', pct: 0.001, on: 'total' },
-        exchange_txn: { type: 'pct', pct: 0.0000297, on: 'total' },
+        // Exchange charge is set by NSE, not the broker - same 0.00307% for both.
+        exchange_txn: { type: 'pct', pct: 0.0000307, on: 'total' },
         sebi: SEBI_RULE,
         stamp_duty: { type: 'pct', pct: 0.00015, on: 'buy' },
         dp_charges: { type: 'flat_on_exit', amount: 14.75 }

@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinPlus Trading Command Hub</title>
+  <style>
+    :root {
+      --bg-base: #0a0d14;
+      --bg-surface: #111722;
+      --bg-elevated: #182232;
+      --border-color: #223044;
+      --border-active: #00e676;
+      --text-main: #e2e8f0;
+      --text-muted: #8899a6;
+      --accent-green: #00e676;
+      --accent-cyan: #00d2ff;
+      --accent-amber: #ffb300;
+      --accent-purple: #b388ff;
+      --accent-red: #ff5252;
+      --header-height: 52px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      display: flex !important;
+      flex-direction: column !important;
+    }
+
+    /* Top Command Bar */
+    header {
+      height: var(--header-height);
+      width: 100%;
+      flex-shrink: 0;
+      background-color: var(--bg-surface);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      gap: 12px;
+      user-select: none;
+      z-index: 100;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .brand-logo {
+      font-weight: 800;
+      font-size: 14.5px;
+      letter-spacing: 0.5px;
+      background: linear-gradient(135deg, #00e676 0%, #00d2ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .market-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+    }
+
+    .market-badge.open {
+      color: var(--accent-green);
+      border-color: rgba(0, 230, 118, 0.3);
+      background: rgba(0, 230, 118, 0.1);
+    }
+
+    .market-badge.closed {
+      color: var(--text-muted);
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .open .dot {
+      box-shadow: 0 0 8px currentColor;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.4; }
+      100% { opacity: 1; }
+    }
+
+    /* App Tab Switcher */
+    .app-tabs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-base);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 6px 13px;
+      font-size: 12.5px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-btn.active {
+      background: var(--bg-elevated);
+      color: #fff;
+      border-color: var(--border-color);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    .tab-btn .badge-port {
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.08);
+      font-family: monospace;
+      color: var(--text-muted);
+    }
+
+    .tab-btn.active .badge-port {
+      background: rgba(0, 230, 118, 0.2);
+      color: var(--accent-green);
+    }
+
+    /* Layout Controls */
+    .control-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .layout-switcher {
+      display: flex;
+      background: var(--bg-base);
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      padding: 2px;
+    }
+
+    .layout-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 5px 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+
+    .layout-btn:hover {
+      color: var(--text-main);
+    }
+
+    .layout-btn.active {
+      background: var(--bg-elevated);
+      color: var(--accent-cyan);
+    }
+
+    .btn-icon {
+      background: var(--bg-base);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-icon:hover {
+      color: #fff;
+      border-color: var(--border-active);
+    }
+
+    .clock {
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-green);
+      letter-spacing: 0.5px;
+    }
+
+    /* ============================================================
+       VIEWPORT CONTAINER & LAYOUTS (STRICTLY CONSTRAINED)
+       ============================================================ */
+    #viewport-container {
+      width: 100vw;
+      height: calc(100vh - var(--header-height));
+      flex: 1;
+      position: relative;
+      background: var(--bg-base);
+      overflow: hidden;
+    }
+
+    /* Panel Base */
+    .app-panel {
+      background: var(--bg-base);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .panel-header {
+      height: 28px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-main);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .panel-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .panel-actions button, .panel-actions a {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 3px;
+      transition: all 0.1s ease;
+    }
+    .panel-actions button:hover, .panel-actions a:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.15);
+      border-color: var(--border-color);
+    }
+
+    iframe {
+      width: 100%;
+      height: calc(100% - 28px);
+      flex: 1;
+      border: none;
+      background: #0f141c;
+      display: block;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    /* 1. SINGLE VIEW */
+    .view-single #viewport-container {
+      display: block;
+    }
+    .view-single .app-panel {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+    }
+    .view-single .app-panel.active-panel {
+      display: flex !important;
+    }
+
+    /* 2. QUAD VIEW (2x2 Grid spanning the full screen) */
+    .view-quad #viewport-container {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 4px;
+      width: 100vw;
+      height: calc(100vh - var(--header-height));
+      background: var(--border-color);
+    }
+    .view-quad .app-panel {
+      display: flex !important;
+      position: relative !important;
+      width: 100% !important;
+      height: 100% !important;
+      min-width: 0 !important;
+      min-height: 0 !important;
+    }
+
+    /* 3. DUAL VIEW (Left & Right 50% split) */
+    .view-dual #viewport-container {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr;
+      gap: 4px;
+      width: 100vw;
+      height: calc(100vh - var(--header-height));
+      background: var(--border-color);
+    }
+    .view-dual .app-panel {
+      display: none;
+      position: relative !important;
+      width: 100% !important;
+      height: 100% !important;
+      min-width: 0 !important;
+      min-height: 0 !important;
+    }
+    .view-dual .app-panel.dual-active {
+      display: flex !important;
+    }
+
+    .shortcut {
+      font-size: 9.5px;
+      opacity: 0.6;
+      border: 1px solid var(--border-color);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="view-single">
+
+  <!-- Header / Master Dock -->
+  <header>
+    <div class="brand-section">
+      <div class="brand-logo">
+        <span>⚡</span> FINPLUS COMMAND HUB
+      </div>
+
+      <!-- Live Clock & Market Badges -->
+      <span class="clock" id="live-clock">--:--:-- IST</span>
+      <div class="market-badge" id="badge-nse">
+        <span class="dot"></span> NSE <span id="nse-status">...</span>
+      </div>
+      <div class="market-badge" id="badge-mcx">
+        <span class="dot"></span> MCX (Till 23:30) <span id="mcx-status">...</span>
+      </div>
+    </div>
+
+    <!-- App Navigation Tabs -->
+    <div class="app-tabs">
+      <button class="tab-btn active" id="tab-screener" onclick="switchApp('screener', 0)">
+        <span>🔍 Stock Screener</span>
+        <span class="badge-port">5050</span>
+        <span class="shortcut">Alt+1</span>
+      </button>
+      <button class="tab-btn" id="tab-sentiment" onclick="switchApp('sentiment', 1)">
+        <span>🧠 Sentiment Tracker</span>
+        <span class="badge-port">8877</span>
+        <span class="shortcut">Alt+2</span>
+      </button>
+      <button class="tab-btn" id="tab-journal" onclick="switchApp('journal', 2)">
+        <span>📒 P&L Journal</span>
+        <span class="badge-port">3000</span>
+        <span class="shortcut">Alt+3</span>
+      </button>
+      <button class="tab-btn" id="tab-paper" onclick="switchApp('paper', 3)">
+        <span>🚀 Paper Trade</span>
+        <span class="badge-port">5173</span>
+        <span class="shortcut">Alt+4</span>
+      </button>
+    </div>
+
+    <!-- Layout & Control Tools -->
+    <div class="control-actions">
+      <div class="layout-switcher">
+        <button class="layout-btn active" id="btn-layout-single" onclick="setLayout('single')" title="Full Single App View">
+          <span>◻ Single</span>
+        </button>
+        <button class="layout-btn" id="btn-layout-quad" onclick="setLayout('quad')" title="2x2 Quad Grid (All 4 Apps)">
+          <span>⊞ Quad 2x2</span>
+        </button>
+        <button class="layout-btn" id="btn-layout-dual" onclick="setLayout('dual')" title="Side-by-Side Dual View">
+          <span>◫ Dual</span>
+        </button>
+      </div>
+
+      <button class="btn-icon" onclick="openAllInTabs()" title="Open all 4 in individual browser tabs">
+        <span>🌐 4 Tabs</span>
+      </button>
+      <button class="btn-icon" onclick="toggleFullScreen()" title="Toggle Fullscreen">
+        <span>⛶</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Viewport Area (Takes 100% of remaining screen) -->
+  <div id="viewport-container">
+
+    <!-- Panel 1: Stock Screener -->
+    <div class="app-panel active-panel dual-active" id="panel-screener">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>🔍 Stock Screener (Port 5050)</span>
+        </div>
+        <div class="panel-actions">
+          <button onclick="maximizeApp('screener', 0)" title="Maximize to Single View">◻ Focus</button>
+          <button onclick="reloadFrame('frame-screener')" title="Reload frame">↻ Refresh</button>
+          <a href="http://localhost:5050" target="_blank" title="Open full tab">↗ Tab</a>
+        </div>
+      </div>
+      <iframe id="frame-screener" src="http://localhost:5050"></iframe>
+    </div>
+
+    <!-- Panel 2: Sentiment Tracker -->
+    <div class="app-panel" id="panel-sentiment">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>🧠 Sentiment & Technical Tracker (Port 8877)</span>
+        </div>
+        <div class="panel-actions">
+          <button onclick="maximizeApp('sentiment', 1)" title="Maximize to Single View">◻ Focus</button>
+          <button onclick="reloadFrame('frame-sentiment')" title="Reload frame">↻ Refresh</button>
+          <a href="http://localhost:8877" target="_blank" title="Open full tab">↗ Tab</a>
+        </div>
+      </div>
+      <iframe id="frame-sentiment" src="http://localhost:8877"></iframe>
+    </div>
+
+    <!-- Panel 3: P&L cum Journal -->
+    <div class="app-panel" id="panel-journal">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>📒 Finplus P&L cum Trade Journal (Port 3000)</span>
+        </div>
+        <div class="panel-actions">
+          <button onclick="maximizeApp('journal', 2)" title="Maximize to Single View">◻ Focus</button>
+          <button onclick="reloadFrame('frame-journal')" title="Reload frame">↻ Refresh</button>
+          <a href="http://localhost:3000" target="_blank" title="Open full tab">↗ Tab</a>
+        </div>
+      </div>
+      <iframe id="frame-journal" src="http://localhost:3000"></iframe>
+    </div>
+
+    <!-- Panel 4: Paper Trade -->
+    <div class="app-panel dual-active" id="panel-paper">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>🚀 Finplus Paper Trader (Port 5173)</span>
+        </div>
+        <div class="panel-actions">
+          <button onclick="maximizeApp('paper', 3)" title="Maximize to Single View">◻ Focus</button>
+          <button onclick="reloadFrame('frame-paper')" title="Reload frame">↻ Refresh</button>
+          <a href="http://localhost:5173" target="_blank" title="Open full tab">↗ Tab</a>
+        </div>
+      </div>
+      <iframe id="frame-paper" src="http://localhost:5173"></iframe>
+    </div>
+
+  </div>
+
+  <script>
+    const panels = ['screener', 'sentiment', 'journal', 'paper'];
+    let currentApp = 'screener';
+    let currentLayout = 'single';
+
+    // Switch active single app
+    function switchApp(appId, tabIndex) {
+      currentApp = appId;
+      if (currentLayout !== 'single') {
+        setLayout('single');
+      }
+      
+      panels.forEach(id => {
+        const p = document.getElementById('panel-' + id);
+        if (id === appId) {
+          p.classList.add('active-panel');
+        } else {
+          p.classList.remove('active-panel');
+        }
+      });
+
+      const tabBtns = document.querySelectorAll('.tab-btn');
+      tabBtns.forEach((btn, idx) => {
+        if (idx === tabIndex) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+    }
+
+    // Maximize from Quad/Dual straight into Single view
+    function maximizeApp(appId, tabIndex) {
+      setLayout('single');
+      switchApp(appId, tabIndex);
+    }
+
+    // Set Layout (Single, Quad, Dual)
+    function setLayout(mode) {
+      currentLayout = mode;
+      document.body.className = 'view-' + mode;
+      
+      document.getElementById('btn-layout-single').classList.toggle('active', mode === 'single');
+      document.getElementById('btn-layout-quad').classList.toggle('active', mode === 'quad');
+      document.getElementById('btn-layout-dual').classList.toggle('active', mode === 'dual');
+
+      // In Dual mode, ensure 2 panels are marked dual-active
+      if (mode === 'dual') {
+        // Default Screener + Paper, or currentApp + paper/screener
+        panels.forEach(id => {
+          const p = document.getElementById('panel-' + id);
+          if (id === 'screener' || id === 'paper') {
+            p.classList.add('dual-active');
+          } else {
+            p.classList.remove('dual-active');
+          }
+        });
+      }
+    }
+
+    // Reload single iframe
+    function reloadFrame(frameId) {
+      const frame = document.getElementById(frameId);
+      if (frame) {
+        const curSrc = frame.src;
+        frame.src = '';
+        setTimeout(() => { frame.src = curSrc; }, 100);
+      }
+    }
+
+    // Open all 4 in individual browser tabs
+    function openAllInTabs() {
+      window.open('http://localhost:5050', '_blank');
+      window.open('http://localhost:8877', '_blank');
+      window.open('http://localhost:3000', '_blank');
+      window.open('http://localhost:5173', '_blank');
+    }
+
+    // Fullscreen toggle
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {});
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Keyboard Shortcuts (Alt+1, Alt+2, Alt+3, Alt+4, Alt+Q for quad)
+    window.addEventListener('keydown', (e) => {
+      if (e.altKey && e.key === '1') switchApp('screener', 0);
+      if (e.altKey && e.key === '2') switchApp('sentiment', 1);
+      if (e.altKey && e.key === '3') switchApp('journal', 2);
+      if (e.altKey && e.key === '4') switchApp('paper', 3);
+      if (e.altKey && (e.key.toLowerCase() === 'q')) setLayout('quad');
+      if (e.altKey && (e.key.toLowerCase() === 's')) setLayout('single');
+      if (e.altKey && (e.key.toLowerCase() === 'd')) setLayout('dual');
+    });
+
+    // Market Times and Live Clock (IST)
+    function updateClockAndMarkets() {
+      const now = new Date();
+      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const ist = new Date(utc + (3600000 * 5.5));
+      
+      const hours = ist.getHours();
+      const minutes = ist.getMinutes();
+      const seconds = ist.getSeconds();
+      const day = ist.getDay(); // 0 = Sun, 6 = Sat
+
+      const timeStr = String(hours).padStart(2, '0') + ':' +
+                      String(minutes).padStart(2, '0') + ':' +
+                      String(seconds).padStart(2, '0');
+      document.getElementById('live-clock').innerText = timeStr + ' IST';
+
+      const isWeekday = day >= 1 && day <= 5;
+      const totalMinutes = hours * 60 + minutes;
+
+      // NSE: 09:15 to 15:30 (555 to 930 mins)
+      const isNseOpen = isWeekday && (totalMinutes >= 555 && totalMinutes <= 930);
+      const nseBadge = document.getElementById('badge-nse');
+      const nseText = document.getElementById('nse-status');
+      if (isNseOpen) {
+        nseBadge.className = 'market-badge open';
+        nseText.innerText = 'OPEN';
+      } else {
+        nseBadge.className = 'market-badge closed';
+        nseText.innerText = 'CLOSED';
+      }
+
+      // MCX Commodity: 09:00 to 23:30 (540 to 1410 mins)
+      const isMcxOpen = isWeekday && (totalMinutes >= 540 && totalMinutes <= 1410);
+      const mcxBadge = document.getElementById('badge-mcx');
+      const mcxText = document.getElementById('mcx-status');
+      if (isMcxOpen) {
+        mcxBadge.className = 'market-badge open';
+        const minsRemaining = 1410 - totalMinutes;
+        const hrsLeft = Math.floor(minsRemaining / 60);
+        const minsLeft = minsRemaining % 60;
+        mcxText.innerText = `OPEN (${hrsLeft}h ${minsLeft}m left)`;
+      } else {
+        mcxBadge.className = 'market-badge closed';
+        mcxText.innerText = 'CLOSED';
+      }
+    }
+
+    setInterval(updateClockAndMarkets, 1000);
+    updateClockAndMarkets();
+  </script>
+</body>
+</html>

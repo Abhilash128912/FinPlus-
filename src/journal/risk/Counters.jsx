@@ -72,7 +72,8 @@ export default function Counters({ accrualState, monthView }) {
                   <div style={{ fontSize: '14px', fontWeight: 900, color: '#fff' }}>{l.icon} {l.label}</div>
                   <div style={{ fontSize: '10px', color: C.muted, marginTop: '3px' }}>
                     {inr(l.rate)}/{l.basis === 'WEEKDAYS' ? 'trading day' : 'day'}
-                    {!l.booksLosses && <span style={{ color: C.violet, fontWeight: 800 }}> · losses not booked</span>}
+                    {!l.booksLosses && <span style={{ color: C.violet, fontWeight: 800 }}> · assets hold</span>}
+                    {l.investedAmount > 0 && <span style={{ color: C.accent, fontWeight: 800 }}> · Invested: {inr(l.investedAmount)}</span>}
                   </div>
                 </div>
                 {l.isReserve ? (
@@ -152,12 +153,19 @@ export default function Counters({ accrualState, monthView }) {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '11px', paddingTop: '12px', borderTop: `1px solid ${C.border}` }}>
                 <Stat label="Accrued total" value={inr(l.totalAccrued)} size="14px" />
-                <Stat label="Capital" value={inr(l.capital)} size="14px" color={l.capital >= 0 ? C.green : C.red} />
                 <Stat
-                  label={l.booksLosses ? 'Booked losses' : 'Losses (not booked)'}
+                  label={l.id === 'LONG_TERM' ? "Invested Capital" : "Capital"}
+                  value={inr(l.capital)}
+                  size="14px"
+                  color={l.capital >= 0 ? C.green : C.red}
+                  sub={l.id === 'LONG_TERM' && l.investedAmount > 0 ? "deployed in assets" : undefined}
+                />
+                <Stat
+                  label={l.booksLosses ? 'Losses + Charges' : 'Losses (not booked)'}
                   value={inr(l.booksLosses ? l.lossTotal : l.unbookedLossTotal)}
                   size="14px"
                   color={l.booksLosses ? (l.lossTotal > 0 ? C.red : C.muted) : C.violet}
+                  sub={l.booksLosses && l.lossTotal > 0 ? "deducted from capital" : undefined}
                 />
                 <Stat
                   label="Record"
@@ -173,9 +181,9 @@ export default function Counters({ accrualState, monthView }) {
                 </div>
               )}
 
-              {l.lastLossDate && (
+              {l.booksLosses && l.lossTotal > 0 && (
                 <div style={{ marginTop: '10px', fontSize: '10px', color: C.red, fontWeight: 700 }}>
-                  Counter last reset {l.lastLossDate}
+                  Outflows deducted: {inr(l.lossTotal)} (losses + charges)
                 </div>
               )}
 
