@@ -31,3 +31,8 @@ CLAUDE.md
 memory/
 TASKS.md
 dashboard.html
+
+# Local secrets — never commit. The sync token lives here (or in the
+# SCREENER_SYNC_TOKEN env var); config.json is public.
+secrets.local.json
+.env.local

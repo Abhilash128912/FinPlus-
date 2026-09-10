@@ -24,6 +24,7 @@ import datetime
 import random
 import socket
 import hashlib
+import hmac
 import concurrent.futures
 import urllib.request
 import urllib.parse
@@ -616,7 +617,54 @@ PHASE_BUDGET    = cfg["phase_budget_per_stock"] # 5000
 PHASE_LABEL     = cfg["phase_label"]
 MAX_STOCKS      = cfg["max_stocks"]             # 20
 RENDER_CLOUD_URL = os.environ.get("SCREENER_RENDER_URL") or cfg.get("render_cloud_url", "https://finplus-g0b5.onrender.com")
-SYNC_TOKEN       = os.environ.get("SCREENER_SYNC_TOKEN") or cfg.get("sync_token", "finplus_secure_sync_2026")
+
+
+def _load_local_secrets() -> dict:
+    """Secrets from a git-ignored file next to this script.
+
+    config.json is committed to a public repository, so it is not a place a
+    credential can live. This file is in .gitignore; the environment variable
+    takes precedence over it so Render can supply its own value.
+    """
+    path = os.path.join(BASE_DIR, "secrets.local.json")
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"WARNING: could not read secrets.local.json: {e}")
+        return {}
+
+
+# No literal fallback, and nothing read from config.json: the previous default
+# sat in three files of a public repo -- and, because the whole of config.json
+# was inlined into the page, was served to every visitor -- while guarding
+# /api/sync/scan-data, which overwrites the scan data this app serves. Anyone
+# could read it and replace the picks shown during a live session. With no
+# default, an unset token means SYNC_TOKEN == "" and the endpoint rejects every
+# request -- sync stops rather than standing open.
+SYNC_TOKEN = (os.environ.get("SCREENER_SYNC_TOKEN") or _load_local_secrets().get("sync_token") or "").strip()
+if not SYNC_TOKEN:
+    print("WARNING: SCREENER_SYNC_TOKEN is not set — /api/sync/scan-data will reject every request "
+          "and laptop→cloud sync is disabled. Set the env var, or put sync_token in secrets.local.json.")
+
+# Keys of config.json that are safe to inline into the page every visitor
+# downloads. A whitelist rather than a denylist, so a credential added to
+# config.json in future is excluded by default instead of shipping until someone
+# notices. `excel_path` is deliberately absent: it is a local filesystem path and
+# the browser has no use for it.
+PUBLIC_CONFIG_KEYS: tuple = (
+    "phase", "phase_label", "phase_budget_per_stock", "total_budget",
+    "max_stocks", "min_total_score", "min_strength_score",
+    "max_price_per_share", "cache_ttl_hours", "only_add_pick_on_trading_days",
+    "custom_stocks", "fno_stocks", "render_cloud_url",
+)
+
+
+def public_config(c: dict) -> dict:
+    """The subset of config.json that may be served to a browser."""
+    return {k: c[k] for k in PUBLIC_CONFIG_KEYS if k in c}
 
 FORCE_REFRESH = "--refresh" in sys.argv or "--force-refresh" in sys.argv
 
@@ -9764,7 +9812,12 @@ def build_html(screener_results: list[dict], watchlist: list[dict], lt_watchlist
         "__RUN_TIME__": run_time,
         "__WATCHLIST_JSON__": json.dumps(watchlist, ensure_ascii=False, default=json_serializer),
         "__LT_WATCHLIST_JSON__": json.dumps(lt_watchlist, ensure_ascii=False, default=json_serializer),
-        "__CONFIG_JSON__": json.dumps(cfg, ensure_ascii=False, default=json_serializer),
+        # Whitelisted, not the whole of cfg: this blob is inlined into the page
+        # every visitor downloads, so dumping cfg wholesale served the sync token
+        # (and the local Excel path) to anyone who opened the site. Anything the
+        # frontend genuinely needs has to be named here, so a credential added to
+        # config.json later cannot silently ride along.
+        "__CONFIG_JSON__": json.dumps(public_config(cfg), ensure_ascii=False, default=json_serializer),
         "__COMMODITIES_JSON__": json.dumps(commodity_signals, ensure_ascii=False, default=json_serializer),
         "__MARKET_INFO_JSON__": json.dumps(mkt_info, ensure_ascii=False, default=json_serializer),
         "__FNO_JSON__": json.dumps(fno_data or [], ensure_ascii=False, default=json_serializer),
@@ -10493,7 +10546,11 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
             if not token:
                 token = self.headers.get('X-Sync-Token', '').strip()
 
-            if not SYNC_TOKEN or token != SYNC_TOKEN:
+            # compare_digest, not ==: a plain string comparison returns as soon as
+            # it hits a differing byte, so response time leaks how much of the
+            # token a guess got right. This endpoint overwrites the data the app
+            # serves, so it is worth closing.
+            if not SYNC_TOKEN or not hmac.compare_digest(token, SYNC_TOKEN):
                 self.send_json_response({"status": "error", "message": "Unauthorized: invalid sync token"}, 401)
                 return
 
