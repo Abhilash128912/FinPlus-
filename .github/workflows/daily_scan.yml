@@ -52,9 +52,6 @@ jobs:
           # fresh. Fewer parallel requests survive that; the laptop keeps 16.
           SCREENER_SCAN_WORKERS: '6'
           SCREENER_RENDER_URL: 'https://finplus-g0b5.onrender.com'
-          # No literal fallback: this file is public, so a default here is the
-          # same as publishing the credential. If the repo secret is unset the
-          # value is empty and cloud sync is skipped, which is the safe outcome.
           SCREENER_SYNC_TOKEN: ${{ secrets.SCREENER_SYNC_TOKEN }}
         run: |
           echo "Starting full Nifty 500 scan at $(date '+%Y-%m-%d %H:%M:%S UTC')"
@@ -65,11 +62,24 @@ jobs:
           # so a failed attempt leaves the committed report untouched.
           for attempt in 1 2 3; do
             echo "--- scan attempt $attempt of 3 ---"
-            if python ci_scan.py; then
-              echo "Scan succeeded on attempt $attempt"
+            set +e
+            python ci_scan.py
+            code=$?
+            set -e
+            if [ "$code" -eq 0 ]; then
+              echo "Scan succeeded on attempt $attempt (data synced to Render)"
               exit 0
             fi
-            echo "Attempt $attempt failed"
+            # Exit 3 means the scan itself worked and only the push to the
+            # deployment failed. Retrying would just re-scan good data, so stop,
+            # let the commit step below run, and let the sync-check step fail the
+            # job afterwards.
+            if [ "$code" -eq 3 ]; then
+              echo "Scan succeeded but the Render sync did not - committing data, job will fail after"
+              echo "sync_failed=1" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "Attempt $attempt failed (exit $code)"
             if [ "$attempt" -lt 3 ]; then
               echo "Waiting 120s before retrying..."
               sleep 120
@@ -104,3 +114,15 @@ jobs:
             git push origin HEAD:screener
             echo "Successfully pushed updated scan report to screener"
           fi
+
+      - name: Fail if the deployment never received this scan
+        if: env.sync_failed == '1'
+        run: |
+          echo "::error title=Render did not receive this scan::The scan committed"
+          echo "fine, but the direct sync to the deployment failed, and render.yaml"
+          echo "ignores *.json/*.html so the commit alone will not deploy."
+          echo "Set the SCREENER_SYNC_TOKEN repository secret"
+          echo "(Settings > Secrets and variables > Actions) to the value"
+          echo "configured on the Render service."
+          exit 1
+
