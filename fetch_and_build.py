@@ -365,6 +365,8 @@ def ltp_worker_count() -> int:
     env = os.environ.get("SCREENER_LTP_WORKERS")
     if env and env.isdigit() and int(env) > 0:
         return min(16, int(env))
+    if os.environ.get("RENDER"):
+        return 3
     return max(2, min(12, (os.cpu_count() or 2) * 4))
 
 
@@ -403,6 +405,20 @@ def background_ltp_warmer():
             if not symbols:
                 continue
 
+            # Stagger refreshes: only fetch symbols whose cache is older than 15s.
+            # This spreads out refreshes across 5s cycles rather than fetching all
+            # 120 symbols simultaneously every cycle, avoiding 100% GIL saturation.
+            now_t = time.time()
+            stagger_ttl = 15.0
+            with GLOBAL_LTP_CACHE_LOCK:
+                stale_symbols = [
+                    s for s in symbols
+                    if (now_t - GLOBAL_LTP_CACHE.get(s, (0, 0))[1]) >= stagger_ttl
+                ]
+
+            if not stale_symbols:
+                continue
+
             # A1 Fix: Fast parallel quote-only fetcher.
             #
             # The pool is created once and reused. It used to be built and torn
@@ -416,7 +432,7 @@ def background_ltp_warmer():
             # Render's single shared vCPU -- where this process also has to stay
             # responsive to the phone.
             ex = _ltp_pool()
-            prices_res = list(ex.map(lambda s: (s, fetch_live_price_only(s, bypass_cache=True)), symbols))
+            prices_res = list(ex.map(lambda s: (s, fetch_live_price_only(s, bypass_cache=True)), stale_symbols))
 
             now = time.time()
             updated_any = False
