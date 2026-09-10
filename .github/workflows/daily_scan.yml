@@ -51,6 +51,8 @@ jobs:
           # run because cache/ is gitignored, so the whole universe is fetched
           # fresh. Fewer parallel requests survive that; the laptop keeps 16.
           SCREENER_SCAN_WORKERS: '6'
+          SCREENER_RENDER_URL: 'https://finplus-g0b5.onrender.com'
+          SCREENER_SYNC_TOKEN: ${{ secrets.SCREENER_SYNC_TOKEN }}
         run: |
           echo "Starting full Nifty 500 scan at $(date '+%Y-%m-%d %H:%M:%S UTC')"
           # Retried rather than failed outright: ten of the first twenty-four
@@ -123,3 +125,4 @@ jobs:
           echo "(Settings > Secrets and variables > Actions) to the value"
           echo "configured on the Render service."
           exit 1
+
