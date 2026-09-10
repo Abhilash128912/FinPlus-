@@ -514,25 +514,55 @@ def save_settings_file(settings: Dict[str, Any]):
 # The service holds personal holdings, P&L and cash, so every endpoint that
 # reads or writes that data requires a shared key in the X-Finplus-Key header.
 #
-# Fail-open until FINPLUS_API_KEY is set, so deploying this build cannot lock
-# anyone out of their own data. /api/health reports which mode is active — set
-# the env var on the host and it becomes enforced on the next restart.
+# FAIL CLOSED. A missing key means private endpoints refuse every request, not
+# that they serve holdings to anyone who asks. This used to fail open so that a
+# deploy could not lock anyone out of their own data, but the failure mode was
+# silent and indistinguishable from working: a cleared or mistyped env var on the
+# host would quietly publish the account.
+#
+# Lockout is avoided by looking in two places rather than by giving up. The
+# gitignored finplus_api_key.txt next to this file is what makes local runs work
+# without exporting anything.
 #
 # The key is typed in by the user and stored on their device. It is never baked
 # into the web bundle, which is public and readable by anyone.
 # ══════════════════════════════════════════════════════════════════════════════
 
-FINPLUS_API_KEY = os.environ.get("FINPLUS_API_KEY", "").strip()
-AUTH_ENABLED = bool(FINPLUS_API_KEY)
+def _load_api_key() -> str:
+    """Env var first, then the git-ignored key file beside this script."""
+    key = os.environ.get("FINPLUS_API_KEY", "").strip()
+    if key:
+        return key
+    path = os.path.join(BASE_DIR, "finplus_api_key.txt")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip().startswith("FINPLUS_API_KEY") and "=" in line:
+                        return line.split("=", 1)[1].strip()
+        except Exception as e:
+            print(f"[Auth] could not read finplus_api_key.txt: {e}")
+    return ""
 
-if not AUTH_ENABLED:
-    print("[Auth] FINPLUS_API_KEY not set - private endpoints are OPEN. "
-          "Set the env var to enforce the key.")
+
+FINPLUS_API_KEY = _load_api_key()
+AUTH_ENABLED = True  # always on; the question is only whether a key is configured
+
+if not FINPLUS_API_KEY:
+    print("[Auth] NO KEY CONFIGURED - every private endpoint will return 503. "
+          "Set FINPLUS_API_KEY, or put 'FINPLUS_API_KEY=<value>' in finplus_api_key.txt.")
 
 def require_key(request: Request):
-    """Guard private endpoints. No-op until a key is configured on the host."""
-    if not AUTH_ENABLED:
-        return
+    """Guard private endpoints. Refuses everything when no key is configured."""
+    if not FINPLUS_API_KEY:
+        # 503, not 401: the caller's credentials are not the problem, the server
+        # is misconfigured. Saying so plainly is the difference between a
+        # five-minute fix and an afternoon spent re-checking the key on a phone.
+        raise HTTPException(
+            status_code=503,
+            detail="Server has no API key configured - private endpoints are closed. "
+                   "Set FINPLUS_API_KEY on the host."
+        )
     # Header only. The query-param form put the key into request logs, browser
     # history and Referer headers; nothing in this app ever sent it that way.
     supplied = request.headers.get("X-Finplus-Key") or ""
@@ -548,7 +578,7 @@ def health_check():
         "app": "Finplus PnL Independent Backend",
         "data_source": "yfinance",
         "version": "2.1.0",
-        "auth": "enabled" if AUTH_ENABLED else "disabled",
+        "auth": "enforced" if FINPLUS_API_KEY else "no-key-configured",
         "local_ips": local_ips,
         "recommended_server_urls": [f"http://{ip}:8000" for ip in local_ips]
     }
