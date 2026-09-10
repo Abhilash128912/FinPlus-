@@ -1,121 +1,12 @@
 {
-  "positions": [
-    {
-      "id": "pos_1788782400618_ykuj2",
-      "ticker": "BEPL",
-      "name": "Bhansali Engineering Polymers Limited",
-      "segment": "LT",
-      "shares": 2,
-      "buyPrice": 126.84,
-      "buyDate": "2026-09-07",
-      "target1": 0,
-      "stopLoss": 0,
-      "notes": ""
-    },
-    {
-      "id": "pos_1788763603605_od4gm",
-      "ticker": "BEPL",
-      "name": "Bhansali Engineering Polymers Limited",
-      "segment": "LT",
-      "shares": 2,
-      "buyPrice": 126.25,
-      "buyDate": "2026-09-07",
-      "target1": 0,
-      "stopLoss": 0,
-      "notes": ""
-    },
-    {
-      "id": "pos_1788548077313_0_panamapet",
-      "ticker": "PANAMAPET",
-      "name": "Panama Petrochem Ltd",
-      "segment": "LT",
-      "shares": 1,
-      "buyPrice": 485.35,
-      "buyDate": "2026-09-04",
-      "target1": 0,
-      "stopLoss": 0,
-      "notes": "Imported from INDmoney holdings"
-    },
-    {
-      "id": "pos_1788548077313_1_drcsystems",
-      "ticker": "DRCSYSTEMS",
-      "name": "DRC Systems India Ltd",
-      "segment": "PENNY",
-      "shares": 11,
-      "buyPrice": 13.69,
-      "buyDate": "2026-09-04",
-      "target1": 0,
-      "stopLoss": 0,
-      "notes": "Imported from INDmoney holdings"
-    },
-    {
-      "id": "pos_1788548077313_2_sigma",
-      "ticker": "SIGMA",
-      "name": "Sigma Solve Ltd",
-      "segment": "PENNY",
-      "shares": 4,
-      "buyPrice": 47.2,
-      "buyDate": "2026-09-04",
-      "target1": 0,
-      "stopLoss": 0,
-      "notes": "Imported from INDmoney holdings"
-    },
-    {
-      "id": "pos_1788548077313_3_uyfincorp",
-      "ticker": "UYFINCORP",
-      "name": "U. Y. Fincorp Ltd",
-      "segment": "PENNY",
-      "shares": 10,
-      "buyPrice": 20,
-      "buyDate": "2026-09-04",
-      "target1": 0,
-      "stopLoss": 0,
-      "notes": "Imported from INDmoney holdings"
-    },
-    {
-      "id": "pos_1788548077313_4_ashokley",
-      "ticker": "ASHOKLEY",
-      "name": "Ashok Leyland Ltd",
-      "segment": "LT",
-      "shares": 1,
-      "buyPrice": 171.73,
-      "buyDate": "2026-09-04",
-      "target1": 0,
-      "stopLoss": 0,
-      "notes": "Imported from INDmoney holdings"
-    },
-    {
-      "id": "pos_1788548077313_5_bel",
-      "ticker": "BEL",
-      "name": "Bharat Electronics Ltd",
-      "segment": "LT",
-      "shares": 1,
-      "buyPrice": 409,
-      "buyDate": "2026-09-04",
-      "target1": 0,
-      "stopLoss": 0,
-      "notes": "Imported from INDmoney holdings"
-    },
-    {
-      "id": "pos_1788548077313_6_federalbnk",
-      "ticker": "FEDERALBNK",
-      "name": "Federal Bank Ltd",
-      "segment": "LT",
-      "shares": 1,
-      "buyPrice": 356.45,
-      "buyDate": "2026-09-04",
-      "target1": 0,
-      "stopLoss": 0,
-      "notes": "Imported from INDmoney holdings"
-    }
-  ],
+  "positions": [],
   "capitalLedger": [],
   "soldHistory": [],
   "brokerAdjustments": [],
   "optionsTrades": [],
   "freeCash": {
     "swing": "0",
-    "lt": "0.00",
+    "lt": "0",
     "penny": "0"
   },
   "budget": "0",
@@ -124,5 +15,8 @@
     "lt": 30,
     "penny": 10
   },
-  "savedAt": 1789037477339
+  "savedAt": 1789037536760,
+  "force_reset": true,
+  "reset": true,
+  "isFreshStart": true
 }
