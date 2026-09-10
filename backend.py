@@ -533,7 +533,9 @@ def require_key(request: Request):
     """Guard private endpoints. No-op until a key is configured on the host."""
     if not AUTH_ENABLED:
         return
-    supplied = request.headers.get("X-Finplus-Key") or request.query_params.get("k") or ""
+    # Header only. The query-param form put the key into request logs, browser
+    # history and Referer headers; nothing in this app ever sent it that way.
+    supplied = request.headers.get("X-Finplus-Key") or ""
     if not supplied or not hmac.compare_digest(str(supplied), FINPLUS_API_KEY):
         raise HTTPException(status_code=401, detail="Missing or invalid API key")
 
@@ -641,7 +643,7 @@ async def save_settings_endpoint(request: Request, _auth: None = Depends(require
 
 @app.get("/api/trades")
 @app.get("/api/trades/journal")
-def get_trades():
+def get_trades(_auth: None = Depends(require_key)):
     trades = load_journal_file()
     settings = load_settings_file()
     return {
@@ -1099,7 +1101,7 @@ def load_portfolio_backup(_auth: None = Depends(require_key)):
             return { "status": "error", "message": str(e) }
 
 @app.get("/api/backup/health")
-def backup_health():
+def backup_health(_auth: None = Depends(require_key)):
     """Debug endpoint — returns sync status without exposing full data."""
     if not os.path.exists(PORTFOLIO_FILE):
         return { "status": "missing", "file_exists": False }
