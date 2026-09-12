@@ -1,0 +1,4258 @@
+{
+  "schema_version": 1,
+  "config": {
+    "configured": true,
+    "monthlyRiskBudget": 7500,
+    "allocations": {
+      "INTRADAY": 750,
+      "LONG_TERM": 1500,
+      "INDEX_OPTIONS": 1250,
+      "NATURAL_GAS": 1000,
+      "STOCK_OPTIONS": 1000,
+      "SWING": 1000,
+      "CRUDE": 500,
+      "PENNY": 0
+    },
+    "reserveAllocation": 500,
+    "segmentSL": {
+      "INTRADAY": 100,
+      "LONG_TERM": 250,
+      "INDEX_OPTIONS": 250,
+      "NATURAL_GAS": 250,
+      "STOCK_OPTIONS": 250,
+      "SWING": 100,
+      "CRUDE": 250
+    },
+    "segmentSLPercent": {
+      "INTRADAY": null,
+      "LONG_TERM": null,
+      "INDEX_OPTIONS": null,
+      "NATURAL_GAS": null,
+      "STOCK_OPTIONS": null,
+      "SWING": 5,
+      "CRUDE": null
+    },
+    "segmentTargetPercent": {
+      "INTRADAY": null,
+      "LONG_TERM": null,
+      "INDEX_OPTIONS": null,
+      "NATURAL_GAS": null,
+      "STOCK_OPTIONS": null,
+      "SWING": 5,
+      "CRUDE": null
+    },
+    "segmentBroker": {
+      "INTRADAY": "INDMONEY",
+      "LONG_TERM": null,
+      "INDEX_OPTIONS": "INDMONEY",
+      "NATURAL_GAS": "INDMONEY",
+      "STOCK_OPTIONS": "INDMONEY",
+      "SWING": "ZERODHA",
+      "CRUDE": "INDMONEY"
+    },
+    "openingDeductions": {
+      "INTRADAY": 0,
+      "LONG_TERM": 0,
+      "INDEX_OPTIONS": 0,
+      "NATURAL_GAS": 0,
+      "STOCK_OPTIONS": 0,
+      "SWING": 0,
+      "CRUDE": 0,
+      "PENNY": 0
+    },
+    "dailyRiskLimit": 300,
+    "maxPositionsPerDay": 1,
+    "maxPositionsExceptional": 2,
+    "swingDefaultSL": 100,
+    "longTermBroker": null,
+    "accrualStartDate": "2026-09-04",
+    "accrualDivisor": 22,
+    "accrualBasis": "WEEKDAYS",
+    "booksLosses": {
+      "INTRADAY": true,
+      "LONG_TERM": false,
+      "INDEX_OPTIONS": true,
+      "NATURAL_GAS": true,
+      "STOCK_OPTIONS": true,
+      "SWING": true,
+      "CRUDE": true,
+      "OPPORTUNITY_RESERVE": true
+    },
+    "chargesWarnRatio": 0.25,
+    "actualVsEstimateWarnRatio": 0.2,
+    "correlationBlockSameUnderlying": true
+  },
+  "updated_at": "2026-09-11T06:05:33.378Z",
+  "months": [
+    {
+      "month_key": "2026-09",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2026-10",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2026-11",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2026-12",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2027-01",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2027-02",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2027-03",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2027-04",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2027-05",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2027-06",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2027-07",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2027-08",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2027-09",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2027-10",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2027-11",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2027-12",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2028-01",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2028-02",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2028-03",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2028-04",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2028-05",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2028-06",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2028-07",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2028-08",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2028-09",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2028-10",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2028-11",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2028-12",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2029-01",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2029-02",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2029-03",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2029-04",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2029-05",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2029-06",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2029-07",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2029-08",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    },
+    {
+      "month_key": "2029-09",
+      "mode": "STANDARD",
+      "monthly_risk_budget": 7500,
+      "preexisting_usage": 0,
+      "enforce_segment_quotas": true,
+      "buckets": {
+        "INTRADAY": {
+          "segment_id": "INTRADAY",
+          "initial_allocation": 750,
+          "reserve_transferred_in": 0
+        },
+        "LONG_TERM": {
+          "segment_id": "LONG_TERM",
+          "initial_allocation": 1500,
+          "reserve_transferred_in": 0
+        },
+        "INDEX_OPTIONS": {
+          "segment_id": "INDEX_OPTIONS",
+          "initial_allocation": 1250,
+          "reserve_transferred_in": 0
+        },
+        "NATURAL_GAS": {
+          "segment_id": "NATURAL_GAS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "STOCK_OPTIONS": {
+          "segment_id": "STOCK_OPTIONS",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "SWING": {
+          "segment_id": "SWING",
+          "initial_allocation": 1000,
+          "reserve_transferred_in": 0
+        },
+        "CRUDE": {
+          "segment_id": "CRUDE",
+          "initial_allocation": 500,
+          "reserve_transferred_in": 0
+        },
+        "PENNY": {
+          "segment_id": "PENNY",
+          "initial_allocation": 0,
+          "reserve_transferred_in": 0
+        }
+      },
+      "reserve": {
+        "initial_allocation": 500,
+        "transferred_out": 0
+      },
+      "closed_out": false
+    }
+  ],
+  "trade_setups": [],
+  "trades": [
+    {
+      "segment": "INTRADAY",
+      "symbol": "FIEMIND",
+      "underlying": null,
+      "direction": "SHORT",
+      "entry_price": 2006.32,
+      "quantity": 6,
+      "stop_loss_price": 2046.4464,
+      "target_price": 1926.0672,
+      "lots": null,
+      "lot_size": null,
+      "option_type": null,
+      "strike_price": null,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T14:58:49.352Z",
+      "id": "trade_41e328f3-f287-4483-809b-59f11ff976fa",
+      "status": "CLOSED",
+      "planned_price_risk": 240.76,
+      "planned_total_risk": 253.62,
+      "estimated_charges": 12.86,
+      "estimated_charge_breakdown": {
+        "brokerage": 7.29,
+        "stt": 3.01,
+        "exchange_txn": 0.72,
+        "sebi": 0.02,
+        "stamp_duty": 0.37,
+        "gst": 1.45,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 12.86
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 1,
+      "created_at": "2026-09-10T14:58:49.352Z",
+      "exit_price": 2013,
+      "exit_date": "2026-09-10T09:28:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 7.234776,
+        "stt": 3.00948,
+        "exchange_txn": 0.716242824,
+        "sebi": 0.024115919999999996,
+        "stamp_duty": 0.36234,
+        "gst": 1.43552425392,
+        "dp_charges": 0,
+        "total": 12.78247899792
+      },
+      "updated_at": "2026-09-10T14:59:08.706Z"
+    },
+    {
+      "segment": "INDEX_OPTIONS",
+      "symbol": "NIFTY 23800 CE",
+      "underlying": "NIFTY",
+      "direction": "LONG",
+      "entry_price": 19.95,
+      "quantity": 65,
+      "stop_loss_price": 19.551,
+      "target_price": 20.748,
+      "lots": 1,
+      "lot_size": 65,
+      "option_type": "CE",
+      "strike_price": 23800,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T14:59:50.567Z",
+      "id": "trade_64af4a0e-7c74-4780-b13c-bc0f6c2bb8b5",
+      "status": "CLOSED",
+      "planned_price_risk": 1685.78,
+      "planned_total_risk": 1888.28,
+      "estimated_charges": 202.5,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 82.6,
+        "exchange_txn": 59.3,
+        "sebi": 0.17,
+        "stamp_duty": 2.53,
+        "gst": 17.9,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 202.5
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 2,
+      "created_at": "2026-09-10T14:59:50.567Z",
+      "exit_price": 19.25,
+      "exit_date": "2026-09-10T09:29:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 40,
+        "stt": 1.876875,
+        "exchange_txn": 0.9053044,
+        "sebi": 0.002548,
+        "stamp_duty": 0.0389025,
+        "gst": 7.363413431999999,
+        "dp_charges": 0,
+        "total": 50.187043331999995
+      },
+      "updated_at": "2026-09-10T15:00:02.879Z"
+    },
+    {
+      "segment": "INDEX_OPTIONS",
+      "symbol": "NIFTY 23150 CE",
+      "underlying": "NIFTY",
+      "direction": "LONG",
+      "entry_price": 23.95,
+      "quantity": 65,
+      "stop_loss_price": 23.471,
+      "target_price": 24.908,
+      "lots": 1,
+      "lot_size": 65,
+      "option_type": "CE",
+      "strike_price": 23150,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T15:13:31.871Z",
+      "id": "trade_d2de93fa-2deb-4dad-8771-2e26b0a82b21",
+      "status": "CLOSED",
+      "planned_price_risk": 2023.77,
+      "planned_total_risk": 2257.41,
+      "estimated_charges": 233.64,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 99.16,
+        "exchange_txn": 71.19,
+        "sebi": 0.2,
+        "stamp_duty": 3.04,
+        "gst": 20.05,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 233.64
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 3,
+      "created_at": "2026-09-10T15:13:31.871Z",
+      "exit_price": 23,
+      "exit_date": "2026-09-10T09:44:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 40,
+        "stt": 2.2425,
+        "exchange_txn": 1.084286775,
+        "sebi": 0.0030517499999999998,
+        "stamp_duty": 0.0467025,
+        "gst": 7.3957209345,
+        "dp_charges": 0,
+        "total": 50.7722619595
+      },
+      "updated_at": "2026-09-10T15:14:27.244Z"
+    },
+    {
+      "segment": "INTRADAY",
+      "symbol": "ZEEL",
+      "underlying": null,
+      "direction": "SHORT",
+      "entry_price": 82.57,
+      "quantity": 154,
+      "stop_loss_price": 84.22139999999999,
+      "target_price": 79.26719999999999,
+      "lots": null,
+      "lot_size": null,
+      "option_type": null,
+      "strike_price": null,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T15:18:36.563Z",
+      "id": "trade_0ded2b86-c730-47fe-879f-5e0946e9d0ae",
+      "status": "CLOSED",
+      "planned_price_risk": 254.32,
+      "planned_total_risk": 267.92,
+      "estimated_charges": 13.6,
+      "estimated_charge_breakdown": {
+        "brokerage": 7.71,
+        "stt": 3.18,
+        "exchange_txn": 0.76,
+        "sebi": 0.03,
+        "stamp_duty": 0.39,
+        "gst": 1.53,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 13.6
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 4,
+      "created_at": "2026-09-10T15:18:36.563Z",
+      "exit_price": 82.78,
+      "exit_date": "2026-09-10T09:48:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 7.639169999999999,
+        "stt": 3.1789449999999997,
+        "exchange_txn": 0.75627783,
+        "sebi": 0.0254639,
+        "stamp_duty": 0.38244360000000005,
+        "gst": 1.5157641113999998,
+        "dp_charges": 0,
+        "total": 13.498064441399999
+      },
+      "updated_at": "2026-09-10T15:18:53.408Z"
+    },
+    {
+      "segment": "INDEX_OPTIONS",
+      "symbol": "NIFTY 23700 CE",
+      "underlying": "NIFTY",
+      "direction": "LONG",
+      "entry_price": 36.8,
+      "quantity": 65,
+      "stop_loss_price": 36.064,
+      "target_price": 38.272,
+      "lots": 1,
+      "lot_size": 65,
+      "option_type": "CE",
+      "strike_price": 23700,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T15:19:30.940Z",
+      "id": "trade_f7ef1c98-5929-461e-af6c-489fc3d58569",
+      "status": "CLOSED",
+      "planned_price_risk": 3109.6,
+      "planned_total_risk": 3443.26,
+      "estimated_charges": 333.66,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 152.37,
+        "exchange_txn": 109.38,
+        "sebi": 0.31,
+        "stamp_duty": 4.66,
+        "gst": 26.94,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 333.66
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 5,
+      "created_at": "2026-09-10T15:19:30.940Z",
+      "exit_price": 34.15,
+      "exit_date": "2026-09-10T09:51:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 40,
+        "stt": 3.329625,
+        "exchange_txn": 1.638554775,
+        "sebi": 0.0046117499999999995,
+        "stamp_duty": 0.07176,
+        "gst": 7.495769974500001,
+        "dp_charges": 0,
+        "total": 52.5403214995
+      },
+      "updated_at": "2026-09-10T15:22:08.828Z"
+    },
+    {
+      "segment": "INDEX_OPTIONS",
+      "symbol": "NIFTY 23700 CE",
+      "underlying": "NIFTY",
+      "direction": "LONG",
+      "entry_price": 36.8,
+      "quantity": 65,
+      "stop_loss_price": 36.064,
+      "target_price": 38.272,
+      "lots": 1,
+      "lot_size": 65,
+      "option_type": "CE",
+      "strike_price": 23700,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T15:21:40.142Z",
+      "id": "trade_fe9bd1ea-47b7-4e6e-b4d0-391327d15856",
+      "status": "CLOSED",
+      "planned_price_risk": 47.84,
+      "planned_total_risk": 99.43,
+      "estimated_charges": 51.59,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 2.34,
+        "exchange_txn": 1.68,
+        "sebi": 0,
+        "stamp_duty": 0.07,
+        "gst": 7.5,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 51.59
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 6,
+      "created_at": "2026-09-10T15:21:40.142Z",
+      "exit_price": 38.25,
+      "exit_date": "2026-09-10T09:53:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 40,
+        "stt": 3.729375,
+        "exchange_txn": 1.7332422250000001,
+        "sebi": 0.00487825,
+        "stamp_duty": 0.07176,
+        "gst": 7.512861685499999,
+        "dp_charges": 0,
+        "total": 53.05211716049999
+      },
+      "updated_at": "2026-09-10T15:23:36.360Z"
+    },
+    {
+      "segment": "INDEX_OPTIONS",
+      "symbol": "NIFTY 23250 PE",
+      "underlying": "NIFTY",
+      "direction": "LONG",
+      "entry_price": 38.25,
+      "quantity": 65,
+      "stop_loss_price": 37.485,
+      "target_price": 39.78,
+      "lots": 1,
+      "lot_size": 65,
+      "option_type": "PE",
+      "strike_price": 23250,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T15:23:11.263Z",
+      "id": "trade_c953bdee-c8e0-412a-9c4f-721c3c19ea5f",
+      "status": "CLOSED",
+      "planned_price_risk": 49.73,
+      "planned_total_risk": 101.51,
+      "estimated_charges": 51.78,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 2.44,
+        "exchange_txn": 1.75,
+        "sebi": 0,
+        "stamp_duty": 0.07,
+        "gst": 7.52,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 51.78
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 7,
+      "created_at": "2026-09-10T15:23:11.263Z",
+      "exit_price": 38.25,
+      "exit_date": "2026-09-10T10:05:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 40,
+        "stt": 3.729375,
+        "exchange_txn": 1.76672925,
+        "sebi": 0.0049724999999999995,
+        "stamp_duty": 0.0745875,
+        "gst": 7.518906315,
+        "dp_charges": 0,
+        "total": 53.094570565
+      },
+      "updated_at": "2026-09-10T15:35:29.429Z"
+    },
+    {
+      "segment": "INTRADAY",
+      "symbol": "BIKAJI",
+      "underlying": null,
+      "direction": "SHORT",
+      "entry_price": 569.05,
+      "quantity": 19,
+      "stop_loss_price": 580.4309999999999,
+      "target_price": 546.2879999999999,
+      "lots": null,
+      "lot_size": null,
+      "option_type": null,
+      "strike_price": null,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T15:24:07.057Z",
+      "id": "trade_a2298b14-95ab-4245-9fcf-f040694e8e18",
+      "status": "CLOSED",
+      "planned_price_risk": 216.24,
+      "planned_total_risk": 227.79,
+      "estimated_charges": 11.55,
+      "estimated_charge_breakdown": {
+        "brokerage": 6.55,
+        "stt": 2.7,
+        "exchange_txn": 0.65,
+        "sebi": 0.02,
+        "stamp_duty": 0.33,
+        "gst": 1.3,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 11.55
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 8,
+      "created_at": "2026-09-10T15:24:07.057Z",
+      "exit_price": 570.43,
+      "exit_date": "2026-09-10T09:54:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 6.495035999999999,
+        "stt": 2.7029875,
+        "exchange_txn": 0.6430085639999998,
+        "sebi": 0.021650119999999995,
+        "stamp_duty": 0.32514509999999996,
+        "gst": 1.2887450431199998,
+        "dp_charges": 0,
+        "total": 11.47657232712
+      },
+      "updated_at": "2026-09-10T15:24:26.595Z"
+    },
+    {
+      "segment": "INTRADAY",
+      "symbol": "ZEEL",
+      "underlying": null,
+      "direction": "SHORT",
+      "entry_price": 81.62,
+      "quantity": 100,
+      "stop_loss_price": 83.25240000000001,
+      "target_price": 78.3552,
+      "lots": null,
+      "lot_size": null,
+      "option_type": null,
+      "strike_price": null,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T15:25:04.312Z",
+      "id": "trade_a95b9831-7e7f-47b5-91a9-8a9a6dd26225",
+      "status": "CLOSED",
+      "planned_price_risk": 163.24,
+      "planned_total_risk": 171.97,
+      "estimated_charges": 8.73,
+      "estimated_charge_breakdown": {
+        "brokerage": 4.95,
+        "stt": 2.04,
+        "exchange_txn": 0.49,
+        "sebi": 0.02,
+        "stamp_duty": 0.25,
+        "gst": 0.98,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 8.73
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 9,
+      "created_at": "2026-09-10T15:25:04.312Z",
+      "exit_price": 80.83,
+      "exit_date": "2026-09-10T09:55:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 4.8735,
+        "stt": 2.0405,
+        "exchange_txn": 0.48247650000000003,
+        "sebi": 0.016245,
+        "stamp_duty": 0.24249,
+        "gst": 0.9669998699999999,
+        "dp_charges": 0,
+        "total": 8.622211369999999
+      },
+      "updated_at": "2026-09-10T15:25:21.543Z"
+    },
+    {
+      "segment": "NATURAL_GAS",
+      "symbol": "NATGASMINI 265 PE",
+      "underlying": null,
+      "direction": "LONG",
+      "entry_price": 8.25,
+      "quantity": 250,
+      "stop_loss_price": 8.084999999999999,
+      "target_price": 8.58,
+      "lots": 1,
+      "lot_size": 1250,
+      "option_type": null,
+      "strike_price": null,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T15:26:34.258Z",
+      "id": "trade_fa24848b-807e-41fe-9849-651c07d8b418",
+      "status": "CLOSED",
+      "planned_price_risk": 41.25,
+      "planned_total_risk": 525.18,
+      "estimated_charges": 483.93,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 252.66,
+        "exchange_txn": 107.2,
+        "sebi": 5.1,
+        "stamp_duty": 51.56,
+        "gst": 27.41,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 483.93
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 10,
+      "created_at": "2026-09-10T15:26:34.258Z",
+      "exit_price": 8,
+      "exit_date": "2026-09-10T09:56:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 0,
+        "stt": 4.0625,
+        "exchange_txn": 0.12471875,
+        "sebi": 0.0040625,
+        "stamp_duty": 0.30937499999999996,
+        "gst": 0.023180625000000003,
+        "dp_charges": 15.34,
+        "total": 19.863836875
+      },
+      "updated_at": "2026-09-10T15:26:46.540Z"
+    },
+    {
+      "segment": "CRUDE",
+      "symbol": "CRUDEOIL MINI 9800 CE",
+      "underlying": null,
+      "direction": "LONG",
+      "entry_price": 155.25,
+      "quantity": 10,
+      "stop_loss_price": 152.145,
+      "target_price": 161.46,
+      "lots": 1,
+      "lot_size": 100,
+      "option_type": null,
+      "strike_price": null,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T15:27:36.354Z",
+      "id": "trade_624fe1a9-3418-445d-aca9-1ebe33f736ef",
+      "status": "CLOSED",
+      "planned_price_risk": 31.05,
+      "planned_total_risk": 104.56,
+      "estimated_charges": 73.51,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 15.21,
+        "exchange_txn": 6.46,
+        "sebi": 0.31,
+        "stamp_duty": 3.11,
+        "gst": 8.42,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 73.51
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 11,
+      "created_at": "2026-09-10T15:27:36.354Z",
+      "exit_price": 262,
+      "exit_date": "2026-09-10T09:57:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 0,
+        "stt": 4.1725,
+        "exchange_txn": 0.12809575,
+        "sebi": 0.0041725,
+        "stamp_duty": 0.23287499999999997,
+        "gst": 0.023808285,
+        "dp_charges": 15.34,
+        "total": 19.901451535
+      },
+      "updated_at": "2026-09-10T15:27:51.572Z"
+    },
+    {
+      "segment": "NATURAL_GAS",
+      "symbol": "NATGASMINI 265 PE",
+      "underlying": null,
+      "direction": "LONG",
+      "entry_price": 8.75,
+      "quantity": 250,
+      "stop_loss_price": 8.575,
+      "target_price": 9.1,
+      "lots": 1,
+      "lot_size": 1250,
+      "option_type": null,
+      "strike_price": null,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T15:28:52.647Z",
+      "id": "trade_e467845a-95c1-40f8-a58d-c97725a5bb10",
+      "status": "CLOSED",
+      "planned_price_risk": 43.75,
+      "planned_total_risk": 554.16,
+      "estimated_charges": 510.41,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 267.97,
+        "exchange_txn": 113.7,
+        "sebi": 5.41,
+        "stamp_duty": 54.69,
+        "gst": 28.64,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 510.41
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 12,
+      "created_at": "2026-09-10T15:28:52.647Z",
+      "exit_price": 8.5,
+      "exit_date": "2026-09-10T09:59:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 0,
+        "stt": 4.3125,
+        "exchange_txn": 0.13239375,
+        "sebi": 0.0043124999999999995,
+        "stamp_duty": 0.32812499999999994,
+        "gst": 0.024607125,
+        "dp_charges": 15.34,
+        "total": 20.141938375000002
+      },
+      "updated_at": "2026-09-10T15:29:13.872Z"
+    },
+    {
+      "segment": "CRUDE",
+      "symbol": "CRUDEOIL MINI 9800 CE",
+      "underlying": null,
+      "direction": "LONG",
+      "entry_price": 244.65,
+      "quantity": 10,
+      "stop_loss_price": 239.757,
+      "target_price": 254.436,
+      "lots": 1,
+      "lot_size": 100,
+      "option_type": null,
+      "strike_price": null,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-10T15:30:12.483Z",
+      "id": "trade_9e2627b4-8ced-41e5-b6bf-e1282b92016c",
+      "status": "CLOSED",
+      "planned_price_risk": 48.93,
+      "planned_total_risk": 137.57,
+      "estimated_charges": 88.64,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 23.98,
+        "exchange_txn": 10.17,
+        "sebi": 0.48,
+        "stamp_duty": 4.89,
+        "gst": 9.12,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 88.64
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 13,
+      "created_at": "2026-09-10T15:30:12.483Z",
+      "exit_price": 237,
+      "exit_date": "2026-09-10T10:00:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 0,
+        "stt": 4.8165,
+        "exchange_txn": 0.14786655,
+        "sebi": 0.0048165,
+        "stamp_duty": 0.36697499999999994,
+        "gst": 0.027482949000000003,
+        "dp_charges": 15.34,
+        "total": 20.703640999
+      },
+      "updated_at": "2026-09-10T15:30:30.800Z"
+    },
+    {
+      "segment": "INTRADAY",
+      "symbol": "CMPDI",
+      "underlying": null,
+      "direction": "SHORT",
+      "entry_price": 214.4,
+      "quantity": 50,
+      "stop_loss_price": 218.68800000000002,
+      "target_price": 205.82399999999998,
+      "lots": null,
+      "lot_size": null,
+      "option_type": null,
+      "strike_price": null,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-11T04:39:52.559Z",
+      "id": "trade_73f41b13-62eb-4cfc-88a8-543749363784",
+      "status": "CLOSED",
+      "planned_price_risk": 214.4,
+      "planned_total_risk": 225.86,
+      "estimated_charges": 11.46,
+      "estimated_charge_breakdown": {
+        "brokerage": 6.5,
+        "stt": 2.68,
+        "exchange_txn": 0.64,
+        "sebi": 0.02,
+        "stamp_duty": 0.33,
+        "gst": 1.29,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 11.46
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 1,
+      "created_at": "2026-09-11T04:39:52.559Z",
+      "exit_price": 215.8,
+      "exit_date": "2026-09-11T00:51:00.000Z",
+      "exit_reason": "Manual Exit",
+      "actual_charges": null,
+      "updated_at": "2026-09-11T06:21:42.625Z"
+    },
+    {
+      "segment": "INTRADAY",
+      "symbol": "CMPDI",
+      "underlying": null,
+      "direction": "SHORT",
+      "entry_price": 215.8,
+      "quantity": 50,
+      "stop_loss_price": 220.116,
+      "target_price": 207.168,
+      "lots": null,
+      "lot_size": null,
+      "option_type": null,
+      "strike_price": null,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-11T06:05:33.375Z",
+      "id": "trade_88502d51-a1b8-4ac2-9131-00fc0ee96f03",
+      "status": "CLOSED",
+      "planned_price_risk": 215.8,
+      "planned_total_risk": 227.34,
+      "estimated_charges": 11.54,
+      "estimated_charge_breakdown": {
+        "brokerage": 6.54,
+        "stt": 2.7,
+        "exchange_txn": 0.65,
+        "sebi": 0.02,
+        "stamp_duty": 0.33,
+        "gst": 1.3,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 11.54
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 2,
+      "created_at": "2026-09-11T06:05:33.375Z",
+      "exit_price": 215.8,
+      "exit_date": "2026-09-11T00:51:00.000Z",
+      "exit_reason": "Manual Exit",
+      "actual_charges": null,
+      "updated_at": "2026-09-11T06:21:51.183Z"
+    },
+    {
+      "segment": "INDEX_OPTIONS",
+      "symbol": "NIFTY 23000 PE",
+      "underlying": "NIFTY",
+      "direction": "LONG",
+      "entry_price": 23.55,
+      "quantity": 65,
+      "stop_loss_price": 23.079,
+      "target_price": 24.492,
+      "lots": 1,
+      "lot_size": 65,
+      "option_type": "PE",
+      "strike_price": 23000,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-11T06:06:05.746Z",
+      "id": "trade_a4fdabcf-f8d3-400c-a103-95ef5f81bc8b",
+      "status": "CLOSED",
+      "planned_price_risk": 30.62,
+      "planned_total_risk": 80.64,
+      "estimated_charges": 50.02,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 1.5,
+        "exchange_txn": 1.08,
+        "sebi": 0,
+        "stamp_duty": 0.05,
+        "gst": 7.39,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 50.02
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 3,
+      "created_at": "2026-09-11T06:06:05.746Z",
+      "exit_price": 23,
+      "exit_date": "2026-09-11T00:39:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 40,
+        "stt": 2.2425,
+        "exchange_txn": 1.075048975,
+        "sebi": 0.00302575,
+        "stamp_duty": 0.0459225,
+        "gst": 7.3940534504999995,
+        "dp_charges": 0,
+        "total": 50.7605506755
+      },
+      "updated_at": "2026-09-11T06:09:21.365Z"
+    },
+    {
+      "segment": "INDEX_OPTIONS",
+      "symbol": "NIFTY 23550 CE",
+      "underlying": "NIFTY",
+      "direction": "LONG",
+      "entry_price": 27.7,
+      "quantity": 65,
+      "stop_loss_price": 27.145999999999997,
+      "target_price": 28.808,
+      "lots": 1,
+      "lot_size": 65,
+      "option_type": "CE",
+      "strike_price": 23550,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-11T06:06:37.508Z",
+      "id": "trade_3ff87fd5-31f1-49f8-96c4-8e544f05caeb",
+      "status": "CLOSED",
+      "planned_price_risk": 36.01,
+      "planned_total_risk": 86.52,
+      "estimated_charges": 50.51,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 1.76,
+        "exchange_txn": 1.27,
+        "sebi": 0,
+        "stamp_duty": 0.05,
+        "gst": 7.43,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 50.51
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 4,
+      "created_at": "2026-09-11T06:06:37.508Z",
+      "exit_price": 25.65,
+      "exit_date": "2026-09-11T00:39:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 40,
+        "stt": 2.500875,
+        "exchange_txn": 1.232091575,
+        "sebi": 0.00346775,
+        "stamp_duty": 0.054015,
+        "gst": 7.422400678499999,
+        "dp_charges": 0,
+        "total": 51.212850003499995
+      },
+      "updated_at": "2026-09-11T06:09:32.286Z"
+    },
+    {
+      "segment": "INDEX_OPTIONS",
+      "symbol": "NIFTY 23050 PE",
+      "underlying": "NIFTY",
+      "direction": "LONG",
+      "entry_price": 29.6,
+      "quantity": 65,
+      "stop_loss_price": 29.008,
+      "target_price": 30.784000000000002,
+      "lots": 1,
+      "lot_size": 65,
+      "option_type": "PE",
+      "strike_price": 23050,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-11T06:07:01.732Z",
+      "id": "trade_af2b2fbc-7372-493d-aeed-7493ef68014b",
+      "status": "CLOSED",
+      "planned_price_risk": 38.48,
+      "planned_total_risk": 89.22,
+      "estimated_charges": 50.74,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 1.89,
+        "exchange_txn": 1.35,
+        "sebi": 0,
+        "stamp_duty": 0.06,
+        "gst": 7.44,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 50.74
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 5,
+      "created_at": "2026-09-11T06:07:01.732Z",
+      "exit_price": 28.2,
+      "exit_date": "2026-09-11T00:39:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 40,
+        "stt": 2.7495000000000003,
+        "exchange_txn": 1.3348621,
+        "sebi": 0.003757,
+        "stamp_duty": 0.05772,
+        "gst": 7.440951438,
+        "dp_charges": 0,
+        "total": 51.586790538
+      },
+      "updated_at": "2026-09-11T06:09:47.644Z"
+    },
+    {
+      "segment": "INDEX_OPTIONS",
+      "symbol": "NIFTY 23550 CE",
+      "underlying": "NIFTY",
+      "direction": "LONG",
+      "entry_price": 26.95,
+      "quantity": 65,
+      "stop_loss_price": 26.410999999999998,
+      "target_price": 28.028,
+      "lots": 1,
+      "lot_size": 65,
+      "option_type": "CE",
+      "strike_price": 23550,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-11T06:07:42.880Z",
+      "id": "trade_77559465-5e02-4e18-a809-6193b2bba464",
+      "status": "CLOSED",
+      "planned_price_risk": 35.04,
+      "planned_total_risk": 85.46,
+      "estimated_charges": 50.42,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 1.72,
+        "exchange_txn": 1.23,
+        "sebi": 0,
+        "stamp_duty": 0.05,
+        "gst": 7.42,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 50.42
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 6,
+      "created_at": "2026-09-11T06:07:42.880Z",
+      "exit_price": 25.9,
+      "exit_date": "2026-09-11T00:39:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 40,
+        "stt": 2.52525,
+        "exchange_txn": 1.220544325,
+        "sebi": 0.00343525,
+        "stamp_duty": 0.0525525,
+        "gst": 7.4203163235,
+        "dp_charges": 0,
+        "total": 51.222098398499995
+      },
+      "updated_at": "2026-09-11T06:10:00.122Z"
+    },
+    {
+      "segment": "INDEX_OPTIONS",
+      "symbol": "NIFTY 23050 PE",
+      "underlying": "NIFTY",
+      "direction": "LONG",
+      "entry_price": 28.2,
+      "quantity": 65,
+      "stop_loss_price": 27.636,
+      "target_price": 29.328,
+      "lots": 1,
+      "lot_size": 65,
+      "option_type": "PE",
+      "strike_price": 23050,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-11T06:08:03.469Z",
+      "id": "trade_2c27a42c-08fe-451e-9a78-d624af12e1c2",
+      "status": "CLOSED",
+      "planned_price_risk": 36.66,
+      "planned_total_risk": 87.23,
+      "estimated_charges": 50.57,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 1.8,
+        "exchange_txn": 1.29,
+        "sebi": 0,
+        "stamp_duty": 0.05,
+        "gst": 7.43,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 50.57
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 7,
+      "created_at": "2026-09-11T06:08:03.469Z",
+      "exit_price": 28.2,
+      "exit_date": "2026-09-11T00:40:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 40,
+        "stt": 2.7495000000000003,
+        "exchange_txn": 1.3025298,
+        "sebi": 0.003666,
+        "stamp_duty": 0.054990000000000004,
+        "gst": 7.435115244,
+        "dp_charges": 0,
+        "total": 51.545801044
+      },
+      "updated_at": "2026-09-11T06:10:09.461Z"
+    },
+    {
+      "segment": "CRUDE",
+      "symbol": "CRUDEOIL MINI 10200 CE",
+      "underlying": null,
+      "direction": "LONG",
+      "entry_price": 250.2,
+      "quantity": 10,
+      "stop_loss_price": 245.196,
+      "target_price": 260.20799999999997,
+      "lots": 1,
+      "lot_size": 100,
+      "option_type": null,
+      "strike_price": null,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-11T06:08:58.210Z",
+      "id": "trade_66a4c109-5f73-4e0d-b6fe-9f68f883ef80",
+      "status": "CLOSED",
+      "planned_price_risk": 50.04,
+      "planned_total_risk": 139.62,
+      "estimated_charges": 89.58,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 24.52,
+        "exchange_txn": 10.4,
+        "sebi": 0.5,
+        "stamp_duty": 5,
+        "gst": 9.16,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 89.58
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 8,
+      "created_at": "2026-09-11T06:08:58.210Z",
+      "exit_price": 250.2,
+      "exit_date": "2026-09-11T00:40:00.000Z",
+      "exit_reason": "TARGET_REACHED",
+      "actual_charges": {
+        "brokerage": 0,
+        "stt": 5.0040000000000004,
+        "exchange_txn": 0.1536228,
+        "sebi": 0.005004,
+        "stamp_duty": 0.37529999999999997,
+        "gst": 0.028552824,
+        "dp_charges": 15.34,
+        "total": 20.906479624
+      },
+      "updated_at": "2026-09-11T06:10:47.044Z"
+    },
+    {
+      "segment": "CRUDE",
+      "symbol": "CRUDEOIL MINI PE",
+      "underlying": null,
+      "direction": "LONG",
+      "entry_price": 9000,
+      "quantity": 10,
+      "stop_loss_price": 8820,
+      "target_price": 9360,
+      "lots": 1,
+      "lot_size": 100,
+      "option_type": null,
+      "strike_price": null,
+      "trade_intent": "COUNTER_UNLOCKED",
+      "notes": "",
+      "broker": "ZERODHA",
+      "entry_date": "2026-09-11T06:12:06.252Z",
+      "id": "trade_9c7c8d12-24f3-4b08-95ea-a1a6a479ca1a",
+      "status": "CLOSED",
+      "planned_price_risk": 1800,
+      "planned_total_risk": 3371.81,
+      "estimated_charges": 1571.81,
+      "estimated_charge_breakdown": {
+        "brokerage": 40,
+        "stt": 882,
+        "exchange_txn": 374.22,
+        "sebi": 17.82,
+        "stamp_duty": 180,
+        "gst": 77.77,
+        "dp_charges": 0,
+        "other": 0,
+        "total": 1571.81
+      },
+      "charge_profile_id": "zerodha_v1",
+      "daily_position_number": 9,
+      "created_at": "2026-09-11T06:12:06.252Z",
+      "exit_price": 8998.25,
+      "exit_date": "2026-09-11T00:51:00.000Z",
+      "exit_reason": "Manual Exit",
+      "actual_charges": null,
+      "updated_at": "2026-09-11T06:23:09.398Z"
+    }
+  ],
+  "daily_risk_snapshots": [],
+  "opportunity_reserve_transfers": [],
+  "broker_charge_profiles": [
+    {
+      "id": "indmoney_v1",
+      "broker": "INDMONEY",
+      "label": "INDmoney (zero-brokerage delivery)",
+      "effective_from": "2026-04-01",
+      "effective_to": null,
+      "products": {
+        "EQ_INTRADAY": {
+          "brokerage": {
+            "type": "min_of_pct_or_flat",
+            "pct": 0.0003,
+            "cap": 20
+          },
+          "stt": {
+            "type": "pct",
+            "pct": 0.00025,
+            "on": "sell"
+          },
+          "exchange_txn": {
+            "type": "pct",
+            "pct": 2.97e-05,
+            "on": "total"
+          },
+          "sebi": {
+            "type": "pct",
+            "pct": 1e-06,
+            "on": "total"
+          },
+          "stamp_duty": {
+            "type": "pct",
+            "pct": 3e-05,
+            "on": "buy"
+          },
+          "dp_charges": {
+            "type": "none"
+          }
+        },
+        "EQ_DELIVERY": {
+          "brokerage": {
+            "type": "none"
+          },
+          "stt": {
+            "type": "pct",
+            "pct": 0.001,
+            "on": "total"
+          },
+          "exchange_txn": {
+            "type": "pct",
+            "pct": 2.97e-05,
+            "on": "total"
+          },
+          "sebi": {
+            "type": "pct",
+            "pct": 1e-06,
+            "on": "total"
+          },
+          "stamp_duty": {
+            "type": "pct",
+            "pct": 0.00015,
+            "on": "buy"
+          },
+          "dp_charges": {
+            "type": "flat_on_exit",
+            "amount": 14.75
+          }
+        },
+        "INDEX_OPTION": {
+          "brokerage": {
+            "type": "flat_per_order",
+            "amount": 20
+          },
+          "stt": {
+            "type": "pct",
+            "pct": 0.001,
+            "on": "sell"
+          },
+          "exchange_txn": {
+            "type": "pct",
+            "pct": 0.0003553,
+            "on": "total"
+          },
+          "sebi": {
+            "type": "pct",
+            "pct": 1e-06,
+            "on": "total"
+          },
+          "stamp_duty": {
+            "type": "pct",
+            "pct": 3e-05,
+            "on": "buy"
+          },
+          "dp_charges": {
+            "type": "none"
+          }
+        },
+        "STOCK_OPTION": {
+          "brokerage": {
+            "type": "flat_per_order",
+            "amount": 20
+          },
+          "stt": {
+            "type": "pct",
+            "pct": 0.001,
+            "on": "sell"
+          },
+          "exchange_txn": {
+            "type": "pct",
+            "pct": 0.0003553,
+            "on": "total"
+          },
+          "sebi": {
+            "type": "pct",
+            "pct": 1e-06,
+            "on": "total"
+          },
+          "stamp_duty": {
+            "type": "pct",
+            "pct": 3e-05,
+            "on": "buy"
+          },
+          "dp_charges": {
+            "type": "none"
+          }
+        },
+        "MCX_FUTURE": {
+          "brokerage": {
+            "type": "min_of_pct_or_flat",
+            "pct": 0.0003,
+            "cap": 20
+          },
+          "stt": {
+            "type": "pct",
+            "pct": 0.0001,
+            "on": "sell"
+          },
+          "exchange_txn": {
+            "type": "pct",
+            "pct": 2.1e-05,
+            "on": "total"
+          },
+          "sebi": {
+            "type": "pct",
+            "pct": 1e-06,
+            "on": "total"
+          },
+          "stamp_duty": {
+            "type": "pct",
+            "pct": 2e-05,
+            "on": "buy"
+          },
+          "dp_charges": {
+            "type": "none"
+          }
+        },
+        "MCX_OPTION": {
+          "brokerage": {
+            "type": "flat_per_order",
+            "amount": 20
+          },
+          "stt": {
+            "type": "pct",
+            "pct": 0.0005,
+            "on": "sell"
+          },
+          "exchange_txn": {
+            "type": "pct",
+            "pct": 0.000418,
+            "on": "total"
+          },
+          "sebi": {
+            "type": "pct",
+            "pct": 1e-06,
+            "on": "total"
+          },
+          "stamp_duty": {
+            "type": "pct",
+            "pct": 3e-05,
+            "on": "buy"
+          },
+          "dp_charges": {
+            "type": "none"
+          }
+        }
+      }
+    },
+    {
+      "id": "zerodha_v1",
+      "broker": "ZERODHA",
+      "label": "Zerodha Kite",
+      "effective_from": "2026-04-01",
+      "effective_to": null,
+      "products": {
+        "EQ_INTRADAY": {
+          "brokerage": {
+            "type": "min_of_pct_or_flat",
+            "pct": 0.0003,
+            "cap": 20
+          },
+          "stt": {
+            "type": "pct",
+            "pct": 0.00025,
+            "on": "sell"
+          },
+          "exchange_txn": {
+            "type": "pct",
+            "pct": 2.97e-05,
+            "on": "total"
+          },
+          "sebi": {
+            "type": "pct",
+            "pct": 1e-06,
+            "on": "total"
+          },
+          "stamp_duty": {
+            "type": "pct",
+            "pct": 3e-05,
+            "on": "buy"
+          },
+          "dp_charges": {
+            "type": "none"
+          }
+        },
+        "EQ_DELIVERY": {
+          "brokerage": {
+            "type": "none"
+          },
+          "stt": {
+            "type": "pct",
+            "pct": 0.001,
+            "on": "total"
+          },
+          "exchange_txn": {
+            "type": "pct",
+            "pct": 3.07e-05,
+            "on": "total"
+          },
+          "sebi": {
+            "type": "pct",
+            "pct": 1e-06,
+            "on": "total"
+          },
+          "stamp_duty": {
+            "type": "pct",
+            "pct": 0.00015,
+            "on": "buy"
+          },
+          "dp_charges": {
+            "type": "flat_on_exit",
+            "amount": 15.34
+          }
+        },
+        "INDEX_OPTION": {
+          "brokerage": {
+            "type": "flat_per_order",
+            "amount": 20
+          },
+          "stt": {
+            "type": "pct",
+            "pct": 0.001,
+            "on": "sell"
+          },
+          "exchange_txn": {
+            "type": "pct",
+            "pct": 0.0003553,
+            "on": "total"
+          },
+          "sebi": {
+            "type": "pct",
+            "pct": 1e-06,
+            "on": "total"
+          },
+          "stamp_duty": {
+            "type": "pct",
+            "pct": 3e-05,
+            "on": "buy"
+          },
+          "dp_charges": {
+            "type": "none"
+          }
+        },
+        "STOCK_OPTION": {
+          "brokerage": {
+            "type": "flat_per_order",
+            "amount": 20
+          },
+          "stt": {
+            "type": "pct",
+            "pct": 0.001,
+            "on": "sell"
+          },
+          "exchange_txn": {
+            "type": "pct",
+            "pct": 0.0003553,
+            "on": "total"
+          },
+          "sebi": {
+            "type": "pct",
+            "pct": 1e-06,
+            "on": "total"
+          },
+          "stamp_duty": {
+            "type": "pct",
+            "pct": 3e-05,
+            "on": "buy"
+          },
+          "dp_charges": {
+            "type": "none"
+          }
+        },
+        "MCX_FUTURE": {
+          "brokerage": {
+            "type": "min_of_pct_or_flat",
+            "pct": 0.0003,
+            "cap": 20
+          },
+          "stt": {
+            "type": "pct",
+            "pct": 0.0001,
+            "on": "sell"
+          },
+          "exchange_txn": {
+            "type": "pct",
+            "pct": 2.1e-05,
+            "on": "total"
+          },
+          "sebi": {
+            "type": "pct",
+            "pct": 1e-06,
+            "on": "total"
+          },
+          "stamp_duty": {
+            "type": "pct",
+            "pct": 2e-05,
+            "on": "buy"
+          },
+          "dp_charges": {
+            "type": "none"
+          }
+        },
+        "MCX_OPTION": {
+          "brokerage": {
+            "type": "flat_per_order",
+            "amount": 20
+          },
+          "stt": {
+            "type": "pct",
+            "pct": 0.0005,
+            "on": "sell"
+          },
+          "exchange_txn": {
+            "type": "pct",
+            "pct": 0.000418,
+            "on": "total"
+          },
+          "sebi": {
+            "type": "pct",
+            "pct": 1e-06,
+            "on": "total"
+          },
+          "stamp_duty": {
+            "type": "pct",
+            "pct": 3e-05,
+            "on": "buy"
+          },
+          "dp_charges": {
+            "type": "none"
+          }
+        }
+      }
+    }
+  ],
+  "broker_cash_ledger": [],
+  "growth_reserve_ledger": [],
+  "audit_log": [
+    {
+      "id": "audit_7a1910ae-254b-40e4-8923-73e3d63eca96",
+      "at": "2026-09-05T00:57:02.746Z",
+      "action": "CONFIG_UPDATED",
+      "entity": "config",
+      "entity_id": null,
+      "month_key": null,
+      "detail": {
+        "configured": true,
+        "monthlyRiskBudget": 7500,
+        "allocations": {
+          "INTRADAY": 750,
+          "LONG_TERM": 1500,
+          "INDEX_OPTIONS": 1250,
+          "NATURAL_GAS": 1000,
+          "STOCK_OPTIONS": 1000,
+          "SWING": 1000,
+          "CRUDE": 500
+        },
+        "reserveAllocation": 500,
+        "segmentSL": {
+          "INTRADAY": 100,
+          "LONG_TERM": 250,
+          "INDEX_OPTIONS": 250,
+          "NATURAL_GAS": 250,
+          "STOCK_OPTIONS": 250,
+          "SWING": null,
+          "CRUDE": 250
+        },
+        "segmentSLPercent": {
+          "INTRADAY": null,
+          "LONG_TERM": null,
+          "INDEX_OPTIONS": null,
+          "NATURAL_GAS": null,
+          "STOCK_OPTIONS": null,
+          "SWING": 5,
+          "CRUDE": null
+        },
+        "segmentTargetPercent": {
+          "INTRADAY": null,
+          "LONG_TERM": null,
+          "INDEX_OPTIONS": null,
+          "NATURAL_GAS": null,
+          "STOCK_OPTIONS": null,
+          "SWING": 5,
+          "CRUDE": null
+        },
+        "segmentBroker": {
+          "INTRADAY": "INDMONEY",
+          "LONG_TERM": null,
+          "INDEX_OPTIONS": "INDMONEY",
+          "NATURAL_GAS": "INDMONEY",
+          "STOCK_OPTIONS": "INDMONEY",
+          "SWING": "ZERODHA",
+          "CRUDE": "INDMONEY"
+        },
+        "openingDeductions": {
+          "INTRADAY": 0,
+          "LONG_TERM": 2000,
+          "INDEX_OPTIONS": 0,
+          "NATURAL_GAS": 0,
+          "STOCK_OPTIONS": 0,
+          "SWING": 0,
+          "CRUDE": 0
+        },
+        "dailyRiskLimit": 300,
+        "maxPositionsPerDay": 1,
+        "maxPositionsExceptional": 2,
+        "swingDefaultSL": null,
+        "longTermBroker": null,
+        "accrualStartDate": "2026-09-04",
+        "accrualDivisor": 22,
+        "accrualBasis": "WEEKDAYS",
+        "booksLosses": {
+          "INTRADAY": true,
+          "LONG_TERM": false,
+          "INDEX_OPTIONS": true,
+          "NATURAL_GAS": true,
+          "STOCK_OPTIONS": true,
+          "SWING": true,
+          "CRUDE": true,
+          "OPPORTUNITY_RESERVE": true
+        },
+        "chargesWarnRatio": 0.25,
+        "actualVsEstimateWarnRatio": 0.2,
+        "correlationBlockSameUnderlying": true
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_fb562dd0-5d4f-4a44-821a-1ffd5e47fe21",
+      "at": "2026-09-10T14:58:49.353Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_41e328f3-f287-4483-809b-59f11ff976fa",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "INTRADAY",
+        "symbol": "FIEMIND",
+        "planned_total_risk": 253.62,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_fc67744e-6911-474f-ab70-a23282d42b25",
+      "at": "2026-09-10T14:59:08.706Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_41e328f3-f287-4483-809b-59f11ff976fa",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 2013,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_2137f2c3-5d22-401a-91cf-17da3e7939bb",
+      "at": "2026-09-10T14:59:50.567Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_64af4a0e-7c74-4780-b13c-bc0f6c2bb8b5",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "INDEX_OPTIONS",
+        "symbol": "NIFTY 23800 CE",
+        "planned_total_risk": 1888.28,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_567f66c2-80d7-491a-945d-668af39784e5",
+      "at": "2026-09-10T15:00:02.879Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_64af4a0e-7c74-4780-b13c-bc0f6c2bb8b5",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 19.25,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_984b2fa9-9d51-47a1-9b06-f1a5b260f02c",
+      "at": "2026-09-10T15:13:31.871Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_d2de93fa-2deb-4dad-8771-2e26b0a82b21",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "INDEX_OPTIONS",
+        "symbol": "NIFTY 23150 CE",
+        "planned_total_risk": 2257.41,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_32757b76-363d-457f-b66e-bdbac6cfa743",
+      "at": "2026-09-10T15:14:27.244Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_d2de93fa-2deb-4dad-8771-2e26b0a82b21",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 23,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_f5c78943-1d7e-458b-a2a4-cb769ea3f6d3",
+      "at": "2026-09-10T15:18:36.563Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_0ded2b86-c730-47fe-879f-5e0946e9d0ae",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "INTRADAY",
+        "symbol": "ZEEL",
+        "planned_total_risk": 267.92,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_c5208457-0d68-4318-b4a1-9cc2c691b47d",
+      "at": "2026-09-10T15:18:53.408Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_0ded2b86-c730-47fe-879f-5e0946e9d0ae",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 82.78,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_7369b5f7-ef9b-44c1-adec-ed97dde129cf",
+      "at": "2026-09-10T15:19:30.940Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_f7ef1c98-5929-461e-af6c-489fc3d58569",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "INDEX_OPTIONS",
+        "symbol": "NIFTY 23700 CE",
+        "planned_total_risk": 3443.26,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_73293563-5cc4-41ae-a182-d3228f9dd50c",
+      "at": "2026-09-10T15:21:40.143Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_fe9bd1ea-47b7-4e6e-b4d0-391327d15856",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "INDEX_OPTIONS",
+        "symbol": "NIFTY 23700 CE",
+        "planned_total_risk": 99.43,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_43b931fe-ffea-4513-8ac6-8c16ab672b40",
+      "at": "2026-09-10T15:22:08.828Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_f7ef1c98-5929-461e-af6c-489fc3d58569",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 34.15,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_b5c60ebb-0523-4999-b44a-0fa4db5aab1f",
+      "at": "2026-09-10T15:23:11.263Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_c953bdee-c8e0-412a-9c4f-721c3c19ea5f",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "INDEX_OPTIONS",
+        "symbol": "NIFTY 23250 PE",
+        "planned_total_risk": 101.51,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_e1d990c2-8f87-4b78-890e-3ab7d6e57ab1",
+      "at": "2026-09-10T15:23:36.360Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_fe9bd1ea-47b7-4e6e-b4d0-391327d15856",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 38.25,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_8192570a-1d0f-4b91-99ea-54ff0d892dec",
+      "at": "2026-09-10T15:24:07.057Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_a2298b14-95ab-4245-9fcf-f040694e8e18",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "INTRADAY",
+        "symbol": "BIKAJI",
+        "planned_total_risk": 227.79,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_c041ffa2-13f1-4f18-a9f7-91c5b12ee629",
+      "at": "2026-09-10T15:24:26.595Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_a2298b14-95ab-4245-9fcf-f040694e8e18",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 570.43,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_d30b919f-0fac-4bfb-bb8a-87f3968e4a44",
+      "at": "2026-09-10T15:25:04.312Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_a95b9831-7e7f-47b5-91a9-8a9a6dd26225",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "INTRADAY",
+        "symbol": "ZEEL",
+        "planned_total_risk": 171.97,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_81196b3e-25fe-487f-90ba-fe5ce8617a0f",
+      "at": "2026-09-10T15:25:21.543Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_a95b9831-7e7f-47b5-91a9-8a9a6dd26225",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 80.83,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_f6ee8b85-dedd-49f8-b7a8-04231e7d1029",
+      "at": "2026-09-10T15:26:34.258Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_fa24848b-807e-41fe-9849-651c07d8b418",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "NATURAL_GAS",
+        "symbol": "NATGASMINI 265 PE",
+        "planned_total_risk": 525.18,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_5b4838af-16b6-4621-a174-18883b8fd597",
+      "at": "2026-09-10T15:26:46.540Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_fa24848b-807e-41fe-9849-651c07d8b418",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 8,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_856f24a6-445e-42a4-a6df-f5f89165c7ef",
+      "at": "2026-09-10T15:27:36.354Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_624fe1a9-3418-445d-aca9-1ebe33f736ef",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "CRUDE",
+        "symbol": "CRUDEOIL MINI 9800 CE",
+        "planned_total_risk": 104.56,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_a5a93d87-ff98-4a7b-a0df-a76de1f9b4ba",
+      "at": "2026-09-10T15:27:51.572Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_624fe1a9-3418-445d-aca9-1ebe33f736ef",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 262,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_459be64e-9ec8-45ad-b0f4-4baaa03dd743",
+      "at": "2026-09-10T15:28:52.647Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_e467845a-95c1-40f8-a58d-c97725a5bb10",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "NATURAL_GAS",
+        "symbol": "NATGASMINI 265 PE",
+        "planned_total_risk": 554.16,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_af9254de-ea74-4c2a-a820-64405ed1661e",
+      "at": "2026-09-10T15:29:13.872Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_e467845a-95c1-40f8-a58d-c97725a5bb10",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 8.5,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_a0be4b8f-5b16-4bb7-ae66-b1ff89a34135",
+      "at": "2026-09-10T15:30:12.483Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_9e2627b4-8ced-41e5-b6bf-e1282b92016c",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "CRUDE",
+        "symbol": "CRUDEOIL MINI 9800 CE",
+        "planned_total_risk": 137.57,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_07fb4601-65ec-46f2-96ec-fd77c0ce147d",
+      "at": "2026-09-10T15:30:30.800Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_9e2627b4-8ced-41e5-b6bf-e1282b92016c",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 237,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_a3295bbc-dfc1-4bb9-adaf-44084b21f520",
+      "at": "2026-09-10T15:34:05.855Z",
+      "action": "CONFIG_UPDATED",
+      "entity": "config",
+      "entity_id": null,
+      "month_key": null,
+      "detail": {
+        "configured": true,
+        "monthlyRiskBudget": 7500,
+        "allocations": {
+          "INTRADAY": 750,
+          "LONG_TERM": 1500,
+          "INDEX_OPTIONS": 1250,
+          "NATURAL_GAS": 1000,
+          "STOCK_OPTIONS": 1000,
+          "SWING": 1000,
+          "CRUDE": 500,
+          "PENNY": 0
+        },
+        "reserveAllocation": 500,
+        "segmentSL": {
+          "INTRADAY": 100,
+          "LONG_TERM": 250,
+          "INDEX_OPTIONS": 250,
+          "NATURAL_GAS": 250,
+          "STOCK_OPTIONS": 250,
+          "SWING": 100,
+          "CRUDE": 250
+        },
+        "segmentSLPercent": {
+          "INTRADAY": null,
+          "LONG_TERM": null,
+          "INDEX_OPTIONS": null,
+          "NATURAL_GAS": null,
+          "STOCK_OPTIONS": null,
+          "SWING": 5,
+          "CRUDE": null
+        },
+        "segmentTargetPercent": {
+          "INTRADAY": null,
+          "LONG_TERM": null,
+          "INDEX_OPTIONS": null,
+          "NATURAL_GAS": null,
+          "STOCK_OPTIONS": null,
+          "SWING": 5,
+          "CRUDE": null
+        },
+        "segmentBroker": {
+          "INTRADAY": "INDMONEY",
+          "LONG_TERM": null,
+          "INDEX_OPTIONS": "INDMONEY",
+          "NATURAL_GAS": "INDMONEY",
+          "STOCK_OPTIONS": "INDMONEY",
+          "SWING": "ZERODHA",
+          "CRUDE": "INDMONEY"
+        },
+        "openingDeductions": {
+          "INTRADAY": 0,
+          "LONG_TERM": 2000,
+          "INDEX_OPTIONS": 0,
+          "NATURAL_GAS": 0,
+          "STOCK_OPTIONS": 0,
+          "SWING": 0,
+          "CRUDE": 0,
+          "PENNY": 0
+        },
+        "dailyRiskLimit": 300,
+        "maxPositionsPerDay": 1,
+        "maxPositionsExceptional": 2,
+        "swingDefaultSL": 100,
+        "longTermBroker": null,
+        "accrualStartDate": "2026-09-04",
+        "accrualDivisor": 22,
+        "accrualBasis": "WEEKDAYS",
+        "booksLosses": {
+          "INTRADAY": true,
+          "LONG_TERM": false,
+          "INDEX_OPTIONS": true,
+          "NATURAL_GAS": true,
+          "STOCK_OPTIONS": true,
+          "SWING": true,
+          "CRUDE": true,
+          "OPPORTUNITY_RESERVE": true
+        },
+        "chargesWarnRatio": 0.25,
+        "actualVsEstimateWarnRatio": 0.2,
+        "correlationBlockSameUnderlying": true
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_ead88443-4d02-4327-8970-8196ad7ffc9b",
+      "at": "2026-09-10T15:34:14.714Z",
+      "action": "CONFIG_UPDATED",
+      "entity": "config",
+      "entity_id": null,
+      "month_key": null,
+      "detail": {
+        "configured": true,
+        "monthlyRiskBudget": 7500,
+        "allocations": {
+          "INTRADAY": 750,
+          "LONG_TERM": 1500,
+          "INDEX_OPTIONS": 1250,
+          "NATURAL_GAS": 1000,
+          "STOCK_OPTIONS": 1000,
+          "SWING": 1000,
+          "CRUDE": 500,
+          "PENNY": 0
+        },
+        "reserveAllocation": 500,
+        "segmentSL": {
+          "INTRADAY": 100,
+          "LONG_TERM": 250,
+          "INDEX_OPTIONS": 250,
+          "NATURAL_GAS": 250,
+          "STOCK_OPTIONS": 250,
+          "SWING": 100,
+          "CRUDE": 250
+        },
+        "segmentSLPercent": {
+          "INTRADAY": null,
+          "LONG_TERM": null,
+          "INDEX_OPTIONS": null,
+          "NATURAL_GAS": null,
+          "STOCK_OPTIONS": null,
+          "SWING": 5,
+          "CRUDE": null
+        },
+        "segmentTargetPercent": {
+          "INTRADAY": null,
+          "LONG_TERM": null,
+          "INDEX_OPTIONS": null,
+          "NATURAL_GAS": null,
+          "STOCK_OPTIONS": null,
+          "SWING": 5,
+          "CRUDE": null
+        },
+        "segmentBroker": {
+          "INTRADAY": "INDMONEY",
+          "LONG_TERM": null,
+          "INDEX_OPTIONS": "INDMONEY",
+          "NATURAL_GAS": "INDMONEY",
+          "STOCK_OPTIONS": "INDMONEY",
+          "SWING": "ZERODHA",
+          "CRUDE": "INDMONEY"
+        },
+        "openingDeductions": {
+          "INTRADAY": 0,
+          "LONG_TERM": 0,
+          "INDEX_OPTIONS": 0,
+          "NATURAL_GAS": 0,
+          "STOCK_OPTIONS": 0,
+          "SWING": 0,
+          "CRUDE": 0,
+          "PENNY": 0
+        },
+        "dailyRiskLimit": 300,
+        "maxPositionsPerDay": 1,
+        "maxPositionsExceptional": 2,
+        "swingDefaultSL": 100,
+        "longTermBroker": null,
+        "accrualStartDate": "2026-09-04",
+        "accrualDivisor": 22,
+        "accrualBasis": "WEEKDAYS",
+        "booksLosses": {
+          "INTRADAY": true,
+          "LONG_TERM": false,
+          "INDEX_OPTIONS": true,
+          "NATURAL_GAS": true,
+          "STOCK_OPTIONS": true,
+          "SWING": true,
+          "CRUDE": true,
+          "OPPORTUNITY_RESERVE": true
+        },
+        "chargesWarnRatio": 0.25,
+        "actualVsEstimateWarnRatio": 0.2,
+        "correlationBlockSameUnderlying": true
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_620515af-9410-4d89-916f-eecc030fca5c",
+      "at": "2026-09-10T15:35:29.429Z",
+      "action": "TRADE_CLOSED",
+      "entity": "trades",
+      "entity_id": "trade_c953bdee-c8e0-412a-9c4f-721c3c19ea5f",
+      "month_key": "2026-09",
+      "detail": {
+        "exit_price": 38.25,
+        "exit_reason": "TARGET_REACHED"
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_c118b5be-3d47-459a-aaed-775fdd61b464",
+      "at": "2026-09-11T04:39:52.559Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_73f41b13-62eb-4cfc-88a8-543749363784",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "INTRADAY",
+        "symbol": "CMPDI",
+        "planned_total_risk": 225.86,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    },
+    {
+      "id": "audit_a0af7f43-8988-475f-b87b-60aa74f5731c",
+      "at": "2026-09-11T06:05:33.378Z",
+      "action": "TRADE_RECORDED",
+      "entity": "trades",
+      "entity_id": "trade_88502d51-a1b8-4ac2-9131-00fc0ee96f03",
+      "month_key": "2026-09",
+      "detail": {
+        "segment": "INTRADAY",
+        "symbol": "CMPDI",
+        "planned_total_risk": 227.34,
+        "reserve_used": 0
+      },
+      "override_reason": null,
+      "server_confirmed": false
+    }
+  ]
+}

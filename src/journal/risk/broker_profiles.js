@@ -9,6 +9,31 @@
  * journal_engine.js so Risk Desk numbers agree with the existing journal.
  */
 
+export function calcUnits({ quantity, lot_size = 1, lotSize, lots = null } = {}) {
+  const q = Number(quantity) || 0;
+  const l = Number(lot_size ?? lotSize) || 1;
+  const numLots = Number(lots) || 0;
+
+  if (q <= 0) return 0;
+  if (l <= 1) return q;
+
+  // When lots is explicitly provided
+  if (numLots > 0) {
+    // If quantity was already set to lots * lot_size (e.g. 1 lot * 65 = 65)
+    if (q === numLots * l) return q;
+    // If quantity was set to number of lots (e.g. 1)
+    if (q === numLots) return numLots * l;
+    return q;
+  }
+
+  // If no lots field:
+  // If quantity is already an exact multiple of lot_size and >= lot_size (e.g. 65 shares of Nifty)
+  if (q >= l && q % l === 0) return q;
+
+  // Otherwise, quantity was entered as number of lots (e.g. 2 lots)
+  return q * l;
+}
+
 export const BROKERS = {
   INDMONEY: { id: 'INDMONEY', label: 'INDmoney' },
   ZERODHA: { id: 'ZERODHA', label: 'Zerodha' }
@@ -217,7 +242,7 @@ export function estimateCharges({
 
   const entry = Number(entryPrice) || 0;
   const exit = Number(exitPrice) || 0;
-  const units = (Number(quantity) || 0) * (Number(lotSize) || 1);
+  const units = calcUnits({ quantity, lot_size: lotSize });
   if (entry <= 0 || units <= 0) {
     return { breakdown: { ...EMPTY_BREAKDOWN }, total: 0, profileId: profile.id, error: null };
   }

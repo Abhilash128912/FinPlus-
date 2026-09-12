@@ -305,6 +305,26 @@ export function useRiskDesk({ externalLtps = {}, positions = [] } = {}) {
     );
   }, [commit, monthKey]);
 
+  const deleteTrade = useCallback((id) => {
+    commit(
+      prev => ({
+        ...prev,
+        trades: prev.trades.filter(t => t.id !== id)
+      }),
+      { action: 'TRADE_DELETED', entity: 'trades', entity_id: id, month_key: monthKey }
+    );
+  }, [commit, monthKey]);
+
+  const updateTrade = useCallback((id, updates) => {
+    commit(
+      prev => ({
+        ...prev,
+        trades: prev.trades.map(t => (t.id === id ? { ...t, ...updates, updated_at: new Date().toISOString() } : t))
+      }),
+      { action: 'TRADE_UPDATED', entity: 'trades', entity_id: id, month_key: monthKey, detail: updates }
+    );
+  }, [commit, monthKey]);
+
   const setActualCharges = useCallback((id, breakdown, contractNoteRef) => {
     commit(
       prev => ({
@@ -392,7 +412,7 @@ export function useRiskDesk({ externalLtps = {}, positions = [] } = {}) {
     ltps, ltpUpdatedAt, syncState, trackedSymbols: openSymbols,
     validate,
     actions: {
-      saveSetup, deleteSetup, recordTrade, closeTrade,
+      saveSetup, deleteSetup, recordTrade, closeTrade, deleteTrade, updateTrade,
       setActualCharges, setManualLtp, addCashEntry, addGrowthEntry, updateConfig, resetAll
     }
   };

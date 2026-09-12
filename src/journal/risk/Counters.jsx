@@ -1,5 +1,8 @@
-import React from 'react';
-import { C, inr, pnlColor, Panel, Stat, StatGrid, Bar, Chip, Empty } from './ui.jsx';
+import React, { useState } from 'react';
+import { C, inr, pnlColor, Panel, Stat, StatGrid, Bar, Chip, Btn, Empty } from './ui.jsx';
+import InWindowTradeModal from './InWindowTradeModal.jsx';
+import SquareOffModal from './SquareOffModal.jsx';
+import EditOpenTradeModal from './EditOpenTradeModal.jsx';
 
 /**
  * Daily risk counters — the core of the accrual model.
@@ -8,7 +11,11 @@ import { C, inr, pnlColor, Panel, Stat, StatGrid, Bar, Chip, Empty } from './ui.
  * trading. A win leaves the counter alone; a booked loss resets it to zero and
  * takes the actual net loss out of that segment's capital.
  */
-export default function Counters({ accrualState, monthView }) {
+export default function Counters({ accrualState, monthView, desk }) {
+  const [tradingSegment, setTradingSegment] = useState(null);
+  const [squaringOffTrade, setSquaringOffTrade] = useState(null);
+  const [editingOpenTrade, setEditingOpenTrade] = useState(null);
+
   if (!accrualState) return null;
 
   if (!accrualState.started) {
@@ -25,6 +32,8 @@ export default function Counters({ accrualState, monthView }) {
 
   const lanes = accrualState.lanes;
   const unlocked = lanes.filter(l => l.unlocked === true);
+  const allOpenTrades = (desk?.allTrades || monthView?.openTrades || [])
+    .filter(t => !t._closed && String(t.status || '').toUpperCase() !== 'CLOSED' && Number(t.exit_price || 0) === 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -32,10 +41,10 @@ export default function Counters({ accrualState, monthView }) {
         title="Daily risk counters"
         subtitle={`${inr(accrualState.dailyPot)} per ${accrualState.basis === 'WEEKDAYS' ? 'trading day' : 'day'} since ${accrualState.startDate} · ${lanes[0]?.totalDays || 0} ${accrualState.basis === 'WEEKDAYS' ? 'trading days' : 'days'} in. A win keeps the counter; a loss resets it to zero.`}
         right={
-          <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap', alignItems: 'center' }}>
             {accrualState.isWeekendToday && <Chip tone="warn">weekend — no accrual today</Chip>}
-            <Chip tone={unlocked.length ? 'good' : 'muted'}>
-              {unlocked.length ? `${unlocked.length} unlocked` : 'none unlocked'}
+            <Chip tone="good">
+              ✓ All {lanes.filter(l => !l.isReserve).length} segments unlocked ({unlocked.length} on target)
             </Chip>
           </div>
         }
@@ -51,12 +60,12 @@ export default function Counters({ accrualState, monthView }) {
         </StatGrid>
       </Panel>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
         {lanes.map(l => {
           const segView = monthView?.segments?.find(s => s.id === l.id);
           const noThreshold = l.threshold === null && !l.slPercent && !l.isReserve;
+          const openTrades = allOpenTrades.filter(t => t.segment === l.id);
 
-          const locked = !l.isReserve && l.unlocked === false;
           const accent = l.isReserve
             ? 'rgba(167,139,250,0.35)'
             : l.unlocked
@@ -76,18 +85,40 @@ export default function Counters({ accrualState, monthView }) {
                     {l.investedAmount > 0 && <span style={{ color: C.accent, fontWeight: 800 }}> · Invested: {inr(l.investedAmount)}</span>}
                   </div>
                 </div>
-                {l.isReserve ? (
-                  <Chip tone="violet">reserve</Chip>
-                ) : noThreshold ? (
-                  <Chip tone="warn">⚠ NO SL SET</Chip>
-                ) : l.unlocked ? (
-                  <Chip tone="good">✓ READY TO TRADE</Chip>
-                ) : (
-                  <Chip tone="bad">🔒 LOCKED</Chip>
-                )}
+
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {l.isReserve ? (
+                    <Chip tone="violet">reserve</Chip>
+                  ) : noThreshold ? (
+                    <Chip tone="warn">⚠ NO SL SET</Chip>
+                  ) : l.unlocked ? (
+                    <Chip tone="good">✓ READY TO TRADE</Chip>
+                  ) : (
+                    <Chip tone="bad">⚠ SHORTFALL ({l.daysToUnlock}D)</Chip>
+                  )}
+
+                  {!l.isReserve && (
+                    <Btn
+                      tone={l.unlocked ? "good" : noThreshold ? "warn" : "bad"}
+                      onClick={() => setTradingSegment({ segmentId: l.id, lane: l })}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        fontWeight: 900,
+                        border: l.unlocked 
+                          ? '1px solid #10b981' 
+                          : noThreshold 
+                            ? '1px solid #f59e0b' 
+                            : '1px solid #ef4444'
+                      }}
+                    >
+                      + Trade
+                    </Btn>
+                  )}
+                </div>
               </div>
 
-              {/* Unmistakable trading state - a day count alone reads as neutral */}
+              {/* Unmistakable trading state - Unlocked with warning rather than locked */}
               {!l.isReserve && (
                 <div style={{
                   background: noThreshold ? 'rgba(245,158,11,0.14)' : l.unlocked ? 'rgba(16,185,129,0.14)' : 'rgba(239,68,68,0.14)',
@@ -99,13 +130,33 @@ export default function Counters({ accrualState, monthView }) {
                   fontWeight: 900,
                   letterSpacing: '0.3px',
                   color: noThreshold ? C.amber : l.unlocked ? C.green : '#fca5a5',
-                  textAlign: 'center'
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
                 }}>
-                  {noThreshold
-                    ? '⚠ CANNOT TRADE — NO STOP-LOSS SET'
-                    : l.unlocked
-                      ? '✓ TRADING UNLOCKED'
-                      : `🔒 LOCKED FOR TRADING — ${l.daysToUnlock} TRADING DAY${l.daysToUnlock === 1 ? '' : 'S'} TO GO`}
+                  <span>
+                    {noThreshold
+                      ? '⚠ UNLOCKED — NO STANDARD STOP-LOSS SET (DISCRETIONARY RISK)'
+                      : l.unlocked
+                        ? '✓ TRADING UNLOCKED — ON TARGET'
+                        : `⚠ UNLOCKED (WARNING) — ${inr(l.shortfall)} SHORT (${l.daysToUnlock} TRADING DAY${l.daysToUnlock === 1 ? '' : 'S'} TO TARGET)`}
+                  </span>
+                  <span
+                    onClick={() => setTradingSegment({ segmentId: l.id, lane: l })}
+                    style={{
+                      background: l.unlocked ? '#10b981' : noThreshold ? '#f59e0b' : '#ef4444',
+                      color: '#090d16',
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      fontSize: '10px',
+                      fontWeight: 900,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      marginLeft: '8px'
+                    }}
+                  >
+                    TRADE NOW →
+                  </span>
                 </div>
               )}
 
@@ -113,7 +164,7 @@ export default function Counters({ accrualState, monthView }) {
               {!l.isReserve && (
                 <div style={{ marginBottom: '14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '21px', fontWeight: 900, color: l.unlocked ? C.green : locked ? '#94a3b8' : '#fff' }}>
+                    <span style={{ fontSize: '21px', fontWeight: 900, color: l.unlocked ? C.green : '#fca5a5' }}>
                       {inr(l.counter)}
                     </span>
                     <span style={{ fontSize: '11px', color: C.muted, fontWeight: 700 }}>
@@ -125,7 +176,7 @@ export default function Counters({ accrualState, monthView }) {
                   <Bar
                     used={l.counter}
                     total={l.threshold || (l.slPercent ? l.counter || 1 : 1)}
-                    color={l.unlocked ? C.green : locked ? C.red : C.accent}
+                    color={l.unlocked ? C.green : noThreshold ? C.amber : C.red}
                     height={9}
                   />
                   <div style={{ fontSize: '10px', color: C.dim, marginTop: '6px' }}>
@@ -134,10 +185,10 @@ export default function Counters({ accrualState, monthView }) {
                           ? `Risk capped at ${inr(l.cappedRisk)} per trade — supports a position up to ${inr(l.maxPositionValue)} at a ${l.slPercent}% stop${l.targetPercent ? `, target +${l.targetPercent}%` : ''}.`
                           : `Sized to the counter — supports a position up to ${inr(l.maxPositionValue)} at a ${l.slPercent}% stop${l.targetPercent ? `, target +${l.targetPercent}%` : ''}.`)
                       : noThreshold
-                        ? 'Set a stop-loss for this segment to enable the unlock.'
+                        ? 'No stop-loss set for this segment. Trading is fully unlocked with discretionary sizing.'
                         : l.unlocked
                           ? 'Ready to trade — an A/A+ setup and the daily rules still apply.'
-                          : `${inr(l.shortfall)} short · unlocks ${l.unlockDate || 'soon'}`}
+                          : `Warning: counter is ${inr(l.shortfall)} short of standard threshold. Trading is unlocked with capital drawdown.`}
                   </div>
                 </div>
               )}
@@ -175,6 +226,82 @@ export default function Counters({ accrualState, monthView }) {
                 />
               </div>
 
+              {/* ── ACTIVE OPEN POSITIONS IN THIS SEGMENT ── */}
+              {openTrades.length > 0 && (
+                <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: `1px dashed ${C.border}` }}>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: C.accent, marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>⚡ OPEN POSITIONS ({openTrades.length})</span>
+                    <span style={{ fontSize: '10px', color: C.muted }}>Live MTM</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {openTrades.map(t => {
+                      const netMtm = t._pnl?.liveNet ?? 0;
+                      return (
+                        <div
+                          key={t.id}
+                          style={{
+                            background: 'rgba(0, 0, 0, 0.4)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            borderRadius: '8px',
+                            padding: '9px 11px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '8px',
+                            flexWrap: 'wrap'
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 900, color: '#fff', fontSize: '12px' }}>
+                              {t.symbol}
+                              <span style={{
+                                fontSize: '10px',
+                                color: t.direction === 'SHORT' ? C.red : C.green,
+                                marginLeft: '6px',
+                                fontWeight: 800,
+                                padding: '1px 5px',
+                                background: t.direction === 'SHORT' ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)',
+                                borderRadius: '4px'
+                              }}>
+                                {t.direction || 'LONG'}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '10px', color: C.muted, marginTop: '2px' }}>
+                              {t.quantity} qty @ {inr(t.entry_price)}
+                              {t._pnl?.hasLivePrice && <span> · LTP: {inr(t._pnl.markPrice)}</span>}
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: '12px', fontWeight: 900, color: pnlColor(netMtm) }}>
+                                {netMtm >= 0 ? '+' : ''}{inr(netMtm)}
+                              </div>
+                              <div style={{ fontSize: '9px', color: C.dim }}>Net MTM</div>
+                            </div>
+                            <Btn
+                              tone="ghost"
+                              onClick={() => setEditingOpenTrade(t)}
+                              style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 800 }}
+                              title="Edit buy price, quantity, SL or target"
+                            >
+                              ✏️ Edit
+                            </Btn>
+                            <Btn
+                              tone="danger"
+                              onClick={() => setSquaringOffTrade({ trade: t, lane: l })}
+                              style={{ padding: '4px 10px', fontSize: '10px', fontWeight: 900 }}
+                            >
+                              Square Off
+                            </Btn>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {l.openingDeduction > 0 && (
                 <div style={{ marginTop: '10px', fontSize: '10px', color: C.violet, fontWeight: 700 }}>
                   Less {inr(l.openingDeduction)} committed before the counter started
@@ -196,6 +323,42 @@ export default function Counters({ accrualState, monthView }) {
           );
         })}
       </div>
+
+      {/* ── In-Window Trade Execution Modal ── */}
+      {tradingSegment && (
+        <InWindowTradeModal
+          segmentId={tradingSegment.segmentId}
+          lane={tradingSegment.lane}
+          desk={desk}
+          onClose={() => setTradingSegment(null)}
+        />
+      )}
+
+      {/* ── In-Window Square-Off Modal ── */}
+      {squaringOffTrade && (
+        <SquareOffModal
+          trade={squaringOffTrade.trade}
+          lane={squaringOffTrade.lane}
+          desk={desk}
+          onClose={() => setSquaringOffTrade(null)}
+        />
+      )}
+
+      {/* ── Edit Open Position Modal ── */}
+      {editingOpenTrade && (
+        <EditOpenTradeModal
+          trade={editingOpenTrade}
+          onClose={() => setEditingOpenTrade(null)}
+          onSubmit={(updates) => {
+            desk?.actions?.updateTrade(editingOpenTrade.id, updates);
+            setEditingOpenTrade(null);
+          }}
+          onDelete={(id) => {
+            desk?.actions?.deleteTrade(id);
+            setEditingOpenTrade(null);
+          }}
+        />
+      )}
     </div>
   );
 }

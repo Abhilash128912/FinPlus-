@@ -64,6 +64,7 @@ export function computePlannedRisk(trade, profiles, config = DEFAULT_CONFIG) {
     exitPrice: trade?.stop_loss_price, // cost measured at the stop, the planned worst case
     quantity: trade?.quantity,
     lotSize: trade?.lot_size || 1,
+    lots: trade?.lots,
     isShort: trade?.direction === 'SHORT',
     date: trade?.entry_date
   });
@@ -104,6 +105,7 @@ export function computeTradePnl(trade, profiles, config = DEFAULT_CONFIG, ltp = 
         exit_price: markPrice,
         quantity: trade.quantity,
         lot_size: trade.lot_size || 1,
+        lots: trade.lots,
         direction: trade.direction || 'LONG'
       })
     : 0;
@@ -116,6 +118,7 @@ export function computeTradePnl(trade, profiles, config = DEFAULT_CONFIG, ltp = 
     exitPrice: markPrice,
     quantity: trade?.quantity,
     lotSize: trade?.lot_size || 1,
+    lots: trade?.lots,
     isShort: trade?.direction === 'SHORT',
     date: trade?.exit_date || trade?.entry_date
   });

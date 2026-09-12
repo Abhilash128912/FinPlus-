@@ -3,12 +3,16 @@ import { C, inr, pnlColor, Panel, Stat, StatGrid, Bar, Chip, Btn, Field, Input, 
 import { monthLabel } from './risk_model.js';
 import { sumChargeBreakdown } from './broker_profiles.js';
 import Counters from './Counters.jsx';
+import EditOpenTradeModal from './EditOpenTradeModal.jsx';
 
 /** Dashboard: decision banner, risk counters, cash, performance and open-position live P&L. */
 export default function RiskDashboard({ desk, onOpenDaily }) {
   const { monthView, dailySnapshot, accountView, months, monthKey, setMonthKey, ltpUpdatedAt, trackedSymbols, syncState, actions, dayDecision, accrualState } = desk;
   const [closing, setClosing] = useState(null);
   const [charging, setCharging] = useState(null);
+  const [editingTrade, setEditingTrade] = useState(null);
+  const [editingOpenTrade, setEditingOpenTrade] = useState(null);
+  const [historyScope, setHistoryScope] = useState('ALL'); // 'ALL' or 'MONTH'
 
   if (!monthView) return <Empty>No month record found.</Empty>;
 
@@ -111,7 +115,7 @@ export default function RiskDashboard({ desk, onOpenDaily }) {
       </Panel>
 
       {/* ── Daily risk counters (replaces monthly buckets) ── */}
-      <Counters accrualState={accrualState} monthView={monthView} />
+      <Counters accrualState={accrualState} monthView={monthView} desk={desk} />
 
       {/* ── Cash & performance ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
@@ -205,7 +209,14 @@ export default function RiskDashboard({ desk, onOpenDaily }) {
                     </td>
                     <td style={{ padding: '10px', color: C.amber, fontWeight: 700 }}>{inr(t.planned_total_risk)}</td>
                     <td style={{ padding: '10px' }}>
-                      <Btn tone="ghost" onClick={() => setClosing(t)} style={{ padding: '6px 11px' }}>Close</Btn>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <Btn tone="ghost" onClick={() => setEditingOpenTrade(t)} style={{ padding: '6px 9px', fontSize: '11px' }}>
+                          ✏️ Edit
+                        </Btn>
+                        <Btn tone="ghost" onClick={() => setClosing(t)} style={{ padding: '6px 11px', fontSize: '11px' }}>
+                          Close
+                        </Btn>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -233,80 +244,276 @@ export default function RiskDashboard({ desk, onOpenDaily }) {
       )}
 
       {/* ── Closed trades ── */}
-      <Panel title="Closed trades this month" subtitle="Net P&L uses actual contract-note charges when entered, otherwise the estimate.">
-        {monthView.closedTrades.length === 0 ? (
-          <Empty>No closed trades yet this month.</Empty>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '780px' }}>
-              <thead>
-                <tr style={{ color: C.muted, textAlign: 'left', fontSize: '10px', textTransform: 'uppercase' }}>
-                  <th style={{ padding: '9px 10px' }}>Symbol</th>
-                  <th style={{ padding: '9px 10px' }}>Segment</th>
-                  <th style={{ padding: '9px 10px' }}>Entry → Exit</th>
-                  <th style={{ padding: '9px 10px' }}>Gross</th>
-                  <th style={{ padding: '9px 10px' }}>Charges</th>
-                  <th style={{ padding: '9px 10px' }}>Net</th>
-                  <th style={{ padding: '9px 10px' }}>Exit reason</th>
-                  <th style={{ padding: '9px 10px' }} />
-                </tr>
-              </thead>
-              <tbody>
-                {monthView.closedTrades.map(t => (
-                  <tr key={t.id} style={{ borderTop: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '10px', fontWeight: 900, color: '#fff' }}>{t.symbol}</td>
-                    <td style={{ padding: '10px', color: C.muted }}>{t.segment}</td>
-                    <td style={{ padding: '10px', color: C.muted }}>{inr(t.entry_price)} → {inr(t.exit_price)}</td>
-                    <td style={{ padding: '10px', fontWeight: 800, color: pnlColor(t._pnl.gross) }}>{inr(t._pnl.gross)}</td>
-                    <td style={{ padding: '10px', color: C.amber }}>
-                      {inr(t._pnl.actualCharges)}
-                      <div style={{ fontSize: '9px', color: t._pnl.usingActual ? C.green : C.dim }}>
-                        {t._pnl.usingActual ? 'actual' : 'estimated'}
-                      </div>
-                    </td>
-                    <td style={{ padding: '10px', fontWeight: 900, color: pnlColor(t._pnl.net) }}>{inr(t._pnl.net)}</td>
-                    <td style={{ padding: '10px', color: C.muted, fontSize: '11px' }}>{t.exit_reason || '—'}</td>
-                    <td style={{ padding: '10px' }}>
-                      <Btn tone="ghost" onClick={() => setCharging(t)} style={{ padding: '6px 10px' }}>
-                        {t._pnl.usingActual ? 'Edit charges' : 'Add actual'}
-                      </Btn>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+      {(() => {
+        const allClosed = desk.allTrades ? desk.allTrades.filter(t => t._closed) : monthView.closedTrades;
+        const displayedClosed = historyScope === 'ALL' ? allClosed : monthView.closedTrades;
+
+        return (
+          <Panel
+            title={historyScope === 'ALL' ? `Historical closed trades (All Time · ${displayedClosed.length})` : `Closed trades this month (${displayedClosed.length})`}
+            subtitle="Net P&L uses actual contract-note charges when entered, otherwise the estimate."
+            right={
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <Btn
+                  tone={historyScope === 'ALL' ? 'good' : 'ghost'}
+                  onClick={() => setHistoryScope('ALL')}
+                  style={{ padding: '4px 10px', fontSize: '11px', fontWeight: 800 }}
+                >
+                  All Time ({allClosed.length})
+                </Btn>
+                <Btn
+                  tone={historyScope === 'MONTH' ? 'good' : 'ghost'}
+                  onClick={() => setHistoryScope('MONTH')}
+                  style={{ padding: '4px 10px', fontSize: '11px', fontWeight: 800 }}
+                >
+                  This Month ({monthView.closedTrades.length})
+                </Btn>
+              </div>
+            }
+          >
+            {displayedClosed.length === 0 ? (
+              <Empty>{historyScope === 'ALL' ? 'No historical closed trades recorded yet.' : 'No closed trades yet this month.'}</Empty>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '780px' }}>
+                  <thead>
+                    <tr style={{ color: C.muted, textAlign: 'left', fontSize: '10px', textTransform: 'uppercase' }}>
+                      <th style={{ padding: '9px 10px' }}>Date</th>
+                      <th style={{ padding: '9px 10px' }}>Symbol</th>
+                      <th style={{ padding: '9px 10px' }}>Segment</th>
+                      <th style={{ padding: '9px 10px' }}>Entry → Exit</th>
+                      <th style={{ padding: '9px 10px' }}>Gross</th>
+                      <th style={{ padding: '9px 10px' }}>Charges</th>
+                      <th style={{ padding: '9px 10px' }}>Net</th>
+                      <th style={{ padding: '9px 10px' }}>Exit reason</th>
+                      <th style={{ padding: '9px 10px' }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedClosed.map(t => (
+                      <tr key={t.id} style={{ borderTop: `1px solid ${C.border}` }}>
+                        <td style={{ padding: '10px', color: C.dim, fontSize: '11px' }}>
+                          {String(t.exit_date || t.entry_date || '').slice(0, 10)}
+                        </td>
+                        <td style={{ padding: '10px', fontWeight: 900, color: '#fff' }}>{t.symbol}</td>
+                        <td style={{ padding: '10px', color: C.muted }}>{t.segment}</td>
+                        <td style={{ padding: '10px', color: C.muted }}>{inr(t.entry_price)} → {inr(t.exit_price)}</td>
+                        <td style={{ padding: '10px', fontWeight: 800, color: pnlColor(t._pnl?.gross ?? 0) }}>{inr(t._pnl?.gross ?? 0)}</td>
+                        <td style={{ padding: '10px', color: C.amber }}>
+                          {inr(t._pnl?.actualCharges ?? 0)}
+                          <div style={{ fontSize: '9px', color: t._pnl?.usingActual ? C.green : C.dim }}>
+                            {t._pnl?.usingActual ? 'actual' : 'estimated'}
+                          </div>
+                        </td>
+                        <td style={{ padding: '10px', fontWeight: 900, color: pnlColor(t._pnl?.net ?? 0) }}>{inr(t._pnl?.net ?? 0)}</td>
+                        <td style={{ padding: '10px', color: C.muted, fontSize: '11px' }}>{t.exit_reason || '—'}</td>
+                        <td style={{ padding: '10px' }}>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <Btn tone="ghost" onClick={() => setEditingTrade(t)} style={{ padding: '4px 8px', fontSize: '11px' }}>
+                              Edit
+                            </Btn>
+                            <Btn tone="ghost" onClick={() => setCharging(t)} style={{ padding: '4px 8px', fontSize: '11px' }}>
+                              {t._pnl?.usingActual ? 'Charges' : 'Add charges'}
+                            </Btn>
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Delete ${t.symbol} (${t.segment}) trade? This will restore any booked loss to your capital.`)) {
+                                  actions.deleteTrade(t.id);
+                                }
+                              }}
+                              style={{
+                                background: 'rgba(239,68,68,0.15)',
+                                border: '1px solid rgba(239,68,68,0.4)',
+                                color: '#f87171',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                cursor: 'pointer'
+                              }}
+                              title="Delete Trade"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        );
+      })()}
 
       {closing && <CloseTradeModal trade={closing} onClose={() => setClosing(null)} onSubmit={(payload) => { actions.closeTrade(closing.id, payload); setClosing(null); }} />}
       {charging && <ActualChargesModal trade={charging} onClose={() => setCharging(null)} onSubmit={(b, ref) => { actions.setActualCharges(charging.id, b, ref); setCharging(null); }} />}
+      {editingTrade && (
+        <EditClosedTradeModal
+          trade={editingTrade}
+          onClose={() => setEditingTrade(null)}
+          onSubmit={(updates) => {
+            actions.updateTrade(editingTrade.id, updates);
+            setEditingTrade(null);
+          }}
+        />
+      )}
+      {editingOpenTrade && (
+        <EditOpenTradeModal
+          trade={editingOpenTrade}
+          onClose={() => setEditingOpenTrade(null)}
+          onSubmit={(updates) => {
+            actions.updateTrade(editingOpenTrade.id, updates);
+            setEditingOpenTrade(null);
+          }}
+          onDelete={(id) => {
+            actions.deleteTrade(id);
+            setEditingOpenTrade(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
+function EditClosedTradeModal({ trade, onClose, onSubmit }) {
+  const [entryPrice, setEntryPrice] = useState(String(trade.entry_price || ''));
+  const [exitPrice, setExitPrice] = useState(String(trade.exit_price || ''));
+  const [direction, setDirection] = useState(trade.direction || 'LONG');
+  const [exitReason, setExitReason] = useState(trade.exit_reason || '');
+
+  return (
+    <Modal title={`Edit Trade — ${trade.symbol}`} subtitle={`${trade.segment} · ${trade.quantity} units`} onClose={onClose} width="480px">
+      <div style={{ display: 'grid', gap: '14px' }}>
+        <Field label="Trade Direction">
+          <Select value={direction} onChange={e => setDirection(e.target.value)}>
+            <option value="LONG">🟢 LONG (Bought first, then sold)</option>
+            <option value="SHORT">🔴 SHORT (Sold first, then bought back)</option>
+          </Select>
+        </Field>
+        <Field label="Entry Price (₹)" required>
+          <Input type="number" step="0.01" value={entryPrice} onChange={e => setEntryPrice(e.target.value)} />
+        </Field>
+        <Field label="Exit Price (₹)" required>
+          <Input type="number" step="0.01" value={exitPrice} onChange={e => setExitPrice(e.target.value)} />
+        </Field>
+        <Field label="Exit Reason">
+          <Input value={exitReason} onChange={e => setExitReason(e.target.value)} placeholder="Target reached, stop loss, etc." />
+        </Field>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
+          <Btn tone="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn
+            disabled={!Number(entryPrice) || !Number(exitPrice)}
+            onClick={() => {
+              onSubmit({
+                entry_price: Number(entryPrice),
+                exit_price: Number(exitPrice),
+                direction,
+                exit_reason: exitReason
+              });
+            }}
+          >
+            Save Changes
+          </Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function CloseTradeModal({ trade, onClose, onSubmit }) {
-  const [exitPrice, setExitPrice] = useState(trade._pnl?.hasLivePrice ? String(trade._pnl.markPrice) : '');
+  const defaultExit = trade._pnl?.hasLivePrice ? String(trade._pnl.markPrice) : (trade.manual_ltp ? String(trade.manual_ltp) : '');
+  const [exitPrice, setExitPrice] = useState(defaultExit);
   const [exitReason, setExitReason] = useState('');
   const [exitDate, setExitDate] = useState(new Date().toISOString().slice(0, 16));
 
+  const numExit = Number(exitPrice) || 0;
+  const numEntry = Number(trade.entry_price) || 0;
+  const numQty = Number(trade.quantity) || 1;
+  const isShort = trade.direction === 'SHORT';
+  const estGross = numExit > 0
+    ? (isShort ? (numEntry - numExit) : (numExit - numEntry)) * numQty
+    : 0;
+
+  const quickReasons = ['Target Reached', 'Stop Hit', 'Time Stop', 'Manual Exit', 'Thesis Invalidated'];
+
   return (
-    <Modal title={`Close ${trade.symbol}`} subtitle={`${trade.segment} · entry ${inr(trade.entry_price)} · SL ${inr(trade.stop_loss_price)}`} onClose={onClose} width="520px">
+    <Modal title={`Close ${trade.symbol}`} subtitle={`${trade.segment} · ${trade.quantity} units · Entry: ${inr(trade.entry_price)} · SL: ${inr(trade.stop_loss_price)}`} onClose={onClose} width="520px">
       <div style={{ display: 'grid', gap: '14px' }}>
-        <Field label="Exit price" required>
-          <Input type="number" step="0.01" value={exitPrice} onChange={e => setExitPrice(e.target.value)} />
+        <Field label="Exit price (₹)" required hint="Price at which you squared off">
+          <Input
+            type="number"
+            step="0.01"
+            autoFocus
+            value={exitPrice}
+            onChange={e => setExitPrice(e.target.value)}
+            placeholder="0.00"
+          />
         </Field>
+
+        {numExit > 0 && (
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: `1px solid ${C.border}`,
+            borderRadius: '8px',
+            padding: '10px 12px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span style={{ fontSize: '11px', color: C.muted, fontWeight: 700 }}>ESTIMATED GROSS P&L:</span>
+            <span style={{ fontSize: '13px', fontWeight: 900, color: pnlColor(estGross) }}>
+              {estGross >= 0 ? '+' : ''}{inr(estGross)}
+            </span>
+          </div>
+        )}
+
         <Field label="Exit date/time">
           <Input type="datetime-local" value={exitDate} onChange={e => setExitDate(e.target.value)} />
         </Field>
-        <Field label="Exit reason" required hint="Target hit, stop hit, time stop, thesis invalidated…">
-          <Input value={exitReason} onChange={e => setExitReason(e.target.value)} placeholder="Why you came out" />
+
+        <Field label="Exit reason" hint="Select a quick tag or type custom reason (optional)">
+          <Input
+            value={exitReason}
+            onChange={e => setExitReason(e.target.value)}
+            placeholder="e.g. Target reached, stop hit, manual exit..."
+          />
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+            {quickReasons.map(r => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setExitReason(r)}
+                style={{
+                  background: exitReason === r ? 'rgba(56,189,248,0.2)' : 'rgba(255,255,255,0.05)',
+                  border: `1px solid ${exitReason === r ? C.accent : C.border}`,
+                  color: exitReason === r ? C.accent : C.muted,
+                  borderRadius: '6px',
+                  padding: '3px 8px',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
         </Field>
-        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '6px' }}>
           <Btn tone="ghost" onClick={onClose}>Cancel</Btn>
           <Btn
-            disabled={!Number(exitPrice) || !exitReason.trim()}
-            onClick={() => onSubmit({ exit_price: exitPrice, exit_date: new Date(exitDate).toISOString(), exit_reason: exitReason })}
+            disabled={!numExit || numExit <= 0}
+            onClick={() => {
+              const finalReason = exitReason.trim() || 'Manual Exit';
+              onSubmit({
+                exit_price: numExit,
+                exit_date: new Date(exitDate).toISOString(),
+                exit_reason: finalReason
+              });
+            }}
           >
             Close trade
           </Btn>

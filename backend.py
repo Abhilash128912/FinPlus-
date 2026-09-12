@@ -187,6 +187,109 @@ def fetch_direct_yahoo(y_sym: str) -> Optional[Dict[str, Any]]:
         print(f"[Direct Yahoo Fetch Error for {y_sym}]: {e}")
     return None
 
+
+# ── INDmoney Shared Token Integration ─────────────────────────────────────────
+SHARED_TOKEN_PATH = r"D:\FINPLUS WORKSPACE\indmoney_shared.env"
+_PNL_SECURITY_ID_MAP = None
+
+
+def get_shared_indmoney_token() -> str:
+    t = os.environ.get("INDMONEY_ACCESS_TOKEN", "").strip()
+    if t:
+        return t
+    for p in [SHARED_TOKEN_PATH, os.path.join(BASE_DIR, "indmoney.env"), r"D:\INDMONEY CRUDE APP\indmoney.env"]:
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.startswith("INDMONEY_ACCESS_TOKEN="):
+                            val = line.split("=", 1)[1].strip()
+                            if val:
+                                return val
+            except Exception:
+                pass
+    return ""
+
+
+def _get_indmoney_scrip_code(sym: str) -> str | None:
+    global _PNL_SECURITY_ID_MAP
+    clean = sym.strip().upper().replace(".NS", "").replace(".BO", "")
+    if clean == "RELIANCE":
+        return "NSE_2885"
+    if _PNL_SECURITY_ID_MAP is None:
+        sec_path = os.path.join(BASE_DIR, "nse_equity_security_ids.json")
+        if not os.path.exists(sec_path):
+            sec_path = r"D:\FINPLUS WORKSPACE\nse_equity_security_ids.json"
+        if os.path.exists(sec_path):
+            try:
+                with open(sec_path, "r", encoding="utf-8") as f:
+                    raw = json.load(f)
+                    _PNL_SECURITY_ID_MAP = raw.get("map", raw)
+            except Exception:
+                _PNL_SECURITY_ID_MAP = {}
+        else:
+            _PNL_SECURITY_ID_MAP = {}
+    sec_id = _PNL_SECURITY_ID_MAP.get(clean)
+    return f"NSE_{sec_id}" if sec_id else None
+
+
+def fetch_indmoney_batch(symbols: set) -> set:
+    """Fetches real-time LTP via INDmoney. Returns set of symbols that still need fallback."""
+    token = get_shared_indmoney_token()
+    if not token or not symbols:
+        return symbols
+
+    sym_to_scrip = {}
+    for s in symbols:
+        code = _get_indmoney_scrip_code(s)
+        if code:
+            sym_to_scrip[s] = code
+
+    if not sym_to_scrip:
+        return symbols
+
+    try:
+        scrip_list = list(set(sym_to_scrip.values()))
+        url = f"https://api.indstocks.com/market/quotes/full?scrip-codes={','.join(scrip_list)}"
+        headers = {
+            "Authorization": token if token.startswith("Bearer ") else f"Bearer {token}",
+            "Accept": "application/json"
+        }
+        resp = requests.get(url, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            data = (resp.json() or {}).get("data") or {}
+            now = time.time()
+            resolved = set()
+            for y_sym, scrip in sym_to_scrip.items():
+                node = data.get(scrip)
+                if node and node.get("live_price"):
+                    try:
+                        ltp = round(float(node["live_price"]), 2)
+                        prev_c = round(float(node.get("prev_close") or ltp), 2)
+                        chg = round(float(node.get("day_change") or (ltp - prev_c)), 2)
+                        chg_pct = round(float(node.get("day_change_percentage") or ((chg / prev_c) * 100 if prev_c else 0)), 2)
+                        high = round(float(node.get("day_high") or ltp), 2)
+                        low = round(float(node.get("day_low") or ltp), 2)
+                        price_data = {
+                            "ltp": ltp,
+                            "change": chg,
+                            "change_percent": chg_pct,
+                            "prev_close": prev_c,
+                            "high": high,
+                            "low": low,
+                            "timestamp": now,
+                            "source": "indmoney"
+                        }
+                        PRICE_CACHE[y_sym] = price_data
+                        resolved.add(y_sym)
+                    except Exception:
+                        pass
+            return symbols - resolved
+    except Exception as e:
+        print(f"[INDmoney Batch Error]: {e}")
+    return symbols
+
+
 def fetch_yfinance_batch(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
     now = time.time()
     results = {}
@@ -208,6 +311,17 @@ def fetch_yfinance_batch(symbols: List[str]) -> Dict[str, Dict[str, Any]]:
             needed_y_symbols.add(y_sym)
 
     if needed_y_symbols:
+        needed_y_symbols = fetch_indmoney_batch(needed_y_symbols)
+        for clean_raw, y_sym in raw_to_y_map.items():
+            if y_sym in PRICE_CACHE:
+                results[clean_raw] = PRICE_CACHE[y_sym]
+                results[y_sym] = PRICE_CACHE[y_sym]
+        if not needed_y_symbols:
+            for clean_raw, y_sym in raw_to_y_map.items():
+                if y_sym in PRICE_CACHE:
+                    results[clean_raw] = PRICE_CACHE[y_sym]
+                    results[y_sym] = PRICE_CACHE[y_sym]
+            return results
         try:
             tickers_obj = yf.Tickers(" ".join(list(needed_y_symbols)))
             for y_sym in needed_y_symbols:
@@ -569,8 +683,8 @@ def require_key(request: Request):
     if not supplied or not hmac.compare_digest(str(supplied), FINPLUS_API_KEY):
         raise HTTPException(status_code=401, detail="Missing or invalid API key")
 
-@app.get("/health")
-@app.get("/api/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health_check():
     local_ips = get_local_ips()
     return {
@@ -1157,14 +1271,14 @@ if os.path.exists(DIST_DIR):
     if os.path.exists(ASSETS_DIR):
         app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
-    @app.get("/")
+    @app.api_route("/", methods=["GET", "HEAD"])
     def serve_root():
         index_file = os.path.join(DIST_DIR, "index.html")
         if os.path.exists(index_file):
             return FileResponse(index_file)
         return {"status": "online", "app": "Finplus PnL Independent Backend"}
 
-    @app.get("/{full_path:path}")
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
     def serve_spa(full_path: str):
         if full_path.startswith("api/") or full_path in ["health", "api/health", "docs", "openapi.json"]:
             return {"error": "Not Found"}

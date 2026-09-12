@@ -9,7 +9,8 @@
  * file may be added to, or subtracted from, a broker cash balance.
  */
 
-import { PRODUCTS } from './broker_profiles.js';
+import { PRODUCTS, calcUnits } from './broker_profiles.js';
+export { calcUnits };
 
 export const STANDARD_START = '2026-09';
 export const STANDARD_END = '2029-09';
@@ -266,27 +267,27 @@ export function reapplyConfigToMonths(months, config) {
 
 /* ────────────────────────────── Formulas §6 ────────────────────────────── */
 
-export function plannedPriceRisk({ entry_price, stop_loss_price, quantity, lot_size = 1 }) {
+export function plannedPriceRisk({ entry_price, stop_loss_price, quantity, lot_size = 1, lots = null }) {
   const e = Number(entry_price) || 0;
   const sl = Number(stop_loss_price) || 0;
   const q = Number(quantity) || 0;
-  const l = Number(lot_size) || 1;
   if (!e || !sl || !q) return 0;
-  return Number((Math.abs(e - sl) * q * l).toFixed(2));
+  const units = calcUnits({ quantity: q, lot_size, lots });
+  return Number((Math.abs(e - sl) * units).toFixed(2));
 }
 
 export function plannedTotalRisk(priceRisk, estimatedCharges) {
   return Number(((Number(priceRisk) || 0) + (Number(estimatedCharges) || 0)).toFixed(2));
 }
 
-export function grossPnl({ entry_price, exit_price, quantity, lot_size = 1, direction = 'LONG' }) {
+export function grossPnl({ entry_price, exit_price, quantity, lot_size = 1, direction = 'LONG', lots = null }) {
   const e = Number(entry_price) || 0;
   const x = Number(exit_price) || 0;
   const q = Number(quantity) || 0;
-  const l = Number(lot_size) || 1;
   if (!e || !x || !q) return 0;
+  const units = calcUnits({ quantity: q, lot_size, lots });
   const diff = direction === 'SHORT' ? e - x : x - e;
-  return Number((diff * q * l).toFixed(2));
+  return Number((diff * units).toFixed(2));
 }
 
 export function netPnl(gross, actualCharges) {

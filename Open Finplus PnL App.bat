@@ -1,5 +1,5 @@
 @echo off
-title Finplus PnL Journal - Cache Cleanup & Server Start...
+title Finplus PnL Journal - Cache Cleanup ^& Server Start...
 echo.
 echo  ============================================================
 echo   FINPLUS PnL JOURNAL  -  CACHE PURGE ^& AUTO SYNC
@@ -65,10 +65,10 @@ echo.
 
 :: Vite automatically opens http://localhost:3000 when ready (configured in vite.config.js)
 call npm.cmd run dev -- --force
-if %errorlevel% neq 0 (
-    echo.
-    echo  [ERROR] Failed to start application server.
-    pause
-)
+echo.
+echo  ============================================================
+echo   Finplus application session finished.
+echo  ============================================================
+timeout /t 3 >nul 2>&1
 
 

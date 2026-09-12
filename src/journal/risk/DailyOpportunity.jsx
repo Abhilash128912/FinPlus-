@@ -428,8 +428,8 @@ function TakeTradeModal({ candidate, desk, onClose }) {
 
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           <Btn tone="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn tone="good" disabled={!verdict.ok || busy} onClick={submit}>
-            {busy ? 'Recording…' : 'Record trade'}
+          <Btn tone={verdict.ok ? "good" : "warn"} disabled={busy} onClick={submit}>
+            {busy ? 'Recording…' : verdict.ok ? 'Record trade' : 'Record trade (with warnings)'}
           </Btn>
         </div>
       </div>

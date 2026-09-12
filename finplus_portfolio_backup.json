@@ -12,7 +12,26 @@
   ],
   "soldHistory": [],
   "brokerAdjustments": [],
-  "optionsTrades": [],
+  "optionsTrades": [
+    {
+      "id": "opt_1789051693398_uven9",
+      "entryDate": "2026-09-10",
+      "instrument": "FIEMIND",
+      "instrumentType": "INTRADAY_EQ",
+      "lots": 1,
+      "lotSize": 1,
+      "qty": 6,
+      "entryPrice": 2006.32,
+      "capitalUsed": 12037.92,
+      "fundedBy": "GENERAL",
+      "exitDate": "2026-09-10",
+      "exitPrice": 2013,
+      "charges": 40,
+      "netPnl": 0.08000000000038199,
+      "status": "CLOSED",
+      "notes": ""
+    }
+  ],
   "freeCash": {
     "swing": "0",
     "lt": "0",
@@ -24,5 +43,5 @@
     "lt": 30,
     "penny": 10
   },
-  "savedAt": 1789039548593
+  "savedAt": 1789177303100
 }

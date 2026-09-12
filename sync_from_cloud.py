@@ -36,16 +36,29 @@ def sync():
         except Exception:
             master_data = None
 
-    # Try fetching from Render Cloud
+    # Try fetching from Render Cloud with cold start handling
     cloud_data = None
-    try:
-        res = requests.get("https://finplus.onrender.com/api/backup/load", headers=headers, timeout=8)
-        if res.status_code == 200:
-            resp_json = res.json()
-            if resp_json and resp_json.get("status") == "success" and resp_json.get("data"):
-                cloud_data = resp_json["data"]
-    except Exception as e:
-        print(f" -> Render Cloud read info: {e}")
+    for attempt in range(1, 3):
+        try:
+            timeout = 15 if attempt == 1 else 35
+            if attempt > 1:
+                print(" -> Render Cloud is waking up from idle sleep (waiting for cold start)...")
+            res = requests.get("https://finplus.onrender.com/api/backup/load", headers=headers, timeout=timeout)
+            if res.status_code == 200:
+                resp_json = res.json()
+                if resp_json and resp_json.get("status") == "success" and resp_json.get("data"):
+                    cloud_data = resp_json["data"]
+                    break
+            elif res.status_code == 401:
+                print(" -> Render Cloud requires valid FINPLUS_API_KEY.")
+                break
+        except requests.exceptions.Timeout:
+            if attempt == 1:
+                continue
+            print(" -> Render Cloud read info: Connection timed out (Render cold start took longer than expected).")
+        except Exception as e:
+            print(f" -> Render Cloud read info: {e}")
+            break
 
     local_saved_at = int(master_data.get("savedAt", 0)) if master_data else 0
     cloud_saved_at = int(cloud_data.get("savedAt", 0)) if cloud_data else 0
@@ -121,24 +134,30 @@ def sync():
         if isinstance(p, dict) and p.get("id") and p.get("id") not in sold_keys
     ]
     master_data["positions"] = cleaned_pos
-    master_data["savedAt"] = max(local_saved_at, cloud_saved_at, int(time.time() * 1000))
+    if cloud_data is not None or local_is_fresh:
+        master_data["savedAt"] = max(local_saved_at, cloud_saved_at, int(time.time() * 1000))
+    else:
+        master_data["savedAt"] = local_saved_at
 
     # Save to local portfolio backup file
     with open(PORTFOLIO_FILE, "w", encoding="utf-8") as f:
         json.dump(master_data, f, indent=2)
     print(f" -> Local finplus_portfolio_backup.json updated ({len(cleaned_pos)} active positions, {len(master_data.get('optionsTrades', []))} options trades).")
 
-    # Update Render Cloud with master dataset
-    try:
-        cloud_payload = dict(master_data)
-        if local_is_fresh:
-            cloud_payload["force_reset"] = True
-            cloud_payload["reset"] = True
-            cloud_payload["isFreshStart"] = True
-        requests.post("https://finplus.onrender.com/api/backup/save", json=cloud_payload, headers=headers, timeout=10)
-        print(" -> Render Cloud dataset successfully synced.")
-    except Exception as e:
-        print(f" -> Cloud sync notice: {e}")
+    # Update Render Cloud with master dataset if cloud is reachable or fresh start
+    if cloud_data is not None or local_is_fresh:
+        try:
+            cloud_payload = dict(master_data)
+            if local_is_fresh:
+                cloud_payload["force_reset"] = True
+                cloud_payload["reset"] = True
+                cloud_payload["isFreshStart"] = True
+            requests.post("https://finplus.onrender.com/api/backup/save", json=cloud_payload, headers=headers, timeout=20)
+            print(" -> Render Cloud dataset successfully synced.")
+        except Exception as e:
+            print(f" -> Cloud sync notice: {e}")
+    else:
+        print(" -> Cloud backend currently unreachable; keeping local copy safe without overwriting cloud.")
 
     # Write journal file (preserving both active positions and closed trades)
     with open(JOURNAL_FILE, "w", encoding="utf-8") as jf:
@@ -172,6 +191,45 @@ def sync():
                     "created_at": s.get("buyDate") or s.get("sellDate", "2026-08-23")
                 })
         json.dump(journal_trades, jf, indent=2)
+
+    # Synchronize Risk Desk dataset (finplus_risk_desk.json) so trades are never lost on restart
+    try:
+        risk_file = os.path.join(BASE_DIR, "finplus_risk_desk.json")
+        local_risk = None
+        if os.path.exists(risk_file):
+            try:
+                with open(risk_file, "r", encoding="utf-8") as rf:
+                    local_risk = json.load(rf)
+            except Exception:
+                local_risk = None
+
+        cloud_risk = None
+        res = requests.get("https://finplus.onrender.com/api/risk/sync", headers=headers, timeout=20)
+        if res.status_code == 200:
+            resp_data = res.json()
+            if isinstance(resp_data, dict):
+                cloud_risk = resp_data
+
+        if cloud_risk or local_risk:
+            merged_risk = dict(local_risk or cloud_risk or {})
+            if cloud_risk and local_risk:
+                local_trades = { t.get("id"): t for t in local_risk.get("trades", []) if isinstance(t, dict) and t.get("id") }
+                for ct in cloud_risk.get("trades", []):
+                    if isinstance(ct, dict) and ct.get("id"):
+                        if ct["id"] not in local_trades:
+                            local_trades[ct["id"]] = ct
+                        else:
+                            c_up = str(ct.get("updated_at") or ct.get("at") or "")
+                            l_up = str(local_trades[ct["id"]].get("updated_at") or local_trades[ct["id"]].get("at") or "")
+                            if c_up > l_up:
+                                local_trades[ct["id"]] = ct
+                merged_risk["trades"] = list(local_trades.values())
+            
+            with open(risk_file, "w", encoding="utf-8") as rf:
+                json.dump(merged_risk, rf, indent=2)
+            print(f" -> Risk Desk dataset synchronized ({len(merged_risk.get('trades', []))} trades preserved).")
+    except Exception as e:
+        print(f" -> Risk Desk sync notice: {e}")
 
 if __name__ == "__main__":
     sync()
