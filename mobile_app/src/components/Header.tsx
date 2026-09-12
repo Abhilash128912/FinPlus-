@@ -58,7 +58,12 @@ export const Header: React.FC<HeaderProps> = ({
     <>
       <View style={styles.headerContainer}>
         <View style={styles.leftCol}>
-          <Text style={styles.logoTitle}>INDMONEY TRADER</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+            <View style={styles.fpBadge}>
+              <Text style={styles.fpBadgeText}>FP</Text>
+            </View>
+            <Text style={styles.logoTitle}>FINPLUS RADAR</Text>
+          </View>
           <View style={styles.statusRow}>
             <View
               style={[
@@ -179,6 +184,20 @@ const styles = StyleSheet.create({
   },
   leftCol: {
     flexDirection: "column",
+  },
+  fpBadge: {
+    backgroundColor: "#0f172a",
+    borderWidth: 1.5,
+    borderColor: "#6366f1",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  fpBadgeText: {
+    color: "#10b981",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
   logoTitle: {
     fontSize: 16,
