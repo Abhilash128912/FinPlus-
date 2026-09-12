@@ -1,11 +1,12 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, Text } from "react-native";
+import { StyleSheet, Text, View, ActivityIndicator } from "react-native";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 
 import { theme } from "./src/theme";
+import { loadPersistedConfig } from "./src/config";
 import { TrendScreen } from "./src/screens/TrendScreen";
 import { IntradayScreen } from "./src/screens/IntradayScreen";
 import { ScreenerScreen } from "./src/screens/ScreenerScreen";
@@ -81,6 +82,27 @@ const navTheme = {
 };
 
 export default function App() {
+  // The FinPlus key/URL are restored from SecureStore before the first
+  // render below reaches a screen -- otherwise Trend/Stocks/Intraday would
+  // fire their first fetch with an empty key and get a 401 for a split
+  // second on every cold start.
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    loadPersistedConfig().finally(() => setReady(true));
+  }, []);
+
+  if (!ready) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={[styles.container, styles.loadingContainer]} edges={["top", "left", "right"]}>
+          <StatusBar style="light" />
+          <ActivityIndicator color={theme.colors.accent} size="large" />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       {/* Bottom edge is intentionally NOT excluded here: the tab bar itself
@@ -97,6 +119,10 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
   container: {
     flex: 1,
     backgroundColor: theme.colors.surface,
