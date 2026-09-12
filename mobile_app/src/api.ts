@@ -93,8 +93,56 @@ export interface AlertsResponse {
   };
 }
 
+// ── Real multi-stock screener (equity_scan / swing_engine / lt_engine / penny_engine) ──
+export interface StockPick {
+  symbol: string;
+  name?: string;
+  sector?: string;
+  ltp?: number;
+  direction?: "BUY" | "SELL";
+  srv_signal?: string;
+  srv_entry?: number;
+  srv_stop?: number;
+  srv_target1?: number;
+  srv_target2?: number;
+  srv_rr?: number;
+  srv_setup?: string;
+  srv_reason?: string;
+  stop_loss?: number;
+  target1?: number;
+  target2?: number;
+  intraday_score?: number;
+  total_score?: number;
+  swing_score?: number;
+  swing_action?: string;
+  status_badge?: string;
+  gtt_breakout_level?: number;
+  gtt_pullback_level?: number;
+  rationale?: string;
+  day_chg_pct?: number;
+  rsi?: number;
+  volume_spike?: number;
+  [key: string]: any;
+}
+
+export interface ScreenerAllResponse {
+  success: boolean;
+  swing: { picks: StockPick[]; total_candidates: number; qualified_count: number } | null;
+  lt: { watchlist: StockPick[]; top_challengers: StockPick[]; total_scanned: number } | null;
+  penny: { picks: StockPick[]; total_evaluated: number; qualified_count: number } | null;
+  momentum: { buy: StockPick[]; sell: StockPick[]; buy_qualified: number; sell_qualified: number } | null;
+  equity: { buy: StockPick[]; sell: StockPick[]; watch_buy: StockPick[]; watch_sell: StockPick[] } | null;
+}
+
+// No offline fallback here on purpose: this scan needs your PC's live
+// INDmoney session (equity_scan.py), so there is nothing honest to fabricate
+// when the backend is unreachable -- the screen should say so, not guess.
+export const fetchScreenerAll = async (): Promise<ScreenerAllResponse> => {
+  return request<ScreenerAllResponse>("/api/screener/all", 8000);
+};
+
 // Low-level fetch wrapper
-async function request<T>(path: string, timeoutMs: number = 4000): Promise<T> {
+async function request<T>(path: string, timeoutMs: number = 4000, body?: unknown): Promise<T> {
   const url = `${getApiBaseUrl()}${path}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -106,15 +154,29 @@ async function request<T>(path: string, timeoutMs: number = 4000): Promise<T> {
     headers["X-Finplus-Key"] = key;
   }
   try {
-    const res = await fetch(url, { signal: ctrl.signal, headers });
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers,
+      method: body !== undefined ? "POST" : "GET",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const json = await res.json().catch(() => null);
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      throw new Error(json?.error || `HTTP ${res.status}: ${res.statusText}`);
     }
-    return await res.json();
+    return json;
   } finally {
     clearTimeout(timer);
   }
 }
+
+// Push a freshly generated INDmoney access token to the live backend --
+// lets the token be refreshed daily from the phone itself, no Render
+// dashboard or desktop browser needed (INDmoney tokens expire every 24h
+// and have no programmable refresh flow).
+export const updateIndmoneyToken = async (token: string): Promise<{ success: boolean; error?: string }> => {
+  return request("/api/token", 8000, { token });
+};
 
 // Direct Yahoo Finance Fetcher for Autonomous / Away Mode
 async function fetchDirectYahooChart(ticker: string): Promise<{
@@ -228,12 +290,15 @@ function computePivotSignal(
   };
 }
 
-// ── Autonomous Markets Fetcher (Server first, Direct Market Cloud fallback) ──
+// ── Markets Fetcher: real backend first, live direct-quote fallback second.
+// The fallback only ever uses numbers it actually fetched just now (Yahoo
+// Finance / the MCX cloud endpoint) -- a symbol whose direct fetch also
+// fails is simply left out of the response rather than filled with a
+// made-up price, per the "no fabricated data" rule for this app.
 export const fetchMarkets = async (): Promise<MarketsResponse> => {
   try {
     return await request<MarketsResponse>("/api/markets", 3000);
   } catch (_) {
-    // Autonomous Fallback: Query live quotes directly for away mode
     const [niftyQ, bankQ, relianceQ, mcxData] = await Promise.all([
       fetchDirectYahooChart("^NSEI"),
       fetchDirectYahooChart("^NSEBANK"),
@@ -241,56 +306,47 @@ export const fetchMarkets = async (): Promise<MarketsResponse> => {
       fetchDirectRenderMCX(),
     ]);
 
-    const crudeLtp = mcxData?.crude?.mcx_ltp || 9532.0;
-    const crudeHigh = mcxData?.crude?.mcx_high || crudeLtp * 1.01;
-    const crudeLow = mcxData?.crude?.mcx_low || crudeLtp * 0.99;
-    const crudePrev = mcxData?.crude?.mcx_prev_close || crudeLtp;
-    const crudePct = mcxData?.crude?.mcx_pct || 0;
+    const signals: Record<string, SignalData> = {};
+    const fast_ltp: Record<string, number> = {};
+    const fast_change: Record<string, number> = {};
+    const spark: Record<string, number[]> = {};
 
-    const gasLtp = mcxData?.gas?.mcx_ltp || 269.6;
-    const gasHigh = mcxData?.gas?.mcx_high || gasLtp * 1.01;
-    const gasLow = mcxData?.gas?.mcx_low || gasLtp * 0.99;
-    const gasPrev = mcxData?.gas?.mcx_prev_close || gasLtp;
-    const gasPct = mcxData?.gas?.mcx_pct || 0;
-
-    const nLtp = niftyQ?.ltp || 23398.1;
-    const bLtp = bankQ?.ltp || 56606.5;
-    const rLtp = relianceQ?.ltp || 1257.5;
-
-    const signals: Record<string, SignalData> = {
-      nifty: computePivotSignal(nLtp, niftyQ?.high || nLtp * 1.008, niftyQ?.low || nLtp * 0.992, niftyQ?.prevClose || nLtp, "NIFTY 50"),
-      banknifty: computePivotSignal(bLtp, bankQ?.high || bLtp * 1.01, bankQ?.low || bLtp * 0.99, bankQ?.prevClose || bLtp, "BANK NIFTY"),
-      crude: computePivotSignal(crudeLtp, crudeHigh, crudeLow, crudePrev, "CRUDE OIL (MCX)"),
-      natgas: computePivotSignal(gasLtp, gasHigh, gasLow, gasPrev, "NATURAL GAS (MCX)"),
-      reliance: computePivotSignal(rLtp, relianceQ?.high || rLtp * 1.01, relianceQ?.low || rLtp * 0.99, relianceQ?.prevClose || rLtp, "RELIANCE"),
+    const addQuote = (key: string, label: string, q: typeof niftyQ) => {
+      if (!q || !q.ltp) return;
+      signals[key] = computePivotSignal(q.ltp, q.high, q.low, q.prevClose, label);
+      fast_ltp[key] = q.ltp;
+      fast_change[key] = q.change;
+      spark[key] = q.spark;
     };
 
-    const fast_ltp: Record<string, number> = {
-      nifty: nLtp,
-      banknifty: bLtp,
-      crude: crudeLtp,
-      natgas: gasLtp,
-      reliance: rLtp,
-    };
+    addQuote("nifty", "NIFTY 50", niftyQ);
+    addQuote("banknifty", "BANK NIFTY", bankQ);
+    addQuote("reliance", "RELIANCE", relianceQ);
 
-    const fast_change: Record<string, number> = {
-      nifty: niftyQ?.change || 0,
-      banknifty: bankQ?.change || 0,
-      crude: crudePct,
-      natgas: gasPct,
-      reliance: relianceQ?.change || 0,
-    };
+    const crude = mcxData?.crude;
+    if (crude?.mcx_ltp) {
+      const high = crude.mcx_high ?? crude.mcx_ltp;
+      const low = crude.mcx_low ?? crude.mcx_ltp;
+      const prev = crude.mcx_prev_close ?? crude.mcx_ltp;
+      signals.crude = computePivotSignal(crude.mcx_ltp, high, low, prev, "CRUDE OIL (MCX)");
+      fast_ltp.crude = crude.mcx_ltp;
+      fast_change.crude = crude.mcx_pct ?? 0;
+      spark.crude = [low, (low + high) / 2, high, crude.mcx_ltp];
+    }
 
-    const spark: Record<string, number[]> = {
-      nifty: niftyQ?.spark || [nLtp],
-      banknifty: bankQ?.spark || [bLtp],
-      crude: [crudeLow, (crudeLow + crudeHigh) / 2, crudeHigh, crudeLtp],
-      natgas: [gasLow, (gasLow + gasHigh) / 2, gasHigh, gasLtp],
-      reliance: relianceQ?.spark || [rLtp],
-    };
+    const gas = mcxData?.gas;
+    if (gas?.mcx_ltp) {
+      const high = gas.mcx_high ?? gas.mcx_ltp;
+      const low = gas.mcx_low ?? gas.mcx_ltp;
+      const prev = gas.mcx_prev_close ?? gas.mcx_ltp;
+      signals.natgas = computePivotSignal(gas.mcx_ltp, high, low, prev, "NATURAL GAS (MCX)");
+      fast_ltp.natgas = gas.mcx_ltp;
+      fast_change.natgas = gas.mcx_pct ?? 0;
+      spark.natgas = [low, (low + high) / 2, high, gas.mcx_ltp];
+    }
 
     return {
-      success: true,
+      success: Object.keys(signals).length > 0,
       signals,
       signals_updated_at: new Date().toISOString(),
       fast_ltp,
@@ -299,57 +355,50 @@ export const fetchMarkets = async (): Promise<MarketsResponse> => {
       spark,
       trends: {},
       token_status: {
-        has_token: true,
-        is_expired: false,
-        data_source: "Live Cloud Direct",
+        has_token: false,
+        is_expired: true,
+        data_source: "Live Cloud Direct (backend unreachable)",
         fallback_active: true,
       },
     };
   }
 };
 
-// ── Autonomous Commodities Fetcher ──
+// ── Commodities Fetcher: real backend first, direct MCX cloud fallback ──
 export const fetchCommodities = async (): Promise<CommoditiesResponse> => {
   try {
     return await request<CommoditiesResponse>("/api/commodities", 3000);
   } catch (_) {
     const mcxData = await fetchDirectRenderMCX();
-    const crudeLtp = mcxData?.crude?.mcx_ltp || 9532.0;
-    const crudeHigh = mcxData?.crude?.mcx_high || crudeLtp * 1.012;
-    const crudeLow = mcxData?.crude?.mcx_low || crudeLtp * 0.988;
-    const crudePrev = mcxData?.crude?.mcx_prev_close || crudeLtp;
-    const crudePct = mcxData?.crude?.mcx_pct || 0.05;
+    const crude = mcxData?.crude;
+    const gas = mcxData?.gas;
 
-    const gasLtp = mcxData?.gas?.mcx_ltp || 269.6;
-    const gasHigh = mcxData?.gas?.mcx_high || gasLtp * 1.015;
-    const gasLow = mcxData?.gas?.mcx_low || gasLtp * 0.985;
-    const gasPrev = mcxData?.gas?.mcx_prev_close || gasLtp;
-    const gasPct = mcxData?.gas?.mcx_pct || 0.0;
-
-    const crudeSignal = computePivotSignal(crudeLtp, crudeHigh, crudeLow, crudePrev, "CRUDEOIL");
-    const gasSignal = computePivotSignal(gasLtp, gasHigh, gasLow, gasPrev, "NATURALGAS");
+    const buildLeg = (leg: typeof crude, name: string) => {
+      if (!leg?.mcx_ltp) {
+        return { signal: {}, ltp: undefined, change: undefined, spark: [], bars: [] };
+      }
+      const high = leg.mcx_high ?? leg.mcx_ltp;
+      const low = leg.mcx_low ?? leg.mcx_ltp;
+      const prev = leg.mcx_prev_close ?? leg.mcx_ltp;
+      return {
+        signal: computePivotSignal(leg.mcx_ltp, high, low, prev, name),
+        ltp: leg.mcx_ltp,
+        change: leg.mcx_pct ?? 0,
+        spark: [low, (low + high) / 2, high, leg.mcx_ltp],
+        bars: [],
+      };
+    };
 
     return {
-      success: true,
-      crude: {
-        signal: crudeSignal,
-        ltp: crudeLtp,
-        change: crudePct,
-        spark: [crudeLow, (crudeLow + crudeHigh) / 2, crudeHigh, crudeLtp],
-        bars: [],
-      },
-      natgas: {
-        signal: gasSignal,
-        ltp: gasLtp,
-        change: gasPct,
-        spark: [gasLow, (gasLow + gasHigh) / 2, gasHigh, gasLtp],
-        bars: [],
-      },
+      success: Boolean(crude?.mcx_ltp || gas?.mcx_ltp),
+      crude: buildLeg(crude, "CRUDEOIL"),
+      natgas: buildLeg(gas, "NATURALGAS"),
     };
   }
 };
 
-// ── Autonomous Intraday Alerts & Suggestions Fetcher ──
+// ── Intraday Alerts Fetcher: real signal-journal history first, live
+// pivot-based read on whatever direct quotes succeeded second. ──
 export const fetchAlerts = async (): Promise<AlertsResponse> => {
   try {
     return await request<AlertsResponse>("/api/alerts", 3000);
@@ -357,7 +406,6 @@ export const fetchAlerts = async (): Promise<AlertsResponse> => {
     const mkt = await fetchMarkets();
     const recent: AlertRecord[] = [];
 
-    const keys = ["crude", "natgas", "nifty", "banknifty", "reliance"];
     const labels: Record<string, string> = {
       crude: "CRUDEOIL MCX",
       natgas: "NATURALGAS MCX",
@@ -366,7 +414,7 @@ export const fetchAlerts = async (): Promise<AlertsResponse> => {
       reliance: "RELIANCE",
     };
 
-    for (const k of keys) {
+    for (const k of Object.keys(mkt.signals)) {
       const sig = mkt.signals[k];
       if (sig && sig.srv_entry && sig.srv_stop && sig.srv_target1) {
         recent.push({
@@ -377,8 +425,8 @@ export const fetchAlerts = async (): Promise<AlertsResponse> => {
           stop: sig.srv_stop,
           target1: sig.srv_target1,
           target2: sig.srv_target2,
-          strength: sig.srv_strength || "HIGH",
-          rr: sig.srv_rr || 2.0,
+          strength: sig.srv_strength || "MODERATE",
+          rr: sig.srv_rr,
           opened_at: new Date().toISOString(),
           outcome: "open",
         });
@@ -386,23 +434,20 @@ export const fetchAlerts = async (): Promise<AlertsResponse> => {
     }
 
     return {
-      success: true,
+      success: recent.length > 0,
       recent,
       stats: {
         overall: {
-          resolved: 14,
+          resolved: 0,
           open: recent.length,
-          wins: 10,
-          losses: 4,
-          win_rate: 71,
-          expectancy_r: 1.9,
+          wins: 0,
+          losses: 0,
+          win_rate: null,
+          expectancy_r: null,
         },
         crude: null,
         natgas: null,
-        by_setup: {
-          "Pivot Support Bounce": { wins: 6, losses: 2, win_rate: 75 },
-          "Pivot Resistance Rejection": { wins: 4, losses: 2, win_rate: 67 },
-        },
+        by_setup: {},
       },
     };
   }

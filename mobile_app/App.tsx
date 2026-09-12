@@ -1,15 +1,73 @@
 import React from "react";
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 
 import { theme } from "./src/theme";
 import { TrendScreen } from "./src/screens/TrendScreen";
 import { IntradayScreen } from "./src/screens/IntradayScreen";
+import { ScreenerScreen } from "./src/screens/ScreenerScreen";
 
 const Tab = createBottomTabNavigator();
+
+const Tabs: React.FC = () => {
+  // On Android, insets.bottom can be 0 or small, which causes the tab bar to collide
+  // with the phone's 3-button navigation bar or gesture pill. Enforce a safe minimum.
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, 20);
+
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            height: 60 + bottomInset,
+            paddingBottom: bottomInset + 4,
+            paddingTop: 8,
+          },
+        ],
+        tabBarActiveTintColor: theme.colors.accent,
+        tabBarInactiveTintColor: theme.colors.textDim,
+        tabBarLabelStyle: styles.tabLabel,
+      }}
+    >
+      <Tab.Screen
+        name="Trend"
+        component={TrendScreen}
+        options={{
+          tabBarLabel: "Trend Analyser",
+          tabBarIcon: ({ focused }) => (
+            <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>📊</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Stocks"
+        component={ScreenerScreen}
+        options={{
+          tabBarLabel: "Stocks",
+          tabBarIcon: ({ focused }) => (
+            <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>💹</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Intraday"
+        component={IntradayScreen}
+        options={{
+          tabBarLabel: "Intraday Calls",
+          tabBarIcon: ({ focused }) => (
+            <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>🎯</Text>
+          ),
+        }}
+      />
+    </Tab.Navigator>
+  );
+};
 
 const navTheme = {
   ...DefaultTheme,
@@ -25,43 +83,13 @@ const navTheme = {
 export default function App() {
   return (
     <SafeAreaProvider>
+      {/* Bottom edge is intentionally NOT excluded here: the tab bar itself
+          pads for insets.bottom (see Tabs above), and letting SafeAreaView
+          also reserve it would double the gap under the tab bar. */}
       <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
         <StatusBar style="light" />
         <NavigationContainer theme={navTheme}>
-          <Tab.Navigator
-            screenOptions={{
-              headerShown: false,
-              tabBarStyle: styles.tabBar,
-              tabBarActiveTintColor: theme.colors.accent,
-              tabBarInactiveTintColor: theme.colors.textDim,
-              tabBarLabelStyle: styles.tabLabel,
-            }}
-          >
-            <Tab.Screen
-              name="Trend"
-              component={TrendScreen}
-              options={{
-                tabBarLabel: "Trend Analyser",
-                tabBarIcon: ({ focused }) => (
-                  <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>
-                    📊
-                  </Text>
-                ),
-              }}
-            />
-            <Tab.Screen
-              name="Intraday"
-              component={IntradayScreen}
-              options={{
-                tabBarLabel: "Intraday Calls",
-                tabBarIcon: ({ focused }) => (
-                  <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>
-                    🎯
-                  </Text>
-                ),
-              }}
-            />
-          </Tab.Navigator>
+          <Tabs />
         </NavigationContainer>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -77,8 +105,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderTopWidth: 1,
     borderTopColor: theme.colors.surfaceBorder,
-    height: 60,
-    paddingBottom: 8,
     paddingTop: 6,
   },
   tabLabel: {

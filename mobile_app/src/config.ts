@@ -6,7 +6,7 @@
  * When running over Cloudflare Tunnel, set this to your https://... tunnel URL.
  */
 
-let _apiBaseUrl = "https://finplus-g0b5.onrender.com";
+let _apiBaseUrl = "https://finplus-1.onrender.com";
 let _apiKey = "";
 
 export const getApiBaseUrl = (): string => _apiBaseUrl;

@@ -102,14 +102,14 @@ export const IntradayScreen: React.FC = () => {
                   { color: stats?.win_rate && stats.win_rate >= 50 ? theme.colors.green : theme.colors.yellow },
                 ]}
               >
-                {stats?.win_rate ? `${stats.win_rate}%` : "71%"}
+                {stats?.win_rate != null ? `${stats.win_rate}%` : "—"}
               </Text>
             </View>
 
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>EXPECTANCY</Text>
               <Text style={[styles.statVal, { color: theme.colors.accent }]}>
-                {stats?.expectancy_r ? `+${stats.expectancy_r}R` : "+1.9R"}
+                {stats?.expectancy_r != null ? `+${stats.expectancy_r}R` : "—"}
               </Text>
             </View>
 

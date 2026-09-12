@@ -53,6 +53,12 @@ export const TrendScreen: React.FC = () => {
     { key: "crude", label: "CRUDE OIL (MCX)", icon: "🛢️", kind: "COMMODITY" },
     { key: "natgas", label: "NATURAL GAS (MCX)", icon: "⚡", kind: "COMMODITY" },
     { key: "reliance", label: "RELIANCE IND.", icon: "🔷", kind: "HEAVYWEIGHT" },
+    { key: "tcs", label: "TCS", icon: "💻", kind: "IT LEADER" },
+    { key: "infy", label: "INFOSYS", icon: "🌐", kind: "IT LEADER" },
+    { key: "hdfcbank", label: "HDFC BANK", icon: "🏦", kind: "BANKING" },
+    { key: "icicibank", label: "ICICI BANK", icon: "💳", kind: "BANKING" },
+    { key: "sbin", label: "STATE BANK OF INDIA", icon: "🏛️", kind: "PSU BANK" },
+    { key: "tatamotors", label: "TATA MOTORS", icon: "🚗", kind: "AUTO" },
   ];
 
   const formatPrice = (val?: number) => {
