@@ -575,7 +575,9 @@ def _options_heatmap_loop():
 
 
 def is_authenticated(req) -> bool:
-    """Verify incoming request authentication via constant-time HMAC check."""
+    """Verify incoming request authentication via constant-time HMAC check.
+    Strictly header-based (matches FINPLUS LEDGER standard). Never accepts query params
+    or cookies, avoiding access-log, browser-history, and Referer leaks."""
     if not FINPLUS_API_KEY:
         return False
     # 1. Custom FinPlus Key header (matches FINPLUS LEDGER standard)
@@ -585,12 +587,6 @@ def is_authenticated(req) -> bool:
         auth_hdr = req.headers.get("Authorization") or ""
         if auth_hdr.lower().startswith("bearer "):
             supplied = auth_hdr[7:].strip()
-    # 3. Persistent browser session cookie
-    if not supplied:
-        supplied = req.cookies.get("finplus_key") or ""
-    # 4. Explicit URL query param (?key=... or ?api_key=...)
-    if not supplied:
-        supplied = req.args.get("key") or req.args.get("api_key") or ""
 
     if supplied and hmac.compare_digest(str(supplied).strip(), FINPLUS_API_KEY):
         return True
@@ -605,7 +601,8 @@ def is_authenticated(req) -> bool:
 
 @app.before_request
 def enforce_api_key():
-    """Fail-closed authentication gate for all private /api/* endpoints."""
+    """Fail-closed authentication gate for all private endpoints.
+    Guards both /api/* and high-risk /settings routes."""
     if request.method == "OPTIONS":
         return None
 
@@ -628,6 +625,19 @@ def enforce_api_key():
                 "error": "Missing or invalid API key. Please provide X-Finplus-Key header."
             }), 401
 
+    # Guard /settings (where INDmoney broker tokens are managed and saved)
+    if path == "/settings" or path.startswith("/settings/"):
+        if not FINPLUS_API_KEY:
+            return "<h3>503 Service Unavailable: Server has no API key configured. Set FINPLUS_API_KEY on the host.</h3>", 503
+        if request.method == "POST":
+            # For POST /settings, accept X-Finplus-Key header OR 'finplus_key' form field
+            supplied = request.headers.get("X-Finplus-Key") or request.form.get("finplus_key") or ""
+            if not supplied or not hmac.compare_digest(str(supplied).strip(), FINPLUS_API_KEY):
+                return jsonify({
+                    "success": False,
+                    "error": "Missing or invalid FinPlus key. Enter 'finplus_key' form field or send X-Finplus-Key header."
+                }), 401
+
     return None
 
 
@@ -636,10 +646,6 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Finplus-Key"
-    # Auto-persist valid key from query param into browser cookie
-    q_key = request.args.get("key") or request.args.get("api_key")
-    if q_key and FINPLUS_API_KEY and hmac.compare_digest(str(q_key).strip(), FINPLUS_API_KEY):
-        response.set_cookie("finplus_key", q_key.strip(), max_age=30 * 86400, httponly=False, samesite="Lax")
     return response
 
 
@@ -908,9 +914,20 @@ def settings_page():
         below; it's tested against a live call before saving, and takes effect immediately &mdash; no restart.</p>
       {status_html}
       <form method="post">
+        <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:700;color:var(--muted)">FinPlus Access Key (X-Finplus-Key):</label>
+        <input type="password" name="finplus_key" id="finplus_key_input" placeholder="Paste your secret FinPlus key" style="width:100%;padding:11px 14px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;font-family:monospace;font-size:13px;margin-bottom:16px;" required /><br>
+        <label style="display:block;margin-bottom:6px;font-size:13px;font-weight:700;color:var(--muted)">New INDmoney Access Token:</label>
         <textarea name="token" placeholder="Paste the new token here" autofocus></textarea><br>
         <button class="btn" type="submit">Test &amp; Save</button>
       </form>
+      <script>
+        const stored = localStorage.getItem('finplus_api_key');
+        if (stored) {{ document.getElementById('finplus_key_input').value = stored; }}
+        document.querySelector('form').addEventListener('submit', function() {{
+          const k = document.getElementById('finplus_key_input').value.trim();
+          if (k) localStorage.setItem('finplus_api_key', k);
+        }});
+      </script>
       {msg_html}
     </div>
   </div>
@@ -1747,19 +1764,6 @@ def dashboard():
     line.setAttribute('points', pts);
     line.setAttribute('stroke', values[values.length - 1] >= values[0] ? '#22c55e' : '#ef4444');
   }}
-
-  (function() {{
-    const p = new URLSearchParams(window.location.search);
-    const k = p.get('key') || p.get('api_key');
-    if (k) {{
-      localStorage.setItem('finplus_api_key', k);
-      document.cookie = 'finplus_key=' + encodeURIComponent(k) + '; path=/; max-age=2592000; SameSite=Lax';
-    }}
-    const s = localStorage.getItem('finplus_api_key');
-    if (s && !document.cookie.includes('finplus_key=')) {{
-      document.cookie = 'finplus_key=' + encodeURIComponent(s) + '; path=/; max-age=2592000; SameSite=Lax';
-    }}
-  }})();
 
   async function pollFastLtp() {{
     try {{
