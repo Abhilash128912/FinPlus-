@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="32" height="32" fill="none">
+  <defs>
+    <linearGradient id="fp_grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="50%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="fp_accent" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="36" height="36" rx="10" fill="#0f172a" stroke="url(#fp_grad)" stroke-width="2"/>
+  <path d="M10 28 L17 21 L22 24 L30 14" stroke="url(#fp_accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M25 14 H30 V19" stroke="url(#fp_accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="30" cy="14" r="2.5" fill="#34d399"/>
+  <text x="10" y="17" fill="#ffffff" font-size="11" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-weight="900" letter-spacing="-0.5">FP</text>
+</svg>

@@ -1593,10 +1593,10 @@ export default function App() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', padding: '8px 12px', borderRadius: '10px', fontWeight: 900, fontSize: '16px', color: '#090d16', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Shield size={18} />
-              <span>FINPLUS</span>
+              <span>FINPLUS LEDGER</span>
             </div>
             <div>
-              <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.02em' }}>3-Pillar Disciplined Portfolio Journal</div>
+              <div style={{ fontSize: '16px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.02em' }}>Disciplined 3-Pillar Portfolio & Risk Ledger</div>
               <div style={{ fontSize: '11px', color: '#94a3b8' }}>25% Monthly Income Strategy • Zero Day Trading • Kite &amp; INDmoney Accounting</div>
             </div>
           </div>
@@ -4282,3 +4282,5 @@ function ReconciliationBanner({ ledgers, split }) {
     </div>
   );
 }
+
+
