@@ -16,7 +16,7 @@ import sys
 import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SCREENER_APP_DIR = r"D:\STOCK SCREENER APP"
+SCREENER_APP_DIR = os.environ.get("SCREENER_APP_DIR", BASE_DIR)
 if SCREENER_APP_DIR not in sys.path:
     sys.path.insert(0, SCREENER_APP_DIR)
 
@@ -24,7 +24,7 @@ import screener_engine as se
 import equity_scan
 import fundamental_engine
 
-SCREENER_DATA_PATH = os.path.join(SCREENER_APP_DIR, "screener_data.json")
+SCREENER_DATA_PATH = os.environ.get("SCREENER_DATA_PATH", os.path.join(SCREENER_APP_DIR, "screener_data.json"))
 
 
 def _load_base_scan_data() -> list[dict]:

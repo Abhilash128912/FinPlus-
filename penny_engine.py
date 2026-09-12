@@ -20,7 +20,7 @@ import sys
 import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SCREENER_APP_DIR = r"D:\STOCK SCREENER APP"
+SCREENER_APP_DIR = os.environ.get("SCREENER_APP_DIR", BASE_DIR)
 if SCREENER_APP_DIR not in sys.path:
     sys.path.insert(0, SCREENER_APP_DIR)
 
@@ -28,7 +28,7 @@ import screener_engine as se
 import fundamental_engine
 import equity_scan
 
-SCREENER_DATA_PATH = os.path.join(SCREENER_APP_DIR, "screener_data.json")
+SCREENER_DATA_PATH = os.environ.get("SCREENER_DATA_PATH", os.path.join(SCREENER_APP_DIR, "screener_data.json"))
 
 
 def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_quotes: bool = True) -> dict:

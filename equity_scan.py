@@ -32,8 +32,11 @@ import requests
 import signal_engine
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SCREENER_APP_DIR = r"D:\STOCK SCREENER APP"
-SCREENER_DATA_PATH = os.path.join(SCREENER_APP_DIR, "screener_data.json")
+# screener_data.json now lives alongside this app (fetch_and_build.py writes
+# it here) rather than in the old standalone STOCK SCREENER APP folder --
+# env-overridable for anyone still running that separate layout.
+SCREENER_APP_DIR = os.environ.get("SCREENER_APP_DIR", BASE_DIR)
+SCREENER_DATA_PATH = os.environ.get("SCREENER_DATA_PATH", os.path.join(SCREENER_APP_DIR, "screener_data.json"))
 
 SECURITY_ID_CACHE_FILE = os.path.join(BASE_DIR, "nse_equity_security_ids.json")
 SECURITY_ID_CACHE_TTL_SEC = 24 * 3600
@@ -62,7 +65,13 @@ def _screener_engine():
 def load_liquid_candidates() -> list[dict]:
     """Every screener_data.json row that clears intraday_candidate_gates_pass --
     the same liquidity/circuit-safety bar the live screener's own intraday
-    tab uses."""
+    tab uses. Returns [] (not a crash) when the scan data hasn't been
+    generated/deployed yet, so callers degrade to an empty result instead of
+    taking the whole background loop down."""
+    if not os.path.exists(SCREENER_DATA_PATH):
+        print(f"[equity_scan] no scan data at {SCREENER_DATA_PATH} -- run fetch_and_build.py "
+              f"and commit screener_data.json, or set SCREENER_DATA_PATH")
+        return []
     se = _screener_engine()
     with open(SCREENER_DATA_PATH, encoding="utf-8") as f:
         rows = json.load(f)

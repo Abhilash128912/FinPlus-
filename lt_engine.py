@@ -17,7 +17,7 @@ import sys
 import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SCREENER_APP_DIR = r"D:\STOCK SCREENER APP"
+SCREENER_APP_DIR = os.environ.get("SCREENER_APP_DIR", BASE_DIR)
 if SCREENER_APP_DIR not in sys.path:
     sys.path.insert(0, SCREENER_APP_DIR)
 
@@ -35,7 +35,7 @@ if not os.path.exists(LT_WATCHLIST_FILE):
         except Exception:
             pass
 
-SCREENER_DATA_PATH = os.path.join(SCREENER_APP_DIR, "screener_data.json")
+SCREENER_DATA_PATH = os.environ.get("SCREENER_DATA_PATH", os.path.join(SCREENER_APP_DIR, "screener_data.json"))
 
 
 EXCLUDED_SLOW_PSUS = {

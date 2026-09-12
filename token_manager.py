@@ -83,11 +83,13 @@ def test_token(token: str) -> tuple[bool, str]:
         return False, f"Request failed: {e}"
 
 
-def save_token(new_token: str, base_dir: str) -> None:
+def save_token(new_token: str, base_dir: str) -> tuple[bool, str] | None:
     """Writes indmoney.env AND updates the running process's os.environ in
     the same call -- every background loop reads the token via
     os.environ.get() on each poll, not once at import time, so this takes
-    effect on the very next tick, not the next restart."""
+    effect on the very next tick, not the next restart. Also relays the
+    token to the Render deployment if MOBILE_BACKEND_URL is configured;
+    returns that relay's (ok, message), or None when no URL is set."""
     new_token = new_token.strip()
     with open(_env_file_path(base_dir), "w", encoding="utf-8") as f:
         f.write(f"{TOKEN_KEY}={new_token}\n")
@@ -97,3 +99,35 @@ def save_token(new_token: str, base_dir: str) -> None:
     except Exception:
         pass
     os.environ[TOKEN_KEY] = new_token
+
+    if not os.environ.get("MOBILE_BACKEND_URL", "").strip():
+        return None
+    return sync_token_to_mobile_backend(new_token)
+
+
+def sync_token_to_mobile_backend(token: str) -> tuple[bool, str]:
+    """Relays a freshly pasted token to the Render deployment so pasting it
+    once on the laptop's own /settings page covers the phone too -- set
+    MOBILE_BACKEND_URL (Render's service URL) once and this fires on every
+    save_token() call; a blank/unset URL makes this a silent no-op rather
+    than an error, since not everyone runs a second deployment. Uses
+    FINPLUS_API_KEY as the X-Finplus-Key header, so the same secret must be
+    configured on both the laptop and the Render service."""
+    backend_url = os.environ.get("MOBILE_BACKEND_URL", "").strip().rstrip("/")
+    if not backend_url:
+        return False, "MOBILE_BACKEND_URL not set -- skipped"
+
+    key = os.environ.get("FINPLUS_API_KEY", "").strip()
+    try:
+        resp = requests.post(
+            f"{backend_url}/api/token",
+            json={"token": token},
+            headers={"X-Finplus-Key": key, "Content-Type": "application/json"},
+            timeout=10,
+        )
+        data = resp.json() if resp.ok else {}
+        if resp.ok and data.get("success"):
+            return True, "Synced to mobile backend"
+        return False, f"Mobile backend rejected sync: {data.get('error') or resp.status_code}"
+    except requests.RequestException as e:
+        return False, f"Could not reach mobile backend: {e}"

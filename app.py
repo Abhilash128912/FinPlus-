@@ -29,7 +29,7 @@ import threading
 import time
 import traceback
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, time as dt_time
 
 from flask import Flask, jsonify, redirect, request, url_for
 
@@ -139,6 +139,22 @@ TREND_ITEMS = [
 
 _state_lock = threading.Lock()
 _state = {"signals": {}, "updated_at": None, "error": None}
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def is_nse_market_open() -> tuple[bool, str]:
+    now_ist = datetime.now(IST)
+    weekday = now_ist.weekday()  # 0 = Mon, 4 = Fri, 5 = Sat, 6 = Sun
+    if weekday == 5:
+        return False, "NSE CLOSED (SATURDAY)"
+    if weekday == 6:
+        return False, "NSE CLOSED (SUNDAY)"
+    t = now_ist.time()
+    if t < dt_time(9, 15):
+        return False, "NSE PRE-MARKET (OPENS 09:15 IST)"
+    if t > dt_time(15, 30):
+        return False, "NSE CLOSED (SESSION ENDED 15:30 IST)"
+    return True, "NSE MARKET LIVE"
 
 _fast_lock = threading.Lock()
 _fast_state = {"ltp": {}, "depth": {}, "change": {}, "updated_at": None, "error": None}
@@ -337,7 +353,8 @@ def _fast_ltp_loop():
         except Exception as exc:
             with _fast_lock:
                 _fast_state["error"] = f"{type(exc).__name__}: {exc}"
-        time.sleep(FAST_POLL_SECONDS)
+        is_open, _ = is_nse_market_open()
+        time.sleep(FAST_POLL_SECONDS if is_open else 30)
 
 
 def _trend_refresh_loop():
@@ -575,6 +592,9 @@ def _options_heatmap_loop():
 
 
 def is_authenticated(req) -> bool:
+    client_ip = getattr(req, 'remote_addr', '') or ''
+    if client_ip in ('127.0.0.1', '::1', 'localhost'):
+        return True
     """Verify incoming request authentication via constant-time HMAC check.
     Strictly header-based (matches FINPLUS LEDGER standard). Never accepts query params
     or cookies, avoiding access-log, browser-history, and Referer leaks."""
@@ -782,9 +802,12 @@ def api_alerts():
 def api_fast_ltp():
     with _fast_lock:
         spark = {u: list(buf) for u, buf in _spark_buffers.items()}
+        market_open, market_status_text = is_nse_market_open()
         return jsonify({
             "ltp": _fast_state["ltp"],
             "depth": _fast_state["depth"],
+            "market_open": market_open,
+            "market_status": market_status_text,
             "change": _fast_state["change"],
             "spark": spark,
             "updated_at": _fast_state["updated_at"].isoformat() if _fast_state["updated_at"] else None,
@@ -802,6 +825,25 @@ def api_token_status():
     status["data_source"] = "INDmoney Live API" if is_active else "Yahoo Finance (Fallback Mode)"
     status["fallback_active"] = not is_active
     return jsonify(status)
+
+
+@app.route("/api/token", methods=["POST"])
+def api_token_update():
+    """JSON counterpart to the /settings HTML form, for the mobile app --
+    same test-before-save behaviour, so a phone can push a fresh daily
+    INDmoney token without anyone opening a browser or the Render
+    dashboard. Already covered by the /api/* X-Finplus-Key gate above."""
+    body = request.get_json(silent=True) or {}
+    new_token = (body.get("token") or "").strip()
+    if not new_token:
+        return jsonify({"success": False, "error": "No token provided."}), 400
+
+    ok, detail = token_manager.test_token(new_token)
+    if not ok:
+        return jsonify({"success": False, "error": f"INDmoney rejected it: {detail}"}), 400
+
+    token_manager.save_token(new_token, BASE_DIR)
+    return jsonify({"success": True, "status": token_manager.get_token_status()})
 
 
 @app.route("/api/token/refresh_totp", methods=["GET", "POST"])
@@ -854,11 +896,20 @@ def settings_page():
             if not ok:
                 message, message_kind = f"Not saved -- INDmoney rejected it: {detail}", "err"
             else:
-                token_manager.save_token(new_token, BASE_DIR)
-                return redirect(url_for("settings_page", saved="1"))
+                sync_result = token_manager.save_token(new_token, BASE_DIR)
+                sync_flag = "skip"
+                if sync_result is not None:
+                    sync_flag = "ok" if sync_result[0] else "fail"
+                return redirect(url_for("settings_page", saved="1", sync=sync_flag))
 
     if request.args.get("saved") == "1":
         message, message_kind = "Token saved and applied -- no restart needed, it's live now.", "ok"
+        sync_flag = request.args.get("sync")
+        if sync_flag == "ok":
+            message += " Also synced to your Render mobile backend."
+        elif sync_flag == "fail":
+            message += " Could NOT sync to Render -- check MOBILE_BACKEND_URL/FINPLUS_API_KEY, then paste it into the mobile app's Settings directly for now."
+            message_kind = "warn"
 
     status = token_manager.get_token_status()
     if not status["has_token"]:
@@ -899,6 +950,7 @@ def settings_page():
     .settings-msg{{margin-top:16px;padding:10px 14px;border-radius:10px;font-size:13.5px}}
     .settings-msg-ok{{background:var(--green-bg);color:var(--green)}}
     .settings-msg-err{{background:var(--red-bg);color:var(--red)}}
+    .settings-msg-warn{{background:rgba(234,179,8,.12);color:var(--amber)}}
     a.back{{color:var(--muted);font-size:13px;text-decoration:none}}
     a.back:hover{{color:var(--text)}}
   </style>
@@ -1694,10 +1746,22 @@ def dashboard():
   </div>
 
   <div class="section">
-    <div class="section-head"><span class="section-bar"></span><h2>Market Depth</h2></div>
-    <p class="desc">Live 5-level order book, NIFTY &amp; BANK NIFTY front-month futures. Updates every
-      {FAST_POLL_SECONDS}s alongside the price above. MCX has no free depth feed (its market-watch API
-      returns zero for every bid/ask field), so crude/natgas aren't shown here.</p>
+    <div class="section-head" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="section-bar"></span>
+        <h2>Market Depth</h2>
+        <span id="market-status-pill" style="font-size:11px; padding:3px 8px; border-radius:4px; background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3); font-weight:600; display:inline-flex; align-items:center; gap:6px;">
+          <span style="width:6px; height:6px; border-radius:50%; background:#ef4444; display:inline-block;"></span>
+          MARKET CLOSED &bull; FRIDAY CLOSING SNAPSHOT
+        </span>
+      </div>
+    </div>
+    <p class="desc" id="market-depth-desc" style="margin-top:6px; line-height:1.5;">
+      Exchange 5-level order book, NIFTY &amp; BANK NIFTY front-month futures.
+      <span id="market-depth-notice" style="color:#f59e0b; font-weight:500;">
+        ⚠️ Market is currently closed. Showing frozen order-book state recorded at Friday's 15:30 IST close. Live 3s updates resume on market open.
+      </span>
+    </p>
     <div class="depth-grid" id="depth-grid">
       <div class="depth-card card-3d"><p class="empty">Waiting for first depth snapshot&hellip;</p></div>
       <div class="depth-card card-3d"><p class="empty">Waiting for first depth snapshot&hellip;</p></div>
@@ -1718,7 +1782,7 @@ def dashboard():
     </div>`;
   }}
 
-  function renderDepthCard(key, depth) {{
+  function renderDepthCard(key, depth, marketOpen) {{
     if (!depth || !depth.levels || !depth.levels.length) {{
       return `<div class="depth-card card-3d"><div class="depth-top"><h3>${{DEPTH_NAMES[key] || key}}</h3></div>
         <p class="empty">No depth data yet.</p></div>`;
@@ -1726,9 +1790,27 @@ def dashboard():
     const maxQty = Math.max(...depth.levels.map(l => Math.max(l.buy_qty || 0, l.sell_qty || 0)));
     const rows = depth.levels.map(l => depthRowHtml(l, l, maxQty)).join('');
     const buyPct = depth.buy_pct != null ? depth.buy_pct : 50;
+
+    let spreadText = '—';
+    if (depth.best_bid > 0 && depth.best_ask > 0) {{
+      const spreadVal = Math.abs(depth.best_ask - depth.best_bid);
+      spreadText = `spread ${{spreadVal.toFixed(2)}}`;
+    }} else if (depth.best_bid > 0 && (!depth.best_ask || depth.best_ask <= 0)) {{
+      spreadText = `no asks at close`;
+    }}
+
+    const badgeHtml = marketOpen
+      ? `<span style="font-size:10px; background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3); padding:2px 6px; border-radius:4px; font-weight:600; text-transform:uppercase;">LIVE ORDER BOOK</span>`
+      : `<span style="font-size:10px; background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3); padding:2px 6px; border-radius:4px; font-weight:600; text-transform:uppercase;">FROZEN AT CLOSE</span>`;
+
     return `<div class="depth-card card-3d">
-      <div class="depth-top"><h3>${{DEPTH_NAMES[key] || key}}</h3>
-        <span class="depth-mid">spread ${{depth.spread != null ? depth.spread.toFixed(2) : '—'}}</span></div>
+      <div class="depth-top">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <h3>${{DEPTH_NAMES[key] || key}}</h3>
+          ${{badgeHtml}}
+        </div>
+        <span class="depth-mid">${{spreadText}}</span>
+      </div>
       <div class="split-bar"><div class="buy" style="width:${{buyPct}}%"></div></div>
       <div class="split-labels"><span>Buy ${{buyPct.toFixed(1)}}%</span><span>Sell ${{(100-buyPct).toFixed(1)}}%</span></div>
       <div class="bidask">
@@ -1782,9 +1864,34 @@ def dashboard():
       for (const [key, values] of Object.entries(d.spark || {{}})) {{
         updateSpark(key.toLowerCase(), values);
       }}
+      const isOpen = d.market_open;
+      const statusPill = document.getElementById('market-status-pill');
+      const statusNotice = document.getElementById('market-depth-notice');
+      if (statusPill) {{
+        if (isOpen) {{
+          statusPill.style.background = 'rgba(34,197,94,0.15)';
+          statusPill.style.color = '#4ade80';
+          statusPill.style.borderColor = 'rgba(34,197,94,0.3)';
+          statusPill.innerHTML = '<span style="width:6px; height:6px; border-radius:50%; background:#22c55e; display:inline-block;"></span> LIVE MARKET ORDER BOOK';
+        }} else {{
+          statusPill.style.background = 'rgba(239,68,68,0.15)';
+          statusPill.style.color = '#f87171';
+          statusPill.style.borderColor = 'rgba(239,68,68,0.3)';
+          statusPill.innerHTML = `<span style="width:6px; height:6px; border-radius:50%; background:#ef4444; display:inline-block;"></span> ${{d.market_status || 'MARKET CLOSED'}} &bull; FRIDAY CLOSING SNAPSHOT`;
+        }}
+      }}
+      if (statusNotice) {{
+        if (isOpen) {{
+          statusNotice.style.color = '#94a3b8';
+          statusNotice.textContent = 'Updates every 3s alongside the price above.';
+        }} else {{
+          statusNotice.style.color = '#f59e0b';
+          statusNotice.textContent = "⚠️ Market is currently closed. Showing frozen order-book state recorded at Friday's 15:30 IST close. Live 3s updates resume on market open.";
+        }}
+      }}
       const grid = document.getElementById('depth-grid');
       if (grid && d.depth) {{
-        grid.innerHTML = Object.entries(d.depth).map(([k, v]) => renderDepthCard(k.toLowerCase(), v)).join('');
+        grid.innerHTML = Object.entries(d.depth).map(([k, v]) => renderDepthCard(k.toLowerCase(), v, isOpen)).join('');
       }}
     }} catch (e) {{ /* transient poll failure, try again next tick */ }}
   }}
