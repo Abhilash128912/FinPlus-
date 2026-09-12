@@ -2,6 +2,8 @@
 *.env
 *.env.*
 secrets*.json
+finplus_api_key*
+screener_data.json
 
 # Python caches & logs
 __pycache__/

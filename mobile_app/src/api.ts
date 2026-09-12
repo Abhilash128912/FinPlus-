@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "./config";
+import { getApiBaseUrl, getApiKey } from "./config";
 
 export interface SignalData {
   srv_signal?: string;
@@ -138,8 +138,15 @@ async function request<T>(path: string): Promise<T> {
   const url = `${getApiBaseUrl()}${path}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const key = getApiKey();
+  if (key) {
+    headers["X-Finplus-Key"] = key;
+  }
   try {
-    const res = await fetch(url, { signal: ctrl.signal });
+    const res = await fetch(url, { signal: ctrl.signal, headers });
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     }

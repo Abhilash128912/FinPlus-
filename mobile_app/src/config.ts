@@ -7,6 +7,7 @@
  */
 
 let _apiBaseUrl = "http://192.168.1.36:5850";
+let _apiKey = "";
 
 export const getApiBaseUrl = (): string => _apiBaseUrl;
 
@@ -16,4 +17,10 @@ export const setApiBaseUrl = (url: string) => {
     cleaned = cleaned.slice(0, -1);
   }
   _apiBaseUrl = cleaned;
+};
+
+export const getApiKey = (): string => _apiKey;
+
+export const setApiKey = (key: string) => {
+  _apiKey = key.trim();
 };

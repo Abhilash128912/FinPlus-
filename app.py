@@ -22,6 +22,7 @@ seconds stale when a single batched LTP call is nearly free:
 Local-only for now: no git push, no Render deploy, no mobile wrapper.
 Run: python app.py  ->  http://127.0.0.1:5850
 """
+import hmac
 import json
 import os
 import threading
@@ -53,6 +54,34 @@ def _load_env_file(path: str) -> None:
 
 _load_env_file(os.path.join(BASE_DIR, "indmoney.env"))
 _load_env_file(r"D:\FINPLUS WORKSPACE\indmoney_shared.env")
+_load_env_file(r"D:\FINPLUS APPS\FINPLUS COMMAND\indmoney_shared.env")
+
+
+def _load_api_key() -> str:
+    """Load API key from environment, fallback token, or local gitignored file."""
+    key = os.environ.get("FINPLUS_API_KEY", "").strip()
+    if key:
+        return key
+    key = os.environ.get("SCREENER_SYNC_TOKEN", "").strip()
+    if key:
+        return key
+    path = os.path.join(BASE_DIR, "finplus_api_key.txt")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip().startswith("FINPLUS_API_KEY") and "=" in line:
+                        return line.split("=", 1)[1].strip()
+        except Exception as e:
+            print(f"[Auth] could not read finplus_api_key.txt: {e}")
+    return ""
+
+
+FINPLUS_API_KEY = _load_api_key()
+if not FINPLUS_API_KEY:
+    print("[Auth] WARN: No FINPLUS_API_KEY configured. Private endpoints will return 503.")
+else:
+    print(f"[Auth] Security gate active. FinPlus API key loaded (length={len(FINPLUS_API_KEY)}).")
 
 import yfinance as yf  # noqa: E402
 
@@ -545,12 +574,84 @@ def _options_heatmap_loop():
         time.sleep(option_strategy_engine._HEATMAP_TTL_SEC)
 
 
+def is_authenticated(req) -> bool:
+    """Verify incoming request authentication via constant-time HMAC check."""
+    if not FINPLUS_API_KEY:
+        return False
+    # 1. Custom FinPlus Key header (matches FINPLUS LEDGER standard)
+    supplied = req.headers.get("X-Finplus-Key") or ""
+    # 2. Standard Authorization header (Bearer <key>)
+    if not supplied:
+        auth_hdr = req.headers.get("Authorization") or ""
+        if auth_hdr.lower().startswith("bearer "):
+            supplied = auth_hdr[7:].strip()
+    # 3. Persistent browser session cookie
+    if not supplied:
+        supplied = req.cookies.get("finplus_key") or ""
+    # 4. Explicit URL query param (?key=... or ?api_key=...)
+    if not supplied:
+        supplied = req.args.get("key") or req.args.get("api_key") or ""
+
+    if supplied and hmac.compare_digest(str(supplied).strip(), FINPLUS_API_KEY):
+        return True
+
+    # Check fallback sync token if separately configured
+    sync_tok = os.environ.get("SCREENER_SYNC_TOKEN", "").strip()
+    if sync_tok and supplied and hmac.compare_digest(str(supplied).strip(), sync_tok):
+        return True
+
+    return False
+
+
+@app.before_request
+def enforce_api_key():
+    """Fail-closed authentication gate for all private /api/* endpoints."""
+    if request.method == "OPTIONS":
+        return None
+
+    path = request.path
+
+    # Public health check and static endpoints
+    if path in ("/health", "/api/health", "/favicon.ico") or path.startswith("/static/"):
+        return None
+
+    # Guard API endpoints
+    if path.startswith("/api/"):
+        if not FINPLUS_API_KEY:
+            return jsonify({
+                "success": False,
+                "error": "Server has no API key configured - private endpoints are closed. Set FINPLUS_API_KEY on the host."
+            }), 503
+        if not is_authenticated(request):
+            return jsonify({
+                "success": False,
+                "error": "Missing or invalid API key. Please provide X-Finplus-Key header."
+            }), 401
+
+    return None
+
+
 @app.after_request
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Finplus-Key"
+    # Auto-persist valid key from query param into browser cookie
+    q_key = request.args.get("key") or request.args.get("api_key")
+    if q_key and FINPLUS_API_KEY and hmac.compare_digest(str(q_key).strip(), FINPLUS_API_KEY):
+        response.set_cookie("finplus_key", q_key.strip(), max_age=30 * 86400, httponly=False, samesite="Lax")
     return response
+
+
+@app.route("/health")
+@app.route("/api/health")
+def health_check():
+    return jsonify({
+        "status": "online",
+        "app": "Finplus Radar",
+        "auth": "enforced" if FINPLUS_API_KEY else "no-key-configured",
+        "version": "2.1.0"
+    }), 200
 
 
 @app.route("/api/<path:dummy>", methods=["OPTIONS"])
@@ -1647,9 +1748,25 @@ def dashboard():
     line.setAttribute('stroke', values[values.length - 1] >= values[0] ? '#22c55e' : '#ef4444');
   }}
 
+  (function() {{
+    const p = new URLSearchParams(window.location.search);
+    const k = p.get('key') || p.get('api_key');
+    if (k) {{
+      localStorage.setItem('finplus_api_key', k);
+      document.cookie = 'finplus_key=' + encodeURIComponent(k) + '; path=/; max-age=2592000; SameSite=Lax';
+    }}
+    const s = localStorage.getItem('finplus_api_key');
+    if (s && !document.cookie.includes('finplus_key=')) {{
+      document.cookie = 'finplus_key=' + encodeURIComponent(s) + '; path=/; max-age=2592000; SameSite=Lax';
+    }}
+  }})();
+
   async function pollFastLtp() {{
     try {{
-      const r = await fetch('/api/fast_ltp');
+      const headers = {{}};
+      const key = localStorage.getItem('finplus_api_key');
+      if (key) headers['X-Finplus-Key'] = key;
+      const r = await fetch('/api/fast_ltp', {{ headers }});
       const d = await r.json();
       for (const [key, val] of Object.entries(d.ltp || {{}})) {{
         const el = document.getElementById('ltp-' + key.toLowerCase());
@@ -1790,7 +1907,10 @@ def scan_page():
   // from the 3-min full rescan, which owns score/entry/stop/target.
   async function pollMomentumLtp() {{
     try {{
-      const r = await fetch('/api/momentum_fast_ltp');
+      const headers = {{}};
+      const key = localStorage.getItem('finplus_api_key');
+      if (key) headers['X-Finplus-Key'] = key;
+      const r = await fetch('/api/momentum_fast_ltp', {{ headers }});
       const d = await r.json();
       for (const [symbol, q] of Object.entries(d.quotes || {{}})) {{
         const priceEl = document.getElementById('mom-ltp-' + symbol);
