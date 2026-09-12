@@ -1,0 +1,32 @@
+scanned=724 skipped=0 buy_qualified=1 sell_qualified=2
+
+=== TOP 10 BUY ===
+  BLACKBUCK       ltp=588.5      entry=599.4 stop=565.93 t1=611.55 strength=40.0 - Turned up off support 572.00, on 6.4x volume
+
+=== TOP 10 SELL ===
+  SANDUMA         ltp=192.95     entry=190.81 stop=196.25 t1=187.3 strength=78.5 - Turned down off broken support 194.50, on 2.4x volume
+  SUPREMEIND      ltp=3378.7     entry=3378.0 stop=3500.68 t1=3316.84 strength=68.4 - Turned down off broken support 3470.10, on 1.6x volume
+
+=== WATCH BUY (25 total, near support) ===
+  ABFRL           ltp=50.22      support=50.2 dist=0.02
+  ROLEXRINGS      ltp=171.85     support=171.01 dist=0.84
+  ABLBL           ltp=83.85      support=82.61 dist=1.24
+  ONGC            ltp=233.95     support=232.22 dist=1.73
+  PPLPHARMA       ltp=212.53     support=210.52 dist=2.01
+  AVANTEL         ltp=156.21     support=154.0 dist=2.21
+  EMAMILTD        ltp=364.4      support=361.85 dist=2.55
+  CARBORUNIV      ltp=1071.2     support=1068.5 dist=2.7
+  TFCILTD         ltp=142.11     support=139.4 dist=2.71
+  BELRISE         ltp=228.5      support=225.0 dist=3.5
+
+=== WATCH SELL (32 total, near resistance) ===
+  INOXWIND        ltp=76.4       resistance=76.44 dist=0.04
+  HCC             ltp=22.62      resistance=22.78 dist=0.16
+  MOSCHIP         ltp=210.04     resistance=210.42 dist=0.38
+  NHPC            ltp=76.8       resistance=77.21 dist=0.41
+  NMDC            ltp=82.97      resistance=83.64 dist=0.67
+  ASIANTILES      ltp=50.55      resistance=51.22 dist=0.67
+  STARCEMENT      ltp=195.3      resistance=196.34 dist=1.04
+  MOIL            ltp=245.9      resistance=247.0 dist=1.1
+  DCXINDIA        ltp=166.88     resistance=168.1 dist=1.22
+  POWERGRID       ltp=269.4      resistance=270.75 dist=1.35

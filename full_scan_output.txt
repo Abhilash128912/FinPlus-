@@ -1,0 +1,6 @@
+scanned=724 skipped=0 buy_qualified=0 sell_qualified=1
+
+=== TOP 10 BUY ===
+
+=== TOP 10 SELL ===
+  SANDUMA         ltp=192.95     entry=191.93 stop=196.23 t1=188.46 strength=73.8 - Turned down off broken support 194.50, on 1.6x volume
