@@ -2124,6 +2124,15 @@ _background_started = False
 _background_lock = threading.Lock()
 
 
+# The free-tier Render instance (512MB) OOM-crashes running the full scan
+# suite -- swing/lt/penny/options each build their own pandas DataFrames
+# across hundreds of stocks, on top of the momentum scan the app's
+# Intraday/Trend tabs actually use. Default to the lean set that covers what
+# those tabs need; set ENABLE_FULL_SCAN_SUITE=1 (a paid, non-sleeping plan)
+# to bring swing/long-term/penny/options scanning back.
+FULL_SCAN_SUITE = os.environ.get("ENABLE_FULL_SCAN_SUITE", "").strip() == "1"
+
+
 def start_all_background_threads():
     global _background_started
     with _background_lock:
@@ -2133,16 +2142,20 @@ def start_all_background_threads():
         threading.Thread(target=_mcx_bar_recorder_loop, daemon=True).start()
         threading.Thread(target=_signal_refresh_loop, daemon=True).start()
         threading.Thread(target=_fast_ltp_loop, daemon=True).start()
-        threading.Thread(target=_equity_scan_loop, daemon=True).start()
         threading.Thread(target=_momentum_scan_loop, daemon=True).start()
         threading.Thread(target=_momentum_fast_poll_loop, daemon=True).start()
         threading.Thread(target=_trend_refresh_loop, daemon=True).start()
-        threading.Thread(target=_swing_scan_loop, daemon=True).start()
-        threading.Thread(target=_lt_scan_loop, daemon=True).start()
-        threading.Thread(target=_penny_scan_loop, daemon=True).start()
-        threading.Thread(target=_fundamentals_warm_loop, daemon=True).start()
-        threading.Thread(target=_options_scan_loop, daemon=True).start()
-        threading.Thread(target=_options_heatmap_loop, daemon=True).start()
+        if FULL_SCAN_SUITE:
+            threading.Thread(target=_equity_scan_loop, daemon=True).start()
+            threading.Thread(target=_swing_scan_loop, daemon=True).start()
+            threading.Thread(target=_lt_scan_loop, daemon=True).start()
+            threading.Thread(target=_penny_scan_loop, daemon=True).start()
+            threading.Thread(target=_fundamentals_warm_loop, daemon=True).start()
+            threading.Thread(target=_options_scan_loop, daemon=True).start()
+            threading.Thread(target=_options_heatmap_loop, daemon=True).start()
+        else:
+            print("[startup] ENABLE_FULL_SCAN_SUITE not set -- running Intraday + Trend Analyser "
+                  "loops only (swing/long-term/penny/options scans off to fit the free-tier 512MB limit)")
         totp_auth.start_totp_refresher_thread()
 
 
