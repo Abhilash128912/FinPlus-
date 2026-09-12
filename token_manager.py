@@ -29,6 +29,29 @@ def _env_file_path(base_dir: str) -> str:
     return os.path.join(base_dir, ENV_FILE_NAME)
 
 
+def _write_env_key(path: str, key: str, value: str) -> None:
+    """Updates one KEY=value line in an .env file, preserving every other
+    line untouched (MOBILE_BACKEND_URL and anything else a person or another
+    tool -- e.g. FINPLUS COMMAND's shared-token broadcast -- put in this
+    file). A previous version blindly overwrote the whole file with just
+    this one line, silently deleting any other config on every token save."""
+    lines: list[str] = []
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+    prefix = f"{key}="
+    for i, line in enumerate(lines):
+        if line.strip().startswith(prefix):
+            lines[i] = f"{prefix}{value}\n"
+            break
+    else:
+        lines.append(f"{prefix}{value}\n")
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
 def decode_jwt_payload(token: str) -> dict | None:
     try:
         parts = token.strip().split(".")
@@ -91,8 +114,7 @@ def save_token(new_token: str, base_dir: str) -> tuple[bool, str] | None:
     token to the Render deployment if MOBILE_BACKEND_URL is configured;
     returns that relay's (ok, message), or None when no URL is set."""
     new_token = new_token.strip()
-    with open(_env_file_path(base_dir), "w", encoding="utf-8") as f:
-        f.write(f"{TOKEN_KEY}={new_token}\n")
+    _write_env_key(_env_file_path(base_dir), TOKEN_KEY, new_token)
     try:
         with open(r"D:\FINPLUS WORKSPACE\indmoney_shared.env", "w", encoding="utf-8") as sf:
             sf.write(f"{TOKEN_KEY}={new_token}\n")
