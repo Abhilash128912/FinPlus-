@@ -1,16 +1,13 @@
 import React from "react";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, View, Text } from "react-native";
+import { StyleSheet, Text } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 
 import { theme } from "./src/theme";
-import { MarketsScreen } from "./src/screens/MarketsScreen";
-import { CommoditiesScreen } from "./src/screens/CommoditiesScreen";
-import { ScreenerScreen } from "./src/screens/ScreenerScreen";
-import { OptionsScreen } from "./src/screens/OptionsScreen";
-import { AlertsScreen } from "./src/screens/AlertsScreen";
+import { TrendScreen } from "./src/screens/TrendScreen";
+import { IntradayScreen } from "./src/screens/IntradayScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -41,61 +38,25 @@ export default function App() {
             }}
           >
             <Tab.Screen
-              name="Markets"
-              component={MarketsScreen}
+              name="Trend"
+              component={TrendScreen}
               options={{
-                tabBarLabel: "Markets",
+                tabBarLabel: "Trend Analyser",
                 tabBarIcon: ({ focused }) => (
                   <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>
-                    📈
+                    📊
                   </Text>
                 ),
               }}
             />
             <Tab.Screen
-              name="CrudeMCX"
-              component={CommoditiesScreen}
+              name="Intraday"
+              component={IntradayScreen}
               options={{
-                tabBarLabel: "Crude/MCX",
+                tabBarLabel: "Intraday Calls",
                 tabBarIcon: ({ focused }) => (
                   <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>
-                    🛢️
-                  </Text>
-                ),
-              }}
-            />
-            <Tab.Screen
-              name="Screener"
-              component={ScreenerScreen}
-              options={{
-                tabBarLabel: "Screener",
-                tabBarIcon: ({ focused }) => (
-                  <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>
-                    🔍
-                  </Text>
-                ),
-              }}
-            />
-            <Tab.Screen
-              name="Options"
-              component={OptionsScreen}
-              options={{
-                tabBarLabel: "Options",
-                tabBarIcon: ({ focused }) => (
-                  <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>
-                    ⚡
-                  </Text>
-                ),
-              }}
-            />
-            <Tab.Screen
-              name="Alerts"
-              component={AlertsScreen}
-              options={{
-                tabBarLabel: "Alerts",
-                tabBarIcon: ({ focused }) => (
-                  <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>
-                    🔔
+                    🎯
                   </Text>
                 ),
               }}
@@ -116,21 +77,21 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderTopWidth: 1,
     borderTopColor: theme.colors.surfaceBorder,
-    height: 58,
-    paddingBottom: 6,
+    height: 60,
+    paddingBottom: 8,
     paddingTop: 6,
   },
   tabLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.3,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.4,
   },
   tabIcon: {
-    fontSize: 18,
+    fontSize: 20,
     opacity: 0.7,
   },
   tabIconActive: {
     opacity: 1,
-    transform: [{ scale: 1.1 }],
+    transform: [{ scale: 1.15 }],
   },
 });

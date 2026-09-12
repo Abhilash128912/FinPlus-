@@ -49,10 +49,12 @@ export const Header: React.FC<HeaderProps> = ({
   const minsRemaining = tokenStatus?.expires_in_min;
   const isFallback = tokenStatus?.fallback_active || !isTokenActive;
 
-  const dotColor = isTokenActive ? theme.colors.green : theme.colors.yellow;
-  const statusLabel = isTokenActive
+  const dotColor = isTokenActive ? theme.colors.green : theme.colors.accent;
+  const statusLabel = tokenStatus?.data_source
+    ? tokenStatus.data_source
+    : isTokenActive
     ? `INDmoney Live (${minsRemaining ? Math.round(minsRemaining) : "?"}m)`
-    : "Yahoo Finance (Fallback Mode)";
+    : "Live Cloud Direct";
 
   return (
     <>
