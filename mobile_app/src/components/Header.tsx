@@ -18,6 +18,8 @@ interface HeaderProps {
     expires_in_min?: number;
     totp_configured?: boolean;
     current_totp?: string;
+    data_source?: string;
+    fallback_active?: boolean;
   };
   onRefresh?: () => void;
   isRefreshing?: boolean;
@@ -43,6 +45,12 @@ export const Header: React.FC<HeaderProps> = ({
 
   const isTokenActive = tokenStatus?.has_token && !tokenStatus?.is_expired;
   const minsRemaining = tokenStatus?.expires_in_min;
+  const isFallback = tokenStatus?.fallback_active || !isTokenActive;
+
+  const dotColor = isTokenActive ? theme.colors.green : theme.colors.yellow;
+  const statusLabel = isTokenActive
+    ? `INDmoney Live (${minsRemaining ? Math.round(minsRemaining) : "?"}m)`
+    : "Yahoo Finance (Fallback Mode)";
 
   return (
     <>
@@ -53,14 +61,10 @@ export const Header: React.FC<HeaderProps> = ({
             <View
               style={[
                 styles.statusDot,
-                { backgroundColor: isTokenActive ? theme.colors.green : theme.colors.red },
+                { backgroundColor: dotColor },
               ]}
             />
-            <Text style={styles.statusText}>
-              {isTokenActive
-                ? `Token Active (${minsRemaining ? Math.round(minsRemaining) : "?"}m)`
-                : "Token Expired / Missing"}
-            </Text>
+            <Text style={styles.statusText}>{statusLabel}</Text>
             {tokenStatus?.totp_configured && (
               <View style={styles.totpBadge}>
                 <Text style={styles.totpBadgeText}>TOTP AUTO</Text>

@@ -199,74 +199,97 @@ def _signal_refresh_loop():
         time.sleep(REFRESH_SECONDS)
 
 
+def _fetch_yfinance_fast_quotes() -> dict:
+    """Fallback when INDmoney token is expired or missing.
+    Fetches real-time spot prices for NIFTY 50, BANK NIFTY, and Reliance via yfinance.fast_info.
+    """
+    quotes = {}
+    tickers = {
+        "nifty": "^NSEI",
+        "banknifty": "^NSEBANK",
+        "reliance": "RELIANCE.NS",
+    }
+    for card_id, ticker_sym in tickers.items():
+        try:
+            fi = yf.Ticker(ticker_sym).fast_info
+            last = fi.last_price
+            prev = fi.previous_close or last
+            if last is not None:
+                chg = last - prev if prev else 0.0
+                pct = (chg / prev * 100.0) if prev else 0.0
+                quotes[card_id] = {
+                    "ltp": round(float(last), 2),
+                    "change": round(float(chg), 2),
+                    "change_pct": round(float(pct), 2),
+                    "day_open": round(float(fi.open or last), 2),
+                    "day_high": round(float(fi.day_high or last), 2),
+                    "day_low": round(float(fi.day_low or last), 2),
+                    "prev_close": round(float(prev), 2),
+                }
+        except Exception:
+            pass
+    return quotes
+
+
 def _fast_ltp_loop():
-    """Price shown to the user for NIFTY/BANK NIFTY is the SPOT index
-    (NSE_40000001 / _40000003) -- what INDmoney's own app and every broker
-    terminal calls "NIFTY 50" / "BANK NIFTY", and what Abhilash was
-    comparing against when the futures price looked "wrong" by ~70 points
-    (that gap is the futures basis, a real premium, not a bug -- confirmed
-    2026-09-11: spot 23398.1 vs futures 23470.3). The futures contract keeps
-    doing everything it was already doing in the background -- order-book
-    depth (spot indices carry no depth/volume at all, INDmoney returns null
-    for both) and, via signal_engine, the actual sr_volume signal,
-    entry/stop/target. One batched /market/quotes/full call covers both
-    spot and futures scrip codes for both symbols per tick.
-
-    Crude/natgas ride the same 3s tick for a consistent change%/sparkline
-    across all four cards, but through mcx_feed.fetch_mcx_futures() (real
-    MCX price, no NYMEX proxy involved) -- that call has its own 55s
-    internal cache, so polling it every 3s costs nothing extra.
-
-    All per-underlying dicts here are keyed by card id ("crude"/"natgas"/
-    "nifty"/"banknifty"), not by the feed's own symbol constants -- the
-    frontend just lowercases whatever key it receives to find the matching
-    DOM element, so these have to already be the card ids.
-
-    Sparkline buffers (_spark_buffers) are a bounded, in-memory trace of
-    "since this server started" -- reset on restart, exist to show
-    *direction and recent shape*, not to be an archive."""
+    """Fast LTP poller with automatic Yahoo Finance fallback."""
     while True:
         try:
             now = datetime.now(timezone.utc)
             ltp_by_card, depth_by_card, change_by_card = {}, {}, {}
+            tok_status = token_manager.get_token_status()
+            has_valid_token = tok_status["has_token"] and not tok_status["is_expired"]
 
-            contracts = {u: indmoney_feed.get_front_month_contract(u) for u in INDEX_UNDERLYINGS}
-            spot_codes = {u: trend_engine.INDEX_SECURITY_IDS[u] for u in INDEX_UNDERLYINGS}
-            fut_codes = [c["scrip_code"] for c in contracts.values() if c]
-            all_codes = fut_codes + list(spot_codes.values()) + ["NSE_2885"]
-            if all_codes:
-                quotes_by_code = indmoney_feed.get_quotes_full_many(all_codes)
-                for u in INDEX_UNDERLYINGS:
-                    card_id = u.lower()
-                    spot_q = quotes_by_code.get(spot_codes[u])
-                    fut_c = contracts.get(u)
-                    fut_q = quotes_by_code.get(fut_c["scrip_code"]) if fut_c else None
+            if has_valid_token:
+                try:
+                    contracts = {u: indmoney_feed.get_front_month_contract(u) for u in INDEX_UNDERLYINGS}
+                    spot_codes = {u: trend_engine.INDEX_SECURITY_IDS[u] for u in INDEX_UNDERLYINGS}
+                    fut_codes = [c["scrip_code"] for c in contracts.values() if c]
+                    all_codes = fut_codes + list(spot_codes.values()) + ["NSE_2885"]
+                    if all_codes:
+                        quotes_by_code = indmoney_feed.get_quotes_full_many(all_codes)
+                        for u in INDEX_UNDERLYINGS:
+                            card_id = u.lower()
+                            spot_q = quotes_by_code.get(spot_codes[u])
+                            fut_c = contracts.get(u)
+                            fut_q = quotes_by_code.get(fut_c["scrip_code"]) if fut_c else None
 
-                    if spot_q:
-                        ltp_by_card[card_id] = spot_q["ltp"]
-                        change_by_card[card_id] = {
-                            "change": spot_q["day_change"], "change_pct": spot_q["day_change_pct"],
-                            "day_open": spot_q["day_open"], "day_high": spot_q["day_high"],
-                            "day_low": spot_q["day_low"], "prev_close": spot_q["prev_close"],
-                        }
-                        if spot_q["ltp"] is not None:
-                            _spark_buffers[card_id].append(spot_q["ltp"])
-                    if fut_q:
-                        depth_by_card[card_id] = fut_q["depth"]
+                            if spot_q:
+                                ltp_by_card[card_id] = spot_q["ltp"]
+                                change_by_card[card_id] = {
+                                    "change": spot_q["day_change"], "change_pct": spot_q["day_change_pct"],
+                                    "day_open": spot_q["day_open"], "day_high": spot_q["day_high"],
+                                    "day_low": spot_q["day_low"], "prev_close": spot_q["prev_close"],
+                                }
+                                if spot_q["ltp"] is not None:
+                                    _spark_buffers[card_id].append(spot_q["ltp"])
+                            if fut_q:
+                                depth_by_card[card_id] = fut_q["depth"]
 
-                # Reliance Live Quote & Depth
-                rel_q = quotes_by_code.get("NSE_2885")
-                if rel_q:
-                    ltp_by_card["reliance"] = rel_q["ltp"]
-                    change_by_card["reliance"] = {
-                        "change": rel_q["day_change"], "change_pct": rel_q["day_change_pct"],
-                        "day_open": rel_q["day_open"], "day_high": rel_q["day_high"],
-                        "day_low": rel_q["day_low"], "prev_close": rel_q["prev_close"],
-                    }
-                    if rel_q["ltp"] is not None:
-                        _spark_buffers["reliance"].append(rel_q["ltp"])
-                    if rel_q.get("depth"):
-                        depth_by_card["reliance"] = rel_q["depth"]
+                        # Reliance Live Quote & Depth
+                        rel_q = quotes_by_code.get("NSE_2885")
+                        if rel_q:
+                            ltp_by_card["reliance"] = rel_q["ltp"]
+                            change_by_card["reliance"] = {
+                                "change": rel_q["day_change"], "change_pct": rel_q["day_change_pct"],
+                                "day_open": rel_q["day_open"], "day_high": rel_q["day_high"],
+                                "day_low": rel_q["day_low"], "prev_close": rel_q["prev_close"],
+                            }
+                            if rel_q["ltp"] is not None:
+                                _spark_buffers["reliance"].append(rel_q["ltp"])
+                            if rel_q.get("depth"):
+                                depth_by_card["reliance"] = rel_q["depth"]
+                except Exception:
+                    pass
+
+            # Automatic fallback to Yahoo Finance if INDmoney failed or token expired
+            if not ltp_by_card.get("nifty") or not ltp_by_card.get("banknifty"):
+                yf_quotes = _fetch_yfinance_fast_quotes()
+                for cid, q in yf_quotes.items():
+                    if cid not in ltp_by_card or ltp_by_card[cid] is None:
+                        ltp_by_card[cid] = q["ltp"]
+                        change_by_card[cid] = q
+                        _spark_buffers[cid].append(q["ltp"])
 
             for mcx_symbol, card_id in COMMODITY_CARD_IDS.items():
                 q = mcx_feed.fetch_mcx_futures(mcx_symbol)
@@ -668,6 +691,9 @@ def api_token_status():
     totp_val = totp_auth.get_current_totp()
     status["totp_configured"] = bool(os.environ.get("INDMONEY_TOTP_SECRET"))
     status["current_totp"] = totp_val
+    is_active = status["has_token"] and not status["is_expired"]
+    status["data_source"] = "INDmoney Live API" if is_active else "Yahoo Finance (Fallback Mode)"
+    status["fallback_active"] = not is_active
     return jsonify(status)
 
 
