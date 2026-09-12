@@ -28,9 +28,6 @@ import screener_engine as se
 import fundamental_engine
 import equity_scan
 
-SCREENER_DATA_PATH = os.environ.get("SCREENER_DATA_PATH", os.path.join(SCREENER_APP_DIR, "screener_data.json"))
-
-
 def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_quotes: bool = True) -> dict:
     """
     Executes Quality + Value Penny Stock Screener:
@@ -39,13 +36,10 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
       - Applies exact 7-gate safety filter and percentile ranking
       - Calculates SIP quantity
     """
-    raw_data = []
-    if os.path.exists(SCREENER_DATA_PATH):
-        try:
-            with open(SCREENER_DATA_PATH, "r", encoding="utf-8") as f:
-                raw_data = json.load(f)
-        except Exception:
-            pass
+    # Shared process-lifetime cache (equity_scan.load_screener_data) rather
+    # than this engine's own independent read of the same 11MB file -- see
+    # that function's docstring for why (the free-tier OOM this fixed).
+    raw_data = equity_scan.load_screener_data()
 
     # Filter for micro-caps in the ₹5 to ₹75 window with positive momentum & liquidity
     debt_free_symbols = {c["symbol"] for c in DEBT_FREE_MICROCAPS}

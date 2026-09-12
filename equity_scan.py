@@ -62,20 +62,41 @@ def _screener_engine():
     return se
 
 
-def load_liquid_candidates() -> list[dict]:
-    """Every screener_data.json row that clears intraday_candidate_gates_pass --
-    the same liquidity/circuit-safety bar the live screener's own intraday
-    tab uses. Returns [] (not a crash) when the scan data hasn't been
-    generated/deployed yet, so callers degrade to an empty result instead of
-    taking the whole background loop down."""
+_screener_data_cache: list[dict] | None = None
+
+
+def load_screener_data() -> list[dict]:
+    """The one place screener_data.json actually gets read off disk.
+    equity_scan, swing_engine, lt_engine, and penny_engine all scan
+    overlapping slices of the same ~2,500-row file; before this, each of
+    them opened and json.load()'d its own independent copy, so a single
+    background-thread wakeup (all their loops fire close together) could
+    hold 4+ copies of an 11MB structure in memory at once -- the direct
+    cause of the free-tier 512MB OOM kill on Render. Cached for this
+    process's lifetime: the file is a scan snapshot that only changes on
+    a fresh deploy, never while this process is running, so there is no
+    correctness cost to reading it once. Callers must copy a row (dict(row))
+    before mutating it, since this list is shared -- every caller in this
+    codebase already does."""
+    global _screener_data_cache
+    if _screener_data_cache is not None:
+        return _screener_data_cache
     if not os.path.exists(SCREENER_DATA_PATH):
         print(f"[equity_scan] no scan data at {SCREENER_DATA_PATH} -- run fetch_and_build.py "
               f"and commit screener_data.json, or set SCREENER_DATA_PATH")
-        return []
-    se = _screener_engine()
+        _screener_data_cache = []
+        return _screener_data_cache
     with open(SCREENER_DATA_PATH, encoding="utf-8") as f:
-        rows = json.load(f)
-    return [r for r in rows if se.intraday_candidate_gates_pass(r)]
+        _screener_data_cache = json.load(f)
+    return _screener_data_cache
+
+
+def load_liquid_candidates() -> list[dict]:
+    """Every screener_data.json row that clears intraday_candidate_gates_pass --
+    the same liquidity/circuit-safety bar the live screener's own intraday
+    tab uses."""
+    se = _screener_engine()
+    return [r for r in load_screener_data() if se.intraday_candidate_gates_pass(r)]
 
 
 def _refresh_security_id_cache() -> dict:

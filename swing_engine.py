@@ -10,7 +10,6 @@ Combines:
      via fundamental_engine.py to restore authentic Business Strength & Value scoring.
 """
 
-import json
 import os
 import sys
 import time
@@ -24,17 +23,13 @@ import screener_engine as se
 import equity_scan
 import fundamental_engine
 
-SCREENER_DATA_PATH = os.environ.get("SCREENER_DATA_PATH", os.path.join(SCREENER_APP_DIR, "screener_data.json"))
-
 
 def _load_base_scan_data() -> list[dict]:
-    if os.path.exists(SCREENER_DATA_PATH):
-        try:
-            with open(SCREENER_DATA_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[swing_engine] failed to read {SCREENER_DATA_PATH}: {e}")
-    return []
+    # Shared process-lifetime cache (equity_scan.load_screener_data) so this
+    # doesn't hold its own independent copy of the 11MB scan file alongside
+    # equity_scan/lt_engine/penny_engine's copies -- see that function's
+    # docstring for why (the free-tier OOM this fixed).
+    return equity_scan.load_screener_data()
 
 
 def scan_swing_candidates(top_n: int = 15, update_live_quotes: bool = True) -> dict:
