@@ -29,6 +29,30 @@ def _env_file_path(base_dir: str) -> str:
     return os.path.join(base_dir, ENV_FILE_NAME)
 
 
+def _load_finplus_key(base_dir: str) -> str:
+    """Mirrors app.py's own _load_api_key() lookup. COMMAND's /api/token now
+    requires this same header (2026-09-18: it used to accept anything, no
+    key at all) -- reading it here rather than threading it through every
+    save_token() caller (app.py's /settings route, totp_auth.py's daily
+    auto-refresh) keeps this self-contained."""
+    key = os.environ.get("FINPLUS_API_KEY", "").strip()
+    if key:
+        return key
+    key = os.environ.get("SCREENER_SYNC_TOKEN", "").strip()
+    if key:
+        return key
+    path = os.path.join(base_dir, "finplus_api_key.txt")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip().startswith("FINPLUS_API_KEY") and "=" in line:
+                        return line.split("=", 1)[1].strip()
+        except Exception:
+            pass
+    return ""
+
+
 def decode_jwt_payload(token: str) -> dict | None:
     try:
         parts = token.strip().split(".")
@@ -91,9 +115,25 @@ def save_token(new_token: str, base_dir: str) -> None:
     new_token = new_token.strip()
     with open(_env_file_path(base_dir), "w", encoding="utf-8") as f:
         f.write(f"{TOKEN_KEY}={new_token}\n")
+
+    # Sync to FINPLUS COMMAND and notify master hub
+    command_shared_paths = [
+        r"D:\FINPLUS APPS\FINPLUS COMMAND\indmoney_shared.env",
+        r"D:\FINPLUS WORKSPACE\indmoney_shared.env"
+    ]
+    for sp in command_shared_paths:
+        try:
+            with open(sp, "w", encoding="utf-8") as sf:
+                sf.write(f"{TOKEN_KEY}={new_token}\n")
+        except Exception:
+            pass
+
     try:
-        with open(r"D:\FINPLUS WORKSPACE\indmoney_shared.env", "w", encoding="utf-8") as sf:
-            sf.write(f"{TOKEN_KEY}={new_token}\n")
+        key = _load_finplus_key(base_dir)
+        headers = {"X-Finplus-Key": key} if key else {}
+        requests.post("http://localhost:9000/api/token", json={"token": new_token}, headers=headers, timeout=2)
     except Exception:
         pass
+
     os.environ[TOKEN_KEY] = new_token
+

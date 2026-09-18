@@ -164,6 +164,18 @@ OPTIONS_CSS = """
       background: #2563eb; color: #ffffff;
     }
 
+    /* Toggle buttons for the heatmap / option chain sections (hidden by
+       default -- both involve a live broker call / a full-universe scan,
+       so they should only run when actually asked for). */
+    .toggle-section-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+    .toggle-section-btn {
+      padding: 9px 16px; border-radius: 8px; font-size: 12.5px; font-weight: 700;
+      background: rgba(99, 102, 241, 0.12); color: #818cf8; border: 1px solid var(--border);
+      cursor: pointer; transition: all 0.15s; font-family: inherit;
+    }
+    .toggle-section-btn:hover { background: rgba(99, 102, 241, 0.25); color: #fff; }
+    .toggle-section-btn.active { background: #6366f1; color: #fff; border-color: #6366f1; }
+
     /* Sector Heatmap */
     .heatmap-section { margin-bottom: 28px; }
     .heatmap-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -762,46 +774,61 @@ def render_options_page(
 
   {top_picks_board_html}
 
-  {heatmap_html}
+  <div class="toggle-section-bar">
+    <button class="toggle-section-btn" id="btn-heatmap"
+            onclick="toggleSection('heatmapPanel', 'btn-heatmap', '&#128202; Show Sector Heatmap', '&#128202; Hide Sector Heatmap')">
+      &#128202; Show Sector Heatmap
+    </button>
+    <button class="toggle-section-btn" id="btn-chain"
+            onclick="toggleSection('optionChainPanel', 'btn-chain', '&#128211; Show Live Option Chain', '&#128211; Hide Live Option Chain')">
+      &#128211; Show Live Option Chain
+    </button>
+  </div>
+
+  <div id="heatmapPanel" style="display:none">
+    {heatmap_html}
+  </div>
 
   {strategy_desk_html}
 
-  <div class="section">
-    <div class="section-head" style="margin-bottom:14px">
-      <span class="section-bar"></span>
-      <h2>Live Option Chain Ladder &mdash; {underlying} ({current_expiry})</h2>
-    </div>
-    <div class="oc-container">
-      <div class="oc-table-scroll">
-        <table class="oc-table">
-          <thead>
-            <tr>
-              <th colspan="7" class="th-grp-call">CALLS (CE)</th>
-              <th class="th-grp-strike">STRIKE</th>
-              <th colspan="7" class="th-grp-put">PUTS (PE)</th>
-            </tr>
-            <tr style="background:#131722;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
-              <th>OI</th>
-              <th>OI Chg</th>
-              <th>Volume</th>
-              <th>IV</th>
-              <th>Delta</th>
-              <th>Bid / Ask</th>
-              <th>LTP</th>
-              <th class="th-grp-strike">Strike</th>
-              <th>LTP</th>
-              <th>Bid / Ask</th>
-              <th>Delta</th>
-              <th>IV</th>
-              <th>Volume</th>
-              <th>OI Chg</th>
-              <th>OI</th>
-            </tr>
-          </thead>
-          <tbody>
-            {"".join(chain_rows_html)}
-          </tbody>
-        </table>
+  <div id="optionChainPanel" style="display:none">
+    <div class="section">
+      <div class="section-head" style="margin-bottom:14px">
+        <span class="section-bar"></span>
+        <h2>Live Option Chain Ladder &mdash; {underlying} ({current_expiry})</h2>
+      </div>
+      <div class="oc-container">
+        <div class="oc-table-scroll">
+          <table class="oc-table">
+            <thead>
+              <tr>
+                <th colspan="7" class="th-grp-call">CALLS (CE)</th>
+                <th class="th-grp-strike">STRIKE</th>
+                <th colspan="7" class="th-grp-put">PUTS (PE)</th>
+              </tr>
+              <tr style="background:#131722;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px">
+                <th>OI</th>
+                <th>OI Chg</th>
+                <th>Volume</th>
+                <th>IV</th>
+                <th>Delta</th>
+                <th>Bid / Ask</th>
+                <th>LTP</th>
+                <th class="th-grp-strike">Strike</th>
+                <th>LTP</th>
+                <th>Bid / Ask</th>
+                <th>Delta</th>
+                <th>IV</th>
+                <th>Volume</th>
+                <th>OI Chg</th>
+                <th>OI</th>
+              </tr>
+            </thead>
+            <tbody>
+              {"".join(chain_rows_html)}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -817,15 +844,29 @@ def render_options_page(
     window.location.href = url.toString();
   }}
 
-  // Auto-scroll to ATM strike on load
-  window.addEventListener('DOMContentLoaded', () => {{
-    setTimeout(() => {{
-      const atmRow = document.querySelector('.tr-atm');
-      if (atmRow) {{
-        atmRow.scrollIntoView({{block: 'center', behavior: 'smooth'}});
-      }}
-    }}, 100);
-  }});
+  // Hidden by default (see #heatmapPanel / #optionChainPanel above) --
+  // toggles visibility and swaps the button label/active state.
+  function toggleSection(panelId, btnId, showLabel, hideLabel) {{
+    const panel = document.getElementById(panelId);
+    const btn = document.getElementById(btnId);
+    if (!panel) return;
+    const willShow = panel.style.display === 'none';
+    panel.style.display = willShow ? 'block' : 'none';
+    if (btn) {{
+      btn.innerHTML = willShow ? hideLabel : showLabel;
+      btn.classList.toggle('active', willShow);
+    }}
+    // The chain panel was display:none on page load, so the original
+    // DOMContentLoaded auto-scroll below was a no-op against a hidden
+    // element -- scroll to the ATM strike now instead, once it's actually
+    // visible to scroll to.
+    if (willShow && panelId === 'optionChainPanel') {{
+      setTimeout(() => {{
+        const atmRow = document.querySelector('.tr-atm');
+        if (atmRow) atmRow.scrollIntoView({{block: 'center', behavior: 'smooth'}});
+      }}, 50);
+    }}
+  }}
   </script>
 </body>
 </html>"""

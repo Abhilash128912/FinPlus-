@@ -47,14 +47,19 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
         except Exception:
             pass
 
-    # Filter for micro-caps in the ₹5 to ₹75 window with positive momentum & liquidity
-    debt_free_symbols = {c["symbol"] for c in DEBT_FREE_MICROCAPS}
+    # Filter for micro-caps in the ₹5 to ₹75 window with positive momentum & liquidity.
+    # 2026-09-12 audit: this used to let any symbol on the static DEBT_FREE_MICROCAPS
+    # list skip the trend/volume gates below outright, on the theory a human had
+    # already vetted those names. That list stopped being re-checked once written,
+    # though -- KAMDHENU's hardcoded D/E (0.024) was 4x stale versus its actual
+    # current cached D/E (0.43) by the time this was audited. One gate, applied the
+    # same way to every candidate, live-computed every time: no more exceptions.
     penny_candidates = [
         dict(row) for row in raw_data
         if row.get("symbol")
         and (5.0 <= float(row.get("ltp") or 0.0) <= 75.0)
-        and (row.get("trend") not in ("Downtrend", "Distribution") or row.get("symbol") in debt_free_symbols)
-        and (float(row.get("avg_volume_10d") or 0.0) >= 10000 or row.get("symbol") in debt_free_symbols)
+        and row.get("trend") not in ("Downtrend", "Distribution")
+        and float(row.get("avg_volume_10d") or 0.0) >= 10000
     ]
 
     # Optional live quotes update via INDmoney
@@ -95,9 +100,10 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
         c["durability_score"] = fund.get("durability_score", 50.0)
         c["dvm_label"] = fund.get("dvm_label", "GOOD")
 
-        # Strict Debt-Free Gate: D/E must be <= 0.10 or symbol in audited debt-free microcaps
+        # Strict Debt-Free Gate: D/E must be <= 0.10, checked live every time -- no
+        # hardcoded-list bypass (see the candidate filter above for why).
         de_val = fund.get("de_ratio")
-        is_debt_free = (de_val is not None and float(de_val) <= 0.10) or (sym in debt_free_symbols)
+        is_debt_free = de_val is not None and float(de_val) <= 0.10
         if not is_debt_free:
             continue
 
@@ -119,8 +125,12 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
     # Run screener_engine's compute_quality_penny_stocks with exact gates
     penny_picks = se.compute_quality_penny_stocks(enriched, top_n=top_n, monthly_sip=monthly_sip)
 
-    # Monthly Featured Penny Cohort: Top 10 Debt-Free Micro-Caps (₹5 to ₹75)
-    monthly_cohort = get_or_refresh_penny_monthly_picks(raw_data, top_n=10, monthly_sip=monthly_sip)
+    # Monthly Featured Penny Cohort: Top 10 Debt-Free Micro-Caps (₹5 to ₹75).
+    # Sourced from `enriched` -- the same live-fundamentals-checked, D/E<=0.10-gated
+    # pool "All Qualified Micro-Caps" (penny_picks, above) is built from -- not the
+    # raw pre-gate universe, so the monthly cohort can never include a name the live
+    # debt-free gate would have rejected.
+    monthly_cohort = get_or_refresh_penny_monthly_picks(enriched, top_n=10, monthly_sip=monthly_sip)
 
     return {
         "monthly_cohort": monthly_cohort,
@@ -133,160 +143,6 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
 
 
 PENNY_MONTHLY_PICKS_FILE = os.path.join(BASE_DIR, "penny_monthly_picks.json")
-
-
-DEBT_FREE_MICROCAPS = [
-    {
-        "symbol": "SURANASOL",
-        "name": "Surana Solar Limited",
-        "sector": "Solar Energy & Clean Tech",
-        "ltp": 25.51,
-        "de_ratio": 0.0,
-        "total_debt": 0.0,
-        "total_cash": 6.84,
-        "durability_score": 70.0,
-        "dvm_label": "HIGH",
-        "roe_pct": 11.2,
-        "roce_pct": 14.5,
-        "pe": 19.6,
-        "trend": "Consolidation",
-    },
-    {
-        "symbol": "MERCURYEV",
-        "name": "Mercury Ev-Tech Limited",
-        "sector": "EV Mobility & Clean Tech",
-        "ltp": 41.88,
-        "de_ratio": 0.0,
-        "total_debt": 0.0,
-        "total_cash": 0.0,
-        "durability_score": 68.0,
-        "dvm_label": "GOOD",
-        "roe_pct": 14.2,
-        "roce_pct": 16.5,
-        "pe": 28.5,
-        "trend": "Strong Uptrend",
-    },
-    {
-        "symbol": "FCL",
-        "name": "Fineotex Chemical Limited",
-        "sector": "Specialty Chemicals & Green Chemistry",
-        "ltp": 57.82,
-        "de_ratio": 0.009,
-        "total_debt": 8.19,
-        "total_cash": 73.23,
-        "durability_score": 75.0,
-        "dvm_label": "HIGH",
-        "roe_pct": 18.5,
-        "roce_pct": 24.2,
-        "pe": 26.5,
-        "trend": "Strong Uptrend",
-    },
-    {
-        "symbol": "SUBEXLTD",
-        "name": "Subex Limited",
-        "sector": "Telecom AI & Cyber Analytics",
-        "ltp": 20.63,
-        "de_ratio": 0.082,
-        "total_debt": 28.27,
-        "total_cash": 124.44,
-        "durability_score": 64.0,
-        "dvm_label": "GOOD",
-        "roe_pct": 11.5,
-        "roce_pct": 13.8,
-        "pe": 38.5,
-        "trend": "Strong Uptrend",
-    },
-    {
-        "symbol": "KAMDHENU",
-        "name": "Kamdhenu Ventures Limited",
-        "sector": "Green Construction & Infrastructure",
-        "ltp": 38.29,
-        "de_ratio": 0.024,
-        "total_debt": 9.42,
-        "total_cash": 258.12,
-        "durability_score": 75.0,
-        "dvm_label": "HIGH",
-        "roe_pct": 15.6,
-        "roce_pct": 18.4,
-        "pe": 13.1,
-        "trend": "Strong Uptrend",
-    },
-    {
-        "symbol": "IVC",
-        "name": "IL&FS Investment Managers Limited",
-        "sector": "Private Equity & Asset Management",
-        "ltp": 9.29,
-        "de_ratio": 0.0,
-        "total_debt": 0.0,
-        "total_cash": 85.03,
-        "durability_score": 78.0,
-        "dvm_label": "HIGH",
-        "roe_pct": 13.4,
-        "roce_pct": 16.1,
-        "pe": 24.2,
-        "trend": "Accumulation",
-    },
-    {
-        "symbol": "AXITA",
-        "name": "Axita Cotton Limited",
-        "sector": "Sustainable Textiles & Organic Cotton",
-        "ltp": 8.0,
-        "de_ratio": 0.0,
-        "total_debt": 0.0,
-        "total_cash": 0.0,
-        "durability_score": 70.0,
-        "dvm_label": "GOOD",
-        "roe_pct": 16.2,
-        "roce_pct": 19.8,
-        "pe": 22.5,
-        "trend": "Strong Uptrend",
-    },
-    {
-        "symbol": "SYNCOMF",
-        "name": "Syncom Formulations (India) Limited",
-        "sector": "Healthcare & Pharma Formulations",
-        "ltp": 19.57,
-        "de_ratio": 0.004,
-        "total_debt": 1.47,
-        "total_cash": 112.86,
-        "durability_score": 72.0,
-        "dvm_label": "HIGH",
-        "roe_pct": 12.8,
-        "roce_pct": 15.2,
-        "pe": 21.6,
-        "trend": "Strong Uptrend",
-    },
-    {
-        "symbol": "ANDHRAPAP",
-        "name": "Andhra Paper Limited",
-        "sector": "Paper & Sustainable Packaging",
-        "ltp": 73.24,
-        "de_ratio": 0.10,
-        "total_debt": 232.15,
-        "total_cash": 518.61,
-        "durability_score": 76.0,
-        "dvm_label": "HIGH",
-        "roe_pct": 18.2,
-        "roce_pct": 22.5,
-        "pe": 16.8,
-        "trend": "Strong Uptrend",
-    },
-    {
-        "symbol": "UYFINCORP",
-        "name": "U.Y. Fincorp Limited",
-        "sector": "Financial Services & Micro Investments",
-        "ltp": 19.32,
-        "de_ratio": 0.009,
-        "total_debt": 3.35,
-        "total_cash": 1.12,
-        "durability_score": 60.0,
-        "dvm_label": "GOOD",
-        "roe_pct": 9.8,
-        "roce_pct": 11.6,
-        "pe": 18.5,
-        "trend": "Consolidation",
-    },
-]
 
 
 def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10, monthly_sip: float = 200.0,
@@ -314,7 +170,7 @@ def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10
 
     is_active_lock = (
         saved_state.get("locked_until") == locked_until_str
-        and saved_state.get("method") == "debt_free_microcaps_v2"
+        and saved_state.get("method") == "live_debt_free_gate_v1"
         and len(saved_state.get("picks") or []) == top_n
     )
 
@@ -360,11 +216,33 @@ def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10
             pass
         return saved_state
 
-    # Fresh selection: Build from audited debt-free microcaps pool
+    # Fresh selection: rank the already live-gated candidate pool (raw_universe is
+    # `enriched` from scan_penny_picks -- every entry already cleared the D/E<=0.10
+    # debt-free gate against CURRENT cached fundamentals) by quality, and lock in
+    # the top N for the month.
+    #
+    # 2026-09-12 audit: this used to read the top N straight from a hardcoded
+    # DEBT_FREE_MICROCAPS Python list instead, which meant a stock's real D/E was
+    # never re-checked once written into that list. Confirmed stale in practice:
+    # KAMDHENU's hardcoded de_ratio was 0.024 while its actual cached de_ratio had
+    # drifted to 0.43 -- 4x over the 0.10 gate -- and the cohort kept showing it as
+    # debt-free regardless. Selecting fresh from live data on every new lock period
+    # means a name has to actually be debt-free right now to make the cut, and it
+    # can't get "stuck" here indefinitely once it stops qualifying.
+    def _rank_score(cand: dict) -> float:
+        dur = float(cand.get("durability_score") if cand.get("durability_score") is not None else 65.0)
+        roe_val = cand.get("roe_pct")
+        pe_val = cand.get("pe")
+        q = min(100.0, max(50.0, 60.0 + (float(roe_val if roe_val is not None else 12.0) * 1.5)))
+        v = min(100.0, max(40.0, 90.0 - (float(pe_val if pe_val is not None else 20.0) * 0.8)))
+        return (dur * 0.40) + (q * 0.35) + (v * 0.25)
+
+    ranked_universe = sorted(raw_universe, key=_rank_score, reverse=True)
+
     cohort_picks = []
-    for c in DEBT_FREE_MICROCAPS[:top_n]:
+    for c in ranked_universe[:top_n]:
         sym = c.get("symbol")
-        u_row = by_symbol_universe.get(sym, {})
+        u_row = c  # raw_universe entries already carry live ltp/trend/etc.
         ltp = float(u_row.get("ltp") or c.get("ltp") or 0.0)
         trend = u_row.get("trend") or c.get("trend") or "Uptrend"
 
@@ -403,7 +281,7 @@ def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10
         dur = float(dur_val) if dur_val is not None else 65.0
         q = round(min(100.0, max(50.0, 60.0 + (float(roe_val if roe_val is not None else 12.0) * 1.5))), 1)
         v = round(min(100.0, max(40.0, 90.0 - (float(pe_val if pe_val is not None else 20.0) * 0.8))), 1)
-        rank_s = round((dur * 0.40) + (q * 0.35) + (v * 0.25), 1)
+        rank_s = round(_rank_score(c), 1)  # same formula that ranked/sliced ranked_universe above
         entry_s = round(max(10.0, 100.0 - (dist_pct * 3.0)), 1)
 
         cohort_picks.append({
@@ -435,7 +313,7 @@ def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10
     cohort_data = {
         "month_label": month_label,
         "locked_until": locked_until_str,
-        "method": "debt_free_microcaps_v2",
+        "method": "live_debt_free_gate_v1",
         "min_price": min_price,
         "max_price": max_price,
         "monthly_sip_budget": monthly_sip,

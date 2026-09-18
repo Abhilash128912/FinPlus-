@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import urllib.request
@@ -7,6 +8,33 @@ import time
 sys.stdout.reconfigure(encoding="utf-8")
 
 BASE_URL = "http://127.0.0.1:5850"
+
+
+def _load_finplus_key() -> str:
+    """2026-09-18 audit: /api/* used to accept any local request with no
+    key at all (a since-removed remote_addr==127.0.0.1 bypass in app.py).
+    Now that it's gated like every other endpoint, this script needs to
+    send the real key too -- same file app.py itself falls back to."""
+    key = os.environ.get("FINPLUS_API_KEY", "").strip()
+    if key:
+        return key
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "finplus_api_key.txt")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip().startswith("FINPLUS_API_KEY") and "=" in line:
+                    return line.split("=", 1)[1].strip()
+    return ""
+
+
+FINPLUS_KEY = _load_finplus_key()
+
+
+def _open(url: str, timeout: float = 10):
+    headers = {"User-Agent": "AuditBot/1.0"}
+    if FINPLUS_KEY:
+        headers["X-Finplus-Key"] = FINPLUS_KEY
+    return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout)
 
 ROUTES_TO_TEST = [
     ("/", "Crude Dashboard"),
@@ -70,8 +98,7 @@ def audit():
         url = BASE_URL + route
         try:
             t0 = time.time()
-            req = urllib.request.Request(url, headers={"User-Agent": "AuditBot/1.0"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with _open(url) as resp:
                 elapsed = (time.time() - t0) * 1000
                 status = resp.status
                 raw = resp.read().decode("utf-8")
@@ -94,7 +121,7 @@ def audit():
     # 3a. Audit Long-Term Cohort (/api/lt)
     total_tests += 1
     try:
-        with urllib.request.urlopen(BASE_URL + "/api/lt", timeout=10) as resp:
+        with _open(BASE_URL + "/api/lt") as resp:
             data = json.loads(resp.read().decode("utf-8"))
             lt_res = data.get("result") or {}
             cohort = lt_res.get("monthly_cohort") or {}
@@ -125,7 +152,7 @@ def audit():
     # 3b. Audit Penny Cohort (/api/penny)
     total_tests += 1
     try:
-        with urllib.request.urlopen(BASE_URL + "/api/penny", timeout=10) as resp:
+        with _open(BASE_URL + "/api/penny") as resp:
             data = json.loads(resp.read().decode("utf-8"))
             penny_res = data.get("result") or {}
             cohort = penny_res.get("monthly_cohort") or {}

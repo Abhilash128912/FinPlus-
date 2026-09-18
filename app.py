@@ -25,13 +25,27 @@ Run: python app.py  ->  http://127.0.0.1:5850
 import hmac
 import json
 import os
+import sys
 import threading
 import time
 import traceback
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, time as dt_time
 
 from flask import Flask, jsonify, redirect, request, url_for
+
+# 2026-09-12 audit: Windows' console defaults to cp1252 (not UTF-8), which
+# can't encode the rocket emoji in the startup banner below -- that raised
+# an uncaught UnicodeEncodeError at module load, before app.run() ever got
+# called, so the process exited immediately and the port never opened. This
+# was a total, silent boot failure on this exact machine that nothing here
+# had caught until a live boot test. Reconfiguring stdout/stderr to UTF-8
+# fixes this for any emoji/non-ASCII print, not just the one that crashed.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -139,6 +153,22 @@ TREND_ITEMS = [
 
 _state_lock = threading.Lock()
 _state = {"signals": {}, "updated_at": None, "error": None}
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def is_nse_market_open() -> tuple[bool, str]:
+    now_ist = datetime.now(IST)
+    weekday = now_ist.weekday()  # 0 = Mon, 4 = Fri, 5 = Sat, 6 = Sun
+    if weekday == 5:
+        return False, "NSE CLOSED (SATURDAY)"
+    if weekday == 6:
+        return False, "NSE CLOSED (SUNDAY)"
+    t = now_ist.time()
+    if t < dt_time(9, 15):
+        return False, "NSE PRE-MARKET (OPENS 09:15 IST)"
+    if t > dt_time(15, 30):
+        return False, "NSE CLOSED (SESSION ENDED 15:30 IST)"
+    return True, "NSE MARKET LIVE"
 
 _fast_lock = threading.Lock()
 _fast_state = {"ltp": {}, "depth": {}, "change": {}, "updated_at": None, "error": None}
@@ -337,7 +367,8 @@ def _fast_ltp_loop():
         except Exception as exc:
             with _fast_lock:
                 _fast_state["error"] = f"{type(exc).__name__}: {exc}"
-        time.sleep(FAST_POLL_SECONDS)
+        is_open, _ = is_nse_market_open()
+        time.sleep(FAST_POLL_SECONDS if is_open else 30)
 
 
 def _trend_refresh_loop():
@@ -577,7 +608,16 @@ def _options_heatmap_loop():
 def is_authenticated(req) -> bool:
     """Verify incoming request authentication via constant-time HMAC check.
     Strictly header-based (matches FINPLUS LEDGER standard). Never accepts query params
-    or cookies, avoiding access-log, browser-history, and Referer leaks."""
+    or cookies, avoiding access-log, browser-history, and Referer leaks.
+
+    2026-09-18 audit: this briefly had a `remote_addr in ('127.0.0.1', ...)`
+    bypass, meant to let FINPLUS COMMAND and the local audit script skip the
+    key. Removed -- a browser tab's fetch() to 127.0.0.1 shows up server-side
+    as remote_addr=127.0.0.1 too, so that bypass was indistinguishable from
+    "any webpage open on this machine," combined with the wildcard CORS
+    below it fully defeated this gate for exactly the traffic it exists to
+    stop. COMMAND now sends the real key (token_manager.py, server.py) and
+    so does the audit script -- see the matching fix in FINPLUS COMMAND."""
     if not FINPLUS_API_KEY:
         return False
     # 1. Custom FinPlus Key header (matches FINPLUS LEDGER standard)
@@ -641,12 +681,16 @@ def enforce_api_key():
     return None
 
 
-@app.after_request
-def add_cors_headers(response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Finplus-Key"
-    return response
+# 2026-09-18 audit: this used to be a wildcard `Access-Control-Allow-Origin:
+# *` on every response -- paired with the localhost bypass just removed
+# above, it meant ANY webpage open in the same browser could fetch() this
+# app's /api/* (including /api/token_status) with no credential at all.
+# Nothing legitimate needs cross-origin access here: this page's own JS only
+# ever fetches its own relative /api/* paths (same-origin, no CORS required
+# regardless of whether the page is loaded directly or inside FINPLUS
+# COMMAND's iframe -- an iframe's fetch() uses the iframe document's own
+# origin, not the parent page's), and no other FinPlus app's frontend calls
+# into this one over HTTP. So there's nothing to preserve by keeping it.
 
 
 @app.route("/health")
@@ -782,9 +826,12 @@ def api_alerts():
 def api_fast_ltp():
     with _fast_lock:
         spark = {u: list(buf) for u, buf in _spark_buffers.items()}
+        market_open, market_status_text = is_nse_market_open()
         return jsonify({
             "ltp": _fast_state["ltp"],
             "depth": _fast_state["depth"],
+            "market_open": market_open,
+            "market_status": market_status_text,
             "change": _fast_state["change"],
             "spark": spark,
             "updated_at": _fast_state["updated_at"].isoformat() if _fast_state["updated_at"] else None,
@@ -928,6 +975,7 @@ def settings_page():
           if (k) localStorage.setItem('finplus_api_key', k);
         }});
       </script>
+      {PARENT_KEY_BRIDGE_JS}
       {msg_html}
     </div>
   </div>
@@ -1611,6 +1659,33 @@ def _equity_section_html() -> str:
     </div>"""
 
 
+# 2026-09-12 audit: receives the FinPlus API key from FINPLUS COMMAND (the
+# parent hub at localhost:9000) via postMessage when this page is loaded
+# inside COMMAND's iframe, and writes it into THIS origin's own localStorage
+# under the same key every fetch call on this page already reads
+# ('finplus_api_key'). Needed because browsers increasingly partition
+# localStorage by (top-level site, embedded origin): a key saved while
+# visiting this app directly (http://127.0.0.1:5850) is invisible to the
+# exact same origin loaded inside someone else's iframe, and vice versa --
+# confirmed via live network trace during the audit (saved standalone,
+# still 401'd on every /api/* call once viewed through COMMAND's iframe).
+# Checks event.origin so a page embedding this app in an iframe of its own
+# can't inject a key this way.
+PARENT_KEY_BRIDGE_JS = """<script>
+window.addEventListener('message', function(event) {
+  if (event.origin !== 'http://localhost:9000') return;
+  if (!event.data || event.data.type !== 'finplus-key' || !event.data.key) return;
+  try { localStorage.setItem('finplus_api_key', event.data.key); } catch (e) {}
+  // If the Settings page's key field happens to be on screen and still
+  // empty (page loaded before this message arrived), reflect the key there
+  // too -- without this it'd be silently usable but LOOK unset until the
+  // next full reload. Never overwrites something the user is mid-typing.
+  var input = document.getElementById('finplus_key_input');
+  if (input && !input.value) { input.value = event.data.key; }
+});
+</script>"""
+
+
 def _nav_bar(active: str) -> str:
     def link(path, label, key):
         cls = "active" if key == active else ""
@@ -1624,7 +1699,7 @@ def _nav_bar(active: str) -> str:
       {link("/lt", "💎 Long Term", "lt")}
       {link("/penny", "🪙 Penny Screen", "penny")}
       {link("/settings", "⚙️ Settings", "settings")}
-    </div>"""
+    </div>{PARENT_KEY_BRIDGE_JS}"""
 
 
 @app.route("/")
@@ -1694,10 +1769,22 @@ def dashboard():
   </div>
 
   <div class="section">
-    <div class="section-head"><span class="section-bar"></span><h2>Market Depth</h2></div>
-    <p class="desc">Live 5-level order book, NIFTY &amp; BANK NIFTY front-month futures. Updates every
-      {FAST_POLL_SECONDS}s alongside the price above. MCX has no free depth feed (its market-watch API
-      returns zero for every bid/ask field), so crude/natgas aren't shown here.</p>
+    <div class="section-head" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="section-bar"></span>
+        <h2>Market Depth</h2>
+        <span id="market-status-pill" style="font-size:11px; padding:3px 8px; border-radius:4px; background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3); font-weight:600; display:inline-flex; align-items:center; gap:6px;">
+          <span style="width:6px; height:6px; border-radius:50%; background:#ef4444; display:inline-block;"></span>
+          MARKET CLOSED &bull; FRIDAY CLOSING SNAPSHOT
+        </span>
+      </div>
+    </div>
+    <p class="desc" id="market-depth-desc" style="margin-top:6px; line-height:1.5;">
+      Exchange 5-level order book, NIFTY &amp; BANK NIFTY front-month futures.
+      <span id="market-depth-notice" style="color:#f59e0b; font-weight:500;">
+        ⚠️ Market is currently closed. Showing frozen order-book state recorded at Friday's 15:30 IST close. Live 3s updates resume on market open.
+      </span>
+    </p>
     <div class="depth-grid" id="depth-grid">
       <div class="depth-card card-3d"><p class="empty">Waiting for first depth snapshot&hellip;</p></div>
       <div class="depth-card card-3d"><p class="empty">Waiting for first depth snapshot&hellip;</p></div>
@@ -1718,7 +1805,7 @@ def dashboard():
     </div>`;
   }}
 
-  function renderDepthCard(key, depth) {{
+  function renderDepthCard(key, depth, marketOpen) {{
     if (!depth || !depth.levels || !depth.levels.length) {{
       return `<div class="depth-card card-3d"><div class="depth-top"><h3>${{DEPTH_NAMES[key] || key}}</h3></div>
         <p class="empty">No depth data yet.</p></div>`;
@@ -1726,9 +1813,27 @@ def dashboard():
     const maxQty = Math.max(...depth.levels.map(l => Math.max(l.buy_qty || 0, l.sell_qty || 0)));
     const rows = depth.levels.map(l => depthRowHtml(l, l, maxQty)).join('');
     const buyPct = depth.buy_pct != null ? depth.buy_pct : 50;
+
+    let spreadText = '—';
+    if (depth.best_bid > 0 && depth.best_ask > 0) {{
+      const spreadVal = Math.abs(depth.best_ask - depth.best_bid);
+      spreadText = `spread ${{spreadVal.toFixed(2)}}`;
+    }} else if (depth.best_bid > 0 && (!depth.best_ask || depth.best_ask <= 0)) {{
+      spreadText = `no asks at close`;
+    }}
+
+    const badgeHtml = marketOpen
+      ? `<span style="font-size:10px; background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3); padding:2px 6px; border-radius:4px; font-weight:600; text-transform:uppercase;">LIVE ORDER BOOK</span>`
+      : `<span style="font-size:10px; background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3); padding:2px 6px; border-radius:4px; font-weight:600; text-transform:uppercase;">FROZEN AT CLOSE</span>`;
+
     return `<div class="depth-card card-3d">
-      <div class="depth-top"><h3>${{DEPTH_NAMES[key] || key}}</h3>
-        <span class="depth-mid">spread ${{depth.spread != null ? depth.spread.toFixed(2) : '—'}}</span></div>
+      <div class="depth-top">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <h3>${{DEPTH_NAMES[key] || key}}</h3>
+          ${{badgeHtml}}
+        </div>
+        <span class="depth-mid">${{spreadText}}</span>
+      </div>
       <div class="split-bar"><div class="buy" style="width:${{buyPct}}%"></div></div>
       <div class="split-labels"><span>Buy ${{buyPct.toFixed(1)}}%</span><span>Sell ${{(100-buyPct).toFixed(1)}}%</span></div>
       <div class="bidask">
@@ -1782,9 +1887,34 @@ def dashboard():
       for (const [key, values] of Object.entries(d.spark || {{}})) {{
         updateSpark(key.toLowerCase(), values);
       }}
+      const isOpen = d.market_open;
+      const statusPill = document.getElementById('market-status-pill');
+      const statusNotice = document.getElementById('market-depth-notice');
+      if (statusPill) {{
+        if (isOpen) {{
+          statusPill.style.background = 'rgba(34,197,94,0.15)';
+          statusPill.style.color = '#4ade80';
+          statusPill.style.borderColor = 'rgba(34,197,94,0.3)';
+          statusPill.innerHTML = '<span style="width:6px; height:6px; border-radius:50%; background:#22c55e; display:inline-block;"></span> LIVE MARKET ORDER BOOK';
+        }} else {{
+          statusPill.style.background = 'rgba(239,68,68,0.15)';
+          statusPill.style.color = '#f87171';
+          statusPill.style.borderColor = 'rgba(239,68,68,0.3)';
+          statusPill.innerHTML = `<span style="width:6px; height:6px; border-radius:50%; background:#ef4444; display:inline-block;"></span> ${{d.market_status || 'MARKET CLOSED'}} &bull; FRIDAY CLOSING SNAPSHOT`;
+        }}
+      }}
+      if (statusNotice) {{
+        if (isOpen) {{
+          statusNotice.style.color = '#94a3b8';
+          statusNotice.textContent = 'Updates every 3s alongside the price above.';
+        }} else {{
+          statusNotice.style.color = '#f59e0b';
+          statusNotice.textContent = "⚠️ Market is currently closed. Showing frozen order-book state recorded at Friday's 15:30 IST close. Live 3s updates resume on market open.";
+        }}
+      }}
       const grid = document.getElementById('depth-grid');
       if (grid && d.depth) {{
-        grid.innerHTML = Object.entries(d.depth).map(([k, v]) => renderDepthCard(k.toLowerCase(), v)).join('');
+        grid.innerHTML = Object.entries(d.depth).map(([k, v]) => renderDepthCard(k.toLowerCase(), v, isOpen)).join('');
       }}
     }} catch (e) {{ /* transient poll failure, try again next tick */ }}
   }}
@@ -2043,6 +2173,13 @@ def start_all_background_threads():
 start_all_background_threads()
 
 if __name__ == "__main__":
-    host = os.environ.get("FLASK_HOST", "0.0.0.0")
+    # This branch only runs for a local `python app.py` launch -- Render's
+    # actual deployment (render.yaml) binds via gunicorn's own
+    # `--bind 0.0.0.0:$PORT` flag directly, bypassing this entirely, so
+    # changing this default doesn't touch the live deployment. Defaulting
+    # to 127.0.0.1 matches every other app in the FINPLUS APPS bundle and
+    # stops a plain local run from exposing the API to the whole LAN by
+    # default (FLASK_HOST=0.0.0.0 still opts back in if ever wanted).
+    host = os.environ.get("FLASK_HOST", "127.0.0.1")
     print(f"🚀 Server running on http://{host}:5850 (accessible on LAN / Tailscale)")
     app.run(host=host, port=5850, debug=False, threaded=True)

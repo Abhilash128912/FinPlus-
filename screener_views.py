@@ -349,9 +349,16 @@ def render_swing_page(state: dict, nav_bar_fn, style_css: str) -> str:
         for lbl, n, c in stats
     )
 
-    # Top Conviction Cards (top 4 picks)
+    # Top Conviction Cards -- BUY NOW only. Previously this took the top 4
+    # picks by swing_score regardless of status, so a WAIT-status stock with
+    # a merely high score could sit in the "top conviction" slot even though
+    # there was nothing actionable to actually buy. status == "BUY_NOW" is
+    # the same field swing_engine.py sets on a confirmed live GTT breakout/
+    # pullback trigger (and what the rest of this file already keys off of,
+    # e.g. the BUY NOW stat tile above and the table's badge coloring below).
+    buy_now_picks = [p for p in picks if p.get("status") == "BUY_NOW"]
     top_cards = []
-    for p in picks[:4]:
+    for p in buy_now_picks[:4]:
         sym = p.get("symbol")
         ltp = _fmt(p.get("ltp"))
         action = p.get("swing_action") or p.get("status") or "WAIT"
@@ -477,9 +484,12 @@ def render_swing_page(state: dict, nav_bar_fn, style_css: str) -> str:
       <span class="section-bar"></span>
       <h2>Top High-Conviction Setups</h2>
     </div>
-    <p class="desc">Leading candidates ranked by composite Swing Score with optimal risk-to-reward ratios and confirmed momentum.</p>
+    <p class="desc">Live BUY NOW triggers only &mdash; a confirmed GTT breakout or pullback entry, ranked by composite Swing Score with optimal risk-to-reward ratios.</p>
     <div class="stat-strip">{stat_html}</div>
-    {f'<div class="card-grid" style="margin-top:16px">{ "".join(top_cards) }</div>' if top_cards else ''}
+    {f'<div class="card-grid" style="margin-top:16px">{ "".join(top_cards) }</div>' if top_cards else '''
+    <div class="section" style="margin-top:16px;text-align:center;padding:32px 20px;color:var(--muted);border:1px dashed var(--border);border-radius:12px">
+      No BUY NOW candidates right now &mdash; nothing in today's qualified setups has confirmed a live GTT breakout or pullback trigger yet. Check back after the next rescan.
+    </div>'''}
   </div>
 
   <div class="section">
