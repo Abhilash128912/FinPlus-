@@ -667,7 +667,20 @@ if not FINPLUS_API_KEY:
           "Set FINPLUS_API_KEY, or put 'FINPLUS_API_KEY=<value>' in finplus_api_key.txt.")
 
 def require_key(request: Request):
-    """Guard private endpoints. Refuses everything when no key is configured."""
+    """Guard private endpoints. Refuses everything when no key is configured.
+
+    2026-09-18 audit: briefly had a `request.client.host in ('127.0.0.1', ...)`
+    bypass, matching the same one just removed from FINPLUS RADAR and FINPLUS
+    COMMAND. Same reasoning applies here: a browser tab's or the packaged
+    mobile app's request still shows up server-side as remote_addr=127.0.0.1
+    when uvicorn is bound to localhost, so that bypass would have let any
+    page reachable from this machine straight through with no key at all.
+    Unlike RADAR/COMMAND, allow_origins=["*"] above stays -- this API is
+    genuinely called cross-origin (the Vite UI's explicit localhost:8000
+    fallback in App.jsx/useRiskDesk.js, and the Capacitor mobile build
+    talking to the Render-hosted copy of this same file) and allow_credentials
+    is already False, so the wildcard alone was never the hole; the key
+    check below is the actual gate, and it needs to run unconditionally."""
     if not FINPLUS_API_KEY:
         # 503, not 401: the caller's credentials are not the problem, the server
         # is misconfigured. Saying so plainly is the difference between a
