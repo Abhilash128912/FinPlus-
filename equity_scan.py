@@ -114,12 +114,21 @@ def _refresh_security_id_cache() -> dict:
 
 
 def get_security_id_map() -> dict:
+    cached = None
     if os.path.exists(SECURITY_ID_CACHE_FILE):
         with open(SECURITY_ID_CACHE_FILE, encoding="utf-8") as f:
             cached = json.load(f)
         if time.time() - cached.get("at", 0) < SECURITY_ID_CACHE_TTL_SEC:
             return cached["map"]
-    return _refresh_security_id_cache()
+    try:
+        return _refresh_security_id_cache()
+    except requests.RequestException as e:
+        # Expired/invalid token or INDmoney outage: a stale symbol->id map is
+        # still correct (ids rarely change), so use it rather than crash.
+        if cached and cached.get("map"):
+            print(f"[equity_scan] security-id refresh failed ({e}); using stale cache")
+            return cached["map"]
+        raise
 
 
 QUOTES_BATCH_SIZE = 350  # /market/quotes/full 414'd at 750 codes (~7.6KB URL); 350 stays safely under that

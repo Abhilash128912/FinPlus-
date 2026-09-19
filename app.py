@@ -290,6 +290,25 @@ def _fetch_yfinance_fast_quotes() -> dict:
     return quotes
 
 
+_mcx_ltp_lock = threading.Lock()
+_mcx_ltp_cache: dict = {}
+
+
+def _mcx_ltp_loop():
+    """Polls MCX futures independently of _fast_ltp_loop so a slow/blocked
+    MCX endpoint can never stall the index/equity LTP updates."""
+    while True:
+        try:
+            for mcx_symbol in COMMODITY_CARD_IDS:
+                q = mcx_feed.fetch_mcx_futures(mcx_symbol)
+                if q and q.get("mcx_ltp") is not None:
+                    with _mcx_ltp_lock:
+                        _mcx_ltp_cache[mcx_symbol] = q
+        except Exception:
+            traceback.print_exc()
+        time.sleep(30)
+
+
 def _fast_ltp_loop():
     """Fast LTP poller with automatic Yahoo Finance fallback."""
     while True:
@@ -350,8 +369,13 @@ def _fast_ltp_loop():
                         change_by_card[cid] = q
                         _spark_buffers[cid].append(q["ltp"])
 
+            # MCX comes from its own thread (_mcx_ltp_loop): a blocked MCX
+            # endpoint can burn 45s+ per fetch, and doing it inline here meant
+            # _fast_state was never written -- index prices stayed empty too.
+            with _mcx_ltp_lock:
+                mcx_snapshot = dict(_mcx_ltp_cache)
             for mcx_symbol, card_id in COMMODITY_CARD_IDS.items():
-                q = mcx_feed.fetch_mcx_futures(mcx_symbol)
+                q = mcx_snapshot.get(mcx_symbol)
                 if not q or q.get("mcx_ltp") is None:
                     continue
                 ltp_by_card[card_id] = q["mcx_ltp"]
@@ -2193,6 +2217,7 @@ def start_all_background_threads():
         _background_started = True
         threading.Thread(target=_mcx_bar_recorder_loop, daemon=True).start()
         threading.Thread(target=_signal_refresh_loop, daemon=True).start()
+        threading.Thread(target=_mcx_ltp_loop, daemon=True).start()
         threading.Thread(target=_fast_ltp_loop, daemon=True).start()
         threading.Thread(target=_momentum_scan_loop, daemon=True).start()
         threading.Thread(target=_momentum_fast_poll_loop, daemon=True).start()
