@@ -158,7 +158,7 @@ export const TrendScreen: React.FC = () => {
         {/* Overall stance -- from the trend engine's daily classification of NIFTY + BANK NIFTY */}
         <View style={styles.summaryBanner}>
           <View style={styles.summaryTop}>
-            <Text style={styles.summaryLabel}>OVERALL MARKET TREND</Text>
+            <Text style={styles.summaryLabel}>DAILY TREND (EMA / MA STRUCTURE)</Text>
             <View style={[styles.biasPill, { backgroundColor: biasColor + "22", borderColor: biasColor }]}>
               <View style={[styles.biasDot, { backgroundColor: biasColor }]} />
               <Text style={[styles.biasText, { color: biasColor }]}>{marketBias}</Text>
@@ -169,6 +169,9 @@ export const TrendScreen: React.FC = () => {
           </Text>
           <Text style={styles.summaryDesc}>
             Today: Nifty {niftyToday >= 0 ? "+" : ""}{niftyToday.toFixed(2)}% | BankNifty {bankToday >= 0 ? "+" : ""}{bankToday.toFixed(2)}%
+          </Text>
+          <Text style={[styles.summaryDesc, { fontStyle: "italic" }]}>
+            Daily trend compares price with the 20/50/200-day averages, so it can differ from today's move and from the intraday bias shown in FINPLUS PULSE.
           </Text>
         </View>
 
