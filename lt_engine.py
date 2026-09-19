@@ -398,21 +398,22 @@ def get_or_refresh_monthly_picks(raw_universe: list[dict], top_n: int = 10,
             c["rev_growth_pct"] = fund.get("rev_growth_pct")
             c["pe"] = fund.get("pe")
             c["pb"] = fund.get("pb")
-            c["durability_score"] = fund.get("durability_score", 50.0)
-            c["dvm_label"] = fund.get("dvm_label", "AVERAGE")
+            # No invented "50 / AVERAGE" when fundamentals are missing: None means
+            # "not available" and such a stock cannot be ranked (see below).
+            c["durability_score"] = fund.get("durability_score")
+            c["dvm_label"] = fund.get("dvm_label")
             c["pillar"] = get_compounder_pillar(c)
 
     filtered_by_cap = {}
     for cap, c_list in candidates_by_cap.items():
         req_count = n_large if "Large" in cap else n_mid if "Mid" in cap else n_small
-        growth_cands = [
-            c for c in c_list
-            if float(c.get("durability_score") or 0.0) >= 48.0
-        ]
+        with_fundamentals = [c for c in c_list if c.get("durability_score") is not None]
+        growth_cands = [c for c in with_fundamentals if float(c["durability_score"]) >= 48.0]
         if len(growth_cands) >= req_count:
             filtered_by_cap[cap] = growth_cands
         else:
-            filtered_by_cap[cap] = c_list
+            # Never pad the pool with stocks that have no real fundamentals.
+            filtered_by_cap[cap] = with_fundamentals
 
     def _rank_and_pick_megatrends(pool, top_k, used_pillars, excluded_symbols=None):
         if excluded_symbols is None:
@@ -420,13 +421,18 @@ def get_or_refresh_monthly_picks(raw_universe: list[dict], top_n: int = 10,
         candidates = [x for x in pool if x.get("symbol") not in excluded_symbols]
         scored = []
         for c in candidates:
+            # Ranking needs real durability and ROCE; without them the stock is
+            # left out rather than scored with an assumed 50 / 15%.
+            if c.get("durability_score") is None or c.get("roce_pct") is None:
+                continue
             eval_res = se.compute_sector_aware_lt_quality(c)
             q = float(eval_res.get("lt_quality_score") or 0.0)
-            dur = float(c.get("durability_score") or 50.0)
-            roce = float(c.get("roce_pct") or 15.0)
-            trend = c.get("trend") or "Uptrend"
-            # Momentum bonus: Strong Uptrend gets +15, Accumulation gets +12, Uptrend +10
-            mom_bonus = 15.0 if "Strong" in trend else 12.0 if "Accumulation" in trend else 10.0 if "Uptrend" in trend else 5.0
+            dur = float(c["durability_score"])
+            roce = float(c["roce_pct"])
+            trend = c.get("trend") or ""
+            # Momentum bonus: Strong Uptrend gets +15, Accumulation gets +12, Uptrend +10;
+            # an unknown trend earns no bonus (it is not assumed to be an Uptrend).
+            mom_bonus = 15.0 if "Strong" in trend else 12.0 if "Accumulation" in trend else 10.0 if "Uptrend" in trend else 5.0 if trend else 0.0
             pil = c["pillar"]
             # Future sunrise sector boost
             theme_boost = 20.0 if pil in ('Solar & Clean Energy', 'Semiconductor & Advanced EMS', 'Precious Metals & Gold', 'Defense Electronics & Radar Systems') else 12.0 if pil in ('EV Electronics & Cockpits', 'Digital Wealth & FinTech', 'AAA Retail Housing Finance', 'Green Ports & Modern Logistics', 'Digital NBFC & Enterprise Wealth', '5G Telecom & Digital Infrastructure', 'Private Banking & Wealth') else 0.0
@@ -510,9 +516,9 @@ def get_or_refresh_monthly_picks(raw_universe: list[dict], top_n: int = 10,
             "status_badge_class": badge_cls,
             "status_reason": reason,
             "lt_quality_score": p.get("lt_quality_score"),
-            "durability_score": p.get("durability_score", 50.0),
-            "dvm_label": p.get("dvm_label", "AVERAGE"),
-            "trend": p.get("trend") or "Uptrend",
+            "durability_score": p.get("durability_score"),
+            "dvm_label": p.get("dvm_label"),
+            "trend": p.get("trend"),
             "combined_rank_score": p.get("combined_rank_score"),
             "sector_group": p.get("sector_group"),
             "roe_pct": p.get("roe_pct"),

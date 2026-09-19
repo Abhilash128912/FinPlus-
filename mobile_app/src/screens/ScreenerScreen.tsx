@@ -97,6 +97,12 @@ const StockCard: React.FC<{ pick: StockPick }> = ({ pick }) => {
         </View>
       )}
 
+      {pick.fundamentals_available === false ? (
+        <Text style={[styles.reason, { color: theme.colors.yellow }]}>
+          ⚠ Fundamentals not available for this pick (earlier figures were placeholders and were removed).
+        </Text>
+      ) : null}
+
       {reason ? <Text style={styles.reason}>💡 {reason}</Text> : null}
     </View>
   );

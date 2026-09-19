@@ -30,11 +30,22 @@ _HEADERS = {
 }
 
 
+# Sources that are NOT real fundamentals: a hardcoded per-stock table and a
+# generic "neutral" template (ROE 14 / ROCE 16 / D-E 0.5 / durability 57) that
+# once filled the cache for ~1,000 stocks and made unrelated companies look
+# identical -- and "GOOD_DURABILITY". Anything with these sources is discarded.
+PLACEHOLDER_SOURCES = {"default_neutral", "baseline"}
+
+
+def _drop_placeholders(cache: dict) -> dict:
+    return {k: v for k, v in cache.items() if (v or {}).get("source") not in PLACEHOLDER_SOURCES}
+
+
 def _load_cache() -> dict:
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                return _drop_placeholders(json.load(f))
         except Exception:
             pass
     return {}
@@ -419,6 +430,8 @@ def get_fundamentals(symbol: str, allow_network: bool = False) -> dict:
     cached = _MEM_CACHE.get(sym)
     now = time.time()
 
+    if cached and cached.get("source") in PLACEHOLDER_SOURCES:
+        cached = None  # never serve placeholder values as if they were real
     if cached and (now - cached.get("updated_at", 0) < CACHE_TTL_SEC):
         if "durability_score" not in cached:
             dvm = compute_dvm_score(cached)

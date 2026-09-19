@@ -113,7 +113,8 @@ export const TrendScreen: React.FC = () => {
 
   const niftyTrend = trendOf("nifty");
   const bankTrend = trendOf("banknifty");
-  const pct = (v?: number) => (typeof v === "number" && !isNaN(v) ? v : 0);
+  const pct = (v?: number): number | null => (typeof v === "number" && !isNaN(v) ? v : null);
+  const fmtPct = (v: number | null) => (v === null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`);
   const niftyToday = pct(data?.fast_change?.nifty);
   const bankToday = pct(data?.fast_change?.banknifty);
 
@@ -247,7 +248,7 @@ export const TrendScreen: React.FC = () => {
             NIFTY: {niftyTrend ?? "—"} | BANK NIFTY: {bankTrend ?? "—"}
           </Text>
           <Text style={styles.summaryDesc}>
-            Today: Nifty {niftyToday >= 0 ? "+" : ""}{niftyToday.toFixed(2)}% | BankNifty {bankToday >= 0 ? "+" : ""}{bankToday.toFixed(2)}%
+            Today: Nifty {fmtPct(niftyToday)} | BankNifty {fmtPct(bankToday)}
           </Text>
           <Text style={[styles.summaryDesc, { fontStyle: "italic" }]}>
             Daily trend compares price with the 20/50/200-day averages, so it can differ from today's move and from the intraday bias shown in FINPLUS PULSE.
@@ -263,7 +264,7 @@ export const TrendScreen: React.FC = () => {
           const ltp = data?.fast_ltp?.[item.key];
           const hasLtp = typeof ltp === "number" && !isNaN(ltp);
           const change = pct(data?.fast_change?.[item.key]);
-          const isUp = change >= 0;
+          const isUp = change !== null && change >= 0;
           const t = data?.trends?.[item.key];
           const available = !!(t && t.available);
           const d = t?.display;
@@ -288,7 +289,7 @@ export const TrendScreen: React.FC = () => {
                       { color: !hasLtp ? theme.colors.textDim : isUp ? theme.colors.green : theme.colors.red },
                     ]}
                   >
-                    {hasLtp ? `${isUp ? "▲ +" : "▼ "}${change.toFixed(2)}%` : "No data"}
+                    {!hasLtp ? "No data" : change === null ? "change n/a" : `${isUp ? "▲ +" : "▼ "}${change.toFixed(2)}%`}
                   </Text>
                 </View>
               </View>

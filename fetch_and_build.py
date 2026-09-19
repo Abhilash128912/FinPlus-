@@ -2273,11 +2273,14 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
         scored = live or {}
 
         ltp        = float(live.get("ltp") or 0) if live else 0.0
-        rsi        = float(live.get("rsi") or 50) if live else 50.0
-        trend      = (live.get("trend") or "Consolidation") if live else "Consolidation"
-        trend_badge= (live.get("tech_rating") or "🟡 Consolidation Phase") if live else "🟡 Consolidation Phase"
-        rs_rating  = int(live.get("rs_rating") or 50) if live else 50
-        rs_badge   = (live.get("rs_badge") or f"⚪ RS {rs_rating}") if live else f"⚪ RS {rs_rating}"
+        # No live scan row -> RSI / trend / RS are None ("not available"). They used
+        # to default to RSI 50, "Consolidation" and RS 50, which then produced a
+        # real-looking watchlist status for a stock nothing was known about.
+        rsi        = float(live["rsi"]) if live and live.get("rsi") is not None else None
+        trend      = (live.get("trend") or None) if live else None
+        trend_badge= (live.get("tech_rating") or None) if live else None
+        rs_rating  = int(live["rs_rating"]) if live and live.get("rs_rating") is not None else None
+        rs_badge   = (live.get("rs_badge") or (f"⚪ RS {rs_rating}" if rs_rating is not None else None)) if live else None
         total_score= float(live.get("total_score") or 0) if live else 0.0
         day_chg    = float(live.get("day_chg_pct") or 0) if live else 0.0
 
@@ -2319,8 +2322,12 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
             is_auto_gtt = False
 
         # Check for 1h/Daily Support Reversal Candle (A/E Breakout)
-        is_reversal_up = (day_chg > -0.35 or (rsi > 42 and rsi < 70))
-        gate = get_lt_watchlist_status(trend, rsi, ltp, effective_gtt, day_chg=day_chg, is_reversal_up=is_reversal_up, holding=holding, scored=scored)
+        if rsi is None or trend is None or not live:
+            gate = {"status": "NO_DATA", "badge": "No live data", "badge_class": "badge-gray",
+                    "reason": "No live scan data for this symbol, so no status is computed."}
+        else:
+            is_reversal_up = (day_chg > -0.35 or (rsi > 42 and rsi < 70))
+            gate = get_lt_watchlist_status(trend, rsi, ltp, effective_gtt, day_chg=day_chg, is_reversal_up=is_reversal_up, holding=holding, scored=scored)
         status = gate["status"]
         if status == "BUY_NOW" and active:
             buy_now_count += 1
@@ -2337,14 +2344,14 @@ def process_lt_watchlist(screener_results: list[dict]) -> list[dict]:
         enriched.append({
             **entry,
             "symbol":            sym,
-            "ltp":               round(ltp, 2),
-            "rsi":               round(rsi, 1),
-            "day_chg_pct":       round(day_chg, 2),
+            "ltp":               round(ltp, 2) if live else None,
+            "rsi":               round(rsi, 1) if rsi is not None else None,
+            "day_chg_pct":       round(day_chg, 2) if live else None,
             "trend":             trend,
             "trend_badge":       trend_badge,
             "rs_rating":         rs_rating,
             "rs_badge":          rs_badge,
-            "total_score":       round(total_score, 1),
+            "total_score":       round(total_score, 1) if live else None,
             "gtt_level":         effective_gtt,
             "auto_gtt":          auto_gtt,
             "gtt_mode":          "auto" if is_auto_gtt else "manual",
@@ -5164,8 +5171,11 @@ function calculateClientStatus(item) {
   const serverRank = statusRank[serverStatus] || 0;
 
   const uptrendStates = TREND_CONFIG.uptrend;
-  const trend = item.trend || "Consolidation";
-  const rsi = item.rsi || 50;
+  // No live RSI / trend for this row -> keep the server's status; do not evaluate
+  // the entry rules against an assumed RSI 50 / "Consolidation".
+  if (item.rsi == null || !item.trend) return;
+  const trend = item.trend;
+  const rsi = item.rsi;
   const ltp = item.ltp || 0;
   const isAuto = (item.gtt_mode === 'auto' || item.gtt_mode == null || item.is_auto_gtt);
   const gtt = isAuto ? (item.auto_gtt || item.gtt_level) : item.gtt_level;
@@ -5230,10 +5240,10 @@ function renderLtWatchlist() {
       // Use live.ltp if it's a valid positive number; otherwise keep existing item.ltp
       if (live.ltp != null && live.ltp > 0) item.ltp = live.ltp;
       else if (item.ltp == null || item.ltp === 0) item.ltp = live.ltp || 0;
-      item.rsi = live.rsi || item.rsi || 50;
-      item.trend = live.trend || item.trend || 'Consolidation';
-      item.trend_badge = live.tech_rating || item.trend_badge || '🟡 Consolidation Phase';
-      item.rs_rating = live.rs_rating || item.rs_rating || 50;
+      item.rsi = live.rsi ?? item.rsi ?? null;
+      item.trend = live.trend || item.trend || null;
+      item.trend_badge = live.tech_rating || item.trend_badge || null;
+      item.rs_rating = live.rs_rating ?? item.rs_rating ?? null;
       item.day_chg_pct = live.day_chg_pct || item.day_chg_pct || 0;
 
       const liveEma = live.ema20 || 0;
@@ -9287,12 +9297,14 @@ def apply_1h_sr_overlay(scored: dict, ticker: str) -> dict:
     """
     try:
         df_1h = fetch_1h_history_cffi(ticker, days=60)
-        if not df_1h.empty and len(df_1h) >= 30:
+        # The 1H S/R analysis needs a real RS rating; without one it is skipped
+        # (it used to be fed a default of 50).
+        if not df_1h.empty and len(df_1h) >= 30 and scored.get("rs_rating") is not None:
             from screener_engine import detect_sr_breaks_and_retests, compute_swing_setup
             sr_1h = detect_sr_breaks_and_retests(
                 history=None,
                 ltp=scored.get("ltp"),
-                rs_rating=scored.get("rs_rating", 50),
+                rs_rating=scored.get("rs_rating"),
                 rsi=scored.get("rsi"),
                 vol_spike=scored.get("volume_spike", 1.0),
                 cmf=scored.get("cmf", 0.0),

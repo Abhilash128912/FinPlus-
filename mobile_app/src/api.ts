@@ -116,6 +116,7 @@ export interface StockPick {
   swing_score?: number;
   swing_action?: string;
   status_badge?: string;
+  fundamentals_available?: boolean; // false = the fundamentals behind this pick are not available
   gtt_breakout_level?: number;
   gtt_pullback_level?: number;
   rationale?: string;
@@ -345,18 +346,23 @@ function computePivotSignal(
 // .toFixed() on the object threw during render and closed the release app on
 // launch the moment the server started returning real data -- normalize once
 // here, at the boundary, so every screen only ever sees a number.
-const asPct = (v: unknown): number => {
-  if (typeof v === "number") return isNaN(v) ? 0 : v;
+// Returns undefined -- never 0 -- when there is no real percentage: a missing
+// change must show as "not available", not as an invented flat 0.00%.
+const asPct = (v: unknown): number | undefined => {
+  if (typeof v === "number") return isNaN(v) ? undefined : v;
   if (v && typeof v === "object") {
     const p = (v as { change_pct?: unknown }).change_pct;
-    return typeof p === "number" && !isNaN(p) ? p : 0;
+    return typeof p === "number" && !isNaN(p) ? p : undefined;
   }
-  return 0;
+  return undefined;
 };
 
 const normalizeMarkets = (res: MarketsResponse): MarketsResponse => {
   const fast_change: Record<string, number> = {};
-  for (const [k, v] of Object.entries(res.fast_change ?? {})) fast_change[k] = asPct(v);
+  for (const [k, v] of Object.entries(res.fast_change ?? {})) {
+    const p = asPct(v);
+    if (p !== undefined) fast_change[k] = p;
+  }
   const fast_ltp: Record<string, number> = {};
   for (const [k, v] of Object.entries(res.fast_ltp ?? {})) {
     if (typeof v === "number" && !isNaN(v)) fast_ltp[k] = v;

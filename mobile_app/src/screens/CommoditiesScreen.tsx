@@ -43,8 +43,9 @@ export const CommoditiesScreen: React.FC = () => {
   const activeData = activeTab === "crude" ? data?.crude : data?.natgas;
   const sig = activeData?.signal;
   const ltp = activeData?.ltp || sig?.live_ltp;
-  const change = activeData?.change || sig?.change || 0;
-  const isUp = change >= 0;
+  const rawChange = typeof activeData?.change === "number" ? activeData.change : sig?.change;
+  const change: number | null = typeof rawChange === "number" && !isNaN(rawChange) ? rawChange : null;
+  const isUp = change !== null && change >= 0;
 
   return (
     <View style={styles.container}>
@@ -126,8 +127,7 @@ export const CommoditiesScreen: React.FC = () => {
                   { color: isUp ? theme.colors.green : theme.colors.red },
                 ]}
               >
-                {isUp ? "+" : ""}
-                {change ? change.toFixed(2) : "0.00"}%
+                {change === null ? "n/a" : `${isUp ? "+" : ""}${change.toFixed(2)}%`}
               </Text>
             </View>
           </View>

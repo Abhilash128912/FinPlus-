@@ -91,8 +91,8 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
         c["rev_growth_pct"] = fund.get("rev_growth_pct")
         c["pe"] = fund.get("pe")
         c["pb"] = fund.get("pb")
-        c["durability_score"] = fund.get("durability_score", 50.0)
-        c["dvm_label"] = fund.get("dvm_label", "GOOD")
+        c["durability_score"] = fund.get("durability_score")  # None = not available
+        c["dvm_label"] = fund.get("dvm_label")
 
         # Strict Debt-Free Gate: D/E must be <= 0.10, checked live every time -- no
         # hardcoded-list bypass (see the candidate filter above for why).
@@ -112,7 +112,9 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
         v_score, _ = se.score_value(legacy)
         c["strength"] = s_score
         c["value"] = v_score
-        c["total_score"] = round((s_score * 0.40) + (v_score * 0.35) + (float(c.get("momentum") or 50.0) * 0.25), 1)
+        if c.get("momentum") is None:
+            continue  # no real momentum reading -> cannot score (no assumed 50)
+        c["total_score"] = round((s_score * 0.40) + (v_score * 0.35) + (float(c["momentum"]) * 0.25), 1)
 
         enriched.append(c)
 
@@ -238,7 +240,7 @@ def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10
         sym = c.get("symbol")
         u_row = c  # raw_universe entries already carry live ltp/trend/etc.
         ltp = float(u_row.get("ltp") or c.get("ltp") or 0.0)
-        trend = u_row.get("trend") or c.get("trend") or "Uptrend"
+        trend = u_row.get("trend") or c.get("trend")  # None if unknown -- never assumed "Uptrend"
 
         # Set conservative GTT dip entry at auto_gtt, 50 MA, or 5% pullback
         auto_gtt = float(u_row.get("auto_gtt") or 0.0)
@@ -301,7 +303,7 @@ def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10
             "roce_pct": c.get("roce_pct"),
             "de_ratio": c.get("de_ratio"),
             "pe": c.get("pe"),
-            "today_volume": u_row.get("today_volume") or u_row.get("avg_volume_10d") or 150000,
+            "today_volume": u_row.get("today_volume") or u_row.get("avg_volume_10d"),
         })
 
     cohort_data = {

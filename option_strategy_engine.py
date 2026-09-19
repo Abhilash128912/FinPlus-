@@ -53,7 +53,9 @@ def analyze_option_derivatives(chain_data: Dict[str, Any], signal_dict: Optional
     underlying = chain_data.get("underlying", "UNKNOWN").upper()
     spot_ltp = float(chain_data.get("underlying_ltp") or 0.0)
     atm_strike = float(chain_data.get("atm_strike") or 0.0)
-    pcr = float(chain_data.get("pcr") or 1.0)
+    if chain_data.get("pcr") is None:
+        return {}  # no PCR -> no strategy card; never assume a 1.0 ratio
+    pcr = float(chain_data["pcr"])
     pcr_sentiment = chain_data.get("pcr_sentiment") or "NEUTRAL"
     strikes = chain_data.get("strikes") or []
     atm_ce = chain_data.get("atm_ce") or {}
@@ -103,7 +105,7 @@ def analyze_option_derivatives(chain_data: Dict[str, Any], signal_dict: Optional
     # Signal & Trend integration
     srv_signal = (signal_dict or {}).get("srv_signal", "NO_DATA")
     option_call = (signal_dict or {}).get("option_call")  # "CE", "PE", or None
-    trend_state = (trend_dict or {}).get("trend", "NEUTRAL")
+    trend_state = (trend_dict or {}).get("trend", "UNKNOWN")
 
     # Determine Algorithmic Option Regime & Strategy
     # Selection criteria uses multiple confirmations:
@@ -188,8 +190,10 @@ def analyze_option_derivatives(chain_data: Dict[str, Any], signal_dict: Optional
                 "target2": round(net_debit + max_profit * 0.85, 2),
                 "stop_loss": round(net_debit * 0.60, 2),
                 "rr": spread_rr,
-                "delta": round((rec_opt.get("delta") or 0.5) - (sell_opt.get("delta") or 0.3), 2),
-                "theta": round((rec_opt.get("theta") or -10) - (sell_opt.get("theta") or -6), 1),
+                "delta": (round(rec_opt["delta"] - sell_opt["delta"], 2)
+                          if rec_opt.get("delta") is not None and sell_opt.get("delta") is not None else None),
+                "theta": (round(rec_opt["theta"] - sell_opt["theta"], 1)
+                          if rec_opt.get("theta") is not None and sell_opt.get("theta") is not None else None),
                 "gamma": rec_opt.get("gamma"),
                 "iv": avg_iv,
                 "rationale": (
@@ -256,8 +260,10 @@ def analyze_option_derivatives(chain_data: Dict[str, Any], signal_dict: Optional
                 "target2": round(net_debit + max_profit * 0.85, 2),
                 "stop_loss": round(net_debit * 0.60, 2),
                 "rr": spread_rr,
-                "delta": round((rec_opt.get("delta") or -0.5) - (sell_opt.get("delta") or -0.3), 2),
-                "theta": round((rec_opt.get("theta") or -10) - (sell_opt.get("theta") or -6), 1),
+                "delta": (round(rec_opt["delta"] - sell_opt["delta"], 2)
+                          if rec_opt.get("delta") is not None and sell_opt.get("delta") is not None else None),
+                "theta": (round(rec_opt["theta"] - sell_opt["theta"], 1)
+                          if rec_opt.get("theta") is not None and sell_opt.get("theta") is not None else None),
                 "gamma": rec_opt.get("gamma"),
                 "iv": avg_iv,
                 "rationale": (
@@ -270,7 +276,7 @@ def analyze_option_derivatives(chain_data: Dict[str, Any], signal_dict: Optional
     else:
         # NEUTRAL / RANGEBOUND REGIME (e.g. Reliance or Nifty rangebound)
         # Strategy 1: Non-directional Theta Harvest (Short Straddle / Iron Fly)
-        daily_theta = abs((ce_theta or 0.0) + (pe_theta or 0.0))
+        daily_theta = abs(ce_theta + pe_theta) if ce_theta is not None and pe_theta is not None else None
         strategies.append({
             "type": "STRADDLE_SELL",
             "name": f"ATM {int(atm_strike)} Straddle / Iron Fly",
@@ -282,9 +288,10 @@ def analyze_option_derivatives(chain_data: Dict[str, Any], signal_dict: Optional
             "target1": round(straddle_prem * 0.65, 2),  # collect 35% decay
             "target2": round(straddle_prem * 0.40, 2),  # collect 60% decay
             "stop_loss": round(straddle_prem * 1.35, 2), # 35% SL on combined premium
-            "rr": 1.75,
-            "delta": round((ce_delta or 0.5) + (pe_delta or -0.5), 2),
-            "theta": round(daily_theta, 1),
+            "rr": (round((straddle_prem - straddle_prem * 0.40) / (straddle_prem * 1.35 - straddle_prem), 2)
+                   if straddle_prem else None),
+            "delta": (round(ce_delta + pe_delta, 2) if ce_delta is not None and pe_delta is not None else None),
+            "theta": round(daily_theta, 1) if daily_theta is not None else None,
             "gamma": round((atm_ce.get("gamma") or 0.0) + (atm_pe.get("gamma") or 0.0), 4),
             "iv": avg_iv,
             "upper_breakeven": upper_breakeven,
@@ -292,7 +299,8 @@ def analyze_option_derivatives(chain_data: Dict[str, Any], signal_dict: Optional
             "rationale": (
                 f"Market in balanced consolidation (PCR {pcr:.2f}, IV {avg_iv_txt}). "
                 f"Maximum profit collected if spot remains between ₹{lower_breakeven:.0f} and ₹{upper_breakeven:.0f}. "
-                f"Yields approximately +₹{daily_theta:.1f}/day in rapid theta erosion."
+                + (f"Yields approximately +₹{daily_theta:.1f}/day in rapid theta erosion."
+                   if daily_theta is not None else "Theta yield not available (option greeks missing).")
             ),
             "suitability": "Non-Directional / Rangebound Decay"
         })
@@ -317,20 +325,34 @@ def analyze_option_derivatives(chain_data: Dict[str, Any], signal_dict: Optional
                 and otm_call_opt.get("gamma") is not None and otm_put_opt.get("gamma") is not None):
             condor_gamma = round(-ce_gamma - pe_gamma + otm_call_opt["gamma"] + otm_put_opt["gamma"], 4)
 
-        strategies.append({
+        # Net credit from the REAL leg prices: short ATM straddle minus the two long
+        # wings. (This used to be a flat 45% of the straddle premium -- an invented
+        # price.) Without real wing quotes there is no condor card at all.
+        condor_credit = None
+        if (otm_call_opt and otm_put_opt and otm_call_opt.get("ltp") and otm_put_opt.get("ltp") and straddle_prem):
+            condor_credit = round(straddle_prem - otm_call_opt["ltp"] - otm_put_opt["ltp"], 2)
+        condor_theta = None
+        if (daily_theta is not None and otm_call_opt and otm_put_opt
+                and otm_call_opt.get("theta") is not None and otm_put_opt.get("theta") is not None):
+            condor_theta = round(daily_theta - abs(otm_call_opt["theta"] + otm_put_opt["theta"]), 1)
+
+        condor_card = ({
             "type": "IRON_CONDOR",
             "name": f"Iron Condor ({int(otm_put_strike)} / {int(otm_call_strike)})",
             "style": "DEFINED RISK RANGE",
             "badge_class": "badge-purple",
             "leg": f"-1 {int(atm_strike)} CE/PE, +1 Wings ({int(otm_put_strike)} PE / {int(otm_call_strike)} CE)",
             "strike": f"{int(otm_put_strike)} - {int(otm_call_strike)}",
-            "entry": round(straddle_prem * 0.45, 2),
-            "target1": round(straddle_prem * 0.20, 2),
-            "target2": round(straddle_prem * 0.10, 2),
-            "stop_loss": round(straddle_prem * 0.70, 2),
-            "rr": 1.5,
+            "entry": condor_credit,
+            # Exit rules as fixed fractions of the real credit (buy back at 44% / 22%,
+            # stop at 156% -- the same ratios this card always used).
+            "target1": round(condor_credit * (0.20 / 0.45), 2) if condor_credit else None,
+            "target2": round(condor_credit * (0.10 / 0.45), 2) if condor_credit else None,
+            "stop_loss": round(condor_credit * (0.70 / 0.45), 2) if condor_credit else None,
+            "rr": (round((condor_credit - condor_credit * (0.10 / 0.45)) / (condor_credit * (0.70 / 0.45) - condor_credit), 2)
+                   if condor_credit else None),
             "delta": condor_delta,
-            "theta": round(daily_theta * 0.65, 1),
+            "theta": condor_theta,
             "gamma": condor_gamma,
             "iv": avg_iv,
             "rationale": (
@@ -338,6 +360,8 @@ def analyze_option_derivatives(chain_data: Dict[str, Any], signal_dict: Optional
             ),
             "suitability": "Defined Risk / Overnight Hold"
         })
+        if condor_credit is not None and condor_credit > 0:
+            strategies.append(condor_card)
 
     return {
         "underlying": underlying,
@@ -506,8 +530,8 @@ def refresh_sector_heatmap() -> dict:
             "name": c.get("name") or c.get("symbol"),
             "ltp": ltp,
             "day_chg_pct": round(day_chg_pct, 2),
-            "volume_spike": round(c.get("volume_spike") or 1.0, 2),
-            "rsi": round(c.get("rsi") or 50.0, 1),
+            "volume_spike": round(c["volume_spike"], 2) if c.get("volume_spike") is not None else None,
+            "rsi": round(c["rsi"], 1) if c.get("rsi") is not None else None,
         })
 
     for tiles in sectors.values():
@@ -564,11 +588,12 @@ def refresh_top_options_stocks() -> dict:
         if not raw_pc or raw_pc <= 0 or not ltp or ltp <= 0:
             continue
         day_chg_pct = ((ltp - raw_pc) / raw_pc) * 100.0
-        rsi = c.get("rsi") or 50.0
-        vol_spike = c.get("volume_spike") or 1.0
-        momentum = c.get("momentum") or 0.0
-        rs_rating = c.get("rs_rating") or 50.0
-        ma50 = c.get("ma50") or ltp
+        rsi = c.get("rsi")
+        vol_spike = c.get("volume_spike")
+        momentum = c.get("momentum")
+        rs_rating = c.get("rs_rating")
+        if None in (rsi, vol_spike, momentum, rs_rating):
+            continue  # a missing input is not scored as neutral
 
         if day_chg_pct > 0 and rsi >= 50.0:
             sc = se.intraday_score_components("BUY", day_chg_pct, vol_spike, rsi, momentum, rs_rating)
@@ -631,12 +656,13 @@ def refresh_top_options_stocks() -> dict:
             if raw_pc and raw_pc > 0 and ltp and ltp > 0:
                 day_chg_pct = ((ltp - raw_pc) / raw_pc) * 100.0
                 if day_chg_pct <= 0:
-                    rsi = rel_cand.get("rsi") or 50.0
-                    vol_spike = rel_cand.get("volume_spike") or 1.0
-                    momentum = rel_cand.get("momentum") or 0.0
-                    rs_rating = rel_cand.get("rs_rating") or 50.0
-                    sc_rel = se.intraday_score_components("SELL", day_chg_pct, vol_spike, rsi, momentum, rs_rating)
-                    rel_source = (sc_rel["intraday_score"], rel_cand, day_chg_pct, sc_rel)
+                    rsi = rel_cand.get("rsi")
+                    vol_spike = rel_cand.get("volume_spike")
+                    momentum = rel_cand.get("momentum")
+                    rs_rating = rel_cand.get("rs_rating")
+                    if None not in (rsi, vol_spike, momentum, rs_rating):
+                        sc_rel = se.intraday_score_components("SELL", day_chg_pct, vol_spike, rsi, momentum, rs_rating)
+                        rel_source = (sc_rel["intraday_score"], rel_cand, day_chg_pct, sc_rel)
 
     rel_entry = None
     if rel_source:
