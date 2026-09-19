@@ -197,14 +197,17 @@ export const fetchTokenStatus = async (): Promise<TokenStatus> => {
 export interface PulsePillar {
   title: string;
   weight_pct: number;
-  score: number;
+  available?: boolean;
+  score: number | null; // null = this pillar's data is not available
   details?: string;
 }
 
 export interface PulseTrend {
+  available?: boolean; // false = too little real data for any bias reading
   trend_label: string;
   direction: string;
-  score: number;
+  score: number | null;
+  coverage_pct?: number;
   spot_price?: number;
   updated_at?: string;
   is_market_open?: boolean;

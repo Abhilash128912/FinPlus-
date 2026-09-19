@@ -141,6 +141,8 @@ export const TrendScreen: React.FC = () => {
   const fixText = (s?: string) => (s ? s.split("\u00e2\u201a\u00b9").join("\u20b9") : "");
   const pulseColor = !pulse
     ? theme.colors.textDim
+    : pulse.available === false || pulse.direction === "UNAVAILABLE"
+    ? theme.colors.textDim
     : pulse.direction === "BULLISH"
     ? theme.colors.green
     : pulse.direction === "BEARISH"
@@ -206,7 +208,9 @@ export const TrendScreen: React.FC = () => {
           {pulse ? (
             <>
               <Text style={styles.summaryDesc}>
-                Bullish bias score {typeof pulse.score === "number" ? pulse.score.toFixed(1) : "—"}/100
+                {typeof pulse.score === "number"
+                  ? `Bullish bias score ${pulse.score.toFixed(1)}/100${typeof pulse.coverage_pct === "number" && pulse.coverage_pct < 100 ? ` (from ${pulse.coverage_pct}% of the model - some data not available)` : ""}`
+                  : "Bias score not available - not enough real data"}
                 {pulse.updated_at ? ` · ${pulse.updated_at}` : ""}
               </Text>
               {!!pulse.market_status && <Text style={styles.summaryDesc}>{pulse.market_status}</Text>}
@@ -214,8 +218,8 @@ export const TrendScreen: React.FC = () => {
                 <View key={i} style={{ marginTop: 8 }}>
                   <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                     <Text style={styles.summaryDesc}>{p.title} ({p.weight_pct}%)</Text>
-                    <Text style={[styles.summaryDesc, { color: pillarColor(p.score), fontWeight: "800" }]}>
-                      {typeof p.score === "number" ? p.score.toFixed(1) : "—"}
+                    <Text style={[styles.summaryDesc, { color: typeof p.score === "number" ? pillarColor(p.score) : theme.colors.textDim, fontWeight: "800" }]}>
+                      {typeof p.score === "number" ? p.score.toFixed(1) : "Data not available"}
                     </Text>
                   </View>
                   {!!p.details && <Text style={[styles.summaryDesc, { opacity: 0.7 }]}>{fixText(p.details)}</Text>}
