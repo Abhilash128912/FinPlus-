@@ -47,3 +47,8 @@ export const loadPersistedConfig = async (): Promise<void> => {
     // SecureStore unavailable (e.g. first run edge case) -- keep defaults.
   }
 };
+
+// FINPLUS PULSE (AlphaPulse AI) runs as its own Render service; its NIFTY
+// intraday bias (VWAP/EMA + breadth + PCR + CPR) is shown on the Trend tab.
+// Uses the same X-Finplus-Key as the RADAR backend.
+export const PULSE_BASE_URL = "https://alphapulse-sentiment-tracker.onrender.com";

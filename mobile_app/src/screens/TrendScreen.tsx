@@ -8,13 +8,38 @@ import {
   AppState,
 } from "react-native";
 import { theme } from "../theme";
-import { fetchMarkets, MarketsResponse } from "../api";
+import { fetchMarkets, fetchPulseTrend, MarketsResponse, PulseTrend } from "../api";
 import { Header } from "../components/Header";
 
 export const TrendScreen: React.FC = () => {
   const [data, setData] = useState<MarketsResponse | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pulse, setPulse] = useState<PulseTrend | null>(null);
+  const [pulseError, setPulseError] = useState<string | null>(null);
+  const pulseInFlight = React.useRef(false);
+
+  const loadPulse = async () => {
+    if (pulseInFlight.current) return;
+    pulseInFlight.current = true;
+    try {
+      setPulse(await fetchPulseTrend());
+      setPulseError(null);
+    } catch (e: any) {
+      // Keep the last good reading on screen; just flag that it is stale.
+      setPulseError(e?.name === "AbortError" ? "Pulse is waking up (free tier) -- retrying" : e?.message || "Pulse unavailable");
+    } finally {
+      pulseInFlight.current = false;
+    }
+  };
+
+  useEffect(() => {
+    loadPulse();
+    const timer = setInterval(() => {
+      if (AppState.currentState === "active") loadPulse();
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Skip a poll while the previous one is still in flight, so a slow network
   // cannot pile up overlapping requests every 6s.
@@ -113,6 +138,17 @@ export const TrendScreen: React.FC = () => {
     }
   }
 
+  const fixText = (s?: string) => (s ? s.split("\u00e2\u201a\u00b9").join("\u20b9") : "");
+  const pulseColor = !pulse
+    ? theme.colors.textDim
+    : pulse.direction === "BULLISH"
+    ? theme.colors.green
+    : pulse.direction === "BEARISH"
+    ? theme.colors.red
+    : theme.colors.yellow;
+  const pillarColor = (score: number) =>
+    score >= 60 ? theme.colors.green : score <= 40 ? theme.colors.red : theme.colors.yellow;
+
   const levelRow = (label: string, level: number | null | undefined, ltp: number | null | undefined) => {
     const has = typeof level === "number" && !isNaN(level);
     const above = has && typeof ltp === "number" && ltp >= (level as number);
@@ -154,6 +190,45 @@ export const TrendScreen: React.FC = () => {
             <Text style={styles.errorText}>⚠ {error}</Text>
           </View>
         )}
+
+        {/* NIFTY intraday bias from FINPLUS PULSE (four-pillar model). A different
+            timeframe from the daily EMA/MA trend below, so both are labelled. */}
+        <View style={styles.summaryBanner}>
+          <View style={styles.summaryTop}>
+            <Text style={styles.summaryLabel}>NIFTY INTRADAY BIAS · PULSE</Text>
+            {pulse && (
+              <View style={[styles.biasPill, { backgroundColor: pulseColor + "22", borderColor: pulseColor }]}>
+                <View style={[styles.biasDot, { backgroundColor: pulseColor }]} />
+                <Text style={[styles.biasText, { color: pulseColor }]}>{pulse.trend_label}</Text>
+              </View>
+            )}
+          </View>
+          {pulse ? (
+            <>
+              <Text style={styles.summaryDesc}>
+                Bullish bias score {typeof pulse.score === "number" ? pulse.score.toFixed(1) : "—"}/100
+                {pulse.updated_at ? ` · ${pulse.updated_at}` : ""}
+              </Text>
+              {!!pulse.market_status && <Text style={styles.summaryDesc}>{pulse.market_status}</Text>}
+              {Object.values(pulse.pillars || {}).map((p, i) => (
+                <View key={i} style={{ marginTop: 8 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={styles.summaryDesc}>{p.title} ({p.weight_pct}%)</Text>
+                    <Text style={[styles.summaryDesc, { color: pillarColor(p.score), fontWeight: "800" }]}>
+                      {typeof p.score === "number" ? p.score.toFixed(1) : "—"}
+                    </Text>
+                  </View>
+                  {!!p.details && <Text style={[styles.summaryDesc, { opacity: 0.7 }]}>{fixText(p.details)}</Text>}
+                </View>
+              ))}
+              {!!pulseError && <Text style={[styles.summaryDesc, { color: theme.colors.yellow }]}>⚠ Showing last reading — {pulseError}</Text>}
+            </>
+          ) : (
+            <Text style={styles.summaryDesc}>
+              {pulseError ? `Pulse unavailable: ${pulseError}` : "Loading Pulse bias…"}
+            </Text>
+          )}
+        </View>
 
         {/* Overall stance -- from the trend engine's daily classification of NIFTY + BANK NIFTY */}
         <View style={styles.summaryBanner}>

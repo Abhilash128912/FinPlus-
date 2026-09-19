@@ -1,4 +1,4 @@
-import { getApiBaseUrl, getApiKey } from "./config";
+import { getApiBaseUrl, getApiKey, PULSE_BASE_URL } from "./config";
 
 export interface SignalData {
   srv_signal?: string;
@@ -143,7 +143,11 @@ export const fetchScreenerAll = async (): Promise<ScreenerAllResponse> => {
 
 // Low-level fetch wrapper
 async function request<T>(path: string, timeoutMs: number = 4000, body?: unknown): Promise<T> {
-  const url = `${getApiBaseUrl()}${path}`;
+  return requestAt<T>(getApiBaseUrl(), path, timeoutMs, body);
+}
+
+async function requestAt<T>(baseUrl: string, path: string, timeoutMs: number = 4000, body?: unknown): Promise<T> {
+  const url = `${baseUrl}${path}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const headers: Record<string, string> = {
@@ -162,7 +166,7 @@ async function request<T>(path: string, timeoutMs: number = 4000, body?: unknown
     });
     const json = await res.json().catch(() => null);
     if (!res.ok) {
-      throw new Error(json?.error || `HTTP ${res.status}: ${res.statusText}`);
+      throw new Error(json?.error || json?.detail || `HTTP ${res.status}: ${res.statusText}`);
     }
     return json;
   } finally {
@@ -187,6 +191,33 @@ export interface TokenStatus {
 // so the status pill never sits on "Connecting..." there.
 export const fetchTokenStatus = async (): Promise<TokenStatus> => {
   return request<TokenStatus>("/api/token_status", 8000);
+};
+
+// ── FINPLUS PULSE: NIFTY four-pillar intraday bias ──
+export interface PulsePillar {
+  title: string;
+  weight_pct: number;
+  score: number;
+  details?: string;
+}
+
+export interface PulseTrend {
+  trend_label: string;
+  direction: string;
+  score: number;
+  spot_price?: number;
+  updated_at?: string;
+  is_market_open?: boolean;
+  market_status?: string;
+  pillars?: Record<string, PulsePillar>;
+}
+
+// Pulse is a free-tier Render service that sleeps when idle, so the first call
+// after a quiet spell can take ~a minute to wake it -- hence the long timeout.
+export const fetchPulseTrend = async (): Promise<PulseTrend> => {
+  const res = await requestAt<{ trend?: PulseTrend }>(PULSE_BASE_URL, "/api/nifty-trend/latest", 60000);
+  if (!res?.trend?.trend_label) throw new Error("Pulse returned no trend");
+  return res.trend;
 };
 
 export const updateIndmoneyToken = async (token: string): Promise<{ success: boolean; error?: string }> => {
