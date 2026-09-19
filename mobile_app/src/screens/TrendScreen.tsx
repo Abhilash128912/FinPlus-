@@ -10,8 +10,6 @@ import {
 import { theme } from "../theme";
 import { fetchMarkets, MarketsResponse } from "../api";
 import { Header } from "../components/Header";
-import { SignalBadge } from "../components/SignalBadge";
-import { MiniSparkline } from "../components/MiniSparkline";
 
 export const TrendScreen: React.FC = () => {
   const [data, setData] = useState<MarketsResponse | null>(null);
@@ -61,7 +59,7 @@ export const TrendScreen: React.FC = () => {
     { key: "natgas", label: "NATURAL GAS (MCX)", icon: "⚡", kind: "COMMODITY" },
   ];
 
-  const formatPrice = (val?: number) => {
+  const formatPrice = (val?: number | null) => {
     if (val === undefined || val === null || isNaN(val)) return "—";
     return val.toLocaleString("en-IN", {
       minimumFractionDigits: 1,
@@ -69,14 +67,69 @@ export const TrendScreen: React.FC = () => {
     });
   };
 
-  // Determine overall market bias
-  const niftyChange = data?.fast_change?.nifty || data?.signals?.nifty?.change || 0;
-  const bankChange = data?.fast_change?.banknifty || data?.signals?.banknifty?.change || 0;
-  const avgChange = (niftyChange + bankChange) / 2;
-  const marketBias =
-    avgChange > 0.3 ? "BULLISH TREND" : avgChange < -0.3 ? "BEARISH TREND" : "SIDEWAYS / NEUTRAL";
-  const biasColor =
-    avgChange > 0.3 ? theme.colors.green : avgChange < -0.3 ? theme.colors.red : theme.colors.yellow;
+  // The trend label comes from the server's trend engine (daily EMA20 / MA50 /
+  // MA200 / RSI / volume structure) -- the same classification the desktop
+  // Trend Analyser shows. It must NOT be inferred from today's % move: a stock
+  // index can be up 0.3% today and still be in a daily downtrend.
+  const BULLISH = ["Strong Uptrend", "Uptrend", "Accumulation"];
+  const BEARISH = ["Downtrend", "Distribution"];
+  const trendOf = (key: string): string | null => {
+    const t = data?.trends?.[key];
+    return t && t.available && typeof t.trend === "string" ? t.trend : null;
+  };
+  const colorForTrend = (trend: string | null) =>
+    trend === null
+      ? theme.colors.textDim
+      : BULLISH.includes(trend)
+      ? theme.colors.green
+      : BEARISH.includes(trend)
+      ? theme.colors.red
+      : theme.colors.yellow;
+
+  const niftyTrend = trendOf("nifty");
+  const bankTrend = trendOf("banknifty");
+  const pct = (v?: number) => (typeof v === "number" && !isNaN(v) ? v : 0);
+  const niftyToday = pct(data?.fast_change?.nifty);
+  const bankToday = pct(data?.fast_change?.banknifty);
+
+  let marketBias = "TREND DATA LOADING";
+  let biasColor: string = theme.colors.textDim;
+  if (niftyTrend && bankTrend) {
+    const bothBull = BULLISH.includes(niftyTrend) && BULLISH.includes(bankTrend);
+    const bothBear = BEARISH.includes(niftyTrend) && BEARISH.includes(bankTrend);
+    const bothSide = niftyTrend === "Consolidation" && bankTrend === "Consolidation";
+    if (bothBull) {
+      marketBias = "BULLISH TREND";
+      biasColor = theme.colors.green;
+    } else if (bothBear) {
+      marketBias = "BEARISH TREND";
+      biasColor = theme.colors.red;
+    } else if (bothSide) {
+      marketBias = "SIDEWAYS / CONSOLIDATION";
+      biasColor = theme.colors.yellow;
+    } else {
+      marketBias = "MIXED TREND";
+      biasColor = theme.colors.yellow;
+    }
+  }
+
+  const levelRow = (label: string, level: number | null | undefined, ltp: number | null | undefined) => {
+    const has = typeof level === "number" && !isNaN(level);
+    const above = has && typeof ltp === "number" && ltp >= (level as number);
+    return (
+      <View style={styles.pivotBox}>
+        <Text style={styles.pivotLabel}>{label}</Text>
+        <Text
+          style={[
+            styles.pivotVal,
+            { color: !has ? theme.colors.textDim : above ? theme.colors.green : theme.colors.red },
+          ]}
+        >
+          {has ? formatPrice(level) : "—"}
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -102,32 +155,37 @@ export const TrendScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Market Trend Overview Banner */}
+        {/* Overall stance -- from the trend engine's daily classification of NIFTY + BANK NIFTY */}
         <View style={styles.summaryBanner}>
           <View style={styles.summaryTop}>
-            <Text style={styles.summaryLabel}>OVERALL MARKET STANCE</Text>
+            <Text style={styles.summaryLabel}>OVERALL MARKET TREND</Text>
             <View style={[styles.biasPill, { backgroundColor: biasColor + "22", borderColor: biasColor }]}>
               <View style={[styles.biasDot, { backgroundColor: biasColor }]} />
               <Text style={[styles.biasText, { color: biasColor }]}>{marketBias}</Text>
             </View>
           </View>
           <Text style={styles.summaryDesc}>
-            Nifty {niftyChange >= 0 ? "+" : ""}{niftyChange.toFixed(2)}% | BankNifty {bankChange >= 0 ? "+" : ""}{bankChange.toFixed(2)}%
+            NIFTY: {niftyTrend ?? "—"} | BANK NIFTY: {bankTrend ?? "—"}
+          </Text>
+          <Text style={styles.summaryDesc}>
+            Today: Nifty {niftyToday >= 0 ? "+" : ""}{niftyToday.toFixed(2)}% | BankNifty {bankToday >= 0 ? "+" : ""}{bankToday.toFixed(2)}%
           </Text>
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>TREND ANALYSER WATCHLIST</Text>
-          <Text style={styles.liveTag}>AUTO-REFRESH 6s</Text>
+          <Text style={styles.sectionTitle}>TREND ANALYSER</Text>
+          <Text style={styles.liveTag}>DAILY TREND · LAST LTP</Text>
         </View>
 
         {marketCards.map((item) => {
-          const ltp = data?.fast_ltp?.[item.key] || data?.signals?.[item.key]?.live_ltp;
-          const hasData = ltp !== undefined && ltp !== null && !isNaN(ltp);
-          const change = data?.fast_change?.[item.key] ?? data?.signals?.[item.key]?.change ?? 0;
+          const ltp = data?.fast_ltp?.[item.key];
+          const hasLtp = typeof ltp === "number" && !isNaN(ltp);
+          const change = pct(data?.fast_change?.[item.key]);
           const isUp = change >= 0;
-          const sig = data?.signals?.[item.key];
-          const spark = data?.spark?.[item.key] || [];
+          const t = data?.trends?.[item.key];
+          const available = !!(t && t.available);
+          const d = t?.display;
+          const trendColor = colorForTrend(available ? t.trend : null);
 
           return (
             <View key={item.key} style={styles.card}>
@@ -141,63 +199,58 @@ export const TrendScreen: React.FC = () => {
                 </View>
 
                 <View style={styles.priceCol}>
-                  <Text style={styles.ltpText}>₹{formatPrice(ltp)}</Text>
+                  <Text style={styles.ltpText}>₹{formatPrice(hasLtp ? ltp : undefined)}</Text>
                   <Text
                     style={[
                       styles.changeText,
-                      { color: !hasData ? theme.colors.textDim : isUp ? theme.colors.green : theme.colors.red },
+                      { color: !hasLtp ? theme.colors.textDim : isUp ? theme.colors.green : theme.colors.red },
                     ]}
                   >
-                    {hasData ? (isUp ? "▲ +" : "▼ ") : ""}
-                    {hasData ? change.toFixed(2) + "%" : "No data"}
+                    {hasLtp ? `${isUp ? "▲ +" : "▼ "}${change.toFixed(2)}%` : "No data"}
                   </Text>
                 </View>
               </View>
 
-              <View style={styles.cardMiddle}>
-                <View style={styles.sparkCol}>
-                  <Text style={styles.metaLabel}>INTRADAY TRAJECTORY</Text>
-                  <MiniSparkline data={spark} />
-                </View>
-
-                <View style={styles.signalCol}>
-                  <Text style={styles.metaLabel}>TREND STATUS</Text>
-                  <SignalBadge
-                    signal={sig?.srv_signal || (hasData ? (isUp ? "BUY" : "SELL") : "NONE")}
-                    setup={sig?.srv_setup || (hasData ? "Trend Analysis" : "Awaiting feed")}
-                  />
-                </View>
+              <View style={[styles.biasPill, { alignSelf: "flex-start", backgroundColor: trendColor + "22", borderColor: trendColor, marginTop: 10 }]}>
+                <View style={[styles.biasDot, { backgroundColor: trendColor }]} />
+                <Text style={[styles.biasText, { color: trendColor }]}>
+                  {available ? t.trend : "Trend not available yet"}
+                </Text>
               </View>
 
-              {/* Pivot Levels Row -- only ever derived from a real LTP; an
-                  absent feed shows "--" rather than a 0/flat-ltp guess that
-                  looks like a genuine, if oddly quiet, price level. */}
-              <View style={styles.pivotRow}>
-                <View style={styles.pivotBox}>
-                  <Text style={styles.pivotLabel}>SUPPORT (S1)</Text>
-                  <Text style={styles.pivotVal}>
-                    ₹{formatPrice(sig?.s1 ?? (hasData ? ltp * 0.992 : undefined))}
-                  </Text>
-                </View>
-                <View style={styles.pivotBox}>
-                  <Text style={styles.pivotLabel}>PIVOT (P)</Text>
-                  <Text style={[styles.pivotVal, { color: theme.colors.accent }]}>
-                    ₹{formatPrice(sig?.pivot ?? (hasData ? ltp : undefined))}
-                  </Text>
-                </View>
-                <View style={styles.pivotBox}>
-                  <Text style={styles.pivotLabel}>RESISTANCE (R1)</Text>
-                  <Text style={[styles.pivotVal, { color: theme.colors.green }]}>
-                    ₹{formatPrice(sig?.r1 ?? (hasData ? ltp * 1.008 : undefined))}
-                  </Text>
-                </View>
-              </View>
-
-              {!!sig?.srv_reason && (
-                <View style={styles.reasonBox}>
-                  <Text style={styles.reasonText}>💡 {sig.srv_reason}</Text>
-                </View>
+              {available && d && (
+                <>
+                  <View style={styles.pivotRow}>
+                    {levelRow("EMA 20", d.ema20, d.ltp)}
+                    {levelRow("MA 50", d.ma50, d.ltp)}
+                    {levelRow("MA 200", d.ma200, d.ltp)}
+                  </View>
+                  <View style={styles.pivotRow}>
+                    <View style={styles.pivotBox}>
+                      <Text style={styles.pivotLabel}>RSI (14)</Text>
+                      <Text style={styles.pivotVal}>{typeof t.rsi === "number" ? t.rsi.toFixed(1) : "—"}</Text>
+                    </View>
+                    <View style={styles.pivotBox}>
+                      <Text style={styles.pivotLabel}>VOL vs 10D</Text>
+                      <Text style={styles.pivotVal}>
+                        {typeof t.volume_spike === "number" ? `${t.volume_spike.toFixed(2)}x` : "—"}
+                      </Text>
+                    </View>
+                    <View style={styles.pivotBox}>
+                      <Text style={styles.pivotLabel}>52W HIGH</Text>
+                      <Text style={styles.pivotVal}>
+                        {typeof d.dist_52h_pct === "number" ? `${d.dist_52h_pct.toFixed(1)}%` : "—"}
+                      </Text>
+                    </View>
+                  </View>
+                  {!!d.note && (
+                    <Text style={styles.reasonText}>
+                      Levels are {d.note}; price above is the live MCX quote.
+                    </Text>
+                  )}
+                </>
               )}
+              {!available && !!t?.reason && <Text style={styles.reasonText}>{t.reason}</Text>}
             </View>
           );
         })}

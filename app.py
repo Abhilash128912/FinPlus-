@@ -426,6 +426,36 @@ def _fast_ltp_loop():
         time.sleep(FAST_POLL_SECONDS if is_open else 30)
 
 
+def _attach_trend_display(trends: dict) -> None:
+    """Adds a `display` block to each available trend so the mobile app shows
+    exactly what the desktop trend cards show: commodity levels converted from
+    the NYMEX USD daily series to an INR-equivalent (classification itself is
+    scale-invariant, so it is unaffected), indices passed through unchanged.
+    Runs in the trend loop thread because the FX lookup can block."""
+    for item in TREND_ITEMS:
+        t = trends.get(item["id"])
+        if not t or not t.get("available"):
+            continue
+        is_commodity = item["kind"] == "commodity"
+        rate = _get_usdinr_rate() if is_commodity else 1.0
+
+        def conv(v):
+            return None if v is None else round(v * rate, 2)
+
+        ltp = conv(t.get("ltp"))
+        wk = conv(t.get("week_high_52"))
+        t["display"] = {
+            "ltp": ltp,
+            "ema20": conv(t.get("ema20")),
+            "ma50": conv(t.get("ma50")),
+            "ma200": conv(t.get("ma200")),
+            "week_high_52": wk,
+            "dist_52h_pct": round((ltp - wk) / wk * 100, 1) if ltp and wk else None,
+            "note": "INR-equivalent, derived from the daily USD NYMEX series" if is_commodity else None,
+            "usdinr": round(rate, 2) if is_commodity else None,
+        }
+
+
 def _trend_refresh_loop():
     """Daily-timeframe trend per instrument. For the indices, the freshest
     known LTP (from the fast poller) is passed in so the classification
@@ -455,6 +485,10 @@ def _trend_refresh_loop():
                     trends[item["id"]] = trend_engine.get_equity_trend(item["key"], fast_ltp.get(item["id"]))
                 else:
                     trends[item["id"]] = trend_engine.get_index_trend(item["key"], fast_ltp.get(item["id"]))
+            try:
+                _attach_trend_display(trends)
+            except Exception:
+                traceback.print_exc()
             with _trend_lock:
                 _trend_state["trends"] = trends
                 _trend_state["updated_at"] = datetime.now(timezone.utc)
