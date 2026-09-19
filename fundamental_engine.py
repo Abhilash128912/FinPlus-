@@ -340,60 +340,62 @@ def compute_dvm_score(fund_data: dict) -> dict:
     """
     ROE_ROCE_SANITY_CAP = 60.0
 
-    roe_raw = float(fund_data.get("roe_pct") or 0.0)
-    roce_raw = float(fund_data.get("roce_pct") or (roe_raw * 1.2 if roe_raw > 0 else 0.0))
-    roe = min(roe_raw, ROE_ROCE_SANITY_CAP)
-    roce = min(roce_raw, ROE_ROCE_SANITY_CAP)
-    de = float(fund_data.get("de_ratio") or 0.4)
-    beta = float(fund_data.get("beta") or 1.1)
-    pe = float(fund_data.get("pe") or 25.0)
-    pb = float(fund_data.get("pb") or 3.0)
+    def _num(key):
+        v = fund_data.get(key)
+        try:
+            return None if v is None else float(v)
+        except (TypeError, ValueError):
+            return None
+
+    roe_v, de_v, beta_v, pe_v, pb_v = _num("roe_pct"), _num("de_ratio"), _num("beta"), _num("pe"), _num("pb")
     sector = (fund_data.get("sector") or "").lower()
 
-    # 1. Capital Efficiency (40 pts)
-    cap_pts = 0
-    if roe >= 25.0: cap_pts = 40
-    elif roe >= 20.0: cap_pts = 35
-    elif roe >= 15.0: cap_pts = 28
-    elif roe >= 10.0: cap_pts = 16
-    elif roe >= 6.0: cap_pts = 8
-    else: cap_pts = 2
+    # Durability is built ONLY from the metrics that exist. A missing D/E, beta or
+    # sector no longer earns assumed points (it used to be D/E 0.4, beta 1.1 and a flat
+    # 15 "moat" points): its component is left out and the score is scaled to the
+    # points that were actually available. Without ROE and enough other evidence the
+    # score is None ("not available").
+    earned, possible = 0.0, 0.0
 
-    # 2. Solvency & Volatility Risk (35 pts)
-    solv_pts = 0
-    if de <= 0.2: solv_pts += 18
-    elif de <= 0.5: solv_pts += 14
-    elif de <= 1.0: solv_pts += 8
-    else: solv_pts += 0
+    if roe_v is not None:                              # 1. Capital efficiency (40)
+        roe = min(roe_v, ROE_ROCE_SANITY_CAP)
+        pts = 40 if roe >= 25.0 else 35 if roe >= 20.0 else 28 if roe >= 15.0 else 16 if roe >= 10.0 else 8 if roe >= 6.0 else 2
+        earned += pts
+        possible += 40
+    if de_v is not None:                               # 2a. Leverage (18)
+        earned += 18 if de_v <= 0.2 else 14 if de_v <= 0.5 else 8 if de_v <= 1.0 else 0
+        possible += 18
+    if beta_v is not None:                             # 2b. Volatility (17)
+        earned += 17 if beta_v <= 0.85 else 12 if beta_v <= 1.15 else 6 if beta_v <= 1.40 else 0
+        possible += 17
+    if sector:                                         # 3. Moat / predictability (25)
+        cyclicals = ["textile", "spinning", "yarn", "sugar", "fertilizer", "gas distribution", "sponge iron", "commodity", "metals"]
+        quality_sectors = ["it", "software", "pharma", "fmcg", "consumer", "auto parts", "auto ancillar", "defence", "private bank"]
+        earned += 5 if any(k in sector for k in cyclicals) else 25 if any(k in sector for k in quality_sectors) else 15
+        possible += 25
 
-    if beta <= 0.85: solv_pts += 17
-    elif beta <= 1.15: solv_pts += 12
-    elif beta <= 1.40: solv_pts += 6
-    else: solv_pts += 0
+    if roe_v is None or possible < 58.0:
+        durability_score = None
+    else:
+        durability_score = round(earned / possible * 100.0, 1)
 
-    # 3. Moat & Business Predictability (25 pts)
-    moat_pts = 15
-    cyclicals = ["textile", "spinning", "yarn", "sugar", "fertilizer", "gas distribution", "sponge iron", "commodity", "metals"]
-    quality_sectors = ["it", "software", "pharma", "fmcg", "consumer", "auto parts", "auto ancillar", "defence", "private bank"]
-    if any(k in sector for k in cyclicals):
-        moat_pts = 5  # Severe discount for pure commodity/cyclical margins
-    elif any(k in sector for k in quality_sectors):
-        moat_pts = 25  # Premium for pricing power and repeat business
+    # Valuation score (0-100) from whichever of PE / P/B exists
+    valuation_score = None
+    if pe_v is not None or pb_v is not None:
+        val_pts = 50
+        if pe_v is not None:
+            if 10.0 <= pe_v <= 25.0: val_pts += 25
+            elif 25.0 < pe_v <= 40.0: val_pts += 10
+            elif pe_v > 60.0: val_pts -= 20
+            elif pe_v < 8.0 and roe_v is not None and roe_v < 10.0: val_pts -= 15  # value trap
+        if pb_v is not None:
+            if 1.0 <= pb_v <= 4.0: val_pts += 25
+            elif pb_v > 8.0: val_pts -= 15
+        valuation_score = max(5.0, min(100.0, round(val_pts, 1)))
 
-    durability_score = round(cap_pts + solv_pts + moat_pts, 1)
-
-    # Valuation Score (0-100)
-    val_pts = 50
-    if 10.0 <= pe <= 25.0: val_pts += 25
-    elif 25.0 < pe <= 40.0: val_pts += 10
-    elif pe > 60.0: val_pts -= 20
-    elif pe < 8.0 and roe < 10.0: val_pts -= 15  # Value trap
-
-    if 1.0 <= pb <= 4.0: val_pts += 25
-    elif pb > 8.0: val_pts -= 15
-    valuation_score = max(5.0, min(100.0, round(val_pts, 1)))
-
-    if durability_score >= 70.0:
+    if durability_score is None:
+        dvm_label = None
+    elif durability_score >= 70.0:
         dvm_label = "HIGH_DURABILITY"
     elif durability_score >= 55.0:
         dvm_label = "GOOD_DURABILITY"
