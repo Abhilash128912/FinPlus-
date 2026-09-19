@@ -40,12 +40,12 @@ def _svc(slug, suspended):
 
 
 def test_plan_resumes_suspended_services_inside_the_window():
-    acts = rs.plan([_svc("finplus-1", True), _svc("alphapulse-sentiment-tracker", True)], ist(2026, 9, 21, 8, 5))
+    acts = rs.plan([_svc("finplus-1", True), _svc("finplus", True)], ist(2026, 9, 21, 8, 5))
     assert sorted(a[0] for a in acts) == ["resume", "resume"]
 
 
 def test_plan_suspends_running_services_outside_the_window():
-    acts = rs.plan([_svc("finplus-1", False), _svc("alphapulse-sentiment-tracker", False)], ist(2026, 9, 20, 12, 0))
+    acts = rs.plan([_svc("finplus-1", False), _svc("finplus", False)], ist(2026, 9, 20, 12, 0))
     assert sorted(a[0] for a in acts) == ["suspend", "suspend"]
 
 
@@ -57,7 +57,7 @@ def test_plan_does_nothing_when_already_correct_and_ignores_other_services():
 def test_services_are_matched_by_slug_name_or_url():
     assert rs.match_slug({"slug": "finplus-1"}) == "finplus-1"
     assert rs.match_slug({"name": "FinPlus--1", "slug": "x"}) == "finplus-1"
-    assert rs.match_slug({"slug": "zzz", "serviceDetails": {"url": "https://alphapulse-sentiment-tracker.onrender.com"}}) == "alphapulse-sentiment-tracker"
+    assert rs.match_slug({"slug": "zzz", "serviceDetails": {"url": "https://finplus.onrender.com"}}) == "finplus"
     assert rs.match_slug({"slug": "unrelated", "name": "other"}) is None
 
 
@@ -67,3 +67,9 @@ def test_ledger_backend_is_managed_too():
     # ...and FinPlus--1 (RADAR) is a different service from FinPlus- (LEDGER)
     assert rs.match_slug({"slug": "finplus-1", "name": "FinPlus--1"}) == "finplus-1"
     assert rs.match_slug({"slug": "finplus", "name": "FinPlus-"}) == "finplus"
+
+
+def test_pulse_is_not_scheduled():
+    assert rs.match_slug({"slug": "alphapulse-sentiment-tracker", "name": "alphapulse-sentiment-tracker"}) is None
+    assert rs.plan([{"id": "srv-p", "slug": "alphapulse-sentiment-tracker", "suspended": "not_suspended"}],
+                   ist(2026, 9, 20, 12, 0)) == []

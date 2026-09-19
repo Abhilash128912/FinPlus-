@@ -8,7 +8,8 @@ schedule, so this script -- run every 30 minutes by a GitHub Actions cron -- rec
 state with the desired state by calling Render's API (suspend / resume). Running it more often than
 needed is harmless: it only acts when the state differs, so a delayed or missed cron run heals itself.
 
-Hours: 9 h x ~21.7 weekdays = ~195 h per service, ~390 h for both (cap 750 shared).
+Hours: 9 h x ~21.7 weekdays = ~195 h per service, ~390 h for both (cap 750 per workspace;
+left running 24/7 the two would use ~1,460 h and Render would suspend both mid-month).
 
 Usage:  RENDER_API_KEY=... python tools/render_schedule.py [--dry-run]
 """
@@ -26,15 +27,14 @@ API = "https://api.render.com/v1"
 
 # Services to schedule. Each is matched by slug (the <slug>.onrender.com subdomain), display name or web
 # address, whichever Render reports, so a renamed or blueprint-created service is still found.
-SERVICE_SLUGS = ("finplus-1", "finplus", "alphapulse-sentiment-tracker")
+# Only the services that share ONE Render workspace (free instance hours are counted per workspace).
+# Pulse lives in a different workspace with its own 750 hours, so it is deliberately not scheduled.
+SERVICE_SLUGS = ("finplus-1", "finplus")
 _ALIASES = {
     "finplus-1": ("finplus-1", "finplus--1", "indmoney-trading-screener"),      # RADAR
     "finplus": ("finplus", "finplus-"),                                          # LEDGER backend
-    "alphapulse-sentiment-tracker": ("alphapulse-sentiment-tracker", "alphapulse"),   # Pulse
 }
-# The services may live in different Render accounts/workspaces; one API key per account
-# (GitHub secrets RENDER_API_KEY and RENDER_API_KEY_2). Free hours are per workspace.
-KEY_ENV_VARS = ("RENDER_API_KEY", "RENDER_API_KEY_2")
+KEY_ENV_VARS = ("RENDER_API_KEY",)
 
 
 def match_slug(service: dict) -> str | None:

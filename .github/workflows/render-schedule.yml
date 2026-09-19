@@ -35,5 +35,4 @@ jobs:
       - name: Suspend or resume to match the schedule
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_API_KEY_2: ${{ secrets.RENDER_API_KEY_2 }}
         run: python tools/render_schedule.py
