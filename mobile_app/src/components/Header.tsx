@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { theme } from "../theme";
 import { getApiBaseUrl, setApiBaseUrl, getApiKey, setApiKey } from "../config";
-import { updateIndmoneyToken } from "../api";
+import { updateIndmoneyToken, fetchTokenStatus, TokenStatus } from "../api";
 
 interface HeaderProps {
   tokenStatus?: {
@@ -29,11 +29,38 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  tokenStatus,
+  tokenStatus: tokenStatusProp,
   onRefresh,
   isRefreshing,
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
+  const [ownStatus, setOwnStatus] = useState<TokenStatus | undefined>(undefined);
+  const [statusFailed, setStatusFailed] = useState(false);
+
+  // Screens that already load /api/markets pass tokenStatus in; the rest
+  // (Intraday, Stocks) would otherwise show "Connecting..." forever.
+  useEffect(() => {
+    if (tokenStatusProp) return;
+    let alive = true;
+    const load = async () => {
+      try {
+        const s = await fetchTokenStatus();
+        if (alive) {
+          setOwnStatus(s);
+          setStatusFailed(false);
+        }
+      } catch (_) {
+        if (alive) setStatusFailed(true);
+      }
+    };
+    load();
+    const timer = setInterval(load, 30000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [!!tokenStatusProp]);
+  const tokenStatus = tokenStatusProp ?? ownStatus;
   const [urlInput, setUrlInput] = useState(getApiBaseUrl());
   const [keyInput, setKeyInput] = useState(getApiKey());
   const [tokenInput, setTokenInput] = useState("");
@@ -96,6 +123,8 @@ export const Header: React.FC<HeaderProps> = ({
     ? `INDmoney Live (${minsRemaining ? Math.round(minsRemaining) : "?"}m)`
     : tokenStatus
     ? "No live feed — token missing/expired on server"
+    : statusFailed
+    ? "Server not reachable — retrying…"
     : "Connecting…";
 
   return (

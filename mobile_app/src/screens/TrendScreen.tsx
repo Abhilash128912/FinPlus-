@@ -18,13 +18,20 @@ export const TrendScreen: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Skip a poll while the previous one is still in flight, so a slow network
+  // cannot pile up overlapping requests every 6s.
+  const inFlight = React.useRef(false);
   const loadData = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     try {
       setError(null);
       const res = await fetchMarkets();
       setData(res);
     } catch (e: any) {
       setError(e.message || "Failed to load market trends");
+    } finally {
+      inFlight.current = false;
     }
   };
 

@@ -174,6 +174,21 @@ async function request<T>(path: string, timeoutMs: number = 4000, body?: unknown
 // lets the token be refreshed daily from the phone itself, no Render
 // dashboard or desktop browser needed (INDmoney tokens expire every 24h
 // and have no programmable refresh flow).
+export interface TokenStatus {
+  has_token: boolean;
+  is_expired: boolean;
+  expires_in_min?: number;
+  totp_configured?: boolean;
+  data_source?: string;
+  fallback_active?: boolean;
+}
+
+// Header polls this itself on screens that do not already load /api/markets,
+// so the status pill never sits on "Connecting..." there.
+export const fetchTokenStatus = async (): Promise<TokenStatus> => {
+  return request<TokenStatus>("/api/token_status", 8000);
+};
+
 export const updateIndmoneyToken = async (token: string): Promise<{ success: boolean; error?: string }> => {
   return request("/api/token", 8000, { token });
 };
@@ -328,7 +343,7 @@ const normalizeCommodities = (res: CommoditiesResponse): CommoditiesResponse => 
 // made-up price, per the "no fabricated data" rule for this app.
 export const fetchMarkets = async (): Promise<MarketsResponse> => {
   try {
-    return normalizeMarkets(await request<MarketsResponse>("/api/markets", 3000));
+    return normalizeMarkets(await request<MarketsResponse>("/api/markets", 8000));
   } catch (_) {
     const [niftyQ, bankQ, relianceQ, mcxData] = await Promise.all([
       fetchDirectYahooChart("^NSEI"),
@@ -398,7 +413,7 @@ export const fetchMarkets = async (): Promise<MarketsResponse> => {
 // ── Commodities Fetcher: real backend first, direct MCX cloud fallback ──
 export const fetchCommodities = async (): Promise<CommoditiesResponse> => {
   try {
-    return normalizeCommodities(await request<CommoditiesResponse>("/api/commodities", 3000));
+    return normalizeCommodities(await request<CommoditiesResponse>("/api/commodities", 8000));
   } catch (_) {
     const mcxData = await fetchDirectRenderMCX();
     const crude = mcxData?.crude;
@@ -432,7 +447,7 @@ export const fetchCommodities = async (): Promise<CommoditiesResponse> => {
 // pivot-based read on whatever direct quotes succeeded second. ──
 export const fetchAlerts = async (): Promise<AlertsResponse> => {
   try {
-    return await request<AlertsResponse>("/api/alerts", 3000);
+    return await request<AlertsResponse>("/api/alerts", 8000);
   } catch (_) {
     const mkt = await fetchMarkets();
     const recent: AlertRecord[] = [];
