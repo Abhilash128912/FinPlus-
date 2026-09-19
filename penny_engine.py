@@ -152,9 +152,12 @@ def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10
     from datetime import date
 
     today = date.today()
-    last_day = calendar.monthrange(today.year, today.month)[1]
-    locked_until_str = f"{today.year:04d}-{today.month:02d}-{last_day:02d}"
-    month_label = today.strftime("%B %Y")
+    # Cohort validity: one trading DAY, not one month. The lock exists only so the
+    # list does not reshuffle on every request; it must never keep a list alive
+    # whose inputs were not real, so a saved list is honoured only if EVERY pick
+    # is backed by real fundamentals. Anything else is recomputed from real data.
+    locked_until_str = today.isoformat()
+    month_label = today.strftime("%d %B %Y")
 
     saved_state = {}
     if os.path.exists(PENNY_MONTHLY_PICKS_FILE):
@@ -167,7 +170,8 @@ def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10
     is_active_lock = (
         saved_state.get("locked_until") == locked_until_str
         and saved_state.get("method") == "live_debt_free_gate_v1"
-        and len(saved_state.get("picks") or []) == top_n
+        and len(saved_state.get("picks") or []) >= 1
+        and all(p.get("de_ratio") is not None for p in saved_state.get("picks") or [])
     )
 
     by_symbol_universe = {r.get("symbol"): r for r in raw_universe if r.get("symbol")}
@@ -226,14 +230,16 @@ def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10
     # means a name has to actually be debt-free right now to make the cut, and it
     # can't get "stuck" here indefinitely once it stops qualifying.
     def _rank_score(cand: dict) -> float:
-        dur = float(cand.get("durability_score") if cand.get("durability_score") is not None else 65.0)
-        roe_val = cand.get("roe_pct")
-        pe_val = cand.get("pe")
-        q = min(100.0, max(50.0, 60.0 + (float(roe_val if roe_val is not None else 12.0) * 1.5)))
-        v = min(100.0, max(40.0, 90.0 - (float(pe_val if pe_val is not None else 20.0) * 0.8)))
+        # Only called for candidates with real durability / ROE / PE (see below):
+        # a missing metric used to be replaced by an assumed 65 / 12% / PE 20.
+        dur = float(cand["durability_score"])
+        q = min(100.0, max(50.0, 60.0 + (float(cand["roe_pct"]) * 1.5)))
+        v = min(100.0, max(40.0, 90.0 - (float(cand["pe"]) * 0.8)))
         return (dur * 0.40) + (q * 0.35) + (v * 0.25)
 
-    ranked_universe = sorted(raw_universe, key=_rank_score, reverse=True)
+    rankable = [c for c in raw_universe
+                if all(c.get(k) is not None for k in ("durability_score", "roe_pct", "pe"))]
+    ranked_universe = sorted(rankable, key=_rank_score, reverse=True)
 
     cohort_picks = []
     for c in ranked_universe[:top_n]:

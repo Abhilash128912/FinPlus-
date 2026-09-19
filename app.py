@@ -653,7 +653,10 @@ def _fundamentals_warm_loop():
             if os.path.exists(equity_scan.SCREENER_DATA_PATH):
                 with open(equity_scan.SCREENER_DATA_PATH, encoding="utf-8") as f:
                     rows = json.load(f)
-                symbols = [r["symbol"] for r in rows if r.get("symbol")]
+                # Lean mode covers only what the long-term (75-500) and penny (5-75)
+                # lists draw from; the full suite still warms the whole universe.
+                symbols = [r["symbol"] for r in rows if r.get("symbol")
+                           and (FULL_SCAN_SUITE or 5.0 <= float(r.get("ltp") or 0.0) <= 500.0)]
 
             with _fund_warm_lock:
                 _fund_warm_state["running"] = True
@@ -2332,6 +2335,10 @@ def start_all_background_threads():
             # quote call) and the mobile Stocks tab needs it, so it stays on in
             # lean mode; long-term/penny serve their stored monthly cohorts.
             threading.Thread(target=_swing_scan_loop, daemon=True).start()
+            # Keeps real fundamentals topped up (only missing / >30-day-old symbols are
+            # fetched, sequentially at a polite pace) so long-term picks never fall back
+            # to invented values.
+            threading.Thread(target=_fundamentals_warm_loop, daemon=True).start()
             print("[startup] ENABLE_FULL_SCAN_SUITE not set -- running Intraday + Trend Analyser + Swing "
                   "loops only (long-term/penny/options scans off to fit the free-tier 512MB limit)")
         totp_auth.start_totp_refresher_thread()

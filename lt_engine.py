@@ -302,9 +302,12 @@ def get_or_refresh_monthly_picks(raw_universe: list[dict], top_n: int = 10,
     from datetime import date
 
     today = date.today()
-    last_day = calendar.monthrange(today.year, today.month)[1]
-    locked_until_str = f"{today.year:04d}-{today.month:02d}-{last_day:02d}"
-    month_label = today.strftime("%B %Y")
+    # Cohort validity: one trading DAY, not one month. The lock exists only so the
+    # list does not reshuffle on every request; it must never keep a list alive
+    # whose inputs were not real, so a saved list is honoured only if EVERY pick
+    # is backed by real fundamentals. Anything else is recomputed from real data.
+    locked_until_str = today.isoformat()
+    month_label = today.strftime("%d %B %Y")
 
     saved_state = {}
     if os.path.exists(LT_MONTHLY_PICKS_FILE):
@@ -317,8 +320,9 @@ def get_or_refresh_monthly_picks(raw_universe: list[dict], top_n: int = 10,
     # Check if existing cohort is still locked for this month with 40/40/20 Future Compounders v6
     is_active_lock = (
         saved_state.get("locked_until") == locked_until_str
-        and saved_state.get("cap_distribution") == "40_40_20_future_compounders_v7"
-        and len(saved_state.get("picks") or []) == top_n
+        and saved_state.get("cap_distribution") == "40_40_20_future_compounders_v8_real_data"
+        and len(saved_state.get("picks") or []) >= 1
+        and all(p.get("fundamentals_available") is True for p in saved_state.get("picks") or [])
     )
 
     by_symbol_universe = {r.get("symbol"): r for r in raw_universe if r.get("symbol")}
@@ -516,6 +520,7 @@ def get_or_refresh_monthly_picks(raw_universe: list[dict], top_n: int = 10,
             "status_badge_class": badge_cls,
             "status_reason": reason,
             "lt_quality_score": p.get("lt_quality_score"),
+            "fundamentals_available": p.get("durability_score") is not None and p.get("roce_pct") is not None,
             "durability_score": p.get("durability_score"),
             "dvm_label": p.get("dvm_label"),
             "trend": p.get("trend"),
@@ -531,7 +536,7 @@ def get_or_refresh_monthly_picks(raw_universe: list[dict], top_n: int = 10,
     cohort_data = {
         "month_label": month_label,
         "locked_until": locked_until_str,
-        "cap_distribution": "40_40_20_future_compounders_v7",
+        "cap_distribution": "40_40_20_future_compounders_v8_real_data",
         "min_price": min_price,
         "max_price": max_price,
         "picks": cohort_picks,

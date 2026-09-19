@@ -63,6 +63,9 @@ WL_FILE    = os.path.join(BASE_DIR, "watchlist_data.json")
 LT_WL_FILE = os.path.join(BASE_DIR, "lt_watchlist.json")
 LT_ENRICHED_FILE = os.path.join(BASE_DIR, "lt_watchlist_enriched.json")
 LT_MONTHLY_PICKS_FILE = os.path.join(BASE_DIR, "lt_monthly_picks.json")
+# The screener page's own auto-add bookkeeping used to share lt_monthly_picks.json with
+# lt_engine, overwriting its cohort with a different schema. Separate file now.
+LT_AUTOADD_STATE_FILE = os.path.join(BASE_DIR, "lt_autoadd_state.json")
 PENNY_MONTHLY_PICKS_FILE = os.path.join(BASE_DIR, "penny_monthly_picks.json")
 OUT_JSON_FILE = os.path.join(BASE_DIR, "screener_data.json")
 OUT_HTML   = os.path.join(BASE_DIR, "screener.html")
@@ -110,6 +113,34 @@ def read_scan_completed_at() -> str:
         return ""
 
 
+_FUNDAMENTAL_KEYS = ("roe_pct", "roce_pct", "pe", "pb", "de_ratio", "npm_pct", "rev_growth_pct", "div_yield_pct")
+
+
+def null_duplicate_fundamentals(rows):
+    """Wrong-company guard. Two different companies never share the same set of
+    three-or-more fundamental ratios; when several rows do (e.g. ITC, ITCHOTELS,
+    MITCON, RITCO ... all showing ROE 33.8 / PE 15.2 / D-E 0.0 / NPM 28.5) the data
+    source matched them to one company's page. Every row in such a group has its
+    fundamentals set to None and is flagged, rather than trusting any of them."""
+    try:
+        groups = {}
+        for i, r in enumerate(rows):
+            sig = tuple(r.get(k) for k in _FUNDAMENTAL_KEYS)
+            if sum(1 for v in sig if v is not None) >= 3:
+                groups.setdefault(sig, []).append(i)
+        bad = [i for ix in groups.values() if len(ix) >= 2 for i in ix]
+        for i in bad:
+            for k in _FUNDAMENTAL_KEYS:
+                if k in rows[i]:
+                    rows[i][k] = None
+            rows[i]["fundamentals_unverified"] = True
+        if bad:
+            log(f"  ⚠ Nulled unreliable fundamentals on {len(bad)} row(s) that shared identical ratios")
+    except Exception as e:
+        log(f"  ⚠ duplicate-fundamentals check skipped: {e}")
+    return rows
+
+
 def write_scan_json(clean_results) -> None:
     """Write screener_data.json, its scan stamp, and the www/ copy when bundling.
 
@@ -118,6 +149,7 @@ def write_scan_json(clean_results) -> None:
     wildly different on Render, which rebuilds from committed data at boot and was
     therefore stamping every deploy as a fresh scan.
     """
+    clean_results = null_duplicate_fundamentals(clean_results)
     json_str = json.dumps(clean_results, default=json_serializer)
     atomic_write_file(OUT_JSON_FILE, json_str)
     try:
@@ -9650,7 +9682,7 @@ def sync_monthly_lt_watchlist_additions(screener_results: list[dict]) -> None:
     Ensures lt_watchlist.json holds a locked monthly cohort of auto-selected
     stocks (quality + momentum, LTP < 600 — see select_monthly_lt_watchlist_
     additions), refreshed only once every 30 days (state tracked in
-    LT_MONTHLY_PICKS_FILE). These become real watchlist entries and are
+    LT_AUTOADD_STATE_FILE). These become real watchlist entries and are
     enriched by process_lt_watchlist() exactly like every manually-added
     stock — same auto-trailing GTT, same BUY_NOW/ACCUMULATE_ON_DIP/WAIT/
     WATCHLIST gate. This function only decides membership; it writes
@@ -9667,9 +9699,9 @@ def sync_monthly_lt_watchlist_additions(screener_results: list[dict]) -> None:
     today = datetime.datetime.now(IST).date()
 
     state = None
-    if os.path.exists(LT_MONTHLY_PICKS_FILE):
+    if os.path.exists(LT_AUTOADD_STATE_FILE):
         try:
-            with open(LT_MONTHLY_PICKS_FILE, encoding="utf-8") as f:
+            with open(LT_AUTOADD_STATE_FILE, encoding="utf-8") as f:
                 state = json.load(f)
         except Exception:
             state = None
@@ -9728,11 +9760,11 @@ def sync_monthly_lt_watchlist_additions(screener_results: list[dict]) -> None:
 
     new_state = {
         "batch_symbols": [e["symbol"] for e in new_entries],
-        "locked_until": (today + datetime.timedelta(days=30)).isoformat(),
+        "locked_until": (today + datetime.timedelta(days=1)).isoformat(),  # refreshed daily, not monthly
         "generated_on": today.isoformat(),
     }
     try:
-        with open(LT_MONTHLY_PICKS_FILE, "w", encoding="utf-8") as f:
+        with open(LT_AUTOADD_STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(new_state, f)
         log(f"  🔒 Refreshed monthly LT watchlist cohort: {len(new_entries)} stock(s) added "
             f"(locked until {new_state['locked_until']})")
@@ -9740,7 +9772,7 @@ def sync_monthly_lt_watchlist_additions(screener_results: list[dict]) -> None:
         log(f"  ⚠ Could not save lt_monthly_picks.json state: {e}")
 
 
-PENNY_LOCK_DAYS = 30
+PENNY_LOCK_DAYS = 1  # refreshed daily; no monthly lock
 
 
 def _penny_hard_failure(row: dict) -> str | None:
