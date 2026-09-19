@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:defaults": "python tools/check_no_assumed_defaults.py ."
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",

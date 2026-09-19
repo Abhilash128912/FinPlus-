@@ -1,0 +1,87 @@
+[
+  {
+    "file": "src/App.jsx",
+    "snippet": "const [swingPct, setSwingPct] = useState(() => Number(localStorage.getItem('finplus_split_swing')) || 60);",
+    "reason": "user's own capital-split setting (60/30/10 default); not market data"
+  },
+  {
+    "file": "src/App.jsx",
+    "snippet": "id: `pos_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,",
+    "reason": "random suffix of a client-side record id, not data"
+  },
+  {
+    "file": "src/App.jsx",
+    "snippet": "id: `adj_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,",
+    "reason": "random suffix of a client-side record id, not data"
+  },
+  {
+    "file": "src/App.jsx",
+    "snippet": "id: `opt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,",
+    "reason": "random suffix of a client-side record id, not data"
+  },
+  {
+    "file": "src/App.jsx",
+    "snippet": "id: `opt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,",
+    "reason": "random suffix of a client-side record id, not data"
+  },
+  {
+    "file": "src/journal/risk/RiskSetup.jsx",
+    "snippet": "<Input type=\"number\" min=\"1\" value={f.accrualDivisor ?? 22} onChange={e => set('accrualDivisor', e.target.value)} />",
+    "reason": "editable settings field: default trading days per month; not market data"
+  },
+  {
+    "file": "src/journal/risk/risk_storage.js",
+    "snippet": ": `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;",
+    "reason": "random suffix of a client-side record id, not data"
+  },
+  {
+    "file": "www/index.html",
+    "snippet": "const rsVal = s.rs_rating || 50;",
+    "reason": "universe RS is rank-assigned 1-99 to every scanned row (0 of 2,556 rows lack it, checked 2026-09-19); fallback unreachable for scan rows"
+  },
+  {
+    "file": "www/index.html",
+    "snippet": "const rsVal = s.rs_rating || 50;",
+    "reason": "universe RS is rank-assigned 1-99 to every scanned row (0 of 2,556 rows lack it, checked 2026-09-19); fallback unreachable for scan rows"
+  },
+  {
+    "file": "www/index.html",
+    "snippet": "const rsVal      = s.rs_rating || 50;",
+    "reason": "universe RS is rank-assigned 1-99 to every scanned row (0 of 2,556 rows lack it, checked 2026-09-19); fallback unreachable for scan rows"
+  },
+  {
+    "file": "www/index.html",
+    "snippet": "const rsi = item.rsi || 50;",
+    "reason": "legacy copy of the screener page; not shipped (Capacitor webDir is dist/)"
+  },
+  {
+    "file": "www/index.html",
+    "snippet": "item.rsi = live.rsi || item.rsi || 50;",
+    "reason": "legacy copy of the screener page; not shipped (Capacitor webDir is dist/)"
+  },
+  {
+    "file": "www/index.html",
+    "snippet": "item.rs_rating = live.rs_rating || item.rs_rating || 50;",
+    "reason": "legacy copy of the screener page; not shipped (Capacitor webDir is dist/)"
+  },
+  {
+    "file": "www/index.html",
+    "snippet": "const scoreVal = s.durability_score || 75;",
+    "reason": "legacy copy of the screener page; not shipped (Capacitor webDir is dist/)"
+  },
+  {
+    "file": "www/index.html",
+    "snippet": "const durability_score = parseInt(el('ltFormDurability').value || 75);",
+    "reason": "legacy copy of the screener page; not shipped (Capacitor webDir is dist/)"
+  },
+  {
+    "file": "www/index.html",
+    "snippet": "let effectiveSize = (pageSize === 'all') ? totalItems : parseInt(pageSize || 50);",
+    "reason": "UI page size, not data"
+  },
+  {
+    "file": "www/index.html",
+    "snippet": "const rsVal = s.rs_rating || 50;",
+    "reason": "universe RS is rank-assigned 1-99 to every scanned row (0 of 2,556 rows lack it, checked 2026-09-19); fallback unreachable for scan rows"
+  }
+]
