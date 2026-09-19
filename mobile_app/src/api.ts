@@ -70,7 +70,7 @@ export interface AlertRecord {
   target2?: number;
   strength?: string;
   rr?: number;
-  opened_at: string;
+  opened_at: string | null;
   outcome: "open" | "target" | "stop";
   closed_at?: string | null;
 }
@@ -517,7 +517,7 @@ export const fetchAlerts = async (): Promise<AlertsResponse> => {
           target2: sig.srv_target2,
           strength: sig.srv_strength || "MODERATE",
           rr: sig.srv_rr,
-          opened_at: new Date().toISOString(),
+          opened_at: null,   // the true signal time is unknown in this live-quote fallback; never stamped "now"
           outcome: "open",
         });
       }

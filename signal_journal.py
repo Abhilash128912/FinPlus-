@@ -37,6 +37,52 @@ MAX_RECORDS = 2000
 # refresh loop from logging a fresh record every minute for one live signal.
 DEDUP_ENTRY_PCT = 0.15
 
+IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+
+
+def _ist_date(iso: str | None):
+    try:
+        ts = pd.Timestamp(iso)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize("UTC")
+        return ts.tz_convert(IST).date()
+    except Exception:
+        return None
+
+
+def _same_trial(a: dict, b: dict) -> bool:
+    """Two records are the SAME trial (one independent observation) when they are the same
+    instrument, setup and direction, opened on the same IST trading day, with entries within one
+    stop distance (or DEDUP_ENTRY_PCT) of each other.
+
+    The commodity stops are tight, so a live signal is often stopped out within minutes and the
+    very next refresh sees the same setup and logs it again -- 82 near-identical NATURALGAS
+    records were counted as 82 trials (win rate 1%). They are one trial."""
+    if (a.get("symbol"), a.get("setup"), a.get("direction")) != (b.get("symbol"), b.get("setup"), b.get("direction")):
+        return False
+    if _ist_date(a.get("opened_at")) != _ist_date(b.get("opened_at")) or _ist_date(a.get("opened_at")) is None:
+        return False
+    try:
+        ea, eb = float(a["entry"]), float(b["entry"])
+        tol = max(abs(ea - float(a["stop"])), ea * DEDUP_ENTRY_PCT / 100.0)
+    except (KeyError, TypeError, ValueError):
+        return False
+    return abs(ea - eb) <= tol
+
+
+def independent(records: list[dict]) -> tuple[list[dict], int]:
+    """(one record per independent trial in time order, number of duplicates collapsed).
+    Idempotent and non-destructive: the stored journal is never rewritten by this."""
+    kept: list[dict] = []
+    dup = 0
+    for r in sorted(records, key=lambda x: x.get("opened_at") or ""):
+        if any(_same_trial(r, k) for k in kept):
+            dup += 1
+        else:
+            kept.append(r)
+    return kept, dup
+
+
 
 def _load() -> list[dict]:
     try:
@@ -79,12 +125,7 @@ def log_signal(symbol: str, sig: dict, now: datetime.datetime | None = None) -> 
 
     now = now or datetime.datetime.now(datetime.timezone.utc)
     records = _load()
-    open_rec = _last_open(records, symbol)
-    if open_rec and open_rec["direction"] == direction and open_rec["entry"]:
-        if abs(entry - open_rec["entry"]) / open_rec["entry"] * 100.0 <= DEDUP_ENTRY_PCT:
-            return  # same setup still live -- don't double-log
-
-    records.append({
+    candidate = {
         "symbol": symbol,
         "direction": direction,
         "setup": sig.get("srv_setup", "level_bounce"),
@@ -98,7 +139,12 @@ def log_signal(symbol: str, sig: dict, now: datetime.datetime | None = None) -> 
         "outcome": "open",
         "closed_at": None,
         "bars_to_resolve": None,
-    })
+    }
+    # Same trial already logged today (open OR already resolved): not a new observation.
+    for r in reversed(records[-200:]):
+        if r.get("symbol") == symbol and _same_trial(candidate, r):
+            return
+    records.append(candidate)
     _save(records)
 
 
@@ -144,6 +190,7 @@ def evaluate(symbol: str, bars_df: pd.DataFrame | None,
             hit_t1 = highs[i] >= t1 if long else lows[i] <= t1
             if hit_stop and hit_t1:
                 resolved = "stop"  # conservative: can't prove target came first
+                r["ambiguous"] = True   # counted separately in stats(): the order inside the bar is unknown
                 break
             if hit_stop:
                 resolved = "stop"
@@ -162,22 +209,20 @@ def evaluate(symbol: str, bars_df: pd.DataFrame | None,
 
 
 def stats(symbol: str | None = None) -> dict:
-    """Rolling performance. With `symbol`, that instrument only; without, all.
+    """Rolling performance over INDEPENDENT trials (duplicates of the same setup collapsed).
 
-    Reports resolved-trade counts, win rate (target hit before stop), and
-    expectancy in R multiples -- a win is +rr R (its own reward:risk), a loss
-    is -1 R -- which is the figure that actually says whether following the
-    signals makes money, not just whether they're "often right".
+    Win rate = target hit before stop. Expectancy is in R multiples -- a win is +rr R (its own
+    reward:risk, only where rr was recorded), a loss is -1 R. A bar spanning both stop and target
+    is scored a loss (conservative) and counted in `ambiguous_stops`.
     """
-    records = _load()
-    resolved = [r for r in records
-                if r["outcome"] in ("target", "stop")
-                and (symbol is None or r["symbol"] == symbol)]
-    open_ct = sum(1 for r in records
-                  if r["outcome"] == "open" and (symbol is None or r["symbol"] == symbol))
+    raw = [r for r in _load() if symbol is None or r["symbol"] == symbol]
+    records, dup = independent(raw)
+    resolved = [r for r in records if r["outcome"] in ("target", "stop")]
+    open_ct = sum(1 for r in records if r["outcome"] == "open")
+    base = {"raw_records": len(raw), "duplicates_collapsed": dup, "open": open_ct}
     if not resolved:
-        return {"resolved": 0, "open": open_ct, "wins": 0, "losses": 0,
-                "win_rate": None, "expectancy_r": None}
+        return {**base, "resolved": 0, "wins": 0, "losses": 0, "win_rate": None,
+                "expectancy_r": None, "ambiguous_stops": 0}
 
     wins = [r for r in resolved if r["outcome"] == "target"]
     losses = [r for r in resolved if r["outcome"] == "stop"]
@@ -187,23 +232,22 @@ def stats(symbol: str | None = None) -> dict:
     r_sum = sum(float(r["rr"]) for r in known_wins) - 1.0 * len(losses)
     r_count = len(known_wins) + len(losses)
     return {
+        **base,
         "resolved": len(resolved),
-        "open": open_ct,
         "wins": len(wins),
         "losses": len(losses),
         "win_rate": round(100.0 * len(wins) / len(resolved), 1),
         "expectancy_r": round(r_sum / r_count, 2) if r_count else None,
+        "ambiguous_stops": sum(1 for r in losses if r.get("ambiguous")),
     }
 
 
 def stats_by_setup(symbol: str | None = None) -> dict:
-    """Win rate broken out by setup type (level_bounce / PDH_BREAK / PDL_BREAK)."""
-    records = _load()
+    """Win rate broken out by setup type (level_bounce / PDH_BREAK / PDL_BREAK), independent trials."""
+    records, _ = independent([r for r in _load() if symbol is None or r["symbol"] == symbol])
     out: dict[str, dict] = {}
     for r in records:
         if r["outcome"] not in ("target", "stop"):
-            continue
-        if symbol is not None and r["symbol"] != symbol:
             continue
         s = out.setdefault(r["setup"], {"wins": 0, "losses": 0})
         s["wins" if r["outcome"] == "target" else "losses"] += 1
@@ -211,6 +255,12 @@ def stats_by_setup(symbol: str | None = None) -> dict:
         tot = v["wins"] + v["losses"]
         v["win_rate"] = round(100.0 * v["wins"] / tot, 1) if tot else None
     return out
+
+
+def recent_independent(limit: int = 100) -> list[dict]:
+    """Newest-first independent trials for display (duplicates are not listed a hundred times)."""
+    kept, _ = independent(_load())
+    return list(reversed(kept[-limit:]))
 
 
 if __name__ == "__main__":

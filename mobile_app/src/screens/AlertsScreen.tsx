@@ -54,7 +54,7 @@ export const AlertsScreen: React.FC = () => {
         g.count += 1;
         g.firstAt = rec.opened_at || g.firstAt;
       } else {
-        groups.set(key, { ...rec, count: 1, firstAt: rec.opened_at });
+        groups.set(key, { ...rec, count: 1, firstAt: rec.opened_at ?? undefined });
       }
     }
     return Array.from(groups.values());

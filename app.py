@@ -957,8 +957,7 @@ def api_screener_all():
 
 @app.route("/api/alerts")
 def api_alerts():
-    records = signal_journal._load()
-    recent = list(reversed(records[-100:])) if records else []
+    recent = signal_journal.recent_independent(100)
     overall_stats = signal_journal.stats()
     crude_stats = signal_journal.stats("CRUDEOIL")
     natgas_stats = signal_journal.stats("NATURALGAS")
