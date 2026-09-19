@@ -9,27 +9,44 @@ import {
   AppState,
 } from "react-native";
 import { theme } from "../theme";
-import { fetchAlerts, fetchCommodities, AlertsResponse, AlertRecord } from "../api";
+import {
+  fetchAlerts,
+  fetchCommodities,
+  fetchScreenerAll,
+  AlertsResponse,
+  CommoditiesResponse,
+  ScreenerAllResponse,
+  StockPick,
+} from "../api";
 import { Header } from "../components/Header";
 
+type Filter = "ALL" | "MCX" | "STOCKS";
+const MAX_STOCKS_PER_SIDE = 5;
+
+// LIVE trade calls only: today's momentum stocks and whichever MCX setup is
+// firing right now. The journal of past/closed triggers lives in the Signal
+// Journal tab -- listing it here made this tab a wall of repeated stopped-out
+// NATURALGAS/CRUDEOIL rows with no stocks at all.
 export const IntradayScreen: React.FC = () => {
-  const [data, setData] = useState<AlertsResponse | null>(null);
-  const [commodities, setCommodities] = useState<any>(null);
-  const [activeFilter, setActiveFilter] = useState<"ALL" | "MCX" | "EQUITY">("ALL");
+  const [alerts, setAlerts] = useState<AlertsResponse | null>(null);
+  const [commodities, setCommodities] = useState<CommoditiesResponse | null>(null);
+  const [screener, setScreener] = useState<ScreenerAllResponse | null>(null);
+  const [activeFilter, setActiveFilter] = useState<Filter>("ALL");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
-    try {
-      setError(null);
-      const [alertsRes, commRes] = await Promise.all([
-        fetchAlerts(),
-        fetchCommodities(),
-      ]);
-      setData(alertsRes);
-      setCommodities(commRes);
-    } catch (e: any) {
-      setError(e.message || "Failed to load intraday trade suggestions");
+    setError(null);
+    const [a, c, s] = await Promise.allSettled([
+      fetchAlerts(),
+      fetchCommodities(),
+      fetchScreenerAll(),
+    ]);
+    if (a.status === "fulfilled") setAlerts(a.value);
+    if (c.status === "fulfilled") setCommodities(c.value);
+    if (s.status === "fulfilled") setScreener(s.value);
+    if (a.status === "rejected" && c.status === "rejected" && s.status === "rejected") {
+      setError(a.reason?.message || "Failed to load intraday trade suggestions");
     }
   };
 
@@ -45,30 +62,49 @@ export const IntradayScreen: React.FC = () => {
       if (AppState.currentState === "active") {
         loadData();
       }
-    }, 6000);
+    }, 15000);
     return () => clearInterval(timer);
   }, []);
 
-  const stats = data?.stats?.overall;
-  const recentAlerts: AlertRecord[] = data?.recent || [];
+  const stats = alerts?.stats?.overall;
 
-  const filteredAlerts = recentAlerts.filter((item) => {
-    if (activeFilter === "MCX") {
-      return item.symbol.includes("CRUDE") || item.symbol.includes("GAS") || item.symbol.includes("MCX");
-    }
-    if (activeFilter === "EQUITY") {
-      return !item.symbol.includes("CRUDE") && !item.symbol.includes("GAS") && !item.symbol.includes("MCX");
-    }
-    return true;
+  const mcxCalls = [
+    { label: "CRUDEOIL", leg: commodities?.crude },
+    { label: "NATURALGAS", leg: commodities?.natgas },
+  ].map(({ label, leg }) => {
+    const sig = leg?.signal;
+    const live = sig?.srv_signal === "BUY" || sig?.srv_signal === "SELL";
+    return { label, sig, live };
   });
 
-  const formatPrice = (val?: number) => {
+  const buyStocks: StockPick[] = (screener?.momentum?.buy || []).slice(0, MAX_STOCKS_PER_SIDE);
+  const sellStocks: StockPick[] = (screener?.momentum?.sell || []).slice(0, MAX_STOCKS_PER_SIDE);
+  const stockCalls = [
+    ...buyStocks.map((p) => ({ ...p, side: "BUY" as const })),
+    ...sellStocks.map((p) => ({ ...p, side: "SELL" as const })),
+  ];
+
+  const formatPrice = (val?: number | null) => {
     if (val === undefined || val === null || isNaN(val)) return "—";
     return val.toLocaleString("en-IN", {
       minimumFractionDigits: 1,
       maximumFractionDigits: 2,
     });
   };
+
+  const showMcx = activeFilter === "ALL" || activeFilter === "MCX";
+  const showStocks = activeFilter === "ALL" || activeFilter === "STOCKS";
+  const liveMcxCount = mcxCalls.filter((m) => m.live).length;
+  const shownCount = (showMcx ? liveMcxCount : 0) + (showStocks ? stockCalls.length : 0);
+
+  const renderFilterBtn = (id: Filter, label: string) => (
+    <TouchableOpacity
+      style={[styles.filterBtn, activeFilter === id && styles.filterBtnActive]}
+      onPress={() => setActiveFilter(id)}
+    >
+      <Text style={[styles.filterBtnText, activeFilter === id && styles.filterBtnTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.container}>
@@ -90,9 +126,8 @@ export const IntradayScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Engine Performance Banner */}
         <View style={styles.statsCard}>
-          <Text style={styles.cardHeader}>INTRADAY TRADE ENGINE (AWAY MODE)</Text>
+          <Text style={styles.cardHeader}>INTRADAY TRADE ENGINE</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>WIN RATE</Text>
@@ -109,118 +144,121 @@ export const IntradayScreen: React.FC = () => {
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>EXPECTANCY</Text>
               <Text style={[styles.statVal, { color: theme.colors.accent }]}>
-                {stats?.expectancy_r != null ? `+${stats.expectancy_r}R` : "—"}
+                {stats?.expectancy_r != null ? `${stats.expectancy_r > 0 ? "+" : ""}${stats.expectancy_r}R` : "—"}
               </Text>
             </View>
 
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>ACTIVE CALLS</Text>
-              <Text style={[styles.statVal, { color: theme.colors.text }]}>
-                {filteredAlerts.length}
-              </Text>
+              <Text style={styles.statLabel}>LIVE CALLS</Text>
+              <Text style={[styles.statVal, { color: theme.colors.text }]}>{shownCount}</Text>
             </View>
           </View>
         </View>
 
-        {/* Filter Switcher */}
         <View style={styles.filterRow}>
-          <TouchableOpacity
-            style={[styles.filterBtn, activeFilter === "ALL" && styles.filterBtnActive]}
-            onPress={() => setActiveFilter("ALL")}
-          >
-            <Text style={[styles.filterBtnText, activeFilter === "ALL" && styles.filterBtnTextActive]}>
-              ALL SUGGESTIONS
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterBtn, activeFilter === "MCX" && styles.filterBtnActive]}
-            onPress={() => setActiveFilter("MCX")}
-          >
-            <Text style={[styles.filterBtnText, activeFilter === "MCX" && styles.filterBtnTextActive]}>
-              🛢️ CRUDE / MCX
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterBtn, activeFilter === "EQUITY" && styles.filterBtnActive]}
-            onPress={() => setActiveFilter("EQUITY")}
-          >
-            <Text style={[styles.filterBtnText, activeFilter === "EQUITY" && styles.filterBtnTextActive]}>
-              📈 INDICES & STOCKS
-            </Text>
-          </TouchableOpacity>
+          {renderFilterBtn("ALL", "ALL")}
+          {renderFilterBtn("MCX", "🛢️ CRUDE / GAS")}
+          {renderFilterBtn("STOCKS", "📈 STOCKS")}
         </View>
 
-        {/* Active Trade Calls */}
-        {filteredAlerts.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No active suggestions in this category right now.</Text>
-          </View>
-        ) : (
-          filteredAlerts.map((rec, i) => {
-            const isBuy = rec.direction === "BUY";
+        {showMcx &&
+          mcxCalls.map(({ label, sig, live }) => {
+            if (!live || !sig) {
+              return (
+                <View key={label} style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>{label}: no active setup right now.</Text>
+                </View>
+              );
+            }
+            const isBuy = sig.srv_signal === "BUY";
             const dirColor = isBuy ? theme.colors.green : theme.colors.red;
             const dirBg = isBuy ? theme.colors.greenBg : theme.colors.redBg;
-
             return (
-              <View key={i} style={styles.tradeCard}>
+              <View key={label} style={styles.tradeCard}>
                 <View style={styles.tradeTop}>
                   <View style={styles.symbolRow}>
-                    <View
-                      style={[
-                        styles.dirTag,
-                        { backgroundColor: dirBg, borderColor: dirColor },
-                      ]}
-                    >
-                      <Text style={[styles.dirText, { color: dirColor }]}>
-                        {rec.direction}
-                      </Text>
+                    <View style={[styles.dirTag, { backgroundColor: dirBg, borderColor: dirColor }]}>
+                      <Text style={[styles.dirText, { color: dirColor }]}>{sig.srv_signal}</Text>
                     </View>
                     <View>
-                      <Text style={styles.symbolTitle}>{rec.symbol}</Text>
-                      {rec.setup && (
-                        <Text style={styles.setupText}>{rec.setup}</Text>
-                      )}
+                      <Text style={styles.symbolTitle}>{label}</Text>
+                      {!!sig.srv_setup && <Text style={styles.setupText}>{sig.srv_setup}</Text>}
                     </View>
                   </View>
-
-                  {!!rec.rr && (
+                  {!!sig.srv_rr && (
                     <View style={styles.rrBadge}>
-                      <Text style={styles.rrText}>R:R 1:{rec.rr.toFixed(1)}</Text>
+                      <Text style={styles.rrText}>R:R 1:{Number(sig.srv_rr).toFixed(1)}</Text>
                     </View>
                   )}
                 </View>
-
-                {/* Level Boxes */}
                 <View style={styles.levelsGrid}>
                   <View style={styles.lvlBox}>
                     <Text style={styles.lvlLabel}>ENTRY</Text>
-                    <Text style={styles.lvlVal}>₹{formatPrice(rec.entry)}</Text>
+                    <Text style={styles.lvlVal}>₹{formatPrice(sig.srv_entry)}</Text>
                   </View>
                   <View style={styles.lvlBox}>
                     <Text style={styles.lvlLabel}>STOP LOSS</Text>
-                    <Text style={[styles.lvlVal, { color: theme.colors.red }]}>
-                      ₹{formatPrice(rec.stop)}
-                    </Text>
+                    <Text style={[styles.lvlVal, { color: theme.colors.red }]}>₹{formatPrice(sig.srv_stop)}</Text>
                   </View>
                   <View style={styles.lvlBox}>
                     <Text style={styles.lvlLabel}>TARGET 1</Text>
-                    <Text style={[styles.lvlVal, { color: theme.colors.green }]}>
-                      ₹{formatPrice(rec.target1)}
-                    </Text>
+                    <Text style={[styles.lvlVal, { color: theme.colors.green }]}>₹{formatPrice(sig.srv_target1)}</Text>
                   </View>
-                  {rec.target2 ? (
-                    <View style={styles.lvlBox}>
-                      <Text style={styles.lvlLabel}>TARGET 2</Text>
-                      <Text style={[styles.lvlVal, { color: theme.colors.green }]}>
-                        ₹{formatPrice(rec.target2)}
-                      </Text>
-                    </View>
-                  ) : null}
                 </View>
               </View>
             );
-          })
+          })}
+
+        {showStocks && stockCalls.length === 0 && (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>
+              {screener
+                ? "No intraday stock momentum picks qualify right now."
+                : "Stock picks unavailable — server has not returned a scan yet."}
+            </Text>
+          </View>
         )}
+
+        {showStocks &&
+          stockCalls.map((p, i) => {
+            const isBuy = p.side === "BUY";
+            const dirColor = isBuy ? theme.colors.green : theme.colors.red;
+            const dirBg = isBuy ? theme.colors.greenBg : theme.colors.redBg;
+            const chg = typeof p.day_chg_pct === "number" ? p.day_chg_pct : null;
+            return (
+              <View key={`${p.side}-${p.symbol}-${i}`} style={styles.tradeCard}>
+                <View style={styles.tradeTop}>
+                  <View style={styles.symbolRow}>
+                    <View style={[styles.dirTag, { backgroundColor: dirBg, borderColor: dirColor }]}>
+                      <Text style={[styles.dirText, { color: dirColor }]}>{p.side}</Text>
+                    </View>
+                    <View>
+                      <Text style={styles.symbolTitle}>{p.symbol}</Text>
+                      {!!p.name && <Text style={styles.setupText}>{p.name}</Text>}
+                    </View>
+                  </View>
+                  {typeof p.intraday_score === "number" && (
+                    <View style={styles.rrBadge}>
+                      <Text style={styles.rrText}>SCORE {p.intraday_score.toFixed(0)}</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.levelsGrid}>
+                  <View style={styles.lvlBox}>
+                    <Text style={styles.lvlLabel}>LTP</Text>
+                    <Text style={styles.lvlVal}>₹{formatPrice(p.ltp)}</Text>
+                  </View>
+                  <View style={styles.lvlBox}>
+                    <Text style={styles.lvlLabel}>DAY CHG</Text>
+                    <Text style={[styles.lvlVal, { color: chg === null || chg >= 0 ? theme.colors.green : theme.colors.red }]}>
+                      {chg === null ? "—" : `${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%`}
+                    </Text>
+                  </View>
+                </View>
+                {!!p.rationale && <Text style={styles.setupText}>{p.rationale}</Text>}
+              </View>
+            );
+          })}
       </ScrollView>
     </View>
   );

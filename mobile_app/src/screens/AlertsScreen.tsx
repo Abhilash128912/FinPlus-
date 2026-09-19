@@ -36,7 +36,29 @@ export const AlertsScreen: React.FC = () => {
   };
 
   const stats = data?.stats?.overall;
-  const recentAlerts: AlertRecord[] = data?.recent || [];
+  // The engine re-fires the same setup every few minutes while a level holds,
+  // so the raw log is dozens of near-identical rows (e.g. 40x NATURALGAS
+  // PDH_BREAK stop-outs). Collapse repeats of the same symbol/setup/side/
+  // outcome into one row carrying a count, newest first, so the journal is
+  // readable and stocks are not buried under MCX noise.
+  type GroupedAlert = AlertRecord & { count: number; firstAt?: string };
+  const recentAlerts: GroupedAlert[] = (() => {
+    const groups = new Map<string, GroupedAlert>();
+    const sorted = [...(data?.recent || [])].sort((a, b) =>
+      String(b.opened_at || "").localeCompare(String(a.opened_at || ""))
+    );
+    for (const rec of sorted) {
+      const key = [rec.symbol, rec.setup, rec.direction, rec.outcome].join("|");
+      const g = groups.get(key);
+      if (g) {
+        g.count += 1;
+        g.firstAt = rec.opened_at || g.firstAt;
+      } else {
+        groups.set(key, { ...rec, count: 1, firstAt: rec.opened_at });
+      }
+    }
+    return Array.from(groups.values());
+  })();
 
   const getOutcomeBadge = (outcome: string) => {
     if (outcome === "target") {
@@ -151,7 +173,7 @@ export const AlertsScreen: React.FC = () => {
                     ]}
                   >
                     <Text style={[styles.outcomeText, { color: badge.color }]}>
-                      {badge.label}
+                      {badge.label}{rec.count > 1 ? ` ×${rec.count}` : ""}
                     </Text>
                   </View>
                 </View>
@@ -181,7 +203,8 @@ export const AlertsScreen: React.FC = () => {
 
                 <View style={styles.cardFooter}>
                   <Text style={styles.timeText}>
-                    Triggered: {rec.opened_at ? rec.opened_at.slice(0, 16).replace("T", " ") : "—"}
+                    {rec.count > 1 ? "Latest: " : "Triggered: "}
+                    {rec.opened_at ? rec.opened_at.slice(0, 16).replace("T", " ") : "—"}
                   </Text>
                   {!!rec.rr && (
                     <Text style={styles.rrText}>R:R {rec.rr.toFixed(1)}</Text>

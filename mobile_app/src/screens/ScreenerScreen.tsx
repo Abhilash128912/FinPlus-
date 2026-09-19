@@ -151,9 +151,9 @@ export const ScreenerScreen: React.FC = () => {
       buyPicks = data.swing.picks || [];
       qualifiedNote = `${data.swing.qualified_count ?? 0} of ${data.swing.total_candidates ?? 0} candidates qualified`;
     } else if (filter === "LONGTERM" && data.lt) {
-      buyPicks = data.lt.top_challengers || [];
+      buyPicks = data.lt.picks || data.lt.top_challengers || [];
       watchPicks = data.lt.watchlist || [];
-      qualifiedNote = `${data.lt.total_scanned ?? 0} stocks scanned`;
+      qualifiedNote = `${data.lt.monthly_cohort ?? buyPicks.length} stocks in this month's cohort`;
     } else if (filter === "PENNY" && data.penny) {
       buyPicks = data.penny.picks || [];
       qualifiedNote = `${data.penny.qualified_count ?? 0} of ${data.penny.total_evaluated ?? 0} evaluated`;

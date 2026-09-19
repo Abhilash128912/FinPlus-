@@ -128,7 +128,7 @@ export interface StockPick {
 export interface ScreenerAllResponse {
   success: boolean;
   swing: { picks: StockPick[]; total_candidates: number; qualified_count: number } | null;
-  lt: { watchlist: StockPick[]; top_challengers: StockPick[]; total_scanned: number } | null;
+  lt: { picks?: StockPick[]; watchlist?: StockPick[]; top_challengers?: StockPick[]; monthly_cohort?: number } | null;
   penny: { picks: StockPick[]; total_evaluated: number; qualified_count: number } | null;
   momentum: { buy: StockPick[]; sell: StockPick[]; buy_qualified: number; sell_qualified: number } | null;
   equity: { buy: StockPick[]; sell: StockPick[]; watch_buy: StockPick[]; watch_sell: StockPick[] } | null;

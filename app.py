@@ -2283,8 +2283,12 @@ def start_all_background_threads():
             threading.Thread(target=_options_scan_loop, daemon=True).start()
             threading.Thread(target=_options_heatmap_loop, daemon=True).start()
         else:
-            print("[startup] ENABLE_FULL_SCAN_SUITE not set -- running Intraday + Trend Analyser "
-                  "loops only (swing/long-term/penny/options scans off to fit the free-tier 512MB limit)")
+            # Swing is light (reads the shared screener_data cache + one batched
+            # quote call) and the mobile Stocks tab needs it, so it stays on in
+            # lean mode; long-term/penny serve their stored monthly cohorts.
+            threading.Thread(target=_swing_scan_loop, daemon=True).start()
+            print("[startup] ENABLE_FULL_SCAN_SUITE not set -- running Intraday + Trend Analyser + Swing "
+                  "loops only (long-term/penny/options scans off to fit the free-tier 512MB limit)")
         totp_auth.start_totp_refresher_thread()
         token_manager.start_token_puller_thread(BASE_DIR)
 
