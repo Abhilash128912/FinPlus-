@@ -198,6 +198,22 @@ export const fetchTokenStatus = async (): Promise<TokenStatus> => {
   return request<TokenStatus>("/api/token_status", 8000);
 };
 
+// ── Standing data-integrity report (RADAR /api/data_health) ──
+export interface DataHealthCheck {
+  name: string;
+  status: "OK" | "WARN" | "FAIL" | "SKIPPED";
+  detail: string;
+}
+export interface DataHealth {
+  overall: "OK" | "WARN" | "FAIL";
+  summary: string;
+  checked_at: string;
+  checks: DataHealthCheck[];
+}
+export const fetchDataHealth = async (): Promise<DataHealth> => {
+  return request<DataHealth>("/api/data_health", 20000);
+};
+
 // ── FINPLUS PULSE: NIFTY four-pillar intraday bias ──
 export interface PulsePillar {
   title: string;

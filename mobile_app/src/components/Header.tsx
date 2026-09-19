@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { theme } from "../theme";
 import { getApiBaseUrl, setApiBaseUrl, getApiKey, setApiKey } from "../config";
-import { updateIndmoneyToken, fetchTokenStatus, TokenStatus } from "../api";
+import { updateIndmoneyToken, fetchTokenStatus, TokenStatus, fetchDataHealth, DataHealth } from "../api";
 
 interface HeaderProps {
   tokenStatus?: {
@@ -61,6 +61,42 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, [!!tokenStatusProp]);
   const tokenStatus = tokenStatusProp ?? ownStatus;
+
+  // Standing data-integrity report from the server: real-vs-Yahoo price check, freshness of the
+  // candles behind every pick, list sanity. Tap the pill to see exactly which check needs attention.
+  const [health, setHealth] = useState<DataHealth | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const h = await fetchDataHealth();
+        if (alive) setHealth(h);
+      } catch (_) {
+        if (alive) setHealth(undefined);
+      }
+    };
+    load();
+    const timer = setInterval(load, 300000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, []);
+  const showHealth = () => {
+    if (!health) {
+      Alert.alert("Data check", "The server has not returned a data-health report yet.");
+      return;
+    }
+    const lines = health.checks
+      .filter((c) => c.status !== "OK")
+      .map((c) => `${c.status}: ${c.name} - ${c.detail}`);
+    Alert.alert(
+      `Data check: ${health.overall}`,
+      (lines.length ? lines.join("\n\n") : health.summary) + `\n\nChecked ${health.checked_at.replace("T", " ")}`
+    );
+  };
+  const healthColor =
+    health?.overall === "OK" ? theme.colors.green : health?.overall === "FAIL" ? theme.colors.red : theme.colors.accent;
   const [urlInput, setUrlInput] = useState(getApiBaseUrl());
   const [keyInput, setKeyInput] = useState(getApiKey());
   const [tokenInput, setTokenInput] = useState("");
@@ -145,6 +181,11 @@ export const Header: React.FC<HeaderProps> = ({
               ]}
             />
             <Text style={styles.statusText}>{statusLabel}</Text>
+            <TouchableOpacity onPress={showHealth} style={[styles.healthPill, { borderColor: healthColor }]}>
+              <Text style={[styles.healthPillText, { color: healthColor }]}>
+                {health ? `DATA ${health.overall}` : "DATA ?"}
+              </Text>
+            </TouchableOpacity>
             {tokenStatus?.totp_configured && (
               <View style={styles.totpBadge}>
                 <Text style={styles.totpBadgeText}>TOTP AUTO</Text>
@@ -307,6 +348,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: theme.colors.textMuted,
     fontWeight: "500",
+  },
+  healthPill: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginLeft: 6,
+  },
+  healthPillText: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.4,
   },
   totpBadge: {
     marginLeft: 6,

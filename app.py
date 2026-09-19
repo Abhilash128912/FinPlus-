@@ -974,6 +974,29 @@ def api_alerts():
     })
 
 
+_health_cache = {"at": 0.0, "result": None}
+
+
+@app.route("/api/data_health")
+def api_data_health():
+    """Standing data-integrity report (see data_health.py). Cached 5 minutes: it makes a few
+    outbound price cross-checks."""
+    import data_health
+    now = time.time()
+    if _health_cache["result"] is None or now - _health_cache["at"] > 300:
+        with _swing_lock:
+            swing = _swing_state.get("result")
+        with _lt_lock:
+            lt = _lt_state.get("result")
+        with _penny_lock:
+            penny = _penny_state.get("result")
+        with _momentum_lock:
+            momentum = _momentum_state.get("result")
+        _health_cache["result"] = data_health.run({"swing": swing, "lt": lt, "penny": penny, "momentum": momentum})
+        _health_cache["at"] = now
+    return jsonify({"success": True, **_health_cache["result"]})
+
+
 @app.route("/api/fast_ltp")
 def api_fast_ltp():
     with _fast_lock:
