@@ -162,7 +162,9 @@ def analyze_option_derivatives(chain_data: Dict[str, Any], signal_dict: Optional
             "rationale": (
                 f"Underlying in bullish posture with PCR at {pcr:.2f} ({pcr_sentiment}). "
                 f"Heavy Put writing at {int(highest_put_strike)} provides firm downside cushion. "
-                f"Positive Delta ({rec_opt.get('delta', 0.5):.2f}) captures upside acceleration towards resistance {int(highest_call_strike)}."
+                + (f"Positive Delta ({float(rec_opt['delta']):.2f}) captures upside acceleration towards resistance {int(highest_call_strike)}."
+                 if rec_opt.get("delta") is not None else
+                 f"Upside acceleration towards resistance {int(highest_call_strike)} (delta not available).")
             ),
             "suitability": "Aggressive / Intraday Momentum"
         })
@@ -681,8 +683,8 @@ def refresh_top_options_stocks() -> dict:
         score, c, day_chg, sc_comp, chain = entry
         sym = c.get("symbol")
         ltp = float(c.get("ltp") or 0.0)
-        vol_spike = float(c.get("volume_spike") or 1.0)
-        rsi = float(c.get("rsi") or 50.0)
+        vol_spike = float(c["volume_spike"]) if c.get("volume_spike") is not None else None
+        rsi = float(c["rsi"]) if c.get("rsi") is not None else None
         name = c.get("name") or sym
         sector = c.get("sector") or "Equity F&O"
 
@@ -735,7 +737,7 @@ def refresh_top_options_stocks() -> dict:
             "strike": strike_disp,
             "spot_ltp": ltp,
             "day_chg_pct": round(day_chg, 2),
-            "volume_spike": round(vol_spike, 2),
+            "volume_spike": round(vol_spike, 2) if vol_spike is not None else None,
             "rsi": round(rsi, 1),
             "intraday_score": round(score, 1),
             "premium": est_premium,
@@ -750,7 +752,9 @@ def refresh_top_options_stocks() -> dict:
             "is_reliance": (sym == "RELIANCE"),
             "rationale": (
                 f"{'Bullish momentum' if direction == 'CE' else 'Bearish breakdown'} with "
-                f"day move {day_chg:+.2f}%, {vol_spike:.1f}x volume spike, and RSI {rsi:.1f}."
+                f"day move {day_chg:+.2f}%, "
+                + (f"{vol_spike:.1f}x volume spike" if vol_spike is not None else "volume spike n/a")
+                + (f", and RSI {rsi:.1f}." if rsi is not None else ", RSI n/a.")
             ),
         }
 

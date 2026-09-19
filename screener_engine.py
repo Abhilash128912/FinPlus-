@@ -666,8 +666,8 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
         "momentum_breakdown": m_break,
         "pa_score": pa_score,
         "pa_breakdown": pa_break,
-        "cmf": pa_break.get("cmf", 0.0),
-        "clv": pa_break.get("clv", 0.5),
+        "cmf": pa_break.get("cmf"),
+        "clv": pa_break.get("clv"),
         "market_structure": pa_break.get("market_structure", "Neutral"),
         "pa_pattern": pa_break.get("pa_pattern", "None"),
         "pa_badge": pa_break.get("pa_badge", "⚪ Neutral Order Flow"),
@@ -712,7 +712,7 @@ def score_stock(info: dict, history: pd.DataFrame) -> dict:
     sr_info = detect_sr_breaks_and_retests(
         history=history,
         ltp=res_stock.get("ltp"),
-        rs_rating=res_stock.get("rs_rating", 50),
+        rs_rating=res_stock.get("rs_rating"),
         rsi=res_stock.get("rsi"),
         vol_spike=res_stock.get("volume_spike", 1.0),
         cmf=res_stock.get("cmf", 0.0)
@@ -900,15 +900,15 @@ def compute_relative_strength_ratings(screener_results: list[dict], nifty_histor
         # Stamp regime so compute_swing_setup can gate signals correctly
         s["nifty_regime_status"] = nifty_regime_status
 
-        if rs_rating >= 80:
+        if (rs_rating is not None and rs_rating >= 80):
             s["rs_badge"] = f"🔥 RS {rs_rating} (Leader)"
             s["rs_class"] = "badge-green"
             s["is_rs_leader"] = True
-        elif rs_rating >= 60:
+        elif (rs_rating is not None and rs_rating >= 60):
             s["rs_badge"] = f"🟢 RS {rs_rating} (Outperformer)"
             s["rs_class"] = "badge-green"
             s["is_rs_leader"] = False
-        elif rs_rating >= 40:
+        elif (rs_rating is not None and rs_rating >= 40):
             s["rs_badge"] = f"⚪ RS {rs_rating} (In Line)"
             s["rs_class"] = "badge-gray"
             s["is_rs_leader"] = False
@@ -1145,7 +1145,7 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
     """
     vol_spike = float(scored.get("volume_spike") or 0.0)
     cmf = float(scored.get("cmf") or 0.0)
-    clv = float(scored.get("clv") or 0.5)
+    clv = float(scored["clv"]) if scored.get("clv") is not None else None
     momentum = float(scored.get("momentum") or 0.0)
     rsi = scored.get("rsi")
     ltp = float(scored.get("ltp") or 0.0)
@@ -1155,7 +1155,7 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
 
     market_structure = scored.get("market_structure") or "Neutral"
     pa_pattern = scored.get("pa_pattern") or "None"
-    rs_rating = float(scored.get("rs_rating") or 50)
+    rs_rating = float(scored["rs_rating"]) if scored.get("rs_rating") is not None else None
     ret_1m = float(scored.get("ret_1m") or 0.0)
     ret_3m = float(scored.get("ret_3m") or 0.0)
 
@@ -1219,9 +1219,9 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
     elif cmf >= 0.05:
         setup_pts += 5.0
 
-    if clv >= 0.65:
+    if (clv is not None and clv >= 0.65):
         setup_pts += 6.0
-    elif clv >= 0.50:
+    elif (clv is not None and clv >= 0.50):
         setup_pts += 4.0
 
     if pa_pattern in ["Bullish FVG", "Bullish Engulfing", "Double Bottom", "Cup & Handle", "VCP Base"]:
@@ -1247,15 +1247,15 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
         setup_pts += 2.0
 
     # RS Rating points
-    if rs_rating >= 85:
+    if (rs_rating is not None and rs_rating >= 85):
         setup_pts += 10.0
-    elif rs_rating >= 75:
+    elif (rs_rating is not None and rs_rating >= 75):
         setup_pts += 8.0
-    elif rs_rating >= 60:
+    elif (rs_rating is not None and rs_rating >= 60):
         setup_pts += 5.0
-    elif rs_rating >= 45:
+    elif (rs_rating is not None and rs_rating >= 45):
         setup_pts += 2.0
-    elif rs_rating < 35:
+    elif (rs_rating is not None and rs_rating < 35):
         setup_pts -= 6.0
 
     # Context-aware RSI scoring
@@ -1460,7 +1460,7 @@ def compute_swing_setup(scored: dict, history: pd.DataFrame = None) -> dict:
         swing_reason = f"Weak structure/momentum ({setup_score:.0f}/100 setup)"
 
     is_blast = (vol_spike >= 2.0 and momentum >= 60 and setup_score >= 75)
-    is_order_flow_bull = (cmf >= 0.08 and clv >= 0.55 and setup_score >= 65)
+    is_order_flow_bull = (cmf >= 0.08 and (clv is not None and clv >= 0.55) and setup_score >= 65)
     is_momentum_surge = (momentum >= 75 and setup_score >= 70)
     is_pullback = (rsi is not None and 38 <= rsi <= 57 and entry_score >= 70 and setup_score >= 65)
 
@@ -1615,7 +1615,7 @@ def calc_chartprime_sr_high_volume_boxes(df: pd.DataFrame, lookback: int = 20, b
 def detect_sr_breaks_and_retests(
     history: pd.DataFrame = None,
     ltp: float = None,
-    rs_rating: float = 50,
+    rs_rating: float = None,
     rsi: float = None,
     vol_spike: float = 1.0,
     cmf: float = 0.0,
@@ -1668,9 +1668,9 @@ def detect_sr_breaks_and_retests(
         if sr_type == "NONE":
             return default_res
         base_score = 50.0 if sr_type == "BREAK_RES" else 55.0 if sr_type == "RETEST_BUY" else 35.0
-        if rs_rating >= 80:   base_score += 22.0
-        elif rs_rating >= 60: base_score += 14.0
-        elif rs_rating < 40:  base_score -= 12.0
+        if (rs_rating is not None and rs_rating >= 80):   base_score += 22.0
+        elif (rs_rating is not None and rs_rating >= 60): base_score += 14.0
+        elif (rs_rating is not None and rs_rating < 40):  base_score -= 12.0
         if vol_spike >= 2.0:   base_score += 15.0
         elif vol_spike >= 1.3: base_score += 10.0
         if rsi is not None:
@@ -1877,9 +1877,9 @@ def detect_sr_breaks_and_retests(
         return {**default_res, "sr_timeframe": timeframe_label}
 
     # ── 4. Confluence Scoring ──────────────────────────────────────────────────
-    if rs_rating >= 80:   base_score += 22.0
-    elif rs_rating >= 60: base_score += 14.0
-    elif rs_rating < 40:  base_score -= 12.0
+    if (rs_rating is not None and rs_rating >= 80):   base_score += 22.0
+    elif (rs_rating is not None and rs_rating >= 60): base_score += 14.0
+    elif (rs_rating is not None and rs_rating < 40):  base_score -= 12.0
 
     if vol_spike >= 2.0:   base_score += 15.0
     elif vol_spike >= 1.3: base_score += 10.0
@@ -2221,7 +2221,7 @@ def compute_fundamental_trend_score(scored: dict) -> dict:
     npm = float(scored.get("npm_pct") if scored.get("npm_pct") is not None else 0.0)
     rev_growth = float(scored.get("rev_growth_pct") if scored.get("rev_growth_pct") is not None else 0.0)
     cmf = float(scored.get("cmf") or 0.0)
-    clv = float(scored.get("clv") or 0.5)
+    clv = float(scored["clv"]) if scored.get("clv") is not None else None
 
     trend_pts = 0.0
     # 1. Revenue Growth & Acceleration (max 25)
@@ -2241,7 +2241,7 @@ def compute_fundamental_trend_score(scored: dict) -> dict:
     elif roe >= 6.0: trend_pts += 10.0
 
     # 4. FCF & Cash Accumulation Trend (max 15)
-    if cmf >= 0.05 and clv >= 0.50: trend_pts += 15.0
+    if cmf >= 0.05 and (clv is not None and clv >= 0.50): trend_pts += 15.0
     elif cmf >= 0.0: trend_pts += 8.0
 
     # 5. Debt / De-leveraging Trend (max 10)
@@ -2343,8 +2343,8 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
     de = float(scored.get("de_ratio") if has_de else 0.0)
     npm = float(scored.get("npm_pct") if has_npm else 0.0)
     rev_growth = float(scored.get("rev_growth_pct") if has_growth else 0.0)
-    total_score = float(scored.get("total_score") or 50.0)
-    strength = float(scored.get("strength") or 50.0)
+    total_score = float(scored.get("total_score") or 0.0)
+    strength = float(scored.get("strength") or 0.0)
     pe = scored.get("pe")
     pb = scored.get("pb")
     trend = scored.get("trend") or TREND_CONSOLIDATION
@@ -2423,9 +2423,9 @@ def compute_sector_aware_lt_quality(scored: dict) -> dict:
     s_pts = 0.0
     s_pts += min(15.0, (total_score / 100.0) * 15.0)
     cmf = float(scored.get("cmf") or 0.0)
-    clv = float(scored.get("clv") or 0.5)
-    if cmf >= 0.05 and clv >= 0.55: s_pts += 10.0
-    elif cmf >= 0.0 or clv >= 0.45: s_pts += 5.0
+    clv = float(scored["clv"]) if scored.get("clv") is not None else None
+    if cmf >= 0.05 and (clv is not None and clv >= 0.55): s_pts += 10.0
+    elif cmf >= 0.0 or (clv is not None and clv >= 0.45): s_pts += 5.0
 
     lt_sustainability_score = round(min(25.0, max(0.0, s_pts)), 1)
 
@@ -2762,7 +2762,7 @@ def find_best_swing_candidate(screener_results: list[dict]) -> dict:
         if dist_ma50_pct > 15 or dist_ma50_pct < -10:
             continue
         # Skip stocks already in market-correction avoid mode
-        if s.get("nifty_regime_status") == "CORRECTION" and s.get("rs_rating", 50) < 75:
+        if s.get("nifty_regime_status") == "CORRECTION" and (s.get("rs_rating") or 0) < 75:
             continue
 
         # Rank by swing_score (technical setup) — not total_score (fundamentals)
@@ -3114,12 +3114,14 @@ def compute_intraday_picks(screener_results: list[dict], top_n: int = 5) -> dict
         # adjacent cards and make the tab disagree with its own ranking.
         day_chg_pct = _js_round(((ltp - raw_prev_close) / raw_prev_close) * 100, 2) if has_day_move else 0.0
 
-        rsi = s.get("rsi") or 50
-        vol_spike = s.get("volume_spike") or 1.0
-        ma50 = s.get("ma50") or ltp
+        if any(s.get(k) is None for k in ("rsi", "volume_spike", "ma50", "momentum", "rs_rating")):
+            continue        # an incomplete row is not ranked: no assumed RSI / volume / MA / momentum / RS
+        rsi = s["rsi"]
+        vol_spike = s["volume_spike"]
+        ma50 = s["ma50"]
         dist_ma50_pct = ((ltp - ma50) / ma50) * 100 if ma50 > 0 else 0
-        momentum = s.get("momentum") or 0
-        rs_rating = s.get("rs_rating") or 50
+        momentum = s["momentum"]
+        rs_rating = s["rs_rating"]
 
         # A stock already pinned just under a circuit band is the trap this tab
         # must not walk into: once it locks there is no exit at any price, and an
@@ -3254,19 +3256,22 @@ def compute_fno_signal(scored: dict, fno_cfg: dict) -> dict:
     import math as _math
 
     ltp       = scored.get("ltp", 0)
-    rsi       = float(scored.get("rsi") or 50)
+    if scored.get("rsi") is None or not fno_cfg.get("lot_size") or not fno_cfg.get("strike_interval") \
+            or float(fno_cfg["lot_size"]) <= 0 or float(fno_cfg["strike_interval"]) <= 0:
+        return {
+            "signal": "NO_DATA", "symbol": scored.get("symbol"), "name": scored.get("name"),
+            "ltp": ltp or 0, "conviction": 0,
+            "reason": "RSI, lot size or strike interval not available -- no signal is invented",
+        }
+    rsi       = float(scored["rsi"])
     ma50      = scored.get("ma50")
     ma200     = scored.get("ma200")
     vol_spike = float(scored.get("volume_spike") or 1.0)
     beta      = float(scored.get("beta") or 1.0)
     wk52_ret  = float(scored.get("wk52_return_pct") or 0)
 
-    strike_iv = float(fno_cfg.get("strike_interval") or 50)
-    if strike_iv <= 0:
-        strike_iv = 50.0
-    lot_size  = int(fno_cfg.get("lot_size") or 50)
-    if lot_size <= 0:
-        lot_size = 50
+    strike_iv = float(fno_cfg["strike_interval"])
+    lot_size  = int(fno_cfg["lot_size"])
 
     if ltp <= 0:
         return {
@@ -3399,9 +3404,9 @@ def compute_fno_signal(scored: dict, fno_cfg: dict) -> dict:
         "total_score": scored.get("total_score"),
         "strength": scored.get("strength"),
         "momentum": scored.get("momentum"),
-        "pa_score": scored.get("pa_score", 50.0),
-        "cmf": scored.get("cmf", 0.0),
-        "clv": scored.get("clv", 0.5),
+        "pa_score": scored.get("pa_score"),
+        "cmf": scored.get("cmf"),
+        "clv": scored.get("clv"),
         "market_structure": scored.get("market_structure", "Neutral"),
         "pa_pattern": scored.get("pa_pattern", "None"),
         "pa_badge": scored.get("pa_badge", "⚪ Neutral Order Flow"),
@@ -3554,8 +3559,9 @@ def compute_quality_penny_stocks(screener_results: list[dict], top_n: int = 20, 
         else: e_pts += 0.0
 
         # RSI Sweet Spot (Max 25 pts) — momentum neither exhausted nor rolling over.
-        rsi = float(s.get("rsi") or 50.0)
-        if 45 <= rsi <= 58: e_pts += 25.0
+        rsi = float(s["rsi"]) if s.get("rsi") is not None else None
+        if rsi is None: e_pts += 0.0            # no RSI -> no points (never an assumed 50)
+        elif 45 <= rsi <= 58: e_pts += 25.0
         elif 40 <= rsi <= 65: e_pts += 12.0
         else: e_pts += 0.0
 
