@@ -65,15 +65,23 @@ def _check(name: str, status: str, detail: str) -> dict:
     return {"name": name, "status": status, "detail": detail}
 
 
-def evaluate_payload(payload: dict, now: datetime.datetime | None = None) -> list[dict]:
+WARMUP_SEC = 15 * 60     # after a (re)start the lists are rebuilt from scratch; empty is expected for a few minutes
+
+
+def evaluate_payload(payload: dict, now: datetime.datetime | None = None, uptime_sec: float | None = None) -> list[dict]:
     """Pure checks on the served lists (no network) -- unit-testable."""
     checks: list[dict] = []
     lists = {n: _picks(payload, n) for n in LIST_MIN}
 
     empty = [n for n, mn in LIST_MIN.items() if len(lists[n]) < mn]
-    checks.append(_check("lists_populated", "FAIL" if empty else "OK",
-                         ("empty or too short: " + ", ".join(empty)) if empty else
-                         ", ".join(f"{n}={len(v)}" for n, v in lists.items())))
+    warming = uptime_sec is not None and uptime_sec < WARMUP_SEC
+    if empty and warming:
+        checks.append(_check("lists_populated", "WARN",
+                             f"warming up ({uptime_sec / 60:.0f} min since the server started); still empty: " + ", ".join(empty)))
+    else:
+        checks.append(_check("lists_populated", "FAIL" if empty else "OK",
+                             ("empty or too short: " + ", ".join(empty)) if empty else
+                             ", ".join(f"{n}={len(v)}" for n, v in lists.items())))
 
     dups = []
     for n, v in lists.items():
@@ -190,8 +198,8 @@ def system_checks() -> list[dict]:
     return out
 
 
-def run(payload: dict, network: bool = True) -> dict:
-    checks = evaluate_payload(payload) + system_checks()
+def run(payload: dict, network: bool = True, uptime_sec: float | None = None) -> dict:
+    checks = evaluate_payload(payload, uptime_sec=uptime_sec) + system_checks()
     if network:
         checks.append(price_cross_check(payload))
     worst = max(checks, key=lambda c: _STATUS_RANK[c["status"]])["status"]

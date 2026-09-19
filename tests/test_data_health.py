@@ -66,3 +66,10 @@ def test_price_cross_check_skips_when_source_unreachable(monkeypatch):
         raise dh.requests.ConnectionError("down")
     monkeypatch.setattr(dh.requests, "get", boom)
     assert dh.price_cross_check(_payload(), sample=2)["status"] == "SKIPPED"
+
+
+def test_empty_lists_right_after_a_restart_warn_instead_of_fail():
+    c = _by(dh.evaluate_payload(_payload(swing=None), NOW, uptime_sec=120))
+    assert c["lists_populated"]["status"] == "WARN" and "warming up" in c["lists_populated"]["detail"]
+    c = _by(dh.evaluate_payload(_payload(swing=None), NOW, uptime_sec=3 * 3600))
+    assert c["lists_populated"]["status"] == "FAIL"

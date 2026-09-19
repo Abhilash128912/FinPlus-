@@ -992,7 +992,8 @@ def api_data_health():
             penny = _penny_state.get("result")
         with _momentum_lock:
             momentum = _momentum_state.get("result")
-        _health_cache["result"] = data_health.run({"swing": swing, "lt": lt, "penny": penny, "momentum": momentum})
+        _health_cache["result"] = data_health.run({"swing": swing, "lt": lt, "penny": penny, "momentum": momentum},
+                                                  uptime_sec=(datetime.now(timezone.utc) - _PROCESS_STARTED).total_seconds())
         _health_cache["at"] = now
     return jsonify({"success": True, **_health_cache["result"]})
 
