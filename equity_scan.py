@@ -144,8 +144,28 @@ def fetch_live_quotes_batch(scrip_codes: list[str]) -> dict:
                          headers={"Authorization": _token()}, timeout=30)
     resp.raise_for_status()
     data = resp.json().get("data") or {}
-    return {code: {"ltp": node.get("live_price"), "volume": node.get("volume")}
+    return {code: {"ltp": node.get("live_price"), "volume": node.get("volume"),
+                   "prev_close": node.get("prev_close"), "day_change_pct": node.get("day_change_percentage")}
             for code, node in data.items() if node}
+
+
+def fetch_live_quotes_resilient(scrip_codes: list[str], chunk: int = 150, retries: int = 4) -> dict:
+    """Live quotes for many codes: chunked, each chunk retried with back-off. A chunk that
+    still fails is reported and simply absent -- callers must treat "no live quote" as
+    "cannot be priced now", never fall back to an old price silently."""
+    out: dict = {}
+    for i in range(0, len(scrip_codes), chunk):
+        batch = scrip_codes[i:i + chunk]
+        for attempt in range(retries):
+            try:
+                out.update(fetch_live_quotes_batch(batch))
+                break
+            except Exception as exc:
+                if attempt == retries - 1:
+                    print(f"[equity_scan] live quotes chunk failed after {retries} tries ({len(batch)} codes): {exc}")
+                else:
+                    time.sleep(1.5 * (attempt + 1))
+    return out
 
 
 def fetch_live_quotes_for_symbols(symbols: list[str]) -> dict[str, dict]:
@@ -202,36 +222,86 @@ def scan_intraday_momentum(top_n: int = 10) -> dict:
     scrip_to_symbol = {f"NSE_{sec_map[sym]}": sym for sym in by_symbol}
     all_codes = list(scrip_to_symbol.keys())
 
-    live_by_code: dict = {}
-    for i in range(0, len(all_codes), QUOTES_BATCH_SIZE):
-        batch = all_codes[i:i + QUOTES_BATCH_SIZE]
-        try:
-            live_by_code.update(fetch_live_quotes_batch(batch))
-        except Exception as e:
-            print(f"[equity_scan] live quotes batch failed ({len(batch)} codes): {e}")
+    live_by_code = fetch_live_quotes_resilient(all_codes)
 
     updated_rows, stale_count = [], 0
     for code, symbol in scrip_to_symbol.items():
         row = dict(by_symbol[symbol])
         live = live_by_code.get(code)
         if not live or live.get("ltp") is None:
+            # No live quote: this stock cannot be priced today. It is left OUT of the intraday
+            # ranking (it used to stay in with a days-old snapshot price and day change).
             stale_count += 1
-            updated_rows.append(row)  # keep the cached row rather than drop the candidate entirely
             continue
         row["ltp"] = live["ltp"]
+        if live.get("prev_close"):
+            row["prev_close"] = live["prev_close"]      # the broker's own previous close, not the scan's
         avg_vol = row.get("avg_volume_10d") or 0
         if avg_vol > 0 and live.get("volume") is not None:
             row["volume_spike"] = round(live["volume"] / avg_vol, 2)
             row["today_volume"] = live["volume"]
+        row["_live_volume"] = live.get("volume")
         updated_rows.append(row)
 
-    picks = se.compute_intraday_picks(updated_rows, top_n=top_n)
+    # Stage 1: a wide shortlist from the (partly snapshot-based) first pass. Stage 2: for
+    # the shortlist only, replace the daily-timeframe inputs that come from the desktop scan
+    # snapshot -- RSI, 50-day MA, 20-day EMA, 10-day average volume -- with values computed
+    # from FRESH INDstocks daily candles, then re-score. (The snapshot can be days old, which
+    # is how a -2.9% day was being shown as -3.9% with an RSI of 34.7 instead of 27.5.)
+    wide = se.compute_intraday_picks(updated_rows, top_n=40)
+    shortlist = {p["symbol"] for p in (wide.get("buy", []) + wide.get("sell", []))}
+    import lt_engine
+    lt_engine.prefetch_technicals(list(shortlist))     # batched INDstocks candles
+    refreshed = []
+    for row in updated_rows:
+        if row.get("symbol") not in shortlist:
+            continue
+        r = dict(row)
+        tech = lt_engine.fresh_technicals(r["symbol"], require_ma200=False)
+        if tech:
+            r["rsi"], r["ma50"], r["ema20"] = tech["rsi"], tech["ma50"], tech["ema20"]
+            r["avg_volume_10d"] = tech["avg_volume_10d"]
+            if r.get("_live_volume") is not None and tech["avg_volume_10d"] > 0:
+                r["volume_spike"] = round(r["_live_volume"] / tech["avg_volume_10d"], 2)
+                r["today_volume"] = r["_live_volume"]
+            r["technicals_fresh"] = True
+        else:
+            r["technicals_fresh"] = False           # candles unavailable: snapshot values, flagged
+        refreshed.append(r)
+
+    picks = se.compute_intraday_picks(refreshed, top_n=top_n)
+    for side in ("buy", "sell"):
+        by_sym = {r["symbol"]: r for r in refreshed}
+        for p in picks.get(side, []):
+            p["technicals_fresh"] = bool((by_sym.get(p["symbol"]) or {}).get("technicals_fresh"))
     picks["scanned"] = len(updated_rows)
     picks["stale_ltp_count"] = stale_count
     print(f"[equity_scan] intraday momentum: {len(updated_rows)} scanned, {stale_count} stale, "
           f"{len(picks['buy'])} buy / {len(picks['sell'])} sell picks "
           f"(qualified {picks['buy_qualified']}/{picks['sell_qualified']})")
     return picks
+
+
+def fetch_daily_candles_batch(scrip_codes: list[str], days: int = 370) -> dict:
+    """ONE INDstocks historical call for up to BATCH_SIZE (5) scrip-codes, daily bars.
+    Returns {scrip_code: DataFrame(Open, High, Low, Close, Volume)}; a code with no data is
+    simply absent. Raises requests.HTTPError (incl. 429) so the caller can back off."""
+    end_ms = int(time.time() * 1000)
+    start_ms = end_ms - days * 24 * 3600 * 1000
+    resp = requests.get(f"{INDMONEY_BASE_URL}/market/historical/1day",
+                         params={"scrip-codes": ",".join(scrip_codes), "start_time": start_ms, "end_time": end_ms},
+                         headers={"Authorization": _token()}, timeout=30)
+    resp.raise_for_status()
+    out = {}
+    for code, series in ((resp.json().get("data")) or {}).items():
+        candles = (series or {}).get("candles") or []
+        if not candles:
+            continue
+        df = pd.DataFrame(candles)
+        df["time"] = pd.to_datetime(df["ts"], unit="s", utc=True).dt.tz_convert("Asia/Kolkata")
+        df = df.set_index("time").rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+        out[code] = df[["Open", "High", "Low", "Close", "Volume"]]
+    return out
 
 
 def fetch_hourly_candles_batch(scrip_codes: list[str], days: int = 14) -> dict:

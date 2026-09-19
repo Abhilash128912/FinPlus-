@@ -60,19 +60,14 @@ def scan_swing_candidates(top_n: int = 15, update_live_quotes: bool = True) -> d
             scrip_to_symbol = {f"NSE_{sec_map[sym]}": sym for sym in by_symbol}
             all_codes = list(scrip_to_symbol.keys())
 
-            live_by_code = {}
-            for i in range(0, len(all_codes), equity_scan.QUOTES_BATCH_SIZE):
-                batch = all_codes[i:i + equity_scan.QUOTES_BATCH_SIZE]
-                try:
-                    live_by_code.update(equity_scan.fetch_live_quotes_batch(batch))
-                except Exception:
-                    pass
+            live_by_code = equity_scan.fetch_live_quotes_resilient(all_codes)
 
             for code, sym in scrip_to_symbol.items():
                 live = live_by_code.get(code)
                 if live and live.get("ltp") is not None:
                     row = by_symbol[sym]
                     row["ltp"] = live["ltp"]
+                    row["_live"] = True
                     avg_vol = row.get("avg_volume_10d") or 0
                     if avg_vol > 0 and live.get("volume") is not None:
                         row["volume_spike"] = round(live["volume"] / avg_vol, 2)
@@ -160,14 +155,58 @@ def scan_swing_candidates(top_n: int = 15, update_live_quotes: bool = True) -> d
         if se.swing_candidate_gates_pass(c):
             enriched.append(c)
 
-    # Sort candidates by swing_score descending
-    enriched.sort(
-        key=lambda s: (
-            se.sane_metric(s, "swing_score") or 0.0,
-            se.sane_metric(s, "total_score") or 0.0,
-        ),
-        reverse=True,
-    )
+    def _rank(rows):
+        rows.sort(key=lambda s: (se.sane_metric(s, "swing_score") or 0.0,
+                                 se.sane_metric(s, "total_score") or 0.0), reverse=True)
+        return rows
+
+    # First pass (snapshot technicals) only picks a wide shortlist. The shortlisted stocks are
+    # then RE-EVALUATED on fresh INDstocks daily candles -- trend, RSI, moving averages, 1M/3M
+    # returns, volume vs average and the Fibonacci / anchored-VWAP / divergence setup all
+    # recomputed from the candles -- because the scan snapshot can be days old (GRANULES was
+    # scored on RSI 66.8 when its real RSI was 53).
+    _rank(enriched)
+    if update_live_quotes:
+        import lt_engine
+        lt_engine.prefetch_technicals([c["symbol"] for c in enriched[:60]])   # batched INDstocks candles
+        refreshed = []
+        for c in enriched[:60]:
+            df = lt_engine.fresh_history(c["symbol"])
+            tech = lt_engine.fresh_technicals(c["symbol"], require_ma200=False)
+            if df is None or not tech:
+                c["technicals_fresh"] = False
+                refreshed.append(c)
+                continue
+            c = dict(c)
+            if not c.get("_live"):
+                c["ltp"] = tech["ltp"]          # no live quote: the last daily close, not a snapshot price
+            c.update({"trend": tech["trend"], "rsi": tech["rsi"], "ema20": tech["ema20"], "ma50": tech["ma50"],
+                      "ma200": tech["ma200"]})
+            if tech.get("ret_1m") is not None:
+                c["ret_1m"] = round(tech["ret_1m"], 2)
+            if tech.get("ret_3m") is not None:
+                c["ret_3m"] = round(tech["ret_3m"], 2)
+            avg_vol = tech["avg_volume_10d"]
+            if avg_vol > 0 and c.get("today_volume"):
+                c["volume_spike"] = round(float(c["today_volume"]) / avg_vol, 2)
+            c["avg_volume_10d"] = avg_vol
+            c["technicals_fresh"] = True
+            c["technicals_as_of"] = tech["last_bar"]
+            c.update(se.compute_swing_setup(c, history=df))
+            ltp = float(c.get("ltp") or 0.0)
+            gb = float(c.get("gtt_breakout_level") or 0.0)
+            gp = float(c.get("gtt_pullback_level") or 0.0)
+            if gb > 0 and ltp >= gb:
+                c.update(status="BUY_NOW", swing_action="BUY BREAKOUT", status_badge="\U0001F680 BUY NOW", status_badge_class="badge-green")
+            elif gp > 0 and abs(ltp - gp) / gp <= 0.015:
+                c.update(status="BUY_NOW", swing_action="BUY PULLBACK", status_badge="\U0001F3AF BUY DIP", status_badge_class="badge-green")
+            elif gp > 0 and ltp > gp:
+                c.update(status="WAIT", swing_action="WAIT FOR PULLBACK", status_badge="\u23f3 PULLBACK", status_badge_class="badge-amber")
+            elif gb > 0 and ltp < gb:
+                c.update(status="WAIT", swing_action="WAIT FOR BREAKOUT", status_badge="\u23f3 BREAKOUT", status_badge_class="badge-blue")
+            if se.swing_candidate_gates_pass(c):
+                refreshed.append(c)
+        enriched = _rank(refreshed)
 
     top_picks = enriched[:top_n]
     return {

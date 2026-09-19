@@ -375,42 +375,92 @@ def _score_candidate(c: dict, eval_res: dict, financial: bool) -> tuple[float, d
 # marked technicals_fresh=False so the staleness is visible.
 TECH_TTL_SEC = 6 * 3600
 _TECH_CACHE: dict = {}
+_HIST_CACHE: dict = {}      # symbol -> daily candle DataFrame (same TTL)
+
+
+def fresh_history(symbol: str):
+    """Daily candle DataFrame behind fresh_technicals (None if unavailable)."""
+    if fresh_technicals(symbol, require_ma200=False) is None:
+        return None
+    return _HIST_CACHE.get(symbol)
+
+
+def _tech_from_df(df) -> dict | None:
+    """Trend / MAs / RSI / volume / returns from a daily candle frame (None if too short)."""
+    import trend_engine
+    if df is None or df.empty:
+        return None
+    m = trend_engine._metrics_from_daily(df, None)
+    if not m:
+        return None
+    cls = se.compute_trend_classification(m)
+    close = df["Close"]
+    return {
+        "trend": cls.get("trend"),
+        "ltp": float(close.iloc[-1]),
+        "ema20": m["ema20"], "ma50": m["ma50"], "ma200": m["ma200"],
+        "rsi": m["rsi"], "volume_spike": m["volume_spike"],
+        "ret_6m": (float(close.iloc[-1] / close.iloc[-126] - 1.0) * 100.0) if len(close) > 126 else None,
+        "ret_1m": (float(close.iloc[-1] / close.iloc[-22] - 1.0) * 100.0) if len(close) > 22 else None,
+        "ret_3m": (float(close.iloc[-1] / close.iloc[-64] - 1.0) * 100.0) if len(close) > 64 else None,
+        # Average volume of the 10 sessions BEFORE the latest bar: "today's volume vs average"
+        # must not have today in its own baseline (it understated the ratio, e.g. 3.25x vs 4.8x).
+        "avg_volume_10d": float((df["Volume"].iloc[-11:-1] if len(df) > 11 else df["Volume"]).mean()),
+        "bars": len(df),
+        "last_bar": str(df.index[-1].date()),
+    }
+
+
+def prefetch_technicals(symbols: list) -> None:
+    """Fill the technicals cache for many symbols at once: INDstocks daily candles, 5 stocks per
+    request, paced under the API's rate limit (~5 requests/second) with back-off on HTTP 429.
+    Symbols already cached (within TECH_TTL_SEC) are skipped."""
+    import requests as _rq
+    now = time.time()
+    try:
+        sec_map = equity_scan.get_security_id_map()
+    except Exception as exc:
+        print(f"[lt_engine] technicals prefetch skipped: {exc}")
+        return
+    todo = [s for s in dict.fromkeys(symbols)
+            if s in sec_map and not ((_TECH_CACHE.get(s) or (0, None))[0] and now - _TECH_CACHE[s][0] < TECH_TTL_SEC)]
+    for i in range(0, len(todo), 5):
+        batch = todo[i:i + 5]
+        code_to_sym = {f"NSE_{sec_map[s]}": s for s in batch}
+        dfs = None
+        for attempt in range(5):
+            try:
+                dfs = equity_scan.fetch_daily_candles_batch(list(code_to_sym))
+                break
+            except _rq.HTTPError as exc:
+                if exc.response is not None and exc.response.status_code == 429:
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+                print(f"[lt_engine] candle batch failed: {exc}")
+                break
+            except Exception as exc:
+                print(f"[lt_engine] candle batch failed: {exc}")
+                break
+        if dfs is None:
+            continue
+        for code, sym in code_to_sym.items():
+            df = dfs.get(code)
+            tech = _tech_from_df(df)
+            if tech:
+                _TECH_CACHE[sym] = (time.time(), tech)
+                _HIST_CACHE[sym] = df
+        time.sleep(0.2)
 
 
 def fresh_technicals(symbol: str, require_ma200: bool = True) -> dict | None:
-    now = time.time()
     hit = _TECH_CACHE.get(symbol)
-    if hit and now - hit[0] < TECH_TTL_SEC:
-        return hit[1] if (hit[1].get("ma200") is not None or not require_ma200) else None
-    try:
-        import indmoney_feed
-        import trend_engine
-        sid = equity_scan.get_security_id_map().get(symbol)
-        if not sid:
-            return None
-        df = indmoney_feed.get_daily_candles(f"NSE_{sid}")
-        if df is None or df.empty:
-            return None
-        m = trend_engine._metrics_from_daily(df, None)
-        if not m or (require_ma200 and m.get("ma200") is None):   # fewer than ~200 completed daily bars
-            return None
-        cls = se.compute_trend_classification(m)
-        close = df["Close"]
-        out = {
-            "trend": cls.get("trend"),
-            "ltp": float(close.iloc[-1]),
-            "ema20": m["ema20"], "ma50": m["ma50"], "ma200": m["ma200"],
-            "rsi": m["rsi"], "volume_spike": m["volume_spike"],
-            "ret_6m": (float(close.iloc[-1] / close.iloc[-126] - 1.0) * 100.0) if len(close) > 126 else None,
-            "avg_volume_10d": float(df["Volume"].iloc[-10:].mean()),
-            "bars": len(df),
-            "last_bar": str(df.index[-1].date()),
-        }
-        _TECH_CACHE[symbol] = (now, out)
-        return out
-    except Exception as exc:
-        print(f"[lt_engine] fresh technicals unavailable for {symbol}: {exc}")
+    if not (hit and time.time() - hit[0] < TECH_TTL_SEC):
+        prefetch_technicals([symbol])
+        hit = _TECH_CACHE.get(symbol)
+    if not hit:
         return None
+    tech = hit[1]
+    return tech if (tech.get("ma200") is not None or not require_ma200) else None
 
 
 def _qualified_candidates(raw_universe: list, min_price: float, max_price: float) -> list:
@@ -444,7 +494,8 @@ def _qualified_candidates(raw_universe: list, min_price: float, max_price: float
                 continue
         stage1.append((c, eval_res, sector_group, financial))
 
-    # Stage 2 -- fresh technicals for the survivors
+    # Stage 2 -- fresh technicals for the survivors (batched: 5 stocks per INDstocks request)
+    prefetch_technicals([c["symbol"] for c, *_ in stage1])
     staged = []
     for c, eval_res, sector_group, financial in stage1:
         tech = fresh_technicals(c["symbol"])

@@ -64,13 +64,7 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
             scrip_to_symbol = {f"NSE_{sec_map[sym]}": sym for sym in by_symbol}
             all_codes = list(scrip_to_symbol.keys())
 
-            live_by_code = {}
-            for i in range(0, len(all_codes), equity_scan.QUOTES_BATCH_SIZE):
-                batch = all_codes[i:i + equity_scan.QUOTES_BATCH_SIZE]
-                try:
-                    live_by_code.update(equity_scan.fetch_live_quotes_batch(batch))
-                except Exception:
-                    pass
+            live_by_code = equity_scan.fetch_live_quotes_resilient(all_codes)
 
             for code, sym in scrip_to_symbol.items():
                 live = live_by_code.get(code)
@@ -122,6 +116,7 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
     # snapshot): price band, trend and liquidity gates are re-checked on current data.
     # Where candles cannot be fetched the snapshot values are kept and flagged.
     import lt_engine
+    lt_engine.prefetch_technicals([c["symbol"] for c in enriched])     # batched INDstocks candles
     fresh_enriched = []
     for c in enriched:
         tech = lt_engine.fresh_technicals(c["symbol"], require_ma200=False)
@@ -152,6 +147,13 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
     # raw pre-gate universe, so the monthly cohort can never include a name the live
     # debt-free gate would have rejected.
     monthly_cohort = get_or_refresh_penny_monthly_picks(enriched, top_n=10, monthly_sip=monthly_sip)
+
+    # The 20-name "qualified" list is ranked by a value/entry-timing-heavy score that can put a
+    # low-ROE stock first. Put the quality-ranked cohort (the curated 10) first, in its order,
+    # then the remaining qualified names.
+    _order = {p.get("symbol"): i for i, p in enumerate((monthly_cohort or {}).get("picks", []))}
+    penny_picks = sorted(penny_picks, key=lambda p: (_order.get(p.get("symbol"), 10 ** 6),
+                                                     -(p.get("penny_rank_score") or 0.0)))
 
     return {
         "monthly_cohort": monthly_cohort,
