@@ -929,6 +929,17 @@ def api_token_update():
     return jsonify({"success": True, "status": token_manager.get_token_status()})
 
 
+@app.route("/api/token/current")
+def api_token_current():
+    """Lets a follower machine (e.g. the laptop) pull the live INDmoney token
+    from whichever deployment owns the TOTP auto-refresh. Returns a broker
+    credential, so it relies entirely on the /api/* X-Finplus-Key gate."""
+    token = os.environ.get(token_manager.TOKEN_KEY, "").strip()
+    if not token:
+        return jsonify({"success": False, "error": "No token on this server."}), 404
+    return jsonify({"success": True, "token": token, "status": token_manager.get_token_status()})
+
+
 @app.route("/api/token/refresh_totp", methods=["GET", "POST"])
 def api_token_refresh_totp():
     ok, msg = totp_auth.refresh_token_using_totp()
@@ -2275,6 +2286,7 @@ def start_all_background_threads():
             print("[startup] ENABLE_FULL_SCAN_SUITE not set -- running Intraday + Trend Analyser "
                   "loops only (swing/long-term/penny/options scans off to fit the free-tier 512MB limit)")
         totp_auth.start_totp_refresher_thread()
+        token_manager.start_token_puller_thread(BASE_DIR)
 
 
 @app.before_request

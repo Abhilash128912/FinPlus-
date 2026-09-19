@@ -130,7 +130,7 @@ def test_token(token: str) -> tuple[bool, str]:
         return False, f"Request failed: {e}"
 
 
-def save_token(new_token: str, base_dir: str) -> tuple[bool, str] | None:
+def save_token(new_token: str, base_dir: str, relay: bool = True) -> tuple[bool, str] | None:
     """Writes indmoney.env AND updates the running process's os.environ in
     the same call -- every background loop reads the token via
     os.environ.get() on each poll, not once at import time, so this takes
@@ -166,7 +166,9 @@ def save_token(new_token: str, base_dir: str) -> tuple[bool, str] | None:
 
     os.environ[TOKEN_KEY] = new_token
 
-    if not os.environ.get("MOBILE_BACKEND_URL", "").strip():
+    # relay=False when the token *came from* the backend (fetch_token_from_backend)
+    # -- pushing it straight back would just be a pointless round trip.
+    if not relay or not os.environ.get("MOBILE_BACKEND_URL", "").strip():
         return None
     return sync_token_to_mobile_backend(new_token)
 
@@ -197,3 +199,76 @@ def sync_token_to_mobile_backend(token: str) -> tuple[bool, str]:
         return False, f"Mobile backend rejected sync: {data.get('error') or resp.status_code}"
     except requests.RequestException as e:
         return False, f"Could not reach mobile backend: {e}"
+
+
+def fetch_token_from_backend(base_dir: str) -> tuple[bool, str]:
+    """Pulls the live INDmoney token from the Render deployment
+    (GET {MOBILE_BACKEND_URL}/api/token/current, X-Finplus-Key auth).
+
+    INDstocks keeps only one TOTP-generated token live at a time, so exactly
+    one machine (Render) may run the TOTP auto-refresh; every other copy of
+    this app calls this instead. Adopts the backend's token only if it
+    outlives the local one, so a fresher local paste is never overwritten."""
+    backend_url = os.environ.get("MOBILE_BACKEND_URL", "").strip().rstrip("/")
+    if not backend_url:
+        return False, "MOBILE_BACKEND_URL not set"
+    key = _load_finplus_key(base_dir)
+    if not key:
+        return False, "No FinPlus key configured (FINPLUS_API_KEY / finplus_api_key.txt)"
+
+    try:
+        resp = requests.get(f"{backend_url}/api/token/current",
+                            headers={"X-Finplus-Key": key}, timeout=15)
+        if resp.status_code != 200:
+            return False, f"Backend returned HTTP {resp.status_code}"
+        token = (resp.json().get("token") or "").strip()
+    except (requests.RequestException, ValueError) as e:
+        return False, f"Could not fetch token from backend: {e}"
+    if not token:
+        return False, "Backend has no token"
+
+    remote = decode_jwt_payload(token) or {}
+    local = decode_jwt_payload(os.environ.get(TOKEN_KEY, "")) or {}
+    if not remote.get("exp"):
+        return False, "Backend token is not a readable JWT"
+    if token == os.environ.get(TOKEN_KEY, "").strip() or remote["exp"] <= local.get("exp", 0):
+        return True, "Local token already current"
+    if remote["exp"] <= time.time():
+        return False, "Backend token is itself expired"
+
+    ok, detail = test_token(token)
+    if not ok:
+        return False, f"Backend token failed live check: {detail}"
+    save_token(token, base_dir, relay=False)
+    return True, "Token pulled from backend"
+
+
+def _is_follower() -> bool:
+    """True on a machine that should pull the token instead of generating it:
+    a backend URL is configured, no local TOTP secret (so this copy never
+    invalidates the backend's token), and we are not Render itself."""
+    return (bool(os.environ.get("MOBILE_BACKEND_URL", "").strip())
+            and not os.environ.get("INDMONEY_TOTP_SECRET", "").strip()
+            and not os.environ.get("RENDER"))
+
+
+def start_token_puller_thread(base_dir: str, interval_sec: int = 300):
+    """Background poller for follower machines; a no-op everywhere else."""
+    import threading
+
+    def _loop():
+        while True:
+            try:
+                if _is_follower():
+                    ok, msg = fetch_token_from_backend(base_dir)
+                    if not ok:
+                        print(f"[token_puller] {msg}")
+                    elif msg.startswith("Token pulled"):
+                        print(f"[token_puller] {msg}")
+            except Exception as e:
+                print(f"[token_puller] error: {e}")
+            time.sleep(interval_sec)
+
+    t = threading.Thread(target=_loop, daemon=True, name="token_puller")
+    t.start()
+    return t
