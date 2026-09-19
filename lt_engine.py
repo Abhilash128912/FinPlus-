@@ -652,6 +652,9 @@ def _pick_record(p: dict) -> dict:
         "fundamentals_basis": {"margin": p.get("npm_basis"), "growth": p.get("growth_basis")},
         "technicals_fresh": p.get("technicals_fresh"),
         "technicals_as_of": p.get("technicals_as_of"),
+        "rs_rating": p.get("rs_rating"),
+        "rs_source": p.get("rs_source"),
+        "rs_fresh": p.get("rs_source") == "fresh universe RS",
         "data_flags": p.get("data_flags") or [],
     }
     rec.update(_status_for(p.get("trend"), ltp, gtt))

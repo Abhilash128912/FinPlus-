@@ -116,6 +116,7 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
     # snapshot): price band, trend and liquidity gates are re-checked on current data.
     # Where candles cannot be fetched the snapshot values are kept and flagged.
     import lt_engine
+    import fresh_rs
     lt_engine.prefetch_technicals([c["symbol"] for c in enriched])     # batched INDstocks candles
     fresh_enriched = []
     for c in enriched:
@@ -125,8 +126,20 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
                 c[k] = tech[k]
             c["technicals_fresh"] = True
             c["technicals_as_of"] = tech["last_bar"]
+            # Momentum from fresh candles at the live-ish last price, and the fresh universe RS;
+            # the quality score is re-computed with the fresh momentum.
+            m = lt_engine.fresh_momentum(c["symbol"], ltp=tech.get("ltp"))
+            if m is not None:
+                c["momentum"] = m
+                c["total_score"] = round((float(c["strength"]) * 0.40) + (float(c["value"]) * 0.35) + (float(m) * 0.25), 1)
+            c["momentum_fresh"] = m is not None
+            rs = fresh_rs.rs_rating(c["symbol"])
+            if rs is not None:
+                c["rs_rating"] = rs
+            c["rs_fresh"] = rs is not None
         else:
             c["technicals_fresh"] = False
+            c["momentum_fresh"] = c["rs_fresh"] = False
             c["technicals_as_of"] = "scan snapshot"
         ltp_now = float(c.get("ltp") or 0.0)
         if not (5.0 <= ltp_now <= 75.0):

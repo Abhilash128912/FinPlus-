@@ -17,7 +17,7 @@
       "name": "Modison Limited",
       "sector": "Electrical Components & Equipments",
       "cap_category": "Small Cap",
-      "ltp": 503.05,
+      "ltp": 457.6,
       "gtt_level": 364.92,
       "lt_quality_score": 83.4,
       "fundamentals_available": true,
@@ -50,17 +50,17 @@
       "technicals_as_of": "2026-09-18",
       "data_flags": [],
       "status": "WATCH",
-      "status_badge": "\ud83d\udc41 WATCH (+37.9%)",
+      "status_badge": "\ud83d\udc41 WATCH (+25.4%)",
       "status_badge_class": "badge-gray",
-      "status_reason": "Extended: +37.9% above GTT dip level (\u20b9364.92); wait for a pullback",
-      "dist_from_gtt_pct": 37.9
+      "status_reason": "Extended: +25.4% above GTT dip level (\u20b9364.92); wait for a pullback",
+      "dist_from_gtt_pct": 25.4
     },
     {
       "symbol": "LOTUSDEV",
       "name": "Sri Lotus Developers and Realty Limited",
       "sector": "Real Estate",
       "cap_category": "Small Cap",
-      "ltp": 209.27,
+      "ltp": 215.13,
       "gtt_level": 179.74,
       "lt_quality_score": 70.9,
       "fundamentals_available": true,
@@ -71,7 +71,7 @@
       "score_breakdown": {
         "quality": 84.6,
         "profitability": 100.0,
-        "momentum": 91.9,
+        "momentum": 91.8,
         "valuation": 40.0
       },
       "sector_group": "UTILITIES_INFRA",
@@ -93,17 +93,17 @@
       "technicals_as_of": "2026-09-18",
       "data_flags": [],
       "status": "WATCH",
-      "status_badge": "\ud83d\udc41 WATCH (+16.4%)",
+      "status_badge": "\ud83d\udc41 WATCH (+19.7%)",
       "status_badge_class": "badge-gray",
-      "status_reason": "Extended: +16.4% above GTT dip level (\u20b9179.74); wait for a pullback",
-      "dist_from_gtt_pct": 16.4
+      "status_reason": "Extended: +19.7% above GTT dip level (\u20b9179.74); wait for a pullback",
+      "dist_from_gtt_pct": 19.7
     },
     {
       "symbol": "IGIL",
       "name": "International Gemological Institute Limited",
       "sector": "Education Services",
       "cap_category": "Small Cap",
-      "ltp": 314.3,
+      "ltp": 330.95,
       "gtt_level": 326.15,
       "lt_quality_score": 66.6,
       "fundamentals_available": true,
@@ -114,7 +114,7 @@
       "score_breakdown": {
         "quality": 88.0,
         "profitability": 100.0,
-        "momentum": 48.3,
+        "momentum": 48.5,
         "valuation": 100.0
       },
       "sector_group": "QUALITY_GROWTH",
@@ -135,18 +135,18 @@
       "technicals_fresh": true,
       "technicals_as_of": "2026-09-18",
       "data_flags": [],
-      "status": "WAIT",
-      "status_badge": "\u23f3 WAIT FOR DIP (+5.3%)",
-      "status_badge_class": "badge-yellow",
-      "status_reason": "+5.3% above GTT dip level (\u20b9298.58)",
-      "dist_from_gtt_pct": 5.3
+      "status": "BUY_NOW",
+      "status_badge": "\ud83d\ude80 BUY NOW",
+      "status_badge_class": "badge-green",
+      "status_reason": "At accumulation / GTT dip level (\u20b9326.15)",
+      "dist_from_gtt_pct": 1.5
     },
     {
       "symbol": "MENONBE",
       "name": "Menon Bearings Limited",
       "sector": "Auto Parts",
       "cap_category": "Small Cap",
-      "ltp": 297.5,
+      "ltp": 316.85,
       "gtt_level": 250.33,
       "lt_quality_score": 90.2,
       "fundamentals_available": true,
@@ -157,7 +157,7 @@
       "score_breakdown": {
         "quality": 91.0,
         "profitability": 65.2,
-        "momentum": 97.7,
+        "momentum": 97.8,
         "valuation": 40.0
       },
       "sector_group": "MANUFACTURING",
@@ -179,28 +179,28 @@
       "technicals_as_of": "2026-09-18",
       "data_flags": [],
       "status": "WATCH",
-      "status_badge": "\ud83d\udc41 WATCH (+18.8%)",
+      "status_badge": "\ud83d\udc41 WATCH (+26.6%)",
       "status_badge_class": "badge-gray",
-      "status_reason": "Extended: +18.8% above GTT dip level (\u20b9250.33); wait for a pullback",
-      "dist_from_gtt_pct": 18.8
+      "status_reason": "Extended: +26.6% above GTT dip level (\u20b9250.33); wait for a pullback",
+      "dist_from_gtt_pct": 26.6
     },
     {
       "symbol": "AXTEL",
       "name": "Axtel Industries Limited",
       "sector": "Industrial Machinery",
       "cap_category": "Small Cap",
-      "ltp": 440.2,
+      "ltp": 440.05,
       "gtt_level": 422.49,
       "lt_quality_score": 64.8,
       "fundamentals_available": true,
       "durability_score": 88.0,
       "dvm_label": "HIGH_DURABILITY",
       "trend": "Strong Uptrend",
-      "combined_rank_score": 80.5,
+      "combined_rank_score": 80.6,
       "score_breakdown": {
         "quality": 88.0,
         "profitability": 80.0,
-        "momentum": 61.2,
+        "momentum": 61.5,
         "valuation": 100.0
       },
       "sector_group": "MANUFACTURING",
@@ -232,18 +232,18 @@
       "name": "Fabtech Technologies Limited",
       "sector": "Pharmaceuticals",
       "cap_category": "Small Cap",
-      "ltp": 147.02,
+      "ltp": 147.93,
       "gtt_level": 147.49,
       "lt_quality_score": 41.5,
       "fundamentals_available": true,
       "durability_score": 100.0,
       "dvm_label": "HIGH_DURABILITY",
       "trend": "Uptrend",
-      "combined_rank_score": 80.4,
+      "combined_rank_score": 80.5,
       "score_breakdown": {
         "quality": 100.0,
         "profitability": 76.2,
-        "momentum": 45.5,
+        "momentum": 45.9,
         "valuation": 100.0
       },
       "sector_group": "QUALITY_GROWTH",
@@ -264,29 +264,29 @@
       "technicals_fresh": true,
       "technicals_as_of": "2026-09-18",
       "data_flags": [],
-      "status": "WAIT",
-      "status_badge": "\u23f3 WAIT FOR DIP (+5.3%)",
-      "status_badge_class": "badge-yellow",
-      "status_reason": "+5.3% above GTT dip level (\u20b9139.67)",
-      "dist_from_gtt_pct": 5.3
+      "status": "BUY_NOW",
+      "status_badge": "\ud83d\ude80 BUY NOW",
+      "status_badge_class": "badge-green",
+      "status_reason": "At accumulation / GTT dip level (\u20b9147.49)",
+      "dist_from_gtt_pct": 0.3
     },
     {
       "symbol": "KRONOX",
       "name": "Kronox Lab Sciences Limited",
       "sector": "Specialty Chemicals",
       "cap_category": "Small Cap",
-      "ltp": 175.92,
+      "ltp": 172.79,
       "gtt_level": 166.91,
       "lt_quality_score": 79.1,
       "fundamentals_available": true,
       "durability_score": 88.0,
       "dvm_label": "HIGH_DURABILITY",
       "trend": "Consolidation",
-      "combined_rank_score": 79.6,
+      "combined_rank_score": 79.7,
       "score_breakdown": {
         "quality": 88.0,
         "profitability": 79.8,
-        "momentum": 57.9,
+        "momentum": 58.0,
         "valuation": 100.0
       },
       "sector_group": "COMMODITY",
@@ -307,29 +307,29 @@
       "technicals_fresh": true,
       "technicals_as_of": "2026-09-18",
       "data_flags": [],
-      "status": "WAIT",
-      "status_badge": "\u23f3 WAIT FOR DIP (+5.4%)",
-      "status_badge_class": "badge-yellow",
-      "status_reason": "+5.4% above GTT dip level (\u20b9166.91)",
-      "dist_from_gtt_pct": 5.4
+      "status": "BUY_NOW",
+      "status_badge": "\ud83d\ude80 BUY NOW",
+      "status_badge_class": "badge-green",
+      "status_reason": "At accumulation / GTT dip level (\u20b9166.91)",
+      "dist_from_gtt_pct": 3.5
     },
     {
       "symbol": "CASTROLIND",
       "name": "Castrol India Limited",
       "sector": "Commodity Chemicals",
       "cap_category": "Small Cap",
-      "ltp": 188.03,
+      "ltp": 197.14,
       "gtt_level": 187.17,
       "lt_quality_score": 80.3,
       "fundamentals_available": true,
       "durability_score": 75.0,
       "dvm_label": "HIGH_DURABILITY",
       "trend": "Strong Uptrend",
-      "combined_rank_score": 79.2,
+      "combined_rank_score": 79.3,
       "score_breakdown": {
         "quality": 75.0,
         "profitability": 100.0,
-        "momentum": 56.9,
+        "momentum": 57.3,
         "valuation": 100.0
       },
       "sector_group": "COMMODITY",
@@ -350,29 +350,29 @@
       "technicals_fresh": true,
       "technicals_as_of": "2026-09-18",
       "data_flags": [],
-      "status": "BUY_NOW",
-      "status_badge": "\ud83d\ude80 BUY NOW",
-      "status_badge_class": "badge-green",
-      "status_reason": "At accumulation / GTT dip level (\u20b9187.17)",
-      "dist_from_gtt_pct": 0.5
+      "status": "WAIT",
+      "status_badge": "\u23f3 WAIT FOR DIP (+5.3%)",
+      "status_badge_class": "badge-yellow",
+      "status_reason": "+5.3% above GTT dip level (\u20b9187.17)",
+      "dist_from_gtt_pct": 5.3
     },
     {
       "symbol": "GLOBAL",
       "name": "Global Education Limited",
       "sector": "Education Services",
       "cap_category": "Small Cap",
-      "ltp": 126.91,
+      "ltp": 130.16,
       "gtt_level": 109.04,
       "lt_quality_score": 75.2,
       "fundamentals_available": true,
       "durability_score": 85.0,
       "dvm_label": "HIGH_DURABILITY",
       "trend": "Strong Uptrend",
-      "combined_rank_score": 79.0,
+      "combined_rank_score": 79.1,
       "score_breakdown": {
         "quality": 85.0,
         "profitability": 66.9,
-        "momentum": 73.1,
+        "momentum": 73.3,
         "valuation": 100.0
       },
       "sector_group": "QUALITY_GROWTH",
@@ -394,17 +394,17 @@
       "technicals_as_of": "2026-09-18",
       "data_flags": [],
       "status": "WATCH",
-      "status_badge": "\ud83d\udc41 WATCH (+16.4%)",
+      "status_badge": "\ud83d\udc41 WATCH (+19.4%)",
       "status_badge_class": "badge-gray",
-      "status_reason": "Extended: +16.4% above GTT dip level (\u20b9109.04); wait for a pullback",
-      "dist_from_gtt_pct": 16.4
+      "status_reason": "Extended: +19.4% above GTT dip level (\u20b9109.04); wait for a pullback",
+      "dist_from_gtt_pct": 19.4
     },
     {
       "symbol": "UNIVASTU",
       "name": "Univastu India Limited",
       "sector": "Construction & Engineering",
       "cap_category": "Small Cap",
-      "ltp": 153.0,
+      "ltp": 152.26,
       "gtt_level": 144.14,
       "lt_quality_score": 76.0,
       "fundamentals_available": true,
@@ -415,7 +415,7 @@
       "score_breakdown": {
         "quality": 81.0,
         "profitability": 76.2,
-        "momentum": 69.8,
+        "momentum": 69.9,
         "valuation": 100.0
       },
       "sector_group": "UTILITIES_INFRA",
@@ -437,10 +437,10 @@
       "technicals_as_of": "2026-09-18",
       "data_flags": [],
       "status": "WAIT",
-      "status_badge": "\u23f3 WAIT FOR DIP (+6.1%)",
+      "status_badge": "\u23f3 WAIT FOR DIP (+5.6%)",
       "status_badge_class": "badge-yellow",
-      "status_reason": "+6.1% above GTT dip level (\u20b9144.14)",
-      "dist_from_gtt_pct": 6.1
+      "status_reason": "+5.6% above GTT dip level (\u20b9144.14)",
+      "dist_from_gtt_pct": 5.6
     }
   ],
   "bench": [
@@ -497,14 +497,14 @@
       "symbol": "SHANTIGOLD",
       "name": "Shanti Gold International Limited",
       "ltp": 251.27,
-      "combined_rank_score": 76.6,
+      "combined_rank_score": 76.7,
       "trend": "Accumulation"
     },
     {
       "symbol": "GOKULAGRO",
       "name": "Gokul Agro Resources Limited",
       "ltp": 224.24,
-      "combined_rank_score": 76.2,
+      "combined_rank_score": 76.3,
       "trend": "Consolidation"
     },
     {
@@ -515,6 +515,6 @@
       "trend": "Accumulation"
     }
   ],
-  "updated_at": 1789805068.135511,
-  "computed_at": 1789803601.7416794
+  "updated_at": 1789809889.5737512,
+  "computed_at": 1789809889.5737512
 }
