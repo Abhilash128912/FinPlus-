@@ -291,265 +291,307 @@ def scan_lt_discovery(top_n: int = 20, update_live_quotes: bool = True) -> dict:
 LT_MONTHLY_PICKS_FILE = os.path.join(BASE_DIR, "lt_monthly_picks.json")
 
 
-def get_or_refresh_monthly_picks(raw_universe: list[dict], top_n: int = 10,
-                                 min_price: float = 75.0, max_price: float = 500.0) -> dict:
-    """
-    Selects top 10 stocks with highest fundamental strength and price between ₹75 and ₹500,
-    locks them for the current calendar month, and triggers 'BUY NOW' when
-    live LTP reaches or falls below the GTT dip accumulation level.
-    """
-    import calendar
-    from datetime import date
+# ── Best-10 long-term list ────────────────────────────────────────────────────
+# The list is the 10 best stocks NOW, ranked on measurable, real-data criteria, and it
+# changes whenever the data says a better stock exists. There is no calendar lock and
+# no pinned symbol. To stop it reshuffling on every refresh, an incumbent is only
+# replaced when a challenger beats it by SWAP_MARGIN points (or the incumbent stops
+# qualifying).
+LT_LIST_VERSION = "best10_real_data_v1"
+LT_REFRESH_SEC = 30 * 60      # recompute at most every 30 minutes (inputs are daily data)
+SWAP_MARGIN = 6.0             # score points a challenger must lead an incumbent by
+MAX_PER_SECTOR_GROUP = 3      # diversification: max stocks per industry sector
+MIN_DURABILITY = 55.0
+MIN_ROE = 12.0
+MIN_ROCE = 12.0               # non-financials; banks/NBFCs are judged on ROE only
+MAX_DEBT_TO_EQUITY = 1.5      # non-financials, when D/E is known
+BUY_NOW_DIST_PCT = 3.5        # % above the GTT dip level that still counts as "at" it
+WATCH_DIST_PCT = 8.0          # further than this above the GTT level -> WATCH
 
-    today = date.today()
-    # Cohort validity: one trading DAY, not one month. The lock exists only so the
-    # list does not reshuffle on every request; it must never keep a list alive
-    # whose inputs were not real, so a saved list is honoured only if EVERY pick
-    # is backed by real fundamentals. Anything else is recomputed from real data.
-    locked_until_str = today.isoformat()
-    month_label = today.strftime("%d %B %Y")
+TREND_STATE_POINTS = {"Strong Uptrend": 100.0, "Accumulation": 85.0, "Uptrend": 75.0, "Consolidation": 45.0}
 
-    saved_state = {}
-    if os.path.exists(LT_MONTHLY_PICKS_FILE):
-        try:
-            with open(LT_MONTHLY_PICKS_FILE, "r", encoding="utf-8") as f:
-                saved_state = json.load(f)
-        except Exception:
-            saved_state = {}
 
-    # Check if existing cohort is still locked for this month with 40/40/20 Future Compounders v6
-    is_active_lock = (
-        saved_state.get("locked_until") == locked_until_str
-        and saved_state.get("cap_distribution") == "40_40_20_future_compounders_v8_real_data"
-        and len(saved_state.get("picks") or []) >= 1
-        and all(p.get("fundamentals_available") is True for p in saved_state.get("picks") or [])
-    )
+def _gtt_level(p: dict, ltp: float) -> float:
+    """Dip-entry level: the 50-day MA, else the 20-day EMA (when below price), else a
+    5% pullback from the current price (a stated rule, not market data)."""
+    ma50 = float(p.get("ma50") or 0.0)
+    ema20 = float(p.get("ema20") or 0.0)
+    if 0 < ma50 < ltp:
+        return round(ma50, 2)
+    if 0 < ema20 < ltp:
+        return round(ema20, 2)
+    return round(ltp * 0.95, 2)
 
-    by_symbol_universe = {r.get("symbol"): r for r in raw_universe if r.get("symbol")}
 
-    if is_active_lock:
-        picks = saved_state["picks"]
-        # Update live prices and re-evaluate GTT trigger status
-        for p in picks:
-            sym = p.get("symbol")
-            u_row = by_symbol_universe.get(sym)
-            if u_row and u_row.get("ltp"):
-                p["ltp"] = u_row["ltp"]
+def _status_for(trend, ltp: float, gtt: float) -> dict:
+    """BUY_NOW / WAIT / WATCH from price vs the GTT dip level and the trend."""
+    dist_pct = round(((ltp - gtt) / gtt) * 100, 1) if gtt > 0 else 0.0
+    at_level = ltp > 0 and (ltp <= gtt or dist_pct <= BUY_NOW_DIST_PCT
+                            or (trend == "Accumulation" and dist_pct <= 5.0))
+    if at_level:
+        return {"status": "BUY_NOW", "status_badge": "\U0001F680 BUY NOW", "status_badge_class": "badge-green",
+                "status_reason": f"At accumulation / GTT dip level (\u20b9{gtt:.2f})", "dist_from_gtt_pct": dist_pct}
+    if dist_pct <= WATCH_DIST_PCT:
+        return {"status": "WAIT", "status_badge": f"\u23f3 WAIT FOR DIP ({dist_pct:+.1f}%)",
+                "status_badge_class": "badge-yellow",
+                "status_reason": f"+{dist_pct:.1f}% above GTT dip level (\u20b9{gtt:.2f})", "dist_from_gtt_pct": dist_pct}
+    return {"status": "WATCH", "status_badge": f"\U0001F441 WATCH ({dist_pct:+.1f}%)",
+            "status_badge_class": "badge-gray",
+            "status_reason": f"Extended: +{dist_pct:.1f}% above GTT dip level (\u20b9{gtt:.2f}); wait for a pullback",
+            "dist_from_gtt_pct": dist_pct}
 
-            ltp = float(p.get("ltp") or 0.0)
-            gtt = float(p.get("gtt_level") or (ltp * 0.95))
-            p["gtt_level"] = round(gtt, 2)
 
-            dist_pct = round(((ltp - gtt) / gtt) * 100, 1) if gtt > 0 else 0.0
-            p["dist_from_gtt_pct"] = dist_pct
+def _score_candidate(c: dict, eval_res: dict, financial: bool) -> tuple[float, dict]:
+    """0-100 score from REAL inputs only. A component with no data is dropped and the
+    remaining weights renormalised -- nothing is assumed."""
+    comps = {}
+    comps["quality"] = float(c["durability_score"])
+    prof_metric = c.get("roe_pct") if financial else (c.get("roce_pct") if c.get("roce_pct") is not None else c.get("roe_pct"))
+    comps["profitability"] = min(max(float(prof_metric), 0.0), 40.0) / 40.0 * 100.0
+    mom_parts = []
+    if c.get("trend") in TREND_STATE_POINTS:
+        mom_parts.append(TREND_STATE_POINTS[c["trend"]])
+    if c.get("rs_rating") is not None:
+        mom_parts.append(float(c["rs_rating"]))
+    if mom_parts:
+        comps["momentum"] = sum(mom_parts) / len(mom_parts)
+    pe = c.get("pe")
+    # A PE below ~4 is almost always a one-off gain distorting earnings, not a bargain:
+    # the valuation part is left out instead of being scored as "very cheap".
+    if pe is not None and float(pe) >= 4.0:
+        pe = float(pe)
+        comps["valuation"] = 100.0 if pe <= 25 else 70.0 if pe <= 40 else 40.0 if pe <= 60 else 10.0
+    weights = {"quality": 0.40, "profitability": 0.25, "momentum": 0.25, "valuation": 0.10}
+    total_w = sum(weights[k] for k in comps)
+    score = sum(comps[k] * weights[k] for k in comps) / total_w
+    return round(score, 1), {k: round(v, 1) for k, v in comps.items()}
 
-            is_buy = ltp > 0 and (ltp <= gtt or dist_pct <= 3.5 or (p.get("trend") == "Accumulation" and dist_pct <= 5.0))
-            if is_buy:
-                p["status"] = "BUY_NOW"
-                p["status_badge"] = "🚀 BUY NOW"
-                p["status_badge_class"] = "badge-green"
-                p["status_reason"] = f"At accumulation / GTT dip level (₹{gtt:.2f})"
-            else:
-                p["status"] = "WAIT"
-                p["status_badge"] = f"⏳ WAIT FOR DIP ({dist_pct:+.1f}%)"
-                p["status_badge_class"] = "badge-yellow"
-                p["status_reason"] = f"+{dist_pct:.1f}% above GTT dip level (₹{gtt:.2f})"
 
-        saved_state["picks"] = picks
-        saved_state["updated_at"] = time.time()
-        try:
-            with open(LT_MONTHLY_PICKS_FILE, "w", encoding="utf-8") as f:
-                json.dump(saved_state, f, indent=2)
-        except Exception:
-            pass
-        return saved_state
-
-    # Autosearch: Partition universe between min_price (₹75) and max_price (₹500)
-    # Allocation: 40% Large Cap (4), 40% Mid Cap (4), 20% Small Cap (2)
-    n_large = int(round(top_n * 0.40))
-    n_mid = int(round(top_n * 0.40))
-    n_small = top_n - n_large - n_mid
-
-    candidates_by_cap = {"Large Cap": [], "Mid Cap": [], "Small Cap": []}
+def _qualified_candidates(raw_universe: list, min_price: float, max_price: float) -> list:
+    out = []
     for row in raw_universe:
         sym = row.get("symbol")
         ltp = float(row.get("ltp") or 0.0)
         trend = row.get("trend") or ""
         if not sym or not (min_price <= ltp <= max_price):
             continue
-        if sym != "BEL" and (sym in EXCLUDED_SLOW_PSUS or trend in ("Downtrend", "Distribution")):
+        if sym in EXCLUDED_SLOW_PSUS or trend in ("Downtrend", "Distribution"):
             continue
-        if sym == "FEDERALBNK":
-            cap = "Mid Cap"
-        elif sym == "BEL":
-            cap = "Large Cap"
-        else:
-            cap = row.get("cap_category") or "Small Cap"
-        if cap in candidates_by_cap:
-            candidates_by_cap[cap].append(dict(row))
-        else:
-            candidates_by_cap["Small Cap"].append(dict(row))
-
-    # Enrich with genuine fundamentals + Trendlyne-style DVM Durability
-    for cap, c_list in candidates_by_cap.items():
-        for c in c_list:
-            sym = c.get("symbol")
-            fund = fundamental_engine.get_fundamentals(sym, allow_network=False)
-            c["roe_pct"] = fund.get("roe_pct")
-            c["roce_pct"] = fund.get("roce_pct")
-            c["de_ratio"] = fund.get("de_ratio")
-            c["npm_pct"] = fund.get("npm_pct")
-            c["rev_growth_pct"] = fund.get("rev_growth_pct")
-            c["pe"] = fund.get("pe")
-            c["pb"] = fund.get("pb")
-            # No invented "50 / AVERAGE" when fundamentals are missing: None means
-            # "not available" and such a stock cannot be ranked (see below).
-            c["durability_score"] = fund.get("durability_score")
-            c["dvm_label"] = fund.get("dvm_label")
-            c["pillar"] = get_compounder_pillar(c)
-
-    filtered_by_cap = {}
-    for cap, c_list in candidates_by_cap.items():
-        req_count = n_large if "Large" in cap else n_mid if "Mid" in cap else n_small
-        with_fundamentals = [c for c in c_list if c.get("durability_score") is not None]
-        growth_cands = [c for c in with_fundamentals if float(c["durability_score"]) >= 48.0]
-        if len(growth_cands) >= req_count:
-            filtered_by_cap[cap] = growth_cands
-        else:
-            # Never pad the pool with stocks that have no real fundamentals.
-            filtered_by_cap[cap] = with_fundamentals
-
-    def _rank_and_pick_megatrends(pool, top_k, used_pillars, excluded_symbols=None):
-        if excluded_symbols is None:
-            excluded_symbols = set()
-        candidates = [x for x in pool if x.get("symbol") not in excluded_symbols]
-        scored = []
-        for c in candidates:
-            # Ranking needs real durability and ROCE; without them the stock is
-            # left out rather than scored with an assumed 50 / 15%.
-            if c.get("durability_score") is None or c.get("roce_pct") is None:
+        if row.get("ma200") is None:
+            continue  # < ~200 trading days of price history: too new to judge for a long-term hold
+        fund = fundamental_engine.get_fundamentals(sym, allow_network=False)
+        if fund.get("durability_score") is None or fund.get("roe_pct") is None or fund.get("npm_pct") is None:
+            continue  # no real fundamentals -> cannot be judged
+        c = dict(row)
+        for k in ("roe_pct", "roce_pct", "de_ratio", "npm_pct", "rev_growth_pct", "pe", "pb",
+                  "durability_score", "dvm_label"):
+            c[k] = fund.get(k)
+        eval_res = se.compute_sector_aware_lt_quality(c)
+        sector_group = eval_res.get("sector_group") or c.get("sector_group") or "General"
+        financial = sector_group == "BFSI"
+        # Profitability / safety gates ("profitable" must be shown by the numbers)
+        if float(c["npm_pct"]) <= 0 or float(c["roe_pct"]) < MIN_ROE or float(c["durability_score"]) < MIN_DURABILITY:
+            continue
+        if not financial:
+            if c.get("roce_pct") is not None and float(c["roce_pct"]) < MIN_ROCE:
                 continue
-            eval_res = se.compute_sector_aware_lt_quality(c)
-            q = float(eval_res.get("lt_quality_score") or 0.0)
-            dur = float(c["durability_score"])
-            roce = float(c["roce_pct"])
-            trend = c.get("trend") or ""
-            # Momentum bonus: Strong Uptrend gets +15, Accumulation gets +12, Uptrend +10;
-            # an unknown trend earns no bonus (it is not assumed to be an Uptrend).
-            mom_bonus = 15.0 if "Strong" in trend else 12.0 if "Accumulation" in trend else 10.0 if "Uptrend" in trend else 5.0 if trend else 0.0
-            pil = c["pillar"]
-            # Future sunrise sector boost
-            theme_boost = 20.0 if pil in ('Solar & Clean Energy', 'Semiconductor & Advanced EMS', 'Precious Metals & Gold', 'Defense Electronics & Radar Systems') else 12.0 if pil in ('EV Electronics & Cockpits', 'Digital Wealth & FinTech', 'AAA Retail Housing Finance', 'Green Ports & Modern Logistics', 'Digital NBFC & Enterprise Wealth', '5G Telecom & Digital Infrastructure', 'Private Banking & Wealth') else 0.0
-            # Flag-bearer boost for user requested anchors
-            semi_flag = 10.0 if c.get("symbol") in ("APOLLO", "BEL", "FEDERALBNK") else 0.0
+            if c.get("de_ratio") is not None and float(c["de_ratio"]) > MAX_DEBT_TO_EQUITY:
+                continue
+        score, breakdown = _score_candidate(c, eval_res, financial)
+        item = dict(c)
+        item.update(eval_res)
+        item["sector_group"] = sector_group
+        item["combined_rank_score"] = score
+        item["score_breakdown"] = breakdown
+        out.append(item)
+    out.sort(key=lambda x: x["combined_rank_score"], reverse=True)
+    return out
 
-            item = dict(c)
-            item.update(eval_res)
-            # Future Megatrend Score: 35% Durability + 25% ROCE + 25% Momentum + Theme Boost + Flag + 15% Quality
-            item["combined_rank_score"] = round((dur * 0.35) + (min(roce, 40.0) * 1.5 * 0.25) + mom_bonus + theme_boost + semi_flag + (q * 0.15), 1)
-            item["pillar"] = pil
-            scored.append(item)
-        scored.sort(key=lambda x: x["combined_rank_score"], reverse=True)
 
-        picks = []
-        for s in scored:
-            pil = s["pillar"]
-            if pil not in used_pillars and pil != "General":
-                picks.append(s)
-                used_pillars.add(pil)
-                if len(picks) == top_k:
-                    break
-        # Fallback if pool exhausted
-        if len(picks) < top_k:
-            for s in scored:
-                if s not in picks:
-                    picks.append(s)
-                    if len(picks) == top_k:
-                        break
-        return picks
+def _div_key(c: dict) -> str:
+    """Diversification bucket = the stock's real industry sector; a stock with no
+    sector is its own bucket (never capped)."""
+    return c.get("sector") or ("UNKNOWN:" + str(c.get("symbol")))
 
-    used_pillars = set()
-    selected_large = _rank_and_pick_megatrends(filtered_by_cap["Large Cap"], n_large, used_pillars)
-    ex_large = {x["symbol"] for x in selected_large}
-    selected_mid = _rank_and_pick_megatrends(filtered_by_cap["Mid Cap"], n_mid, used_pillars, excluded_symbols=ex_large)
-    ex_mid = ex_large | {x["symbol"] for x in selected_mid}
-    selected_small = _rank_and_pick_megatrends(filtered_by_cap["Small Cap"], n_small, used_pillars, excluded_symbols=ex_mid)
 
-    selected = selected_large + selected_mid + selected_small
+def _select_with_hysteresis(ranked: list, incumbents: list, top_n: int) -> list:
+    by_sym = {c["symbol"]: c for c in ranked}
+    selected = [by_sym[s] for s in incumbents if s in by_sym][:top_n]   # keep those still qualifying
+    counts = {}
 
-    cohort_picks = []
-    for p in selected:
-        sym = p.get("symbol")
+    def _count(c):
+        g = _div_key(c)
+        counts[g] = counts.get(g, 0) + 1
+
+    def _room(c):
+        return counts.get(_div_key(c), 0) < MAX_PER_SECTOR_GROUP
+
+    kept = []
+    for c in selected:
+        if _room(c):
+            kept.append(c)
+            _count(c)
+    selected = kept
+    chosen = {c["symbol"] for c in selected}
+
+    # fill empty slots with the best available
+    for c in ranked:
+        if len(selected) >= top_n:
+            break
+        if c["symbol"] not in chosen and _room(c):
+            selected.append(c)
+            chosen.add(c["symbol"])
+            _count(c)
+
+    # swap: a challenger replaces the weakest incumbent only if it leads by SWAP_MARGIN
+    for c in ranked:
+        if c["symbol"] in chosen:
+            continue
+        weakest = min(selected, key=lambda x: x["combined_rank_score"])
+        if c["combined_rank_score"] - weakest["combined_rank_score"] < SWAP_MARGIN:
+            break
+        g_new, g_old = _div_key(c), _div_key(weakest)
+        if g_new != g_old and counts.get(g_new, 0) >= MAX_PER_SECTOR_GROUP:
+            continue
+        selected.remove(weakest)
+        chosen.discard(weakest["symbol"])
+        counts[g_old] = counts.get(g_old, 1) - 1
+        selected.append(c)
+        chosen.add(c["symbol"])
+        counts[g_new] = counts.get(g_new, 0) + 1
+    selected.sort(key=lambda x: x["combined_rank_score"], reverse=True)
+    return selected
+
+
+def _pick_record(p: dict) -> dict:
+    ltp = float(p.get("ltp") or 0.0)
+    gtt = _gtt_level(p, ltp)
+    rec = {
+        "symbol": p.get("symbol"),
+        "name": p.get("name") or p.get("symbol"),
+        "sector": p.get("sector") or p.get("sector_group") or "",
+        "cap_category": p.get("cap_category") or "Small Cap",
+        "ltp": ltp,
+        "gtt_level": gtt,
+        "lt_quality_score": p.get("lt_quality_score"),
+        "fundamentals_available": True,
+        "durability_score": p.get("durability_score"),
+        "dvm_label": p.get("dvm_label"),
+        "trend": p.get("trend"),
+        "combined_rank_score": p.get("combined_rank_score"),
+        "score_breakdown": p.get("score_breakdown"),
+        "sector_group": p.get("sector_group"),
+        "roe_pct": p.get("roe_pct"),
+        "roce_pct": p.get("roce_pct"),
+        "de_ratio": p.get("de_ratio"),
+        "npm_pct": p.get("npm_pct"),
+        "pe": p.get("pe"),
+        "ma50": p.get("ma50"),
+        "ema20": p.get("ema20"),
+    }
+    rec.update(_status_for(p.get("trend"), ltp, gtt))
+    return rec
+
+
+def refresh_live_status(cohort: dict) -> dict:
+    """Overlays LIVE quotes (one batched INDmoney call for the picks) and recomputes each
+    pick's BUY_NOW / WAIT / WATCH status. If live quotes are unavailable the prices stay at
+    the last scan snapshot and the cohort says so (prices_live=False)."""
+    picks = cohort.get("picks") or []
+    live_ok = False
+    try:
+        sec_map = equity_scan.get_security_id_map()
+        codes = {f"NSE_{sec_map[p['symbol']]}": p for p in picks if p.get("symbol") in sec_map}
+        quotes = equity_scan.fetch_live_quotes_batch(list(codes)) if codes else {}
+        for code, p in codes.items():
+            q = quotes.get(code)
+            if q and q.get("ltp"):
+                p["ltp"] = float(q["ltp"])
+                live_ok = True
+    except Exception as exc:
+        print(f"[lt_engine] live quote overlay skipped: {exc}")
+    for p in picks:
         ltp = float(p.get("ltp") or 0.0)
+        p.update(_status_for(p.get("trend"), ltp, _gtt_level(p, ltp)))
+    cohort["prices_live"] = live_ok
+    cohort["prices_as_of"] = time.time()
+    return cohort
 
-        # Set conservative GTT dip entry at 50 MA or 5% pullback
-        ma50 = float(p.get("ma50") or 0.0)
-        ema20 = float(p.get("ema20") or 0.0)
-        if 0 < ma50 < ltp:
-            gtt = round(ma50, 2)
-        elif 0 < ema20 < ltp:
-            gtt = round(ema20, 2)
-        else:
-            gtt = round(ltp * 0.95, 2)
 
-        dist_pct = round(((ltp - gtt) / gtt) * 100, 1) if gtt > 0 else 0.0
+def get_or_refresh_monthly_picks(raw_universe: list[dict], top_n: int = 10,
+                                 min_price: float = 75.0, max_price: float = 500.0) -> dict:
+    """The best `top_n` long-term stocks right now (real fundamentals only), each with a
+    BUY_NOW / WAIT / WATCH status from trend and GTT. (Function name kept for callers;
+    there is no monthly lock any more -- see the block comment above.)"""
+    from datetime import date
 
-        is_buy = ltp > 0 and (ltp <= gtt or dist_pct <= 3.5 or (p.get("trend") == "Accumulation" and dist_pct <= 5.0))
-        if is_buy:
-            status = "BUY_NOW"
-            badge = "🚀 BUY NOW"
-            badge_cls = "badge-green"
-            reason = f"At accumulation / GTT dip level (₹{gtt:.2f})"
-        else:
-            status = "WAIT"
-            badge = f"⏳ WAIT FOR DIP ({dist_pct:+.1f}%)"
-            badge_cls = "badge-yellow"
-            reason = f"+{dist_pct:.1f}% above GTT dip level (₹{gtt:.2f})"
+    today = date.today()
+    now = time.time()
+    saved = {}
+    if os.path.exists(LT_MONTHLY_PICKS_FILE):
+        try:
+            with open(LT_MONTHLY_PICKS_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+        except Exception:
+            saved = {}
+    same_version = saved.get("cap_distribution") == LT_LIST_VERSION
+    by_symbol_universe = {r.get("symbol"): r for r in raw_universe if r.get("symbol")}
 
-        cap_cat = "Mid Cap" if sym == "FEDERALBNK" else (p.get("cap_category") or "Small Cap")
-        cohort_picks.append({
-            "symbol": sym,
-            "name": p.get("name") or sym,
-            "sector": p.get("pillar") or p.get("sector") or "",
-            "cap_category": cap_cat,
-            "ltp": ltp,
-            "gtt_level": gtt,
-            "dist_from_gtt_pct": dist_pct,
-            "status": status,
-            "status_badge": badge,
-            "status_badge_class": badge_cls,
-            "status_reason": reason,
-            "lt_quality_score": p.get("lt_quality_score"),
-            "fundamentals_available": p.get("durability_score") is not None and p.get("roce_pct") is not None,
-            "durability_score": p.get("durability_score"),
-            "dvm_label": p.get("dvm_label"),
-            "trend": p.get("trend"),
-            "combined_rank_score": p.get("combined_rank_score"),
-            "sector_group": p.get("sector_group"),
-            "roe_pct": p.get("roe_pct"),
-            "roce_pct": p.get("roce_pct"),
-            "de_ratio": p.get("de_ratio"),
-            "npm_pct": p.get("npm_pct"),
-            "pe": p.get("pe"),
-        })
+    fresh = (same_version and saved.get("picks")
+             and saved.get("top_n") == top_n
+             and (now - float(saved.get("computed_at") or 0)) < LT_REFRESH_SEC
+             and all(p.get("fundamentals_available") is True for p in saved["picks"]))
+    if fresh:
+        # Same list; only refresh live prices and BUY_NOW / WAIT / WATCH status.
+        for p in saved["picks"]:
+            u_row = by_symbol_universe.get(p.get("symbol"))
+            if u_row and u_row.get("ltp"):
+                p["ltp"] = float(u_row["ltp"])
+            p.update(_status_for(p.get("trend"), float(p.get("ltp") or 0.0),
+                                 _gtt_level(p, float(p.get("ltp") or 0.0))))
+        saved["updated_at"] = now
+        try:
+            with open(LT_MONTHLY_PICKS_FILE, "w", encoding="utf-8") as f:
+                json.dump(saved, f, indent=2)
+        except Exception:
+            pass
+        return saved
+
+    ranked = _qualified_candidates(raw_universe, min_price, max_price)
+    incumbents = [p.get("symbol") for p in (saved.get("picks") or [])] if same_version else []
+    selected = _select_with_hysteresis(ranked, incumbents, top_n)
+    chosen = {c["symbol"] for c in selected}
+    bench = [{"symbol": c["symbol"], "name": c.get("name") or c["symbol"], "ltp": c.get("ltp"),
+              "combined_rank_score": c["combined_rank_score"], "trend": c.get("trend")}
+             for c in ranked if c["symbol"] not in chosen][:10]
 
     cohort_data = {
-        "month_label": month_label,
-        "locked_until": locked_until_str,
-        "cap_distribution": "40_40_20_future_compounders_v8_real_data",
+        "month_label": today.strftime("%d %B %Y"),
+        "locked_until": today.isoformat(),
+        "cap_distribution": LT_LIST_VERSION,
         "min_price": min_price,
         "max_price": max_price,
-        "picks": cohort_picks,
-        "updated_at": time.time(),
+        "qualified_count": len(ranked),
+        "top_n": top_n,
+        "selection_rules": {
+            "gates": f"durability>={MIN_DURABILITY:.0f}, ROE>={MIN_ROE:.0f}%, net margin>0, "
+                     f"ROCE>={MIN_ROCE:.0f}% and D/E<={MAX_DEBT_TO_EQUITY} (banks/NBFCs: ROE only), "
+                     "trend not Downtrend/Distribution, 200+ days of price history, real fundamentals only",
+            "score": "40% durability + 25% profitability + 25% trend/RS + 10% valuation (missing parts dropped)",
+            "stability": f"an incumbent is replaced only when beaten by {SWAP_MARGIN:.0f}+ points; max {MAX_PER_SECTOR_GROUP} per industry sector",
+        },
+        "picks": [_pick_record(p) for p in selected],
+        "bench": bench,
+        "updated_at": now,
+        "computed_at": now,
     }
-
     try:
         with open(LT_MONTHLY_PICKS_FILE, "w", encoding="utf-8") as f:
             json.dump(cohort_data, f, indent=2)
-    except Exception as e:
-        print(f"[lt_engine] failed to save {LT_MONTHLY_PICKS_FILE}: {e}")
-
+    except Exception:
+        pass
     return cohort_data
+
 
 
 if __name__ == "__main__":

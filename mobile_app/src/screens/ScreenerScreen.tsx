@@ -36,12 +36,13 @@ const pickDirection = (p: StockPick): "BUY" | "SELL" | undefined => {
 };
 
 const pickScore = (p: StockPick): number | undefined =>
-  p.intraday_score ?? p.swing_score ?? p.total_score;
+  p.combined_rank_score ?? p.intraday_score ?? p.swing_score ?? p.total_score;
 
-const pickEntry = (p: StockPick) => p.srv_entry ?? p.ltp;
+// Long-term picks enter at their GTT dip level, not at the current price.
+const pickEntry = (p: StockPick) => p.srv_entry ?? p.gtt_level ?? p.ltp;
 const pickStop = (p: StockPick) => p.srv_stop ?? p.stop_loss ?? p.gtt_pullback_level;
 const pickTarget = (p: StockPick) => p.srv_target1 ?? p.target1 ?? p.gtt_breakout_level;
-const pickReason = (p: StockPick) => p.srv_reason ?? p.rationale ?? p.status_badge ?? p.srv_setup;
+const pickReason = (p: StockPick) => p.srv_reason ?? p.rationale ?? p.status_reason ?? p.status_badge ?? p.srv_setup;
 
 const StockCard: React.FC<{ pick: StockPick }> = ({ pick }) => {
   const dir = pickDirection(pick);
@@ -76,6 +77,25 @@ const StockCard: React.FC<{ pick: StockPick }> = ({ pick }) => {
         {score != null && (
           <View style={styles.scoreBadge}>
             <Text style={styles.scoreText}>SCORE {Math.round(score)}</Text>
+          </View>
+        )}
+        {pick.combined_rank_score != null && !!pick.status_badge && (
+          <View style={styles.scoreBadge}>
+            <Text
+              style={[
+                styles.scoreText,
+                {
+                  color:
+                    pick.status === "BUY_NOW"
+                      ? theme.colors.green
+                      : pick.status === "WAIT"
+                      ? theme.colors.yellow
+                      : theme.colors.textDim,
+                },
+              ]}
+            >
+              {pick.status_badge}
+            </Text>
           </View>
         )}
       </View>

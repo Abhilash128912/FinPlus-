@@ -10,18 +10,6 @@ import math
 import pandas as pd
 import numpy as np
 
-PORTFOLIO_FUNDAMENTAL_FALLBACKS = {
-    "ITC": {"returnOnEquity": 0.338, "debtToEquity": 0.0, "profitMargins": 0.285, "trailingPE": 15.2},
-    "BEL": {"returnOnEquity": 0.245, "debtToEquity": 0.0, "profitMargins": 0.214, "trailingPE": 48.3},
-    "ASHOKLEY": {"returnOnEquity": 0.216, "debtToEquity": 34.5, "profitMargins": 0.062, "trailingPE": 29.9},
-    "FEDERALBNK": {"returnOnEquity": 0.148, "debtToEquity": 0.0, "profitMargins": 0.185, "trailingPE": 11.5},
-    "TATAPOWER": {"returnOnEquity": 0.125, "debtToEquity": 120.0, "profitMargins": 0.112, "trailingPE": 32.5},
-    "TATASTEEL": {"returnOnEquity": 0.102, "debtToEquity": 85.0, "profitMargins": 0.085, "trailingPE": 24.8},
-    "NMDC": {"returnOnEquity": 0.285, "debtToEquity": 0.0, "profitMargins": 0.320, "trailingPE": 10.8},
-    "UYFINCORP": {"returnOnEquity": 0.134, "debtToEquity": 1.0, "profitMargins": 0.296, "trailingPE": 7.47},
-    "BORANA": {"returnOnEquity": 0.350, "debtToEquity": 25.0, "profitMargins": 0.166, "trailingPE": 13.33}
-}
-
 def classify_incumbent(info: dict) -> str:
     """
     Classifies stock into 5 status buckets based on fundamental trends:
@@ -42,12 +30,9 @@ def score_strength(info: dict) -> tuple[float, dict]:
     Strength Score (0-100): Is the business fundamentally healthy?
     Returns (score, breakdown_dict)
     """
-    sym = (info.get("symbol") or info.get("shortName") or info.get("longName") or "").strip().upper()
-    for clean_sym, fallbacks in PORTFOLIO_FUNDAMENTAL_FALLBACKS.items():
-        if clean_sym in sym or sym == clean_sym:
-            for fk, fv in fallbacks.items():
-                if info.get(fk) is None:
-                    info[fk] = fv
+    # (A hardcoded per-symbol fundamentals table used to be merged in here, matched by
+    # SUBSTRING -- so "MITCON" or "KILITCH" inherited ITC's ROE/PE/margins. Removed:
+    # a missing metric stays missing and the score is partial.)
 
     breakdown = {}
     score = 0.0

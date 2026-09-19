@@ -616,6 +616,33 @@ def _lt_scan_loop():
         time.sleep(LT_SCAN_INTERVAL_SECONDS)
 
 
+def _lt_cohort_loop():
+    """Lean-mode refresh of the best-10 long-term list: recomputes it (cheap -- reads the
+    fundamentals cache and the shared scan snapshot) and overlays live prices so each pick's
+    BUY_NOW / WAIT / WATCH status follows the market."""
+    time.sleep(20)
+    while True:
+        try:
+            raw = equity_scan.load_screener_data()
+            cohort = lt_engine.get_or_refresh_monthly_picks(raw, top_n=10)
+            cohort = lt_engine.refresh_live_status(cohort)
+            with _lt_lock:
+                _lt_state["result"] = {
+                    "monthly_cohort": cohort,
+                    "picks": cohort.get("picks", []),
+                    "bench": cohort.get("bench", []),
+                    "prices_live": cohort.get("prices_live"),
+                    "monthly_sip_budget": 200.0,
+                }
+                _lt_state["updated_at"] = datetime.now(timezone.utc)
+                _lt_state["error"] = None
+        except Exception as exc:
+            with _lt_lock:
+                _lt_state["error"] = f"{type(exc).__name__}: {exc}"
+            traceback.print_exc()
+        time.sleep(120)
+
+
 def _penny_scan_loop():
     while True:
         try:
@@ -2339,6 +2366,7 @@ def start_all_background_threads():
             # fetched, sequentially at a polite pace) so long-term picks never fall back
             # to invented values.
             threading.Thread(target=_fundamentals_warm_loop, daemon=True).start()
+            threading.Thread(target=_lt_cohort_loop, daemon=True).start()
             print("[startup] ENABLE_FULL_SCAN_SUITE not set -- running Intraday + Trend Analyser + Swing "
                   "loops only (long-term/penny/options scans off to fit the free-tier 512MB limit)")
         totp_auth.start_totp_refresher_thread()

@@ -116,6 +116,10 @@ export interface StockPick {
   swing_score?: number;
   swing_action?: string;
   status_badge?: string;
+  status?: string;
+  status_reason?: string;
+  gtt_level?: number;
+  combined_rank_score?: number;
   fundamentals_available?: boolean; // false = the fundamentals behind this pick are not available
   gtt_breakout_level?: number;
   gtt_pullback_level?: number;
