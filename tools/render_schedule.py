@@ -70,6 +70,13 @@ def plan(services: list[dict], now: datetime.datetime | None = None) -> list[tup
     return actions
 
 
+def annotate(level: str, message: str) -> None:
+    """Also surface a result as a GitHub Actions annotation (readable without opening the raw log).
+    Carries service names/slugs/states/HTTP codes only -- never the API key."""
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"::{level} title=Render schedule::{message.replace(chr(10), ' | ')}")
+
+
 def _headers(key: str) -> dict:
     return {"Authorization": f"Bearer {key}", "Accept": "application/json"}
 
@@ -107,9 +114,13 @@ def main(argv: list[str]) -> int:
         print("Services this API key can see (name / slug / state):")
         for s in services:
             print(f"  - {s.get('name')} / {s.get('slug')} / {s.get('suspended')}")
+        annotate("error", "Not found: " + ", ".join(missing) + ". This API key can see: "
+                 + "; ".join(f"{s.get('name')} [{s.get('slug')}, {s.get('suspended')}]" for s in services))
     actions = plan(services, now)
     if not actions:
         print("Already in the desired state; nothing to do.")
+        annotate("notice", f"Already in desired state ({'RUNNING' if desired_running(now) else 'SUSPENDED'}); services seen: "
+                 + ", ".join(sorted(f"{s.get('slug')}={s.get('suspended')}" for s in services if match_slug(s))))
     for action, sid, slug in actions:
         print(f"{'[dry-run] ' if dry else ''}{action} {slug} ({sid})")
         if dry:
@@ -118,7 +129,9 @@ def main(argv: list[str]) -> int:
         print(f"  -> HTTP {r.status_code}")
         if r.status_code >= 300:
             print(r.text[:300])
+            annotate("error", f"{action} {slug} failed: HTTP {r.status_code} {r.text[:200]}")
             return 1
+        annotate("notice", f"{action} {slug}: HTTP {r.status_code}")
     return 1 if missing else 0
 
 
