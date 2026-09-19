@@ -3,9 +3,25 @@ totp_auth.py - Automated INDmoney TOTP Authentication & Daily Token Refresher
 
 Automates token generation so you never need to copy-paste tokens every day:
 1. Generates the 6-digit TOTP dynamically via pyotp using your base32 TOTP secret.
-2. Exchanges credentials + TOTP with INDmoney's authentication endpoint.
+2. Calls INDstocks' own documented TOTP token endpoint with mpin + totp.
 3. Automatically validates and saves the new JWT access token via token_manager.
 4. Provides a scheduled morning auto-refresh (runs daily at 8:45 AM IST or when token < 60m).
+
+2026-09-19: this previously called guessed endpoints
+(/user/login/verify-totp, /user/token/generate) that don't appear anywhere
+in INDstocks' real API surface -- they silently 404'd, which is why this
+was never actually configured. Confirmed against the real published docs
+at api-docs.indstocks.com/Users/: the one true endpoint is POST
+/generate/token, authenticated by an `x-api-key` header (the Client ID
+INDstocks issues when you complete "Setup TOTP" on their access-tokens
+page), with only {mpin, totp} in the body. This is an official INDstocks
+feature built for exactly this purpose -- not reverse-engineered, not
+scraped, and it requires its own one-time opt-in on their dashboard
+(Setup TOTP -> scan QR -> confirm within 5 min -> Client ID is issued).
+Docs also state: only one TOTP-generated token is live at a time (each
+call invalidates the previous one), max 1 call per 60s, and 5 failed TOTP
+attempts triggers a 15-minute lockout -- the refresher daemon below only
+calls this a few times a day, well under either limit.
 """
 import datetime
 import logging
@@ -22,10 +38,9 @@ import token_manager
 logger = logging.getLogger("totp_auth")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# INDmoney / INDstocks Auth Endpoints
+# INDstocks' real, documented TOTP token endpoint (api-docs.indstocks.com/Users/).
 INDMONEY_API_BASE = "https://api.indstocks.com"
-LOGIN_ENDPOINT = f"{INDMONEY_API_BASE}/user/login/verify-totp"
-TOKEN_EXCHANGE_ENDPOINT = f"{INDMONEY_API_BASE}/user/token/generate"
+TOKEN_GENERATE_ENDPOINT = f"{INDMONEY_API_BASE}/generate/token"
 
 
 def get_current_totp(secret: Optional[str] = None) -> Optional[str]:
@@ -46,17 +61,22 @@ def refresh_token_using_totp(
     client_id: Optional[str] = None,
     mpin: Optional[str] = None,
     totp_secret: Optional[str] = None,
-    api_key: Optional[str] = None,
 ) -> Tuple[bool, str]:
-    """Attempts automated token generation using credentials and live TOTP.
+    """Calls INDstocks' real POST /generate/token with {mpin, totp}, the
+    Client ID as the `x-api-key` header -- both issued together by their
+    "Setup TOTP" flow on the access-tokens dashboard page, a one-time,
+    INDstocks-sanctioned opt-in, not something scraped or reverse-engineered.
 
-    Returns (success, message_or_token).
+    Returns (success, message).
     """
     cid = client_id or os.environ.get("INDMONEY_CLIENT_ID", "")
     pin = mpin or os.environ.get("INDMONEY_MPIN", "")
     secret = totp_secret or os.environ.get("INDMONEY_TOTP_SECRET", "")
-    key = api_key or os.environ.get("INDMONEY_API_KEY", "")
 
+    if not cid:
+        return False, "INDMONEY_CLIENT_ID is not configured in indmoney.env"
+    if not pin:
+        return False, "INDMONEY_MPIN is not configured in indmoney.env"
     if not secret:
         return False, "INDMONEY_TOTP_SECRET is not configured in indmoney.env"
 
@@ -64,35 +84,21 @@ def refresh_token_using_totp(
     if not current_otp:
         return False, "Could not generate valid TOTP from secret"
 
-    # Attempt auth call against INDmoney API
-    payload = {
-        "client_id": cid,
-        "mpin": pin,
-        "totp": current_otp,
-    }
+    payload = {"mpin": pin, "totp": current_otp}
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
+        "x-api-key": cid,
     }
-    if key:
-        headers["X-API-KEY"] = key
 
     try:
-        # Try primary token generation endpoint
-        resp = requests.post(TOKEN_EXCHANGE_ENDPOINT, json=payload, headers=headers, timeout=15)
-        if resp.status_code == 404:
-            # Fallback to secondary auth endpoint
-            resp = requests.post(LOGIN_ENDPOINT, json=payload, headers=headers, timeout=15)
-
+        resp = requests.post(TOKEN_GENERATE_ENDPOINT, json=payload, headers=headers, timeout=15)
         if resp.status_code == 200:
             data = resp.json()
-            # Find the token in common response shapes
-            token = (
-                data.get("data", {}).get("access_token")
-                or data.get("access_token")
-                or data.get("token")
-                or data.get("data", {}).get("token")
-            )
+            # Docs (api-docs.indstocks.com/Users/) describe {"data": {"token": ...}},
+            # but the live endpoint actually returns a flat {"token": ...} --
+            # confirmed against a real successful call. Accept either shape.
+            token = data.get("token") or (data.get("data") or {}).get("token")
             if token:
                 valid, reason = token_manager.test_token(token)
                 if valid:
@@ -101,8 +107,9 @@ def refresh_token_using_totp(
                     return True, "Token successfully refreshed and applied."
                 return False, f"Token obtained but failed live validation: {reason}"
             return False, f"Token not found in response: {resp.text[:200]}"
-        else:
-            return False, f"INDmoney auth returned HTTP {resp.status_code}: {resp.text[:200]}"
+        if resp.status_code == 429:
+            return False, "Rate-limited by INDstocks (max 1 token/60s, or 15-min lockout after 5 failed TOTP attempts)."
+        return False, f"INDstocks TOTP endpoint returned HTTP {resp.status_code}: {resp.text[:200]}"
     except Exception as e:
         return False, f"TOTP auth request exception: {e}"
 

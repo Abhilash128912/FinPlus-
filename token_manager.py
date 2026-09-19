@@ -111,10 +111,31 @@ def save_token(new_token: str, base_dir: str) -> None:
     """Writes indmoney.env AND updates the running process's os.environ in
     the same call -- every background loop reads the token via
     os.environ.get() on each poll, not once at import time, so this takes
-    effect on the very next tick, not the next restart."""
+    effect on the very next tick, not the next restart.
+
+    2026-09-19: this used to truncate indmoney.env and write only the
+    token line, silently deleting INDMONEY_CLIENT_ID/MPIN/TOTP_SECRET the
+    moment a TOTP auto-refresh succeeded -- destroying the credentials the
+    *next* auto-refresh needs. Now it rewrites only the token line and
+    preserves every other key already in the file."""
     new_token = new_token.strip()
-    with open(_env_file_path(base_dir), "w", encoding="utf-8") as f:
-        f.write(f"{TOKEN_KEY}={new_token}\n")
+    env_path = _env_file_path(base_dir)
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, encoding="utf-8") as f:
+            lines = f.readlines()
+
+    found = False
+    for i, line in enumerate(lines):
+        if line.strip().startswith(f"{TOKEN_KEY}="):
+            lines[i] = f"{TOKEN_KEY}={new_token}\n"
+            found = True
+            break
+    if not found:
+        lines.append(f"{TOKEN_KEY}={new_token}\n")
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
 
     # Sync to FINPLUS COMMAND and notify master hub
     command_shared_paths = [

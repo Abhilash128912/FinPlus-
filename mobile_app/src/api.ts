@@ -229,11 +229,19 @@ function computePivotSignal(
 }
 
 // ── Autonomous Markets Fetcher (Server first, Direct Market Cloud fallback) ──
+//
+// If /api/markets fails (missing key, RADAR offline, network blip), this
+// used to backfill every symbol with numbers hardcoded in this file --
+// frozen at whatever NIFTY/crude/etc. happened to be when this code was
+// written -- and label the result "Live Cloud Direct", indistinguishable
+// from a genuine live read. That silently showed stale, made-up prices as
+// current. Now a symbol only appears here if a real quote (server or
+// direct Yahoo/MCX) actually came back; anything else is simply omitted,
+// so the UI's own "--" placeholder shows instead of a fabricated number.
 export const fetchMarkets = async (): Promise<MarketsResponse> => {
   try {
     return await request<MarketsResponse>("/api/markets", 3000);
   } catch (_) {
-    // Autonomous Fallback: Query live quotes directly for away mode
     const [niftyQ, bankQ, relianceQ, mcxData] = await Promise.all([
       fetchDirectYahooChart("^NSEI"),
       fetchDirectYahooChart("^NSEBANK"),
@@ -241,53 +249,49 @@ export const fetchMarkets = async (): Promise<MarketsResponse> => {
       fetchDirectRenderMCX(),
     ]);
 
-    const crudeLtp = mcxData?.crude?.mcx_ltp || 9532.0;
-    const crudeHigh = mcxData?.crude?.mcx_high || crudeLtp * 1.01;
-    const crudeLow = mcxData?.crude?.mcx_low || crudeLtp * 0.99;
-    const crudePrev = mcxData?.crude?.mcx_prev_close || crudeLtp;
-    const crudePct = mcxData?.crude?.mcx_pct || 0;
+    const crudeLtp = mcxData?.crude?.mcx_ltp;
+    const crudeHigh = mcxData?.crude?.mcx_high ?? (crudeLtp ? crudeLtp * 1.01 : undefined);
+    const crudeLow = mcxData?.crude?.mcx_low ?? (crudeLtp ? crudeLtp * 0.99 : undefined);
+    const crudePrev = mcxData?.crude?.mcx_prev_close ?? crudeLtp;
+    const crudePct = mcxData?.crude?.mcx_pct ?? 0;
 
-    const gasLtp = mcxData?.gas?.mcx_ltp || 269.6;
-    const gasHigh = mcxData?.gas?.mcx_high || gasLtp * 1.01;
-    const gasLow = mcxData?.gas?.mcx_low || gasLtp * 0.99;
-    const gasPrev = mcxData?.gas?.mcx_prev_close || gasLtp;
-    const gasPct = mcxData?.gas?.mcx_pct || 0;
+    const gasLtp = mcxData?.gas?.mcx_ltp;
+    const gasHigh = mcxData?.gas?.mcx_high ?? (gasLtp ? gasLtp * 1.01 : undefined);
+    const gasLow = mcxData?.gas?.mcx_low ?? (gasLtp ? gasLtp * 0.99 : undefined);
+    const gasPrev = mcxData?.gas?.mcx_prev_close ?? gasLtp;
+    const gasPct = mcxData?.gas?.mcx_pct ?? 0;
 
-    const nLtp = niftyQ?.ltp || 23398.1;
-    const bLtp = bankQ?.ltp || 56606.5;
-    const rLtp = relianceQ?.ltp || 1257.5;
+    const signals: Record<string, SignalData> = {};
+    const fast_ltp: Record<string, number> = {};
+    const fast_change: Record<string, number> = {};
+    const spark: Record<string, number[]> = {};
 
-    const signals: Record<string, SignalData> = {
-      nifty: computePivotSignal(nLtp, niftyQ?.high || nLtp * 1.008, niftyQ?.low || nLtp * 0.992, niftyQ?.prevClose || nLtp, "NIFTY 50"),
-      banknifty: computePivotSignal(bLtp, bankQ?.high || bLtp * 1.01, bankQ?.low || bLtp * 0.99, bankQ?.prevClose || bLtp, "BANK NIFTY"),
-      crude: computePivotSignal(crudeLtp, crudeHigh, crudeLow, crudePrev, "CRUDE OIL (MCX)"),
-      natgas: computePivotSignal(gasLtp, gasHigh, gasLow, gasPrev, "NATURAL GAS (MCX)"),
-      reliance: computePivotSignal(rLtp, relianceQ?.high || rLtp * 1.01, relianceQ?.low || rLtp * 0.99, relianceQ?.prevClose || rLtp, "RELIANCE"),
+    const add = (
+      key: string,
+      ltp: number | undefined,
+      high: number | undefined,
+      low: number | undefined,
+      prevClose: number | undefined,
+      change: number | undefined,
+      sparkVals: number[] | undefined,
+      label: string
+    ) => {
+      if (ltp === undefined || ltp === null || isNaN(ltp)) return; // no real quote -- leave it out
+      signals[key] = computePivotSignal(ltp, high ?? ltp, low ?? ltp, prevClose ?? ltp, label);
+      fast_ltp[key] = ltp;
+      fast_change[key] = change ?? 0;
+      spark[key] = sparkVals && sparkVals.length ? sparkVals : [ltp];
     };
 
-    const fast_ltp: Record<string, number> = {
-      nifty: nLtp,
-      banknifty: bLtp,
-      crude: crudeLtp,
-      natgas: gasLtp,
-      reliance: rLtp,
-    };
+    add("nifty", niftyQ?.ltp, niftyQ?.high, niftyQ?.low, niftyQ?.prevClose, niftyQ?.change, niftyQ?.spark, "NIFTY 50");
+    add("banknifty", bankQ?.ltp, bankQ?.high, bankQ?.low, bankQ?.prevClose, bankQ?.change, bankQ?.spark, "BANK NIFTY");
+    add("reliance", relianceQ?.ltp, relianceQ?.high, relianceQ?.low, relianceQ?.prevClose, relianceQ?.change, relianceQ?.spark, "RELIANCE");
+    add("crude", crudeLtp, crudeHigh, crudeLow, crudePrev, crudePct, crudeLtp && crudeLow && crudeHigh ? [crudeLow, (crudeLow + crudeHigh) / 2, crudeHigh, crudeLtp] : undefined, "CRUDE OIL (MCX)");
+    add("natgas", gasLtp, gasHigh, gasLow, gasPrev, gasPct, gasLtp && gasLow && gasHigh ? [gasLow, (gasLow + gasHigh) / 2, gasHigh, gasLtp] : undefined, "NATURAL GAS (MCX)");
 
-    const fast_change: Record<string, number> = {
-      nifty: niftyQ?.change || 0,
-      banknifty: bankQ?.change || 0,
-      crude: crudePct,
-      natgas: gasPct,
-      reliance: relianceQ?.change || 0,
-    };
-
-    const spark: Record<string, number[]> = {
-      nifty: niftyQ?.spark || [nLtp],
-      banknifty: bankQ?.spark || [bLtp],
-      crude: [crudeLow, (crudeLow + crudeHigh) / 2, crudeHigh, crudeLtp],
-      natgas: [gasLow, (gasLow + gasHigh) / 2, gasHigh, gasLtp],
-      reliance: relianceQ?.spark || [rLtp],
-    };
+    if (Object.keys(signals).length === 0) {
+      throw new Error("RADAR server unreachable and no backup market data available.");
+    }
 
     return {
       success: true,
@@ -299,9 +303,9 @@ export const fetchMarkets = async (): Promise<MarketsResponse> => {
       spark,
       trends: {},
       token_status: {
-        has_token: true,
+        has_token: false,
         is_expired: false,
-        data_source: "Live Cloud Direct",
+        data_source: "Backup feed (delayed, server unreachable)",
         fallback_active: true,
       },
     };
@@ -309,40 +313,44 @@ export const fetchMarkets = async (): Promise<MarketsResponse> => {
 };
 
 // ── Autonomous Commodities Fetcher ──
+// Same rule as fetchMarkets: only ever show a number that came from a real
+// quote. If MCX direct-cloud data isn't available either, throw instead of
+// backfilling with figures hardcoded in this file.
 export const fetchCommodities = async (): Promise<CommoditiesResponse> => {
   try {
     return await request<CommoditiesResponse>("/api/commodities", 3000);
   } catch (_) {
     const mcxData = await fetchDirectRenderMCX();
-    const crudeLtp = mcxData?.crude?.mcx_ltp || 9532.0;
-    const crudeHigh = mcxData?.crude?.mcx_high || crudeLtp * 1.012;
-    const crudeLow = mcxData?.crude?.mcx_low || crudeLtp * 0.988;
-    const crudePrev = mcxData?.crude?.mcx_prev_close || crudeLtp;
-    const crudePct = mcxData?.crude?.mcx_pct || 0.05;
+    const crudeLtp = mcxData?.crude?.mcx_ltp;
+    const gasLtp = mcxData?.gas?.mcx_ltp;
+    if (crudeLtp === undefined && gasLtp === undefined) {
+      throw new Error("RADAR server unreachable and no backup MCX data available.");
+    }
 
-    const gasLtp = mcxData?.gas?.mcx_ltp || 269.6;
-    const gasHigh = mcxData?.gas?.mcx_high || gasLtp * 1.015;
-    const gasLow = mcxData?.gas?.mcx_low || gasLtp * 0.985;
-    const gasPrev = mcxData?.gas?.mcx_prev_close || gasLtp;
-    const gasPct = mcxData?.gas?.mcx_pct || 0.0;
+    const crudeHigh = mcxData?.crude?.mcx_high ?? (crudeLtp ? crudeLtp * 1.012 : undefined);
+    const crudeLow = mcxData?.crude?.mcx_low ?? (crudeLtp ? crudeLtp * 0.988 : undefined);
+    const crudePrev = mcxData?.crude?.mcx_prev_close ?? crudeLtp;
+    const crudePct = mcxData?.crude?.mcx_pct ?? 0;
 
-    const crudeSignal = computePivotSignal(crudeLtp, crudeHigh, crudeLow, crudePrev, "CRUDEOIL");
-    const gasSignal = computePivotSignal(gasLtp, gasHigh, gasLow, gasPrev, "NATURALGAS");
+    const gasHigh = mcxData?.gas?.mcx_high ?? (gasLtp ? gasLtp * 1.015 : undefined);
+    const gasLow = mcxData?.gas?.mcx_low ?? (gasLtp ? gasLtp * 0.985 : undefined);
+    const gasPrev = mcxData?.gas?.mcx_prev_close ?? gasLtp;
+    const gasPct = mcxData?.gas?.mcx_pct ?? 0;
 
     return {
       success: true,
-      crude: {
-        signal: crudeSignal,
+      crude: crudeLtp === undefined ? { signal: {}, spark: [], bars: [] } : {
+        signal: computePivotSignal(crudeLtp, crudeHigh ?? crudeLtp, crudeLow ?? crudeLtp, crudePrev ?? crudeLtp, "CRUDEOIL"),
         ltp: crudeLtp,
         change: crudePct,
-        spark: [crudeLow, (crudeLow + crudeHigh) / 2, crudeHigh, crudeLtp],
+        spark: crudeHigh && crudeLow ? [crudeLow, (crudeLow + crudeHigh) / 2, crudeHigh, crudeLtp] : [crudeLtp],
         bars: [],
       },
-      natgas: {
-        signal: gasSignal,
+      natgas: gasLtp === undefined ? { signal: {}, spark: [], bars: [] } : {
+        signal: computePivotSignal(gasLtp, gasHigh ?? gasLtp, gasLow ?? gasLtp, gasPrev ?? gasLtp, "NATURALGAS"),
         ltp: gasLtp,
         change: gasPct,
-        spark: [gasLow, (gasLow + gasHigh) / 2, gasHigh, gasLtp],
+        spark: gasHigh && gasLow ? [gasLow, (gasLow + gasHigh) / 2, gasHigh, gasLtp] : [gasLtp],
         bars: [],
       },
     };
@@ -385,24 +393,26 @@ export const fetchAlerts = async (): Promise<AlertsResponse> => {
       }
     }
 
+    // Historical win/loss outcomes only exist in RADAR's real signal
+    // journal (signal_journal.py), which isn't reachable in this fallback
+    // path -- reporting invented resolved/win-rate numbers here would show
+    // a fake track record as if it were real. Honestly report "no data"
+    // instead; the currently-open setups above are still real quotes.
     return {
       success: true,
       recent,
       stats: {
         overall: {
-          resolved: 14,
+          resolved: 0,
           open: recent.length,
-          wins: 10,
-          losses: 4,
-          win_rate: 71,
-          expectancy_r: 1.9,
+          wins: 0,
+          losses: 0,
+          win_rate: null,
+          expectancy_r: null,
         },
         crude: null,
         natgas: null,
-        by_setup: {
-          "Pivot Support Bounce": { wins: 6, losses: 2, win_rate: 75 },
-          "Pivot Resistance Rejection": { wins: 4, losses: 2, win_rate: 67 },
-        },
+        by_setup: {},
       },
     };
   }

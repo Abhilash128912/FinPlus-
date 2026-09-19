@@ -117,6 +117,7 @@ export const TrendScreen: React.FC = () => {
 
         {marketCards.map((item) => {
           const ltp = data?.fast_ltp?.[item.key] || data?.signals?.[item.key]?.live_ltp;
+          const hasData = ltp !== undefined && ltp !== null && !isNaN(ltp);
           const change = data?.fast_change?.[item.key] ?? data?.signals?.[item.key]?.change ?? 0;
           const isUp = change >= 0;
           const sig = data?.signals?.[item.key];
@@ -138,11 +139,11 @@ export const TrendScreen: React.FC = () => {
                   <Text
                     style={[
                       styles.changeText,
-                      { color: isUp ? theme.colors.green : theme.colors.red },
+                      { color: !hasData ? theme.colors.textDim : isUp ? theme.colors.green : theme.colors.red },
                     ]}
                   >
-                    {isUp ? "▲ +" : "▼ "}
-                    {change ? change.toFixed(2) : "0.00"}%
+                    {hasData ? (isUp ? "▲ +" : "▼ ") : ""}
+                    {hasData ? change.toFixed(2) + "%" : "No data"}
                   </Text>
                 </View>
               </View>
@@ -156,30 +157,32 @@ export const TrendScreen: React.FC = () => {
                 <View style={styles.signalCol}>
                   <Text style={styles.metaLabel}>TREND STATUS</Text>
                   <SignalBadge
-                    signal={sig?.srv_signal || (isUp ? "BUY" : "SELL")}
-                    setup={sig?.srv_setup || "Trend Analysis"}
+                    signal={sig?.srv_signal || (hasData ? (isUp ? "BUY" : "SELL") : "NONE")}
+                    setup={sig?.srv_setup || (hasData ? "Trend Analysis" : "Awaiting feed")}
                   />
                 </View>
               </View>
 
-              {/* Pivot Levels Row */}
+              {/* Pivot Levels Row -- only ever derived from a real LTP; an
+                  absent feed shows "--" rather than a 0/flat-ltp guess that
+                  looks like a genuine, if oddly quiet, price level. */}
               <View style={styles.pivotRow}>
                 <View style={styles.pivotBox}>
                   <Text style={styles.pivotLabel}>SUPPORT (S1)</Text>
                   <Text style={styles.pivotVal}>
-                    ₹{formatPrice(sig?.s1 || (ltp ? ltp * 0.992 : 0))}
+                    ₹{formatPrice(sig?.s1 ?? (hasData ? ltp * 0.992 : undefined))}
                   </Text>
                 </View>
                 <View style={styles.pivotBox}>
                   <Text style={styles.pivotLabel}>PIVOT (P)</Text>
                   <Text style={[styles.pivotVal, { color: theme.colors.accent }]}>
-                    ₹{formatPrice(sig?.pivot || ltp)}
+                    ₹{formatPrice(sig?.pivot ?? (hasData ? ltp : undefined))}
                   </Text>
                 </View>
                 <View style={styles.pivotBox}>
                   <Text style={styles.pivotLabel}>RESISTANCE (R1)</Text>
                   <Text style={[styles.pivotVal, { color: theme.colors.green }]}>
-                    ₹{formatPrice(sig?.r1 || (ltp ? ltp * 1.008 : 0))}
+                    ₹{formatPrice(sig?.r1 ?? (hasData ? ltp * 1.008 : undefined))}
                   </Text>
                 </View>
               </View>

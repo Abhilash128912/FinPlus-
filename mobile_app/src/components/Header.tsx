@@ -47,14 +47,26 @@ export const Header: React.FC<HeaderProps> = ({
 
   const isTokenActive = tokenStatus?.has_token && !tokenStatus?.is_expired;
   const minsRemaining = tokenStatus?.expires_in_min;
-  const isFallback = tokenStatus?.fallback_active || !isTokenActive;
 
-  const dotColor = isTokenActive ? theme.colors.green : theme.colors.accent;
+  // RADAR's real /api/markets never sends `data_source` or `fallback_active`
+  // -- those only appear when this client's own backup path (api.ts) built
+  // the response itself. Previously, any real-but-tokenless server reply
+  // (has_token: false, no data_source) fell through to a hardcoded
+  // "Live Cloud Direct" label -- claiming a healthy live feed while every
+  // price on screen was actually blank/zero. Distinguish that case
+  // explicitly instead of defaulting to a reassuring-sounding fallback.
+  const dotColor = isTokenActive
+    ? theme.colors.green
+    : tokenStatus?.fallback_active
+    ? theme.colors.accent
+    : theme.colors.red;
   const statusLabel = tokenStatus?.data_source
     ? tokenStatus.data_source
     : isTokenActive
     ? `INDmoney Live (${minsRemaining ? Math.round(minsRemaining) : "?"}m)`
-    : "Live Cloud Direct";
+    : tokenStatus
+    ? "No live feed — token missing/expired on server"
+    : "Connecting…";
 
   return (
     <>
@@ -121,7 +133,7 @@ export const Header: React.FC<HeaderProps> = ({
             <View style={styles.quickRows}>
               <TouchableOpacity
                 style={styles.quickChip}
-                onPress={() => setUrlInput("https://finplus-g0b5.onrender.com")}
+                onPress={() => setUrlInput("https://finplus-1.onrender.com")}
               >
                 <Text style={styles.quickChipText}>Render Cloud</Text>
               </TouchableOpacity>
