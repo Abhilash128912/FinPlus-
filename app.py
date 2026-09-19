@@ -440,7 +440,7 @@ def _attach_trend_display(trends: dict) -> None:
         rate = _get_usdinr_rate() if is_commodity else 1.0
 
         def conv(v):
-            return None if v is None else round(v * rate, 2)
+            return None if (v is None or not rate) else round(v * rate, 2)
 
         ltp = conv(t.get("ltp"))
         wk = conv(t.get("week_high_52"))
@@ -451,8 +451,11 @@ def _attach_trend_display(trends: dict) -> None:
             "ma200": conv(t.get("ma200")),
             "week_high_52": wk,
             "dist_52h_pct": round((ltp - wk) / wk * 100, 1) if ltp and wk else None,
-            "note": "INR-equivalent, derived from the daily USD NYMEX series" if is_commodity else None,
-            "usdinr": round(rate, 2) if is_commodity else None,
+            "note": (
+                "INR-equivalent, derived from the daily USD NYMEX series" if (is_commodity and rate)
+                else ("USD/INR rate not available, so INR-equivalent levels cannot be shown" if is_commodity else None)
+            ),
+            "usdinr": round(rate, 2) if (is_commodity and rate) else None,
         }
 
 
@@ -1406,17 +1409,25 @@ _usdinr_cache = {"rate": None, "at": 0.0}
 USDINR_TTL_SEC = 300
 
 
-def _get_usdinr_rate() -> float:
+def _get_usdinr_rate() -> float | None:
     """Cached 5 min -- FX doesn't move fast enough to justify fetching it
     every render, and this is only used to convert a USD trend series to
-    an INR-comparable display figure, not to price anything."""
+    an INR-comparable display figure, not to price anything.
+
+    Returns the last REAL rate fetched, or None when no real rate has ever
+    been obtained -- there is no hardcoded default rate (callers then show the
+    INR-equivalent figures as not available)."""
     if _usdinr_cache["rate"] is not None and time.time() - _usdinr_cache["at"] < USDINR_TTL_SEC:
         return _usdinr_cache["rate"]
+    rate = None
     try:
         hist = yf.Ticker("USDINR=X").history(period="1d", interval="1m")
-        rate = float(hist["Close"].iloc[-1]) if not hist.empty else 88.0
+        if not hist.empty:
+            rate = float(hist["Close"].iloc[-1])
     except Exception:
-        rate = _usdinr_cache["rate"] or 88.0
+        rate = None
+    if rate is None:
+        return _usdinr_cache["rate"]  # last real value, or None
     _usdinr_cache["rate"] = rate
     _usdinr_cache["at"] = time.time()
     return rate
@@ -1590,7 +1601,7 @@ def _trend_card_html(item: dict, t: dict, mcx_live_ltp: float | None = None) -> 
     rate = _get_usdinr_rate() if is_commodity else 1.0
 
     def conv(val):
-        return None if val is None else val * rate
+        return None if (val is None or not rate) else val * rate
 
     ltp = conv(t.get("ltp"))
     ema20, ma50, ma200, week_high_52 = (conv(t.get(k)) for k in ("ema20", "ma50", "ma200", "week_high_52"))

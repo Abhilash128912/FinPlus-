@@ -9541,8 +9541,8 @@ def fetch_commodity_signals() -> dict:
     from screener_engine import calculate_ema_crossover_15m
 
     # Fetch live USD/INR exchange rate via curl_cffi
-    usdinr_rate = fetch_live_price_only("USDINR=X") or 86.50
-    log(f"  Live USD/INR Rate: ₹{usdinr_rate:.2f}")
+    usdinr_rate = fetch_live_price_only("USDINR=X")  # None if unavailable -- no default rate
+    log(f"  Live USD/INR Rate: ₹{usdinr_rate:.2f}" if usdinr_rate else "  USD/INR rate not available")
 
     items = [
         {"id": "crude", "name": "Crude Oil", "ticker": "CL=F", "unit": "$",
@@ -9571,7 +9571,7 @@ def fetch_commodity_signals() -> dict:
                 "ticker": c["ticker"],
                 "unit": c["unit"],
                 "icon": c["icon"],
-                "usdinr": round(usdinr_rate, 2),
+                "usdinr": round(usdinr_rate, 2) if usdinr_rate else None,
                 # Real traded price when MCX answers. No dollar-times-FX fallback:
                 # a number that looks like an Indian price but is not one is worse
                 # than an empty field, because it invites a trade.
@@ -9613,7 +9613,7 @@ def fetch_commodity_signals() -> dict:
                 "ticker": c["ticker"],
                 "unit": c["unit"],
                 "icon": c["icon"],
-                "usdinr": round(usdinr_rate, 2),
+                "usdinr": round(usdinr_rate, 2) if usdinr_rate else None,
                 "mcx_inr_price": None,
                 "mcx_available": False,
                 "signal": "NO_DATA",

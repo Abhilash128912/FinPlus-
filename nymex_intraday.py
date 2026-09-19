@@ -36,23 +36,27 @@ PROXY_TICKERS = {"CRUDEOIL": "CL=F", "NATURALGAS": "NG=F"}
 
 _FX_CACHE = {"rate": None, "at": 0.0}
 _FX_TTL_SEC = 300.0
-_FX_FALLBACK = 88.0
 
 
-def get_usdinr_rate() -> float:
+def get_usdinr_rate() -> float | None:
     """USD/INR, cached 5 min. Used only to scale the USD proxy series to an
     INR-comparable level -- never to price a trade -- so a stale-by-minutes
-    rate or the conservative fallback is acceptable; what matters is not
-    fetching FX on every signal pass. Mirrors app._get_usdinr_rate() rather
+    (but real) rate is acceptable; what matters is not fetching FX on every
+    signal pass. Returns None when no real rate has ever been fetched -- there
+    is no hardcoded default rate, and callers degrade to the MCX-only series. Mirrors app._get_usdinr_rate() rather
     than importing the Flask app into the engine layer."""
     now = time.time()
     if _FX_CACHE["rate"] is not None and (now - _FX_CACHE["at"]) < _FX_TTL_SEC:
         return _FX_CACHE["rate"]
+    rate = None
     try:
         hist = yf.Ticker("USDINR=X").history(period="1d", interval="1m")
-        rate = float(hist["Close"].iloc[-1]) if hist is not None and not hist.empty else _FX_FALLBACK
+        if hist is not None and not hist.empty:
+            rate = float(hist["Close"].iloc[-1])
     except Exception:
-        rate = _FX_CACHE["rate"] or _FX_FALLBACK
+        rate = None
+    if rate is None:
+        return _FX_CACHE["rate"]  # last real value, or None
     _FX_CACHE["rate"] = rate
     _FX_CACHE["at"] = now
     return rate

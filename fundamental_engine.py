@@ -9,7 +9,7 @@ Features:
   - 30-day local disk caching in fundamentals_cache.json (financials update quarterly).
   - Rate-limit friendly: respectful throttling between web calls.
   - DuPont and balance sheet derived metrics where direct ratios are missing.
-  - Built-in fallback baselines for offline/resilient startup.
+  - No built-in/hardcoded baselines: unknown fundamentals are reported as None.
 """
 
 import json
@@ -22,24 +22,6 @@ from bs4 import BeautifulSoup
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(BASE_DIR, "fundamentals_cache.json")
 CACHE_TTL_SEC = 30 * 24 * 3600  # 30 days - fundamentals change quarterly
-
-# Pre-seeded baseline values for resilience
-PORTFOLIO_FALLBACKS = {
-    "RELIANCE": {"roe_pct": 8.91, "roce_pct": 10.3, "pe": 22.8, "pb": 1.88, "de_ratio": 0.42, "npm_pct": 8.2, "rev_growth_pct": 11.2, "div_yield": 0.48},
-    "TCS": {"roe_pct": 48.2, "roce_pct": 62.4, "pe": 27.5, "pb": 13.2, "de_ratio": 0.08, "npm_pct": 19.5, "rev_growth_pct": 8.4, "div_yield": 1.45},
-    "INFY": {"roe_pct": 31.9, "roce_pct": 40.0, "pe": 13.6, "pb": 4.61, "de_ratio": 0.10, "npm_pct": 16.4, "rev_growth_pct": 6.8, "div_yield": 4.63},
-    "HDFCBANK": {"roe_pct": 16.8, "roce_pct": 17.5, "pe": 18.2, "pb": 2.75, "de_ratio": 0.0, "npm_pct": 21.0, "rev_growth_pct": 15.6, "div_yield": 1.15},
-    "ICICIBANK": {"roe_pct": 18.5, "roce_pct": 19.2, "pe": 17.4, "pb": 3.10, "de_ratio": 0.0, "npm_pct": 24.5, "rev_growth_pct": 18.2, "div_yield": 0.85},
-    "ITC": {"roe_pct": 29.3, "roce_pct": 38.9, "pe": 16.5, "pb": 4.50, "de_ratio": 0.0, "npm_pct": 28.5, "rev_growth_pct": 7.5, "div_yield": 5.58},
-    "TATASTEEL": {"roe_pct": 11.7, "roce_pct": 12.5, "pe": 19.4, "pb": 2.24, "de_ratio": 0.85, "npm_pct": 6.2, "rev_growth_pct": 5.2, "div_yield": 2.19},
-    "TATAMOTORS": {"roe_pct": 28.4, "roce_pct": 21.2, "pe": 9.8, "pb": 3.45, "de_ratio": 0.72, "npm_pct": 7.1, "rev_growth_pct": 14.5, "div_yield": 0.65},
-    "SBIN": {"roe_pct": 16.2, "roce_pct": 16.8, "pe": 10.5, "pb": 1.45, "de_ratio": 0.0, "npm_pct": 18.2, "rev_growth_pct": 14.0, "div_yield": 1.65},
-    "BHARTIARTL": {"roe_pct": 15.8, "roce_pct": 14.5, "pe": 42.0, "pb": 7.80, "de_ratio": 1.35, "npm_pct": 9.4, "rev_growth_pct": 12.8, "div_yield": 0.60},
-    "BEL": {"roe_pct": 26.5, "roce_pct": 35.2, "pe": 44.5, "pb": 10.8, "de_ratio": 0.0, "npm_pct": 21.4, "rev_growth_pct": 16.5, "div_yield": 0.85},
-    "ASHOKLEY": {"roe_pct": 24.2, "roce_pct": 22.8, "pe": 26.5, "pb": 5.60, "de_ratio": 0.35, "npm_pct": 7.5, "rev_growth_pct": 12.0, "div_yield": 2.10},
-    "TATAPOWER": {"roe_pct": 14.2, "roce_pct": 13.5, "pe": 31.0, "pb": 3.85, "de_ratio": 1.20, "npm_pct": 9.2, "rev_growth_pct": 10.5, "div_yield": 0.50},
-    "NMDC": {"roe_pct": 27.5, "roce_pct": 36.2, "pe": 11.2, "pb": 2.45, "de_ratio": 0.0, "npm_pct": 31.5, "rev_growth_pct": 14.2, "div_yield": 3.85},
-}
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -450,16 +432,6 @@ def get_fundamentals(symbol: str, allow_network: bool = False) -> dict:
             _MEM_CACHE[sym] = combined
             _save_cache(_MEM_CACHE)
             return combined
-
-    # Fallback to portfolio baselines -- a real, if static, known-good
-    # number for a small set of well-known large caps.
-    fb = PORTFOLIO_FALLBACKS.get(sym)
-    if fb:
-        res = {"symbol": sym, **fb, "source": "baseline", "updated_at": now}
-        dvm = compute_dvm_score(res)
-        res.update(dvm)
-        _MEM_CACHE[sym] = res
-        return res
 
     unavailable = {
         "symbol": sym,
