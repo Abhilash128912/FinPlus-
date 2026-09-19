@@ -2231,7 +2231,11 @@ def api_penny():
         return jsonify(_penny_state)
 
 
-_background_started = False
+# Tracked by PID, not a bool: under `gunicorn --preload` (or any fork-after-import
+# setup) the loops started at import live in the master, and threads do NOT
+# survive fork -- the serving worker inherits a frozen copy of their state and
+# nothing ever updates it (fast_ltp stuck at updated_at=null, 2026-09-19).
+_background_pid = None
 _background_lock = threading.Lock()
 
 
@@ -2245,11 +2249,13 @@ FULL_SCAN_SUITE = os.environ.get("ENABLE_FULL_SCAN_SUITE", "").strip() == "1"
 
 
 def start_all_background_threads():
-    global _background_started
+    global _background_pid
+    if _background_pid == os.getpid():
+        return
     with _background_lock:
-        if _background_started:
+        if _background_pid == os.getpid():
             return
-        _background_started = True
+        _background_pid = os.getpid()
         threading.Thread(target=_mcx_bar_recorder_loop, daemon=True).start()
         threading.Thread(target=_signal_refresh_loop, daemon=True).start()
         threading.Thread(target=_mcx_ltp_loop, daemon=True).start()
@@ -2271,8 +2277,17 @@ def start_all_background_threads():
         totp_auth.start_totp_refresher_thread()
 
 
-# Auto-start loops on import (for Gunicorn / Render)
-start_all_background_threads()
+@app.before_request
+def _ensure_background_threads():
+    """Under gunicorn the loops start in the worker that serves requests (first
+    request, i.e. Render's health check) rather than at import, so they can
+    never end up only in a pre-fork master."""
+    start_all_background_threads()
+
+
+# Local `python app.py` (and any non-gunicorn launcher) starts loops right away.
+if "gunicorn" not in os.path.basename(sys.argv[0]).lower():
+    start_all_background_threads()
 
 if __name__ == "__main__":
     # This branch only runs for a local `python app.py` launch -- Render's
