@@ -26,11 +26,15 @@ API = "https://api.render.com/v1"
 
 # Services to schedule. Each is matched by slug (the <slug>.onrender.com subdomain), display name or web
 # address, whichever Render reports, so a renamed or blueprint-created service is still found.
-SERVICE_SLUGS = ("finplus-1", "alphapulse-sentiment-tracker")
+SERVICE_SLUGS = ("finplus-1", "finplus", "alphapulse-sentiment-tracker")
 _ALIASES = {
-    "finplus-1": ("finplus-1", "finplus--1", "indmoney-trading-screener"),
-    "alphapulse-sentiment-tracker": ("alphapulse-sentiment-tracker", "alphapulse"),
+    "finplus-1": ("finplus-1", "finplus--1", "indmoney-trading-screener"),      # RADAR
+    "finplus": ("finplus", "finplus-"),                                          # LEDGER backend
+    "alphapulse-sentiment-tracker": ("alphapulse-sentiment-tracker", "alphapulse"),   # Pulse
 }
+# The services may live in different Render accounts/workspaces; one API key per account
+# (GitHub secrets RENDER_API_KEY and RENDER_API_KEY_2). Free hours are per workspace.
+KEY_ENV_VARS = ("RENDER_API_KEY", "RENDER_API_KEY_2")
 
 
 def match_slug(service: dict) -> str | None:
@@ -100,39 +104,44 @@ def list_services(key: str) -> list[dict]:
 
 def main(argv: list[str]) -> int:
     dry = "--dry-run" in argv
-    key = os.environ.get("RENDER_API_KEY", "").strip()
-    if not key:
+    keys = [os.environ[v].strip() for v in KEY_ENV_VARS if os.environ.get(v, "").strip()]
+    if not keys:
         print("RENDER_API_KEY is not set (add it as a GitHub Actions secret).")
         return 2
     now = datetime.datetime.now(IST)
-    services = list_services(key)
-    found = {match_slug(s) for s in services}
-    missing = [slug for slug in SERVICE_SLUGS if slug not in found]
     print(f"{now:%a %Y-%m-%d %H:%M} IST -> desired: {'RUNNING' if desired_running(now) else 'SUSPENDED'}")
+    seen: list[dict] = []
+    rc = 0
+    for n, key in enumerate(keys, 1):
+        services = list_services(key)
+        seen += services
+        actions = plan(services, now)
+        managed = ", ".join(sorted(f"{match_slug(s)}={s.get('suspended')}" for s in services if match_slug(s))) or "none"
+        print(f"key {n}: sees {len(services)} service(s); managed here: {managed}")
+        if not actions:
+            annotate("notice", f"key {n}: already in desired state "
+                     f"({'RUNNING' if desired_running(now) else 'SUSPENDED'}); managed: {managed}")
+        for action, sid, slug in actions:
+            print(f"{'[dry-run] ' if dry else ''}{action} {slug} ({sid})")
+            if dry:
+                continue
+            r = requests.post(f"{API}/services/{sid}/{action}", headers=_headers(key), timeout=30)
+            print(f"  -> HTTP {r.status_code}")
+            if r.status_code >= 300:
+                print(r.text[:300])
+                annotate("error", f"{action} {slug} failed: HTTP {r.status_code} {r.text[:200]}")
+                rc = 1
+            else:
+                annotate("notice", f"{action} {slug}: HTTP {r.status_code}")
+    found = {match_slug(s) for s in seen}
+    missing = [slug for slug in SERVICE_SLUGS if slug not in found]
     if missing:
-        print("WARNING: service(s) not found in this Render account:", ", ".join(missing))
-        print("Services this API key can see (name / slug / state):")
-        for s in services:
-            print(f"  - {s.get('name')} / {s.get('slug')} / {s.get('suspended')}")
-        annotate("error", "Not found: " + ", ".join(missing) + ". This API key can see: "
-                 + "; ".join(f"{s.get('name')} [{s.get('slug')}, {s.get('suspended')}]" for s in services))
-    actions = plan(services, now)
-    if not actions:
-        print("Already in the desired state; nothing to do.")
-        annotate("notice", f"Already in desired state ({'RUNNING' if desired_running(now) else 'SUSPENDED'}); services seen: "
-                 + ", ".join(sorted(f"{s.get('slug')}={s.get('suspended')}" for s in services if match_slug(s))))
-    for action, sid, slug in actions:
-        print(f"{'[dry-run] ' if dry else ''}{action} {slug} ({sid})")
-        if dry:
-            continue
-        r = requests.post(f"{API}/services/{sid}/{action}", headers=_headers(key), timeout=30)
-        print(f"  -> HTTP {r.status_code}")
-        if r.status_code >= 300:
-            print(r.text[:300])
-            annotate("error", f"{action} {slug} failed: HTTP {r.status_code} {r.text[:200]}")
-            return 1
-        annotate("notice", f"{action} {slug}: HTTP {r.status_code}")
-    return 1 if missing else 0
+        listing = "; ".join(f"{s.get('name')} [{s.get('slug')}, {s.get('suspended')}]" for s in seen)
+        print("WARNING: service(s) not found with the API key(s) provided:", ", ".join(missing))
+        print("Services visible:", listing)
+        annotate("error", "Not found: " + ", ".join(missing) + ". Visible: " + listing)
+        rc = 1
+    return rc
 
 
 if __name__ == "__main__":

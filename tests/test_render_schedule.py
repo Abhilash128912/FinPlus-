@@ -59,3 +59,11 @@ def test_services_are_matched_by_slug_name_or_url():
     assert rs.match_slug({"name": "FinPlus--1", "slug": "x"}) == "finplus-1"
     assert rs.match_slug({"slug": "zzz", "serviceDetails": {"url": "https://alphapulse-sentiment-tracker.onrender.com"}}) == "alphapulse-sentiment-tracker"
     assert rs.match_slug({"slug": "unrelated", "name": "other"}) is None
+
+
+def test_ledger_backend_is_managed_too():
+    acts = rs.plan([{"id": "srv-l", "slug": "finplus", "name": "FinPlus-", "suspended": "not_suspended"}], ist(2026, 9, 20, 12, 0))
+    assert acts == [("suspend", "srv-l", "finplus")]
+    # ...and FinPlus--1 (RADAR) is a different service from FinPlus- (LEDGER)
+    assert rs.match_slug({"slug": "finplus-1", "name": "FinPlus--1"}) == "finplus-1"
+    assert rs.match_slug({"slug": "finplus", "name": "FinPlus-"}) == "finplus"
