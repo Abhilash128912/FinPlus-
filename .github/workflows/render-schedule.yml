@@ -1,0 +1,38 @@
+name: Render schedule (market hours only)
+
+# Keeps the free-tier instance hours under the 750/month cap: services run Mon-Fri 08:00-17:00 IST and
+# are suspended otherwise (see tools/render_schedule.py). GitHub cron is in UTC (IST = UTC+5:30) and
+# can be delayed by several minutes, so the script reconciles state instead of trusting the exact tick.
+#
+# One-time setup: add a repository secret RENDER_API_KEY
+#   (Render dashboard -> Account Settings -> API Keys -> Create API Key).
+
+on:
+  schedule:
+    # Weekdays 07:30-17:30 IST: catches the 08:00 resume and the 17:00 suspend, twice an hour.
+    - cron: "0,30 2-12 * * 1-5"
+    # Every 6 hours on every day: keeps nights and the weekend suspended and heals any drift.
+    - cron: "15 0,6,12,18 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: render-schedule
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/render_schedule.py
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Suspend or resume to match the schedule
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: python tools/render_schedule.py
