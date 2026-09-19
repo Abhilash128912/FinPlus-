@@ -606,9 +606,6 @@ def _options_heatmap_loop():
 
 
 def is_authenticated(req) -> bool:
-    client_ip = getattr(req, 'remote_addr', '') or ''
-    if client_ip in ('127.0.0.1', '::1', 'localhost'):
-        return True
     """Verify incoming request authentication via constant-time HMAC check.
     Strictly header-based (matches FINPLUS LEDGER standard). Never accepts query params
     or cookies, avoiding access-log, browser-history, and Referer leaks.
