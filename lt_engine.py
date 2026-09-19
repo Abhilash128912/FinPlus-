@@ -411,6 +411,25 @@ def _tech_from_df(df) -> dict | None:
     }
 
 
+def fresh_momentum(symbol: str, ltp: float | None = None, volume: float | None = None):
+    """Momentum score (0-100) from fresh candles using the screener's own score_momentum():
+    200/50-day MA position, 52-week return, RSI, volume spike and beta. `ltp` / `volume` let a
+    caller pass the LIVE price and volume; beta comes from Tickertape (may be None)."""
+    df = fresh_history(symbol)
+    if df is None or df.empty:
+        return None
+    last = float(df["Close"].iloc[-1])
+    info = {"currentPrice": float(ltp) if ltp else last, "regularMarketPrice": float(ltp) if ltp else last,
+            "volume": float(volume) if volume else float(df["Volume"].iloc[-1]),
+            "beta": fundamental_engine.get_fundamentals(symbol, allow_network=False).get("beta")}
+    try:
+        score, _ = se.score_momentum(info, df)
+        return score
+    except Exception as exc:
+        print(f"[lt_engine] fresh momentum failed for {symbol}: {exc}")
+        return None
+
+
 def prefetch_technicals(symbols: list) -> None:
     """Fill the technicals cache for many symbols at once: INDstocks daily candles, 5 stocks per
     request, paced under the API's rate limit (~5 requests/second) with back-off on HTTP 429.
@@ -518,12 +537,19 @@ def _qualified_candidates(raw_universe: list, min_price: float, max_price: float
             continue
         staged.append((c, eval_res, sector_group, financial))
 
-    # Relative strength = percentile of 6-month return among the candidates (fresh data only)
+    # Relative strength: the universe-wide RS rating (1-99 vs NIFTY, fresh candles) when available;
+    # otherwise the percentile of 6-month return among these candidates.
+    import fresh_rs
     rets = sorted(c["ret_6m"] for c, *_ in staged if c.get("ret_6m") is not None)
     for c, *_ in staged:
-        if c.get("ret_6m") is not None and len(rets) > 1:
+        uni = fresh_rs.rs_rating(c["symbol"])
+        if uni is not None:
+            c["rs_rating"] = float(uni)
+            c["rs_source"] = "fresh universe RS"
+        elif c.get("ret_6m") is not None and len(rets) > 1:
             import bisect
             c["rs_rating"] = round(bisect.bisect_left(rets, c["ret_6m"]) / (len(rets) - 1) * 99.0, 1)
+            c["rs_source"] = "candidate percentile (6M return)"
         else:
             c["rs_rating"] = None
 

@@ -192,6 +192,23 @@ def scan_swing_candidates(top_n: int = 15, update_live_quotes: bool = True) -> d
             c["avg_volume_10d"] = avg_vol
             c["technicals_fresh"] = True
             c["technicals_as_of"] = tech["last_bar"]
+            # Momentum, RS and the order-flow inputs (CMF, CLV, market structure, price-action
+            # pattern) recomputed from the fresh candles instead of read from the scan snapshot.
+            m = lt_engine.fresh_momentum(c["symbol"], ltp=c.get("ltp"), volume=c.get("today_volume"))
+            if m is not None:
+                c["momentum"] = m
+            c["momentum_fresh"] = m is not None
+            import fresh_rs
+            rs = fresh_rs.rs_rating(c["symbol"])
+            if rs is not None:
+                c["rs_rating"] = rs
+            c["rs_fresh"] = rs is not None
+            try:
+                pa_score, pa = se.score_price_action_and_order_flow(df)
+                c["pa_score"] = pa_score
+                c.update({k: pa[k] for k in ("cmf", "clv", "market_structure", "pa_pattern", "pa_badge", "pa_class") if k in pa})
+            except Exception as exc:
+                print(f"[swing_engine] order-flow recompute failed for {c['symbol']}: {exc}")
             c.update(se.compute_swing_setup(c, history=df))
             ltp = float(c.get("ltp") or 0.0)
             gb = float(c.get("gtt_breakout_level") or 0.0)

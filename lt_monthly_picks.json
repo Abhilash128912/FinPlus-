@@ -71,7 +71,7 @@
       "score_breakdown": {
         "quality": 84.6,
         "profitability": 100.0,
-        "momentum": 91.8,
+        "momentum": 91.9,
         "valuation": 40.0
       },
       "sector_group": "UTILITIES_INFRA",
@@ -114,7 +114,7 @@
       "score_breakdown": {
         "quality": 88.0,
         "profitability": 100.0,
-        "momentum": 48.5,
+        "momentum": 48.3,
         "valuation": 100.0
       },
       "sector_group": "QUALITY_GROWTH",
@@ -157,7 +157,7 @@
       "score_breakdown": {
         "quality": 91.0,
         "profitability": 65.2,
-        "momentum": 97.8,
+        "momentum": 97.7,
         "valuation": 40.0
       },
       "sector_group": "MANUFACTURING",
@@ -196,11 +196,11 @@
       "durability_score": 88.0,
       "dvm_label": "HIGH_DURABILITY",
       "trend": "Strong Uptrend",
-      "combined_rank_score": 80.6,
+      "combined_rank_score": 80.5,
       "score_breakdown": {
         "quality": 88.0,
         "profitability": 80.0,
-        "momentum": 61.5,
+        "momentum": 61.2,
         "valuation": 100.0
       },
       "sector_group": "MANUFACTURING",
@@ -239,11 +239,11 @@
       "durability_score": 100.0,
       "dvm_label": "HIGH_DURABILITY",
       "trend": "Uptrend",
-      "combined_rank_score": 80.5,
+      "combined_rank_score": 80.4,
       "score_breakdown": {
         "quality": 100.0,
         "profitability": 76.2,
-        "momentum": 45.9,
+        "momentum": 45.5,
         "valuation": 100.0
       },
       "sector_group": "QUALITY_GROWTH",
@@ -282,11 +282,11 @@
       "durability_score": 88.0,
       "dvm_label": "HIGH_DURABILITY",
       "trend": "Consolidation",
-      "combined_rank_score": 79.7,
+      "combined_rank_score": 79.6,
       "score_breakdown": {
         "quality": 88.0,
         "profitability": 79.8,
-        "momentum": 58.0,
+        "momentum": 57.9,
         "valuation": 100.0
       },
       "sector_group": "COMMODITY",
@@ -325,11 +325,11 @@
       "durability_score": 75.0,
       "dvm_label": "HIGH_DURABILITY",
       "trend": "Strong Uptrend",
-      "combined_rank_score": 79.3,
+      "combined_rank_score": 79.2,
       "score_breakdown": {
         "quality": 75.0,
         "profitability": 100.0,
-        "momentum": 57.3,
+        "momentum": 56.9,
         "valuation": 100.0
       },
       "sector_group": "COMMODITY",
@@ -368,11 +368,11 @@
       "durability_score": 85.0,
       "dvm_label": "HIGH_DURABILITY",
       "trend": "Strong Uptrend",
-      "combined_rank_score": 79.1,
+      "combined_rank_score": 79.0,
       "score_breakdown": {
         "quality": 85.0,
         "profitability": 66.9,
-        "momentum": 73.3,
+        "momentum": 73.1,
         "valuation": 100.0
       },
       "sector_group": "QUALITY_GROWTH",
@@ -415,7 +415,7 @@
       "score_breakdown": {
         "quality": 81.0,
         "profitability": 76.2,
-        "momentum": 69.9,
+        "momentum": 69.8,
         "valuation": 100.0
       },
       "sector_group": "UTILITIES_INFRA",
@@ -497,14 +497,14 @@
       "symbol": "SHANTIGOLD",
       "name": "Shanti Gold International Limited",
       "ltp": 251.27,
-      "combined_rank_score": 76.7,
+      "combined_rank_score": 76.6,
       "trend": "Accumulation"
     },
     {
       "symbol": "GOKULAGRO",
       "name": "Gokul Agro Resources Limited",
       "ltp": 224.24,
-      "combined_rank_score": 76.3,
+      "combined_rank_score": 76.2,
       "trend": "Consolidation"
     },
     {
@@ -515,6 +515,6 @@
       "trend": "Accumulation"
     }
   ],
-  "updated_at": 1789802036.0937924,
-  "computed_at": 1789801768.330593
+  "updated_at": 1789805068.135511,
+  "computed_at": 1789803601.7416794
 }

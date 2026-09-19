@@ -643,6 +643,18 @@ def _lt_cohort_loop():
         time.sleep(120)
 
 
+def _rs_refresh_loop():
+    """Keeps the universe-wide RS rating fresh (about 500 batched INDstocks requests, every 6h)."""
+    import fresh_rs
+    time.sleep(90)
+    while True:
+        try:
+            fresh_rs.refresh_universe_rs()
+        except Exception:
+            traceback.print_exc()
+        time.sleep(30 * 60)          # re-check; refresh_universe_rs no-ops until RS_TTL_SEC has passed
+
+
 def _penny_cohort_loop():
     """Lean-mode refresh of the debt-free penny list: re-runs the real scan (cached
     fundamentals + fresh daily-candle technicals + live quotes) every 10 minutes so its
@@ -2387,6 +2399,7 @@ def start_all_background_threads():
             threading.Thread(target=_fundamentals_warm_loop, daemon=True).start()
             threading.Thread(target=_lt_cohort_loop, daemon=True).start()
             threading.Thread(target=_penny_cohort_loop, daemon=True).start()
+            threading.Thread(target=_rs_refresh_loop, daemon=True).start()
             print("[startup] ENABLE_FULL_SCAN_SUITE not set -- running Intraday + Trend Analyser + Swing "
                   "loops only (long-term/penny/options scans off to fit the free-tier 512MB limit)")
         totp_auth.start_totp_refresher_thread()

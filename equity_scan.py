@@ -265,15 +265,29 @@ def scan_intraday_momentum(top_n: int = 10) -> dict:
                 r["volume_spike"] = round(r["_live_volume"] / tech["avg_volume_10d"], 2)
                 r["today_volume"] = r["_live_volume"]
             r["technicals_fresh"] = True
+            # Momentum from fresh candles at the LIVE price/volume; RS from the fresh universe rating.
+            m = lt_engine.fresh_momentum(r["symbol"], ltp=r.get("ltp"), volume=r.get("_live_volume"))
+            if m is not None:
+                r["momentum"] = m
+            r["momentum_fresh"] = m is not None
+            import fresh_rs
+            rs = fresh_rs.rs_rating(r["symbol"])
+            if rs is not None:
+                r["rs_rating"] = rs
+            r["rs_fresh"] = rs is not None
         else:
             r["technicals_fresh"] = False           # candles unavailable: snapshot values, flagged
+            r["momentum_fresh"] = r["rs_fresh"] = False
         refreshed.append(r)
 
     picks = se.compute_intraday_picks(refreshed, top_n=top_n)
     for side in ("buy", "sell"):
         by_sym = {r["symbol"]: r for r in refreshed}
         for p in picks.get(side, []):
-            p["technicals_fresh"] = bool((by_sym.get(p["symbol"]) or {}).get("technicals_fresh"))
+            _r = by_sym.get(p["symbol"]) or {}
+            p["technicals_fresh"] = bool(_r.get("technicals_fresh"))
+            p["momentum_fresh"] = bool(_r.get("momentum_fresh"))
+            p["rs_fresh"] = bool(_r.get("rs_fresh"))
     picks["scanned"] = len(updated_rows)
     picks["stale_ltp_count"] = stale_count
     print(f"[equity_scan] intraday momentum: {len(updated_rows)} scanned, {stale_count} stale, "
