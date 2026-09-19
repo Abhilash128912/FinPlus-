@@ -380,8 +380,8 @@ def render_options_page(
 
     spot_ltp = chain_data.get("underlying_ltp") or 0.0
     atm_strike = chain_data.get("atm_strike") or 0.0
-    pcr = float(chain_data.get("pcr") or 1.0)
-    pcr_sent = chain_data.get("pcr_sentiment") or "NEUTRAL"
+    pcr = float(chain_data["pcr"]) if chain_data.get("pcr") is not None else None   # None renders as "—"
+    pcr_sent = chain_data.get("pcr_sentiment") or "N/A"
     current_expiry = chain_data.get("expiry") or (expiries[0] if expiries else "")
 
     pcr_cls = "badge-green" if pcr_sent == "BULLISH" else "badge-red" if pcr_sent == "BEARISH" else "badge-yellow"

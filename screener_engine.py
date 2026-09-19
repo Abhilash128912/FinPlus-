@@ -2749,10 +2749,12 @@ def find_best_swing_candidate(screener_results: list[dict]) -> dict:
     candidates = []
     for s in screener_results:
         ltp = s.get("ltp", 0)
-        rsi = s.get("rsi") or 50
-        vol_spike = s.get("volume_spike") or 1.0
-        beta = s.get("beta") or 1.0
-        ma50 = s.get("ma50") or ltp
+        rsi = s.get("rsi")
+        vol_spike = s.get("volume_spike")
+        beta = s.get("beta")
+        ma50 = s.get("ma50")
+        if rsi is None or ma50 is None:
+            continue        # no assumed RSI 50 / MA50 = price: an incomplete row is not ranked
 
         dist_ma50_pct = ((ltp - ma50) / ma50) * 100 if ma50 > 0 else 0
 
@@ -2770,9 +2772,9 @@ def find_best_swing_candidate(screener_results: list[dict]) -> dict:
         # Small tiebreaker bonuses
         if 50 <= rsi <= 63:
             base += 5
-        if vol_spike >= 1.5:
+        if vol_spike is not None and vol_spike >= 1.5:
             base += 5
-        if 1.0 <= beta <= 1.6:
+        if beta is not None and 1.0 <= beta <= 1.6:
             base += 3
 
         candidates.append((base, s))
@@ -2787,7 +2789,7 @@ def find_best_swing_candidate(screener_results: list[dict]) -> dict:
     best = candidates[0][1]
 
     ltp = best.get("ltp", 0)
-    ma50 = best.get("ma50") or (ltp * 0.96)
+    ma50 = best.get("ma50")        # None when unknown: never assumed to be 96% of price
 
     # Stop Loss: MA-anchored (consistent with compute_swing_setup)
     if ma50 and (ltp * 0.94 <= ma50 <= ltp * 0.99):
@@ -3267,7 +3269,7 @@ def compute_fno_signal(scored: dict, fno_cfg: dict) -> dict:
     ma50      = scored.get("ma50")
     ma200     = scored.get("ma200")
     vol_spike = float(scored.get("volume_spike") or 1.0)
-    beta      = float(scored.get("beta") or 1.0)
+    beta      = float(scored["beta"]) if scored.get("beta") is not None else None
     wk52_ret  = float(scored.get("wk52_return_pct") or 0)
 
     strike_iv = float(fno_cfg["strike_interval"])
@@ -3680,7 +3682,14 @@ def evaluate_incumbent_status(scored_match: dict) -> dict:
     - WATCHLIST: Attractive valuation but insufficient quality/trend confirmation.
     """
     q_score = scored_match["lt_quality_score"]
-    t_score = scored_match.get("fundamental_trend_score", 50.0)
+    t_score = scored_match.get("fundamental_trend_score")
+    if t_score is None:
+        return {
+            "incumbent_status": "INSUFFICIENT_DATA",
+            "incumbent_badge": "\u26aa NO FUNDAMENTAL TREND DATA",
+            "incumbent_badge_class": "badge-gray",
+            "incumbent_reason": "Fundamental trend score not available; no verdict is assumed",
+        }
     sec_group = scored_match.get("sector_group", "QUALITY_GROWTH")
     val_status = scored_match.get("lt_valuation_status", "FAIRLY_VALUED")
     cyc_flag = scored_match.get("cyclicality_flag", "LOW")

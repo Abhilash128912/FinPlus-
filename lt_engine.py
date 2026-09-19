@@ -211,10 +211,10 @@ def scan_lt_discovery(top_n: int = 20, update_live_quotes: bool = True) -> dict:
         item.update(scored_data)
 
         ltp = item.get("ltp")
-        if ltp:
+        if ltp and item.get("gtt_level"):     # no real GTT level -> no status from an assumed 95% of price
             ltp = float(ltp)
             item["ltp"] = ltp
-            gtt = float(item.get("gtt_level") or (ltp * 0.95))
+            gtt = float(item["gtt_level"])
             item["gtt_level"] = round(gtt, 2)
             dist_pct = round(((ltp - gtt) / gtt) * 100, 1) if gtt > 0 else 0.0
             item["dist_from_gtt_pct"] = dist_pct

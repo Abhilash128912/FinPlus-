@@ -231,7 +231,9 @@ def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10
                 p["ltp"] = u_row["ltp"]
 
             ltp = float(p.get("ltp") or 0.0)
-            gtt = float(p.get("gtt_level") or (ltp * 0.95))
+            if not p.get("gtt_level"):
+                continue    # no real GTT level: no status is derived from an assumed 95% of price
+            gtt = float(p["gtt_level"])
             p["gtt_level"] = round(gtt, 2)
 
             dist_pct = round(((ltp - gtt) / gtt) * 100, 1) if gtt > 0 else 0.0
@@ -326,9 +328,11 @@ def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10
         dur_val = c.get("durability_score")
         roe_val = c.get("roe_pct")
         pe_val = c.get("pe")
-        dur = float(dur_val) if dur_val is not None else 65.0
-        q = round(min(100.0, max(50.0, 60.0 + (float(roe_val if roe_val is not None else 12.0) * 1.5))), 1)
-        v = round(min(100.0, max(40.0, 90.0 - (float(pe_val if pe_val is not None else 20.0) * 0.8))), 1)
+        if dur_val is None or roe_val is None or pe_val is None:
+            continue        # no assumed durability 65 / ROE 12 / PE 20: an incomplete row is not scored
+        dur = float(dur_val)
+        q = round(min(100.0, max(50.0, 60.0 + (float(roe_val) * 1.5))), 1)
+        v = round(min(100.0, max(40.0, 90.0 - (float(pe_val) * 0.8))), 1)
         rank_s = round(_rank_score(c), 1)  # same formula that ranked/sliced ranked_universe above
         entry_s = round(max(10.0, 100.0 - (dist_pct * 3.0)), 1)
 

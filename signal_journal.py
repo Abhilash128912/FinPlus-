@@ -181,17 +181,18 @@ def stats(symbol: str | None = None) -> dict:
 
     wins = [r for r in resolved if r["outcome"] == "target"]
     losses = [r for r in resolved if r["outcome"] == "stop"]
-    r_sum = 0.0
-    for r in wins:
-        r_sum += float(r.get("rr") or 1.0)
-    r_sum += -1.0 * len(losses)
+    # Expectancy only over trades whose reward:risk is actually recorded -- a win with no recorded
+    # rr is not assumed to be +1R. A loss is -1R by definition.
+    known_wins = [r for r in wins if r.get("rr") is not None]
+    r_sum = sum(float(r["rr"]) for r in known_wins) - 1.0 * len(losses)
+    r_count = len(known_wins) + len(losses)
     return {
         "resolved": len(resolved),
         "open": open_ct,
         "wins": len(wins),
         "losses": len(losses),
         "win_rate": round(100.0 * len(wins) / len(resolved), 1),
-        "expectancy_r": round(r_sum / len(resolved), 2),
+        "expectancy_r": round(r_sum / r_count, 2) if r_count else None,
     }
 
 

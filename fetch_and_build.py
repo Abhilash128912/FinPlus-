@@ -2032,20 +2032,20 @@ def get_fno_master_list() -> dict:
                     if not valid_diffs.empty and not valid_diffs.mode().empty:
                         strike_interval = float(valid_diffs.mode().iloc[0])
                     else:
-                        strike_interval = 50.0
+                        strike_interval = None      # not derivable: never assumed to be 50
                 else:
-                    strike_interval = 50.0
+                    strike_interval = None
             else:
-                strike_interval = 50.0
+                strike_interval = None
 
-            if strike_interval <= 0:
-                strike_interval = 50.0
+            if strike_interval is not None and strike_interval <= 0:
+                strike_interval = None
                 
             fno_master[name] = {
                 "symbol": name,
                 "ticker": f"{name}.NS",
-                "lot_size": lot_size if lot_size > 0 else 50,
-                "strike_interval": int(strike_interval)
+                "lot_size": lot_size if lot_size > 0 else None,
+                "strike_interval": int(strike_interval) if strike_interval else None
             }
         log(f"Successfully processed {len(fno_master)} F&O instruments.")
         return fno_master
@@ -2071,8 +2071,8 @@ def process_fno_stocks(screener_results: list[dict]) -> list[dict]:
             fc["symbol"]: {
                 "symbol": fc["symbol"],
                 "ticker": fc["ticker"],
-                "lot_size": fc.get("lot_size", 50),
-                "strike_interval": fc.get("strike_interval", 50),
+                "lot_size": fc.get("lot_size"),
+                "strike_interval": fc.get("strike_interval"),
                 "name": fc["symbol"]
             } for fc in fno_cfgs
         }
@@ -5401,7 +5401,7 @@ function renderLtWatchlist() {
     // Prefer the computed one; fall back to the manual figure and say which is which.
     const computedQ = (s.lt_quality_score != null) ? s.lt_quality_score
                     : (s.lt_gate_quality_score != null) ? s.lt_gate_quality_score : null;
-    const scoreVal = (computedQ != null) ? Math.round(computedQ) : (s.durability_score || 75);
+    const scoreVal = (computedQ != null) ? Math.round(computedQ) : (s.durability_score != null ? s.durability_score : null);
     const scoreIsComputed = (computedQ != null);
     // The LT quality maths treats an absent ROE / D-E / margin as a real zero, so
     // a score built on no filings is not the same claim as one built on six.
@@ -5580,7 +5580,8 @@ function submitAddLtStockForm(e) {
   const el = id => document.getElementById(id);
   const symbol = el('ltFormSymbol') ? el('ltFormSymbol').value.trim().toUpperCase() : '';
   const type = el('ltFormType') ? el('ltFormType').value : 'Private';
-  const durability_score = parseInt(el('ltFormDurability') ? el('ltFormDurability').value : 75) || 75;
+  const _d = parseInt(el('ltFormDurability') ? el('ltFormDurability').value : '');
+  const durability_score = isNaN(_d) ? null : _d;   // blank stays blank, never an assumed 75
   const sector = el('ltFormSector') ? el('ltFormSector').value.trim() : '';
   const portfolio_role = el('ltFormRole') ? el('ltFormRole').value.trim() : '';
   const gtt_level = (el('ltFormGtt') && el('ltFormGtt').value) ? parseFloat(el('ltFormGtt').value) : null;
@@ -5597,7 +5598,7 @@ function submitAddLtStockForm(e) {
     symbol,
     ticker: `${symbol}.NS`,
     type: type || 'Private',
-    durability_score: durability_score || 75,
+    durability_score: durability_score,
     sector: sector || (screenerItem ? screenerItem.sector : 'General'),
     portfolio_role: portfolio_role || 'Growth',
     gtt_mode: gtt_level ? 'manual' : 'auto',
@@ -6883,7 +6884,7 @@ function renderFnoTab() {
         </div>
         <div class="fno-lot-info">
           <span>Lot Size: <strong>${s.lot_size}</strong> shares</span>
-          <span>Strike Interval: ₹${s.strike_interval}</span>
+          <span>Strike Interval: ${s.strike_interval != null ? '₹' + s.strike_interval : 'n/a'}</span>
           <span>52W Ret: <strong style="color:${s.wk52_return_pct >= 0 ? '#10b981' : '#ef4444'}">${s.wk52_return_pct >= 0 ? '+' : ''}${s.wk52_return_pct}%</strong></span>
         </div>
       </div>
@@ -7794,8 +7795,8 @@ function renderTopPick() {
               </div>
               <div class="modal-metric">
                 <div class="lbl">Buyer Control (CLV)</div>
-                <div class="val" style="color:${(TOP_PICK.clv || 0.5) >= 0.65 ? '#10b981' : '#a5b4fc'}">${TOP_PICK.clv != null ? Math.round((TOP_PICK.clv || 0.5) * 100) + '%' : '50%'}</div>
-                <div style="font-size:13px;color:var(--muted);margin-top:2px">${(TOP_PICK.clv || 0.5) >= 0.65 ? '🟢 Buyer Control' : '⚪ Neutral Close'}</div>
+                <div class="val" style="color:${(TOP_PICK.clv != null && TOP_PICK.clv >= 0.65) ? '#10b981' : '#a5b4fc'}">${TOP_PICK.clv != null ? Math.round((TOP_PICK.clv || 0.5) * 100) + '%' : '50%'}</div>
+                <div style="font-size:13px;color:var(--muted);margin-top:2px">${(TOP_PICK.clv != null && TOP_PICK.clv >= 0.65) ? '🟢 Buyer Control' : '⚪ Neutral Close'}</div>
               </div>
               <div class="modal-metric">
                 <div class="lbl">Market Structure</div>
@@ -10857,7 +10858,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if existing:
                     existing["type"] = body.get("type", existing.get("type", "Private"))
                     existing["sector"] = body.get("sector", existing.get("sector", ""))
-                    existing["durability_score"] = int(body.get("durability_score") or existing.get("durability_score", 75))
+                    existing["durability_score"] = (int(body["durability_score"]) if body.get("durability_score") not in (None, "") else existing.get("durability_score"))
                     existing["portfolio_role"] = body.get("portfolio_role", existing.get("portfolio_role", "Growth"))
                     if "gtt_level" in body and body["gtt_level"] is not None and body["gtt_level"] != "":
                         existing["gtt_level"] = float(body["gtt_level"])
@@ -10869,7 +10870,7 @@ class ScanRequestHandler(http.server.SimpleHTTPRequestHandler):
                         "ticker": f"{sym}.NS",
                         "type": body.get("type", "Private"),
                         "sector": body.get("sector", ""),
-                        "durability_score": int(body.get("durability_score") or 75),
+                        "durability_score": int(body["durability_score"]) if body.get("durability_score") not in (None, "") else None,
                         "portfolio_role": body.get("portfolio_role", "Growth"),
                         "gtt_level": gtt_val,
                         "active": True,

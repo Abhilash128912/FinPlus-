@@ -1,0 +1,127 @@
+[
+  {
+    "file": "app.py",
+    "snippet": "rate = _get_usdinr_rate() if is_commodity else 1.0",
+    "reason": "INR-priced instruments convert at exactly 1.0; the USDINR rate is only used for commodities and is None if unknown"
+  },
+  {
+    "file": "app.py",
+    "snippet": "rate = _get_usdinr_rate() if is_commodity else 1.0",
+    "reason": "INR-priced instruments convert at exactly 1.0; the USDINR rate is only used for commodities and is None if unknown"
+  },
+  {
+    "file": "fetch_and_build.py",
+    "snippet": "tmp_path = filepath + f\".tmp_{os.getpid()}_{random.randint(1000, 9999)}\"",
+    "reason": "random suffix of a temp file name, not data"
+  },
+  {
+    "file": "fetch_and_build.py",
+    "snippet": "const rsVal = s.rs_rating || 50;",
+    "reason": "universe RS is rank-assigned 1-99 to every scanned row (0 of 2,556 rows lack it, checked 2026-09-19); fallback unreachable for scan rows"
+  },
+  {
+    "file": "fetch_and_build.py",
+    "snippet": "const rsVal = s.rs_rating || 50;",
+    "reason": "universe RS is rank-assigned 1-99 to every scanned row (0 of 2,556 rows lack it, checked 2026-09-19); fallback unreachable for scan rows"
+  },
+  {
+    "file": "fetch_and_build.py",
+    "snippet": "const rsVal      = s.rs_rating || 50;",
+    "reason": "universe RS is rank-assigned 1-99 to every scanned row (0 of 2,556 rows lack it, checked 2026-09-19); fallback unreachable for scan rows"
+  },
+  {
+    "file": "fetch_and_build.py",
+    "snippet": "const qMax = Math.round(Number(s.lt_quality_attainable_pct) || 100);",
+    "reason": "normalisation denominator: 100 means 'no rescaling', not a data value"
+  },
+  {
+    "file": "fetch_and_build.py",
+    "snippet": "const effSize = (typeof pageSize !== 'undefined' && pageSize === 'all') ? 60 : parseInt(pageSize || 50);",
+    "reason": "UI page size, not data"
+  },
+  {
+    "file": "fetch_and_build.py",
+    "snippet": "rsi:      isBuy ? (Number(p.rsi || 50) - 50) : (50 - Number(p.rsi || 50)),",
+    "reason": "intraday picks are server-filtered to rows with a real RSI (compute_intraday_picks skips incomplete rows)"
+  },
+  {
+    "file": "fetch_and_build.py",
+    "snippet": "rs:       isBuy ? (Number(p.rs_rating || 50) - 50) : (50 - Number(p.rs_rating || 50))",
+    "reason": "intraday picks are server-filtered to rows with a real RS (compute_intraday_picks skips incomplete rows)"
+  },
+  {
+    "file": "fetch_and_build.py",
+    "snippet": "let effectiveSize = (pageSize === 'all') ? totalItems : parseInt(pageSize || 50);",
+    "reason": "UI page size, not data"
+  },
+  {
+    "file": "fetch_and_build.py",
+    "snippet": "const rsVal = s.rs_rating || 50;",
+    "reason": "universe RS is rank-assigned 1-99 to every scanned row (0 of 2,556 rows lack it, checked 2026-09-19); fallback unreachable for scan rows"
+  },
+  {
+    "file": "fetch_and_build.py",
+    "snippet": "const dailyRate = summary.daily_accrual_rate || 100;",
+    "reason": "user-configured SIP accrual for the user's own deposit accounting, not market data"
+  },
+  {
+    "file": "fetch_and_build.py",
+    "snippet": "vol_spike=scored.get(\"volume_spike\", 1.0),",
+    "reason": "1.0 = volume equal to average; adds no scoring points, so no strength is implied"
+  },
+  {
+    "file": "fundamental_engine.py",
+    "snippet": "earned += 5 if any(k in sector for k in cyclicals) else 25 if any(k in sector for k in quality_sectors) else 15",
+    "reason": "scoring points per sector class (design constants), not a substituted value"
+  },
+  {
+    "file": "lt_engine.py",
+    "snippet": "comps[\"valuation\"] = 100.0 if pe <= 25 else 70.0 if pe <= 40 else 40.0 if pe <= 60 else 10.0",
+    "reason": "valuation score buckets by P/E (design constants); only evaluated when pe exists"
+  },
+  {
+    "file": "option_strategy_engine.py",
+    "snippet": "step = min(diffs) if diffs else (50.0 if underlying == \"NIFTY\" else 100.0 if underlying == \"BANKNIFTY\" else 20.0)",
+    "reason": "NIFTY (50) and BANKNIFTY (100) strike steps are exchange constants; only reached when the chain has too few strikes to build a strategy"
+  },
+  {
+    "file": "screener_engine.py",
+    "snippet": "vol_spike=res_stock.get(\"volume_spike\", 1.0),",
+    "reason": "1.0 = volume equal to average; adds no scoring points, so no strength is implied"
+  },
+  {
+    "file": "screener_engine.py",
+    "snippet": "vol_spike=s.get(\"volume_spike\", 1.0),",
+    "reason": "1.0 = volume equal to average; adds no scoring points, so no strength is implied"
+  },
+  {
+    "file": "screener_engine.py",
+    "snippet": "curr_vol_avg = float(vol_avg_arr[-1]) if vol_avg_arr[-1] > 0 else 1.0",
+    "reason": "zero-volume denominator guard, not a reported value"
+  },
+  {
+    "file": "screener_engine.py",
+    "snippet": "vol_spike = scored.get(\"volume_spike\", 1.0)",
+    "reason": "1.0 = volume equal to average; adds no scoring points, so no strength is implied"
+  },
+  {
+    "file": "screener_engine.py",
+    "snippet": "_attainable = float(eval_res.get(\"lt_quality_attainable_pct\") or 100.0) or 100.0",
+    "reason": "normalisation denominator: 100 means 'no rescaling', not a data value"
+  },
+  {
+    "file": "screener_engine.py",
+    "snippet": "vol_spike = float(scored.get(\"volume_spike\") or 1.0)",
+    "reason": "1.0 = volume equal to average; adds no conviction points in compute_fno_signal"
+  },
+  {
+    "file": "sr_volume.py",
+    "snippet": "close_pos = ((c[-1] - l[-1]) / bar_rng) if bar_rng > 0 else 0.5",
+    "reason": "zero-range bar: close-location is undefined, 0.5 = neutral (no signal)"
+  },
+  {
+    "file": "trend_engine.py",
+    "snippet": "vol_spike = float(df[\"Volume\"].iloc[-1] / vol_avg10) if vol_avg10 > 0 else 1.0",
+    "reason": "average volume of zero (no volume feed): ratio undefined, 1.0 adds no scoring points"
+  }
+]
