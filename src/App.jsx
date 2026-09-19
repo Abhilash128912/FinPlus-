@@ -286,7 +286,7 @@ export default function App() {
   const [closeOptionTrade, setCloseOptionTrade] = useState(null);
   const [closeOptExitPrice, setCloseOptExitPrice] = useState('');
   const [closeOptExitDate, setCloseOptExitDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [closeOptCharges, setCloseOptCharges] = useState('40');
+  const [closeOptCharges, setCloseOptCharges] = useState(''); // no assumed charge: enter the real figure from the contract note
 
   // Modal: EOD Daily Reconciliation State
   const [showReconcileModal, setShowReconcileModal] = useState(false);
@@ -1478,7 +1478,13 @@ export default function App() {
     e.preventDefault();
     if (!closeOptionTrade) return;
     const exitP = parseFloat(closeOptExitPrice) || 0;
-    const chg = parseFloat(closeOptCharges) || 40;
+    // Charges come from the user's contract note; no default is assumed (a fixed
+    // 40 misstated net P&L because real STT/exchange/GST charges scale with premium).
+    if (closeOptCharges === '' || isNaN(parseFloat(closeOptCharges))) {
+      showToast('Enter the actual charges from your contract note before closing the trade.');
+      return;
+    }
+    const chg = parseFloat(closeOptCharges);
     const qty = Number(closeOptionTrade.qty) || 1;
     const entryP = Number(closeOptionTrade.entryPrice) || 0;
     const netPnl = (exitP - entryP) * qty - chg;
@@ -2444,7 +2450,7 @@ export default function App() {
                                   setCloseOptionTrade(o);
                                   setCloseOptExitPrice('');
                                   setCloseOptExitDate(new Date().toISOString().split('T')[0]);
-                                  setCloseOptCharges(String(o.charges || 40));
+                                  setCloseOptCharges(o.charges != null ? String(o.charges) : '');
                                 }}
                                 style={{ background: 'rgba(16, 185, 129, 0.18)', border: '1px solid #10b981', color: '#10b981', padding: '4px 10px', borderRadius: '6px', fontWeight: 800, fontSize: '11px', cursor: 'pointer' }}
                               >
