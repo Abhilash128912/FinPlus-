@@ -465,7 +465,9 @@ def get_option_chain(underlying: str, expiry: str | None = None) -> dict | None:
                 }
             })
 
-        pcr = round(total_pe_oi / total_ce_oi, 2) if total_ce_oi > 0 else 1.0
+        if total_ce_oi <= 0:
+            return None  # no call OI -> no PCR; never substitute a default ratio
+        pcr = round(total_pe_oi / total_ce_oi, 2)
         pcr_sentiment = "BULLISH" if pcr > 1.20 else "BEARISH" if pcr < 0.80 else "NEUTRAL"
 
         # Find ATM nodes for summary
