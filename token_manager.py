@@ -228,13 +228,22 @@ def fetch_token_from_backend(base_dir: str) -> tuple[bool, str]:
         return False, "Backend has no token"
 
     remote = decode_jwt_payload(token) or {}
-    local = decode_jwt_payload(os.environ.get(TOKEN_KEY, "")) or {}
+    local_token = os.environ.get(TOKEN_KEY, "").strip()
+    local = decode_jwt_payload(local_token) or {}
     if not remote.get("exp"):
         return False, "Backend token is not a readable JWT"
-    if token == os.environ.get(TOKEN_KEY, "").strip() or remote["exp"] <= local.get("exp", 0):
+    if token == local_token:
         return True, "Local token already current"
     if remote["exp"] <= time.time():
         return False, "Backend token is itself expired"
+    if remote["exp"] <= local.get("exp", 0):
+        # Same-or-earlier expiry is NOT proof the local token works: INDstocks lets
+        # only one TOTP token live at a time and every token expires at the same
+        # daily cut-off, so a token revoked by the other machine still *looks* valid.
+        # Keep it only if a live call actually succeeds.
+        local_ok = bool(local_token) and test_token(local_token)[0]
+        if local_ok:
+            return True, "Local token still valid"
 
     ok, detail = test_token(token)
     if not ok:
