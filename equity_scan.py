@@ -32,8 +32,11 @@ import requests
 import signal_engine
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SCREENER_APP_DIR = r"D:\STOCK SCREENER APP"
-SCREENER_DATA_PATH = os.path.join(SCREENER_APP_DIR, "screener_data.json")
+# screener_data.json now lives alongside this app (fetch_and_build.py writes
+# it here) rather than in the old standalone STOCK SCREENER APP folder --
+# env-overridable for anyone still running that separate layout.
+SCREENER_APP_DIR = os.environ.get("SCREENER_APP_DIR", BASE_DIR)
+SCREENER_DATA_PATH = os.environ.get("SCREENER_DATA_PATH", os.path.join(SCREENER_APP_DIR, "screener_data.json"))
 
 SECURITY_ID_CACHE_FILE = os.path.join(BASE_DIR, "nse_equity_security_ids.json")
 SECURITY_ID_CACHE_TTL_SEC = 24 * 3600
@@ -59,14 +62,41 @@ def _screener_engine():
     return se
 
 
+_screener_data_cache: list[dict] | None = None
+
+
+def load_screener_data() -> list[dict]:
+    """The one place screener_data.json actually gets read off disk.
+    equity_scan, swing_engine, lt_engine, and penny_engine all scan
+    overlapping slices of the same ~2,500-row file; before this, each of
+    them opened and json.load()'d its own independent copy, so a single
+    background-thread wakeup (all their loops fire close together) could
+    hold 4+ copies of an 11MB structure in memory at once -- the direct
+    cause of the free-tier 512MB OOM kill on Render. Cached for this
+    process's lifetime: the file is a scan snapshot that only changes on
+    a fresh deploy, never while this process is running, so there is no
+    correctness cost to reading it once. Callers must copy a row (dict(row))
+    before mutating it, since this list is shared -- every caller in this
+    codebase already does."""
+    global _screener_data_cache
+    if _screener_data_cache is not None:
+        return _screener_data_cache
+    if not os.path.exists(SCREENER_DATA_PATH):
+        print(f"[equity_scan] no scan data at {SCREENER_DATA_PATH} -- run fetch_and_build.py "
+              f"and commit screener_data.json, or set SCREENER_DATA_PATH")
+        _screener_data_cache = []
+        return _screener_data_cache
+    with open(SCREENER_DATA_PATH, encoding="utf-8") as f:
+        _screener_data_cache = json.load(f)
+    return _screener_data_cache
+
+
 def load_liquid_candidates() -> list[dict]:
     """Every screener_data.json row that clears intraday_candidate_gates_pass --
     the same liquidity/circuit-safety bar the live screener's own intraday
     tab uses."""
     se = _screener_engine()
-    with open(SCREENER_DATA_PATH, encoding="utf-8") as f:
-        rows = json.load(f)
-    return [r for r in rows if se.intraday_candidate_gates_pass(r)]
+    return [r for r in load_screener_data() if se.intraday_candidate_gates_pass(r)]
 
 
 def _refresh_security_id_cache() -> dict:

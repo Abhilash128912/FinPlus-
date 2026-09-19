@@ -20,12 +20,13 @@ RSI here uses the exact same Wilder-smoothing formula as
 detect_rsi_divergence() in screener_engine.py (ewm alpha=1/14), so a "RSI
 48" here means the same thing it means on the equity screener.
 """
+import os
 import sys
 
 import pandas as pd
 import yfinance as yf
 
-SCREENER_APP_DIR = r"D:\STOCK SCREENER APP"
+SCREENER_APP_DIR = os.environ.get("SCREENER_APP_DIR", os.path.dirname(os.path.abspath(__file__)))
 
 INDEX_SECURITY_IDS = {"NIFTY": "NSE_40000001", "BANKNIFTY": "NSE_40000003"}
 COMMODITY_TICKERS = {"CRUDEOIL": "CL=F", "NATURALGAS": "NG=F"}

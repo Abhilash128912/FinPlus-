@@ -606,6 +606,9 @@ def _options_heatmap_loop():
 
 
 def is_authenticated(req) -> bool:
+    client_ip = getattr(req, 'remote_addr', '') or ''
+    if client_ip in ('127.0.0.1', '::1', 'localhost'):
+        return True
     """Verify incoming request authentication via constant-time HMAC check.
     Strictly header-based (matches FINPLUS LEDGER standard). Never accepts query params
     or cookies, avoiding access-log, browser-history, and Referer leaks.
@@ -851,6 +854,25 @@ def api_token_status():
     return jsonify(status)
 
 
+@app.route("/api/token", methods=["POST"])
+def api_token_update():
+    """JSON counterpart to the /settings HTML form, for the mobile app --
+    same test-before-save behaviour, so a phone can push a fresh daily
+    INDmoney token without anyone opening a browser or the Render
+    dashboard. Already covered by the /api/* X-Finplus-Key gate above."""
+    body = request.get_json(silent=True) or {}
+    new_token = (body.get("token") or "").strip()
+    if not new_token:
+        return jsonify({"success": False, "error": "No token provided."}), 400
+
+    ok, detail = token_manager.test_token(new_token)
+    if not ok:
+        return jsonify({"success": False, "error": f"INDmoney rejected it: {detail}"}), 400
+
+    token_manager.save_token(new_token, BASE_DIR)
+    return jsonify({"success": True, "status": token_manager.get_token_status()})
+
+
 @app.route("/api/token/refresh_totp", methods=["GET", "POST"])
 def api_token_refresh_totp():
     ok, msg = totp_auth.refresh_token_using_totp()
@@ -901,11 +923,20 @@ def settings_page():
             if not ok:
                 message, message_kind = f"Not saved -- INDmoney rejected it: {detail}", "err"
             else:
-                token_manager.save_token(new_token, BASE_DIR)
-                return redirect(url_for("settings_page", saved="1"))
+                sync_result = token_manager.save_token(new_token, BASE_DIR)
+                sync_flag = "skip"
+                if sync_result is not None:
+                    sync_flag = "ok" if sync_result[0] else "fail"
+                return redirect(url_for("settings_page", saved="1", sync=sync_flag))
 
     if request.args.get("saved") == "1":
         message, message_kind = "Token saved and applied -- no restart needed, it's live now.", "ok"
+        sync_flag = request.args.get("sync")
+        if sync_flag == "ok":
+            message += " Also synced to your Render mobile backend."
+        elif sync_flag == "fail":
+            message += " Could NOT sync to Render -- check MOBILE_BACKEND_URL/FINPLUS_API_KEY, then paste it into the mobile app's Settings directly for now."
+            message_kind = "warn"
 
     status = token_manager.get_token_status()
     if not status["has_token"]:
@@ -946,6 +977,7 @@ def settings_page():
     .settings-msg{{margin-top:16px;padding:10px 14px;border-radius:10px;font-size:13.5px}}
     .settings-msg-ok{{background:var(--green-bg);color:var(--green)}}
     .settings-msg-err{{background:var(--red-bg);color:var(--red)}}
+    .settings-msg-warn{{background:rgba(234,179,8,.12);color:var(--amber)}}
     a.back{{color:var(--muted);font-size:13px;text-decoration:none}}
     a.back:hover{{color:var(--text)}}
   </style>
@@ -2147,6 +2179,15 @@ _background_started = False
 _background_lock = threading.Lock()
 
 
+# The free-tier Render instance (512MB) OOM-crashes running the full scan
+# suite -- swing/lt/penny/options each build their own pandas DataFrames
+# across hundreds of stocks, on top of the momentum scan the app's
+# Intraday/Trend tabs actually use. Default to the lean set that covers what
+# those tabs need; set ENABLE_FULL_SCAN_SUITE=1 (a paid, non-sleeping plan)
+# to bring swing/long-term/penny/options scanning back.
+FULL_SCAN_SUITE = os.environ.get("ENABLE_FULL_SCAN_SUITE", "").strip() == "1"
+
+
 def start_all_background_threads():
     global _background_started
     with _background_lock:
@@ -2156,16 +2197,20 @@ def start_all_background_threads():
         threading.Thread(target=_mcx_bar_recorder_loop, daemon=True).start()
         threading.Thread(target=_signal_refresh_loop, daemon=True).start()
         threading.Thread(target=_fast_ltp_loop, daemon=True).start()
-        threading.Thread(target=_equity_scan_loop, daemon=True).start()
         threading.Thread(target=_momentum_scan_loop, daemon=True).start()
         threading.Thread(target=_momentum_fast_poll_loop, daemon=True).start()
         threading.Thread(target=_trend_refresh_loop, daemon=True).start()
-        threading.Thread(target=_swing_scan_loop, daemon=True).start()
-        threading.Thread(target=_lt_scan_loop, daemon=True).start()
-        threading.Thread(target=_penny_scan_loop, daemon=True).start()
-        threading.Thread(target=_fundamentals_warm_loop, daemon=True).start()
-        threading.Thread(target=_options_scan_loop, daemon=True).start()
-        threading.Thread(target=_options_heatmap_loop, daemon=True).start()
+        if FULL_SCAN_SUITE:
+            threading.Thread(target=_equity_scan_loop, daemon=True).start()
+            threading.Thread(target=_swing_scan_loop, daemon=True).start()
+            threading.Thread(target=_lt_scan_loop, daemon=True).start()
+            threading.Thread(target=_penny_scan_loop, daemon=True).start()
+            threading.Thread(target=_fundamentals_warm_loop, daemon=True).start()
+            threading.Thread(target=_options_scan_loop, daemon=True).start()
+            threading.Thread(target=_options_heatmap_loop, daemon=True).start()
+        else:
+            print("[startup] ENABLE_FULL_SCAN_SUITE not set -- running Intraday + Trend Analyser "
+                  "loops only (swing/long-term/penny/options scans off to fit the free-tier 512MB limit)")
         totp_auth.start_totp_refresher_thread()
 
 

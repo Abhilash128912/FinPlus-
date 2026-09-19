@@ -93,8 +93,56 @@ export interface AlertsResponse {
   };
 }
 
+// ── Real multi-stock screener (equity_scan / swing_engine / lt_engine / penny_engine) ──
+export interface StockPick {
+  symbol: string;
+  name?: string;
+  sector?: string;
+  ltp?: number;
+  direction?: "BUY" | "SELL";
+  srv_signal?: string;
+  srv_entry?: number;
+  srv_stop?: number;
+  srv_target1?: number;
+  srv_target2?: number;
+  srv_rr?: number;
+  srv_setup?: string;
+  srv_reason?: string;
+  stop_loss?: number;
+  target1?: number;
+  target2?: number;
+  intraday_score?: number;
+  total_score?: number;
+  swing_score?: number;
+  swing_action?: string;
+  status_badge?: string;
+  gtt_breakout_level?: number;
+  gtt_pullback_level?: number;
+  rationale?: string;
+  day_chg_pct?: number;
+  rsi?: number;
+  volume_spike?: number;
+  [key: string]: any;
+}
+
+export interface ScreenerAllResponse {
+  success: boolean;
+  swing: { picks: StockPick[]; total_candidates: number; qualified_count: number } | null;
+  lt: { watchlist: StockPick[]; top_challengers: StockPick[]; total_scanned: number } | null;
+  penny: { picks: StockPick[]; total_evaluated: number; qualified_count: number } | null;
+  momentum: { buy: StockPick[]; sell: StockPick[]; buy_qualified: number; sell_qualified: number } | null;
+  equity: { buy: StockPick[]; sell: StockPick[]; watch_buy: StockPick[]; watch_sell: StockPick[] } | null;
+}
+
+// No offline fallback here on purpose: this scan needs your PC's live
+// INDmoney session (equity_scan.py), so there is nothing honest to fabricate
+// when the backend is unreachable -- the screen should say so, not guess.
+export const fetchScreenerAll = async (): Promise<ScreenerAllResponse> => {
+  return request<ScreenerAllResponse>("/api/screener/all", 8000);
+};
+
 // Low-level fetch wrapper
-async function request<T>(path: string, timeoutMs: number = 4000): Promise<T> {
+async function request<T>(path: string, timeoutMs: number = 4000, body?: unknown): Promise<T> {
   const url = `${getApiBaseUrl()}${path}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -106,15 +154,29 @@ async function request<T>(path: string, timeoutMs: number = 4000): Promise<T> {
     headers["X-Finplus-Key"] = key;
   }
   try {
-    const res = await fetch(url, { signal: ctrl.signal, headers });
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers,
+      method: body !== undefined ? "POST" : "GET",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const json = await res.json().catch(() => null);
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      throw new Error(json?.error || `HTTP ${res.status}: ${res.statusText}`);
     }
-    return await res.json();
+    return json;
   } finally {
     clearTimeout(timer);
   }
 }
+
+// Push a freshly generated INDmoney access token to the live backend --
+// lets the token be refreshed daily from the phone itself, no Render
+// dashboard or desktop browser needed (INDmoney tokens expire every 24h
+// and have no programmable refresh flow).
+export const updateIndmoneyToken = async (token: string): Promise<{ success: boolean; error?: string }> => {
+  return request("/api/token", 8000, { token });
+};
 
 // Direct Yahoo Finance Fetcher for Autonomous / Away Mode
 async function fetchDirectYahooChart(ticker: string): Promise<{
@@ -228,16 +290,11 @@ function computePivotSignal(
   };
 }
 
-// ── Autonomous Markets Fetcher (Server first, Direct Market Cloud fallback) ──
-//
-// If /api/markets fails (missing key, RADAR offline, network blip), this
-// used to backfill every symbol with numbers hardcoded in this file --
-// frozen at whatever NIFTY/crude/etc. happened to be when this code was
-// written -- and label the result "Live Cloud Direct", indistinguishable
-// from a genuine live read. That silently showed stale, made-up prices as
-// current. Now a symbol only appears here if a real quote (server or
-// direct Yahoo/MCX) actually came back; anything else is simply omitted,
-// so the UI's own "--" placeholder shows instead of a fabricated number.
+// ── Markets Fetcher: real backend first, live direct-quote fallback second.
+// The fallback only ever uses numbers it actually fetched just now (Yahoo
+// Finance / the MCX cloud endpoint) -- a symbol whose direct fetch also
+// fails is simply left out of the response rather than filled with a
+// made-up price, per the "no fabricated data" rule for this app.
 export const fetchMarkets = async (): Promise<MarketsResponse> => {
   try {
     return await request<MarketsResponse>("/api/markets", 3000);
@@ -249,52 +306,47 @@ export const fetchMarkets = async (): Promise<MarketsResponse> => {
       fetchDirectRenderMCX(),
     ]);
 
-    const crudeLtp = mcxData?.crude?.mcx_ltp;
-    const crudeHigh = mcxData?.crude?.mcx_high ?? (crudeLtp ? crudeLtp * 1.01 : undefined);
-    const crudeLow = mcxData?.crude?.mcx_low ?? (crudeLtp ? crudeLtp * 0.99 : undefined);
-    const crudePrev = mcxData?.crude?.mcx_prev_close ?? crudeLtp;
-    const crudePct = mcxData?.crude?.mcx_pct ?? 0;
-
-    const gasLtp = mcxData?.gas?.mcx_ltp;
-    const gasHigh = mcxData?.gas?.mcx_high ?? (gasLtp ? gasLtp * 1.01 : undefined);
-    const gasLow = mcxData?.gas?.mcx_low ?? (gasLtp ? gasLtp * 0.99 : undefined);
-    const gasPrev = mcxData?.gas?.mcx_prev_close ?? gasLtp;
-    const gasPct = mcxData?.gas?.mcx_pct ?? 0;
-
     const signals: Record<string, SignalData> = {};
     const fast_ltp: Record<string, number> = {};
     const fast_change: Record<string, number> = {};
     const spark: Record<string, number[]> = {};
 
-    const add = (
-      key: string,
-      ltp: number | undefined,
-      high: number | undefined,
-      low: number | undefined,
-      prevClose: number | undefined,
-      change: number | undefined,
-      sparkVals: number[] | undefined,
-      label: string
-    ) => {
-      if (ltp === undefined || ltp === null || isNaN(ltp)) return; // no real quote -- leave it out
-      signals[key] = computePivotSignal(ltp, high ?? ltp, low ?? ltp, prevClose ?? ltp, label);
-      fast_ltp[key] = ltp;
-      fast_change[key] = change ?? 0;
-      spark[key] = sparkVals && sparkVals.length ? sparkVals : [ltp];
+    const addQuote = (key: string, label: string, q: typeof niftyQ) => {
+      if (!q || !q.ltp) return;
+      signals[key] = computePivotSignal(q.ltp, q.high, q.low, q.prevClose, label);
+      fast_ltp[key] = q.ltp;
+      fast_change[key] = q.change;
+      spark[key] = q.spark;
     };
 
-    add("nifty", niftyQ?.ltp, niftyQ?.high, niftyQ?.low, niftyQ?.prevClose, niftyQ?.change, niftyQ?.spark, "NIFTY 50");
-    add("banknifty", bankQ?.ltp, bankQ?.high, bankQ?.low, bankQ?.prevClose, bankQ?.change, bankQ?.spark, "BANK NIFTY");
-    add("reliance", relianceQ?.ltp, relianceQ?.high, relianceQ?.low, relianceQ?.prevClose, relianceQ?.change, relianceQ?.spark, "RELIANCE");
-    add("crude", crudeLtp, crudeHigh, crudeLow, crudePrev, crudePct, crudeLtp && crudeLow && crudeHigh ? [crudeLow, (crudeLow + crudeHigh) / 2, crudeHigh, crudeLtp] : undefined, "CRUDE OIL (MCX)");
-    add("natgas", gasLtp, gasHigh, gasLow, gasPrev, gasPct, gasLtp && gasLow && gasHigh ? [gasLow, (gasLow + gasHigh) / 2, gasHigh, gasLtp] : undefined, "NATURAL GAS (MCX)");
+    addQuote("nifty", "NIFTY 50", niftyQ);
+    addQuote("banknifty", "BANK NIFTY", bankQ);
+    addQuote("reliance", "RELIANCE", relianceQ);
 
-    if (Object.keys(signals).length === 0) {
-      throw new Error("RADAR server unreachable and no backup market data available.");
+    const crude = mcxData?.crude;
+    if (crude?.mcx_ltp) {
+      const high = crude.mcx_high ?? crude.mcx_ltp;
+      const low = crude.mcx_low ?? crude.mcx_ltp;
+      const prev = crude.mcx_prev_close ?? crude.mcx_ltp;
+      signals.crude = computePivotSignal(crude.mcx_ltp, high, low, prev, "CRUDE OIL (MCX)");
+      fast_ltp.crude = crude.mcx_ltp;
+      fast_change.crude = crude.mcx_pct ?? 0;
+      spark.crude = [low, (low + high) / 2, high, crude.mcx_ltp];
+    }
+
+    const gas = mcxData?.gas;
+    if (gas?.mcx_ltp) {
+      const high = gas.mcx_high ?? gas.mcx_ltp;
+      const low = gas.mcx_low ?? gas.mcx_ltp;
+      const prev = gas.mcx_prev_close ?? gas.mcx_ltp;
+      signals.natgas = computePivotSignal(gas.mcx_ltp, high, low, prev, "NATURAL GAS (MCX)");
+      fast_ltp.natgas = gas.mcx_ltp;
+      fast_change.natgas = gas.mcx_pct ?? 0;
+      spark.natgas = [low, (low + high) / 2, high, gas.mcx_ltp];
     }
 
     return {
-      success: true,
+      success: Object.keys(signals).length > 0,
       signals,
       signals_updated_at: new Date().toISOString(),
       fast_ltp,
@@ -304,7 +356,7 @@ export const fetchMarkets = async (): Promise<MarketsResponse> => {
       trends: {},
       token_status: {
         has_token: false,
-        is_expired: false,
+        is_expired: true,
         data_source: "Backup feed (delayed, server unreachable)",
         fallback_active: true,
       },
@@ -312,52 +364,41 @@ export const fetchMarkets = async (): Promise<MarketsResponse> => {
   }
 };
 
-// ── Autonomous Commodities Fetcher ──
-// Same rule as fetchMarkets: only ever show a number that came from a real
-// quote. If MCX direct-cloud data isn't available either, throw instead of
-// backfilling with figures hardcoded in this file.
+// ── Commodities Fetcher: real backend first, direct MCX cloud fallback ──
 export const fetchCommodities = async (): Promise<CommoditiesResponse> => {
   try {
     return await request<CommoditiesResponse>("/api/commodities", 3000);
   } catch (_) {
     const mcxData = await fetchDirectRenderMCX();
-    const crudeLtp = mcxData?.crude?.mcx_ltp;
-    const gasLtp = mcxData?.gas?.mcx_ltp;
-    if (crudeLtp === undefined && gasLtp === undefined) {
-      throw new Error("RADAR server unreachable and no backup MCX data available.");
-    }
+    const crude = mcxData?.crude;
+    const gas = mcxData?.gas;
 
-    const crudeHigh = mcxData?.crude?.mcx_high ?? (crudeLtp ? crudeLtp * 1.012 : undefined);
-    const crudeLow = mcxData?.crude?.mcx_low ?? (crudeLtp ? crudeLtp * 0.988 : undefined);
-    const crudePrev = mcxData?.crude?.mcx_prev_close ?? crudeLtp;
-    const crudePct = mcxData?.crude?.mcx_pct ?? 0;
-
-    const gasHigh = mcxData?.gas?.mcx_high ?? (gasLtp ? gasLtp * 1.015 : undefined);
-    const gasLow = mcxData?.gas?.mcx_low ?? (gasLtp ? gasLtp * 0.985 : undefined);
-    const gasPrev = mcxData?.gas?.mcx_prev_close ?? gasLtp;
-    const gasPct = mcxData?.gas?.mcx_pct ?? 0;
+    const buildLeg = (leg: typeof crude, name: string) => {
+      if (!leg?.mcx_ltp) {
+        return { signal: {}, ltp: undefined, change: undefined, spark: [], bars: [] };
+      }
+      const high = leg.mcx_high ?? leg.mcx_ltp;
+      const low = leg.mcx_low ?? leg.mcx_ltp;
+      const prev = leg.mcx_prev_close ?? leg.mcx_ltp;
+      return {
+        signal: computePivotSignal(leg.mcx_ltp, high, low, prev, name),
+        ltp: leg.mcx_ltp,
+        change: leg.mcx_pct ?? 0,
+        spark: [low, (low + high) / 2, high, leg.mcx_ltp],
+        bars: [],
+      };
+    };
 
     return {
-      success: true,
-      crude: crudeLtp === undefined ? { signal: {}, spark: [], bars: [] } : {
-        signal: computePivotSignal(crudeLtp, crudeHigh ?? crudeLtp, crudeLow ?? crudeLtp, crudePrev ?? crudeLtp, "CRUDEOIL"),
-        ltp: crudeLtp,
-        change: crudePct,
-        spark: crudeHigh && crudeLow ? [crudeLow, (crudeLow + crudeHigh) / 2, crudeHigh, crudeLtp] : [crudeLtp],
-        bars: [],
-      },
-      natgas: gasLtp === undefined ? { signal: {}, spark: [], bars: [] } : {
-        signal: computePivotSignal(gasLtp, gasHigh ?? gasLtp, gasLow ?? gasLtp, gasPrev ?? gasLtp, "NATURALGAS"),
-        ltp: gasLtp,
-        change: gasPct,
-        spark: gasHigh && gasLow ? [gasLow, (gasLow + gasHigh) / 2, gasHigh, gasLtp] : [gasLtp],
-        bars: [],
-      },
+      success: Boolean(crude?.mcx_ltp || gas?.mcx_ltp),
+      crude: buildLeg(crude, "CRUDEOIL"),
+      natgas: buildLeg(gas, "NATURALGAS"),
     };
   }
 };
 
-// ── Autonomous Intraday Alerts & Suggestions Fetcher ──
+// ── Intraday Alerts Fetcher: real signal-journal history first, live
+// pivot-based read on whatever direct quotes succeeded second. ──
 export const fetchAlerts = async (): Promise<AlertsResponse> => {
   try {
     return await request<AlertsResponse>("/api/alerts", 3000);
@@ -365,7 +406,6 @@ export const fetchAlerts = async (): Promise<AlertsResponse> => {
     const mkt = await fetchMarkets();
     const recent: AlertRecord[] = [];
 
-    const keys = ["crude", "natgas", "nifty", "banknifty", "reliance"];
     const labels: Record<string, string> = {
       crude: "CRUDEOIL MCX",
       natgas: "NATURALGAS MCX",
@@ -374,7 +414,7 @@ export const fetchAlerts = async (): Promise<AlertsResponse> => {
       reliance: "RELIANCE",
     };
 
-    for (const k of keys) {
+    for (const k of Object.keys(mkt.signals)) {
       const sig = mkt.signals[k];
       if (sig && sig.srv_entry && sig.srv_stop && sig.srv_target1) {
         recent.push({
@@ -385,8 +425,8 @@ export const fetchAlerts = async (): Promise<AlertsResponse> => {
           stop: sig.srv_stop,
           target1: sig.srv_target1,
           target2: sig.srv_target2,
-          strength: sig.srv_strength || "HIGH",
-          rr: sig.srv_rr || 2.0,
+          strength: sig.srv_strength || "MODERATE",
+          rr: sig.srv_rr,
           opened_at: new Date().toISOString(),
           outcome: "open",
         });
@@ -399,7 +439,7 @@ export const fetchAlerts = async (): Promise<AlertsResponse> => {
     // a fake track record as if it were real. Honestly report "no data"
     // instead; the currently-open setups above are still real quotes.
     return {
-      success: true,
+      success: recent.length > 0,
       recent,
       stats: {
         overall: {
