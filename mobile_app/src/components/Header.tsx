@@ -13,6 +13,7 @@ import {
 import { theme } from "../theme";
 import { getApiBaseUrl, setApiBaseUrl, getApiKey, setApiKey } from "../config";
 import { updateIndmoneyToken, fetchTokenStatus, TokenStatus, fetchDataHealth, DataHealth } from "../api";
+import { updateInfo } from "../updater";
 
 interface HeaderProps {
   tokenStatus?: {
@@ -217,6 +218,7 @@ export const Header: React.FC<HeaderProps> = ({
           <View style={[styles.modalCard, { maxHeight: "85%" }]}>
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.modalTitle}>Server Connection</Text>
+              <Text style={styles.modalSub}>{updateInfo()}</Text>
               <Text style={styles.modalSub}>
                 This app talks to the cloud backend only — there is no local
                 network / PC-tethered mode. Only change this if your Render

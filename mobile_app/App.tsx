@@ -7,6 +7,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 
 import { theme } from "./src/theme";
 import { loadPersistedConfig } from "./src/config";
+import { useAutoUpdate } from "./src/updater";
 import { TrendScreen } from "./src/screens/TrendScreen";
 import { IntradayScreen } from "./src/screens/IntradayScreen";
 import { ScreenerScreen } from "./src/screens/ScreenerScreen";
@@ -109,12 +110,13 @@ export default function App() {
   // first fetch with an empty key and get a 401 for a split second on every
   // cold start.
   const [ready, setReady] = useState(false);
+  const updateState = useAutoUpdate();
 
   useEffect(() => {
     loadPersistedConfig().finally(() => setReady(true));
   }, []);
 
-  if (!ready) {
+  if (!ready || updateState === "installing") {
     return (
       <SafeAreaProvider>
         <SafeAreaView style={[styles.container, styles.loadingContainer]} edges={["top", "left", "right"]}>
