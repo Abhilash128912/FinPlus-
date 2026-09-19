@@ -24,8 +24,23 @@ import requests
 IST = ZoneInfo("Asia/Kolkata")
 API = "https://api.render.com/v1"
 
-# Render service slugs (the subdomain of <slug>.onrender.com) -- stable even if the display name changes.
+# Services to schedule. Each is matched by slug (the <slug>.onrender.com subdomain), display name or web
+# address, whichever Render reports, so a renamed or blueprint-created service is still found.
 SERVICE_SLUGS = ("finplus-1", "alphapulse-sentiment-tracker")
+_ALIASES = {
+    "finplus-1": ("finplus-1", "finplus--1", "indmoney-trading-screener"),
+    "alphapulse-sentiment-tracker": ("alphapulse-sentiment-tracker", "alphapulse"),
+}
+
+
+def match_slug(service: dict) -> str | None:
+    """Which of SERVICE_SLUGS this Render service is, or None."""
+    host = ((service.get("serviceDetails") or {}).get("url") or "").lower().replace("https://", "").split(".")[0]
+    candidates = {str(service.get("slug") or "").lower(), str(service.get("name") or "").lower(), host}
+    for slug, names in _ALIASES.items():
+        if candidates & set(names):
+            return slug
+    return None
 
 # Weekdays 0=Mon..4=Fri. Window is [OPEN, CLOSE) in IST.
 RUN_DAYS = (0, 1, 2, 3, 4)
@@ -44,13 +59,14 @@ def plan(services: list[dict], now: datetime.datetime | None = None) -> list[tup
     want_up = desired_running(now)
     actions = []
     for s in services:
-        if s.get("slug") not in SERVICE_SLUGS:
+        slug = match_slug(s)
+        if slug is None:
             continue
         suspended = s.get("suspended") == "suspended"
         if want_up and suspended:
-            actions.append(("resume", s["id"], s["slug"]))
+            actions.append(("resume", s["id"], slug))
         elif not want_up and not suspended:
-            actions.append(("suspend", s["id"], s["slug"]))
+            actions.append(("suspend", s["id"], slug))
     return actions
 
 
@@ -83,11 +99,14 @@ def main(argv: list[str]) -> int:
         return 2
     now = datetime.datetime.now(IST)
     services = list_services(key)
-    found = {s.get("slug") for s in services}
+    found = {match_slug(s) for s in services}
     missing = [slug for slug in SERVICE_SLUGS if slug not in found]
     print(f"{now:%a %Y-%m-%d %H:%M} IST -> desired: {'RUNNING' if desired_running(now) else 'SUSPENDED'}")
     if missing:
         print("WARNING: service(s) not found in this Render account:", ", ".join(missing))
+        print("Services this API key can see (name / slug / state):")
+        for s in services:
+            print(f"  - {s.get('name')} / {s.get('slug')} / {s.get('suspended')}")
     actions = plan(services, now)
     if not actions:
         print("Already in the desired state; nothing to do.")
@@ -100,7 +119,7 @@ def main(argv: list[str]) -> int:
         if r.status_code >= 300:
             print(r.text[:300])
             return 1
-    return 1 if missing and not services else 0
+    return 1 if missing else 0
 
 
 if __name__ == "__main__":

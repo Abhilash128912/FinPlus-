@@ -52,3 +52,10 @@ def test_plan_suspends_running_services_outside_the_window():
 def test_plan_does_nothing_when_already_correct_and_ignores_other_services():
     assert rs.plan([_svc("finplus-1", False), _svc("some-other-app", True)], ist(2026, 9, 21, 10, 0)) == []
     assert rs.plan([_svc("finplus-1", True), _svc("some-other-app", False)], ist(2026, 9, 21, 20, 0)) == []
+
+
+def test_services_are_matched_by_slug_name_or_url():
+    assert rs.match_slug({"slug": "finplus-1"}) == "finplus-1"
+    assert rs.match_slug({"name": "FinPlus--1", "slug": "x"}) == "finplus-1"
+    assert rs.match_slug({"slug": "zzz", "serviceDetails": {"url": "https://alphapulse-sentiment-tracker.onrender.com"}}) == "alphapulse-sentiment-tracker"
+    assert rs.match_slug({"slug": "unrelated", "name": "other"}) is None
