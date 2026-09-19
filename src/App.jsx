@@ -280,7 +280,7 @@ export default function App() {
   const [optExitDate, setOptExitDate] = useState('');
   const [optExitPrice, setOptExitPrice] = useState('');
   const [optNotes, setOptNotes] = useState('');
-  const [optCharges, setOptCharges] = useState('40');
+  const [optCharges, setOptCharges] = useState('');
 
   // Modal: Close Options Trade State
   const [closeOptionTrade, setCloseOptionTrade] = useState(null);
@@ -3604,7 +3604,14 @@ export default function App() {
               const entryP = parseFloat(optEntryPrice) || 0;
               const exitP = parseFloat(optExitPrice) || 0;
               const qty = parseInt(optQty, 10) || 1;
-              const chg = parseFloat(optCharges) || 40;
+              // Charges come from the contract note; nothing is assumed. A closed trade cannot be
+              // saved without them (a fixed 40 misstated net P&L).
+              const hasChg = optCharges !== '' && !isNaN(parseFloat(optCharges));
+              if (optStatus === 'CLOSED' && !hasChg) {
+                showToast('Enter the actual charges from your contract note before saving a closed trade.');
+                return;
+              }
+              const chg = hasChg ? parseFloat(optCharges) : null;
               const netPnl = optStatus === 'CLOSED' ? ((exitP - entryP) * qty - chg) : 0;
 
               const newOpt = {
@@ -3996,7 +4003,14 @@ export default function App() {
               const entryP = parseFloat(optEntryPrice) || 0;
               const exitP = parseFloat(optExitPrice) || 0;
               const qty = parseInt(optQty, 10) || 1;
-              const chg = parseFloat(optCharges) || 40;
+              // Charges come from the contract note; nothing is assumed. A closed trade cannot be
+              // saved without them (a fixed 40 misstated net P&L).
+              const hasChg = optCharges !== '' && !isNaN(parseFloat(optCharges));
+              if (optStatus === 'CLOSED' && !hasChg) {
+                showToast('Enter the actual charges from your contract note before saving a closed trade.');
+                return;
+              }
+              const chg = hasChg ? parseFloat(optCharges) : null;
               const netPnl = optStatus === 'CLOSED' ? ((exitP - entryP) * qty - chg) : 0;
 
               const newOpt = {

@@ -114,7 +114,12 @@ export default function InWindowTradeModal({ segmentId, lane, desk, onClose }) {
     if (!ep || !sl || ep <= 0 || sl <= 0) return;
     const riskPerShare = Math.abs(ep - sl);
     if (riskPerShare <= 0) return;
-    const availableRisk = lane?.threshold || lane?.counter || 100;
+    const availableRisk = lane?.threshold || lane?.counter;
+    if (!availableRisk) {
+      // No risk budget is configured for this lane: do not size a real trade off an assumed amount.
+      alert('No risk budget is set for this lane, so the quantity cannot be auto-sized. Enter it yourself.');
+      return;
+    }
     const calculatedQty = Math.floor(availableRisk / riskPerShare);
     if (calculatedQty > 0) {
       setQuantity(String(calculatedQty));
