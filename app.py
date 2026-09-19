@@ -171,7 +171,9 @@ def is_nse_market_open() -> tuple[bool, str]:
     return True, "NSE MARKET LIVE"
 
 _fast_lock = threading.Lock()
-_fast_state = {"ltp": {}, "depth": {}, "change": {}, "updated_at": None, "error": None}
+_fast_state = {"ltp": {}, "depth": {}, "change": {}, "updated_at": None, "error": None,
+               "stage": "not started", "passes": 0}
+_PROCESS_STARTED = datetime.now(timezone.utc)
 SPARK_MAXLEN = 150  # ~7.5 min of history at the 3s poll cadence -- enough for a pocket sparkline
 # Keyed by card id ("crude"/"natgas"/"nifty"/"banknifty"/"reliance") throughout
 _spark_buffers = {cid: deque(maxlen=SPARK_MAXLEN) for cid in ("crude", "natgas", "nifty", "banknifty", "reliance")}
@@ -290,6 +292,30 @@ def _fetch_yfinance_fast_quotes() -> dict:
     return quotes
 
 
+from concurrent.futures import ThreadPoolExecutor  # noqa: E402
+
+_yf_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="yf-fast")
+_yf_future = None
+
+
+def _yfinance_quotes_bounded(timeout: float = 20.0) -> dict:
+    """_fetch_yfinance_fast_quotes with a hard wait limit. Yahoo can stall
+    for a long time from datacenter IPs; the LTP loop must keep moving.
+    A stuck call keeps running in its worker and is reused, not stacked."""
+    global _yf_future
+    if _yf_future is None or _yf_future.done():
+        _yf_future = _yf_executor.submit(_fetch_yfinance_fast_quotes)
+    try:
+        return _yf_future.result(timeout=timeout) or {}
+    except Exception:
+        return {}
+
+
+def _set_fast_stage(stage: str) -> None:
+    with _fast_lock:
+        _fast_state["stage"] = stage
+
+
 _mcx_ltp_lock = threading.Lock()
 _mcx_ltp_cache: dict = {}
 
@@ -314,6 +340,7 @@ def _fast_ltp_loop():
     while True:
         try:
             now = datetime.now(timezone.utc)
+            _set_fast_stage("indmoney")
             ltp_by_card, depth_by_card, change_by_card = {}, {}, {}
             tok_status = token_manager.get_token_status()
             has_valid_token = tok_status["has_token"] and not tok_status["is_expired"]
@@ -362,7 +389,8 @@ def _fast_ltp_loop():
 
             # Automatic fallback to Yahoo Finance if INDmoney failed or token expired
             if not ltp_by_card.get("nifty") or not ltp_by_card.get("banknifty"):
-                yf_quotes = _fetch_yfinance_fast_quotes()
+                _set_fast_stage("yfinance")
+                yf_quotes = _yfinance_quotes_bounded()
                 for cid, q in yf_quotes.items():
                     if cid not in ltp_by_card or ltp_by_card[cid] is None:
                         ltp_by_card[cid] = q["ltp"]
@@ -388,9 +416,12 @@ def _fast_ltp_loop():
                 _fast_state["change"] = change_by_card
                 _fast_state["updated_at"] = now
                 _fast_state["error"] = None
+                _fast_state["stage"] = "idle"
+                _fast_state["passes"] += 1
         except Exception as exc:
             with _fast_lock:
                 _fast_state["error"] = f"{type(exc).__name__}: {exc}"
+                _fast_state["stage"] = "error"
         is_open, _ = is_nse_market_open()
         time.sleep(FAST_POLL_SECONDS if is_open else 30)
 
@@ -860,6 +891,10 @@ def api_fast_ltp():
             "spark": spark,
             "updated_at": _fast_state["updated_at"].isoformat() if _fast_state["updated_at"] else None,
             "error": _fast_state["error"],
+            "stage": _fast_state["stage"],
+            "passes": _fast_state["passes"],
+            "process_started_at": _PROCESS_STARTED.isoformat(),
+            "threads": sorted(th.name for th in threading.enumerate()),
         })
 
 
