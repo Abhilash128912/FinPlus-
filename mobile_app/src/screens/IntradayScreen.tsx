@@ -183,7 +183,7 @@ export const IntradayScreen: React.FC = () => {
                     </View>
                   </View>
 
-                  {rec.rr && (
+                  {!!rec.rr && (
                     <View style={styles.rrBadge}>
                       <Text style={styles.rrText}>R:R 1:{rec.rr.toFixed(1)}</Text>
                     </View>

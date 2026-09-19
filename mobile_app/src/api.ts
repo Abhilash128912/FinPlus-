@@ -290,6 +290,37 @@ function computePivotSignal(
   };
 }
 
+// RADAR's real server sends each card's day change as an object
+// ({change, change_pct, day_open, ...}); the screens (and this file's own
+// direct-quote fallback) work with a plain percentage number. Calling
+// .toFixed() on the object threw during render and closed the release app on
+// launch the moment the server started returning real data -- normalize once
+// here, at the boundary, so every screen only ever sees a number.
+const asPct = (v: unknown): number => {
+  if (typeof v === "number") return isNaN(v) ? 0 : v;
+  if (v && typeof v === "object") {
+    const p = (v as { change_pct?: unknown }).change_pct;
+    return typeof p === "number" && !isNaN(p) ? p : 0;
+  }
+  return 0;
+};
+
+const normalizeMarkets = (res: MarketsResponse): MarketsResponse => {
+  const fast_change: Record<string, number> = {};
+  for (const [k, v] of Object.entries(res.fast_change ?? {})) fast_change[k] = asPct(v);
+  const fast_ltp: Record<string, number> = {};
+  for (const [k, v] of Object.entries(res.fast_ltp ?? {})) {
+    if (typeof v === "number" && !isNaN(v)) fast_ltp[k] = v;
+  }
+  return { ...res, fast_change, fast_ltp, spark: res.spark ?? {}, trends: res.trends ?? {}, signals: res.signals ?? {} };
+};
+
+const normalizeCommodities = (res: CommoditiesResponse): CommoditiesResponse => ({
+  ...res,
+  crude: { ...res.crude, change: asPct(res.crude?.change), spark: res.crude?.spark ?? [], bars: res.crude?.bars ?? [] },
+  natgas: { ...res.natgas, change: asPct(res.natgas?.change), spark: res.natgas?.spark ?? [], bars: res.natgas?.bars ?? [] },
+});
+
 // ── Markets Fetcher: real backend first, live direct-quote fallback second.
 // The fallback only ever uses numbers it actually fetched just now (Yahoo
 // Finance / the MCX cloud endpoint) -- a symbol whose direct fetch also
@@ -297,7 +328,7 @@ function computePivotSignal(
 // made-up price, per the "no fabricated data" rule for this app.
 export const fetchMarkets = async (): Promise<MarketsResponse> => {
   try {
-    return await request<MarketsResponse>("/api/markets", 3000);
+    return normalizeMarkets(await request<MarketsResponse>("/api/markets", 3000));
   } catch (_) {
     const [niftyQ, bankQ, relianceQ, mcxData] = await Promise.all([
       fetchDirectYahooChart("^NSEI"),
@@ -367,7 +398,7 @@ export const fetchMarkets = async (): Promise<MarketsResponse> => {
 // ── Commodities Fetcher: real backend first, direct MCX cloud fallback ──
 export const fetchCommodities = async (): Promise<CommoditiesResponse> => {
   try {
-    return await request<CommoditiesResponse>("/api/commodities", 3000);
+    return normalizeCommodities(await request<CommoditiesResponse>("/api/commodities", 3000));
   } catch (_) {
     const mcxData = await fetchDirectRenderMCX();
     const crude = mcxData?.crude;

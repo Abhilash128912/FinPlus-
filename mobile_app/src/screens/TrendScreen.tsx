@@ -193,7 +193,7 @@ export const TrendScreen: React.FC = () => {
                 </View>
               </View>
 
-              {sig?.srv_reason && (
+              {!!sig?.srv_reason && (
                 <View style={styles.reasonBox}>
                   <Text style={styles.reasonText}>💡 {sig.srv_reason}</Text>
                 </View>

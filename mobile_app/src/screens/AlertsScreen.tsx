@@ -183,7 +183,7 @@ export const AlertsScreen: React.FC = () => {
                   <Text style={styles.timeText}>
                     Triggered: {rec.opened_at ? rec.opened_at.slice(0, 16).replace("T", " ") : "—"}
                   </Text>
-                  {rec.rr && (
+                  {!!rec.rr && (
                     <Text style={styles.rrText}>R:R {rec.rr.toFixed(1)}</Text>
                   )}
                 </View>
