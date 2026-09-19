@@ -159,7 +159,11 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
     # pool "All Qualified Micro-Caps" (penny_picks, above) is built from -- not the
     # raw pre-gate universe, so the monthly cohort can never include a name the live
     # debt-free gate would have rejected.
-    monthly_cohort = get_or_refresh_penny_monthly_picks(enriched, top_n=10, monthly_sip=monthly_sip)
+    # The cohort is drawn ONLY from names that are in the qualified list right now, so the two
+    # lists can never disagree (a name rejected by today's gates cannot stay a featured pick).
+    _qualified = {p.get("symbol") for p in penny_picks}
+    monthly_cohort = get_or_refresh_penny_monthly_picks(
+        [c for c in enriched if c.get("symbol") in _qualified], top_n=10, monthly_sip=monthly_sip)
 
     # The 20-name "qualified" list is ranked by a value/entry-timing-heavy score that can put a
     # low-ROE stock first. Put the quality-ranked cohort (the curated 10) first, in its order,
@@ -212,6 +216,8 @@ def get_or_refresh_penny_monthly_picks(raw_universe: list[dict], top_n: int = 10
         and saved_state.get("method") == "live_debt_free_gate_v1"
         and len(saved_state.get("picks") or []) >= 1
         and all(p.get("de_ratio") is not None for p in saved_state.get("picks") or [])
+        # a saved pick that no longer clears today's gates (not in the current pool) voids the lock
+        and all(p.get("symbol") in {r.get("symbol") for r in raw_universe} for p in saved_state.get("picks") or [])
     )
 
     by_symbol_universe = {r.get("symbol"): r for r in raw_universe if r.get("symbol")}
