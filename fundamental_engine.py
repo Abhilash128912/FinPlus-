@@ -2,8 +2,9 @@
 fundamental_engine.py - Genuine Indian Equity Fundamental Data Engine
 
 Fetches and caches real corporate ratios (ROE, ROCE, P/E, P/B, Debt-to-Equity,
-Net Profit Margin, Revenue Growth) directly from Screener.in for Indian NSE
-equities, replacing broken Yahoo Finance data.
+Net Profit Margin, Revenue Growth) for Indian NSE equities from Tickertape only:
+reported ratios plus figures CALCULATED from Tickertape's annual financial statements.
+screener.in is not used.
 
 Features:
   - 30-day local disk caching in fundamentals_cache.json (financials update quarterly).
@@ -17,11 +18,24 @@ import os
 import re
 import time
 import requests
-from bs4 import BeautifulSoup
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(BASE_DIR, "fundamentals_cache.json")
-CACHE_TTL_SEC = 30 * 24 * 3600  # 30 days - fundamentals change quarterly
+CACHE_TTL_SEC = 30 * 24 * 3600  # off-season refresh interval; see fundamentals_ttl_sec()
+
+
+def fundamentals_ttl_sec() -> int:
+    """How long a stored fundamentals record is treated as fresh. Indian companies publish
+    quarterly results roughly 45 days after each quarter ends, so during those result
+    seasons figures can change within days (refresh weekly); the rest of the year monthly
+    is plenty."""
+    from datetime import date
+    d = date.today()
+    seasons = (((7, 10), (8, 25)), ((10, 10), (11, 25)), ((1, 10), (2, 25)), ((4, 15), (6, 5)))
+    for (m1, d1), (m2, d2) in seasons:
+        if (m1, d1) <= (d.month, d.day) <= (m2, d2):
+            return 7 * 24 * 3600
+    return CACHE_TTL_SEC
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -37,8 +51,13 @@ _HEADERS = {
 PLACEHOLDER_SOURCES = {"default_neutral", "baseline"}
 
 
+def _is_rejected_source(v: dict) -> bool:
+    src = str((v or {}).get("source") or "")
+    return src in PLACEHOLDER_SOURCES or "screener.in" in src
+
+
 def _drop_placeholders(cache: dict) -> dict:
-    return {k: v for k, v in cache.items() if (v or {}).get("source") not in PLACEHOLDER_SOURCES}
+    return {k: v for k, v in cache.items() if not _is_rejected_source(v)}
 
 
 def _load_cache() -> dict:
@@ -79,246 +98,198 @@ def _parse_float(val: str | None) -> float | None:
         return None
 
 
-def fetch_screener_data(symbol: str) -> dict | None:
-    """Fetches key financial ratios for an NSE equity from Screener.in."""
-    sym = clean_symbol(symbol)
-    urls = [
-        f"https://www.screener.in/company/{sym}/consolidated/",
-        f"https://www.screener.in/company/{sym}/",
-    ]
+# ── Tickertape-only fundamentals ─────────────────────────────────────────────
+# Every figure here is either reported by Tickertape or CALCULATED from the company's
+# own reported annual financial statements (income statement + balance sheet) served by
+# Tickertape. screener.in is not used at all. A field that cannot be obtained or
+# calculated is None ("not available") -- nothing is assumed.
+_TT_BASE = "https://api.tickertape.in"
+_TT_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept": "application/json"}
+_FINANCIAL_SECTOR_WORDS = ("bank", "financ", "insur", "nbfc", "asset management", "capital markets", "broking")
 
-    for url in urls:
+
+def _tt_json(path: str, params: dict | None = None, retries: int = 2):
+    """GET a Tickertape endpoint; returns the decoded JSON only when success is true."""
+    for attempt in range(retries + 1):
         try:
-            resp = requests.get(url, headers=_HEADERS, timeout=8)
-            if resp.status_code == 200 and len(resp.text) > 10000:
-                soup = BeautifulSoup(resp.text, "html.parser")
-                ratios = {}
-                for li in soup.select("#top-ratios li"):
-                    name_el = li.select_one(".name")
-                    val_el = li.select_one(".number")
-                    if name_el and val_el:
-                        name = name_el.get_text(strip=True)
-                        val = val_el.get_text(strip=True).replace(",", "")
-                        ratios[name] = val
-
-                roe = _parse_float(ratios.get("ROE"))
-                roce = _parse_float(ratios.get("ROCE"))
-                pe = _parse_float(ratios.get("Stock P/E"))
-                pb = _parse_float(ratios.get("Book Value"))
-                market_cap = _parse_float(ratios.get("Market Cap"))
-                current_price = _parse_float(ratios.get("Current Price"))
-                div_yield = _parse_float(ratios.get("Dividend Yield"))
-
-                # Estimate P/B ratio from Current Price / Book Value if Book Value was returned
-                pb_ratio = None
-                if current_price and pb and pb > 0:
-                    pb_ratio = round(current_price / pb, 2)
-
-                # Search for Debt to equity or Borrowings in Balance Sheet
-                de_ratio = None
-                npm_pct = None
-                rev_growth_pct = None
-
-                # Extract Net Profit Margin & Revenue Growth from Quarterly / P&L tables if present
-                try:
-                    tables = soup.select("section#profit-loss table.data-table, section#quarters table.data-table")
-                    for tbl in tables:
-                        rows = tbl.select("tr")
-                        sales_row, np_row, opm_row = None, None, None
-                        for row in rows:
-                            text = row.get_text()
-                            if "Sales" in text and not sales_row:
-                                sales_row = [td.get_text(strip=True).replace(",", "") for td in row.select("td")]
-                            elif "Net Profit" in text and not np_row:
-                                np_row = [td.get_text(strip=True).replace(",", "") for td in row.select("td")]
-                            elif "OPM %" in text and not opm_row:
-                                opm_row = [td.get_text(strip=True).replace(",", "").replace("%", "") for td in row.select("td")]
-
-                        if opm_row and len(opm_row) > 1:
-                            val = _parse_float(opm_row[-1])
-                            if val is not None:
-                                npm_pct = val
-                        elif sales_row and np_row and len(sales_row) > 1 and len(np_row) > 1:
-                            s_last = _parse_float(sales_row[-1])
-                            np_last = _parse_float(np_row[-1])
-                            if s_last and np_last and s_last > 0:
-                                npm_pct = round((np_last / s_last) * 100, 2)
-
-                        if sales_row and len(sales_row) >= 3:
-                            s_curr = _parse_float(sales_row[-1])
-                            s_prev = _parse_float(sales_row[-2])
-                            if s_curr and s_prev and s_prev > 0:
-                                rev_growth_pct = round(((s_curr - s_prev) / s_prev) * 100, 2)
-                        if npm_pct is not None:
-                            break
-                except Exception:
-                    pass
-
-                # Parse Borrowings / Equity from Balance sheet for D/E
-                try:
-                    bs_table = soup.select_one("section#balance-sheet table.data-table")
-                    if bs_table:
-                        eq_row, res_row, bor_row = None, None, None
-                        for row in bs_table.select("tr"):
-                            txt = row.get_text()
-                            if "Equity Capital" in txt:
-                                eq_row = [_parse_float(td.get_text(strip=True).replace(",", "")) for td in row.select("td")]
-                            elif "Reserves" in txt:
-                                res_row = [_parse_float(td.get_text(strip=True).replace(",", "")) for td in row.select("td")]
-                            elif "Borrowings" in txt:
-                                bor_row = [_parse_float(td.get_text(strip=True).replace(",", "")) for td in row.select("td")]
-                        if bor_row and len(bor_row) > 1:
-                            bor = bor_row[-1] or 0.0
-                            eq = (eq_row[-1] if eq_row and len(eq_row) > 1 else 0.0) or 0.0
-                            res = (res_row[-1] if res_row and len(res_row) > 1 else 0.0) or 0.0
-                            net_worth = eq + res
-                            if net_worth > 0:
-                                de_ratio = round(bor / net_worth, 2)
-                            else:
-                                de_ratio = 0.0 if bor == 0 else 2.0
-                except Exception:
-                    pass
-
-                # de_ratio/npm_pct/rev_growth_pct: None when the balance-sheet or
-                # P&L table parse didn't find a value, not a guessed number --
-                # a heuristic guess here previously produced e.g. de_ratio=0.0
-                # ("debt-free") for stocks whose balance sheet was never
-                # actually read, which is exactly backwards for a metric that
-                # gates real stock picks (see penny_engine's debt-free gate).
-                out = {
-                    "symbol": sym,
-                    "roe_pct": roe,
-                    "roce_pct": roce,
-                    "pe": pe,
-                    "pb": pb_ratio,
-                    "de_ratio": de_ratio,
-                    "npm_pct": npm_pct,
-                    "rev_growth_pct": rev_growth_pct,
-                    "div_yield": div_yield,
-                    "market_cap": market_cap,
-                    "source": "screener.in",
-                    "updated_at": time.time(),
-                }
-                return out
-            elif resp.status_code == 404:
-                continue
+            r = requests.get(f"{_TT_BASE}{path}", params=params, headers=_TT_HEADERS, timeout=12)
+            if r.status_code == 200:
+                j = r.json()
+                return j if isinstance(j, dict) and j.get("success") else None
+            if r.status_code in (403, 429):
+                time.sleep(2.0 * (attempt + 1))      # rate limited: back off
+            elif r.status_code == 404:
+                return None
         except Exception:
-            continue
+            pass
+        time.sleep(0.4 * (attempt + 1))
     return None
 
 
-def fetch_tickertape_data(symbol: str) -> dict | None:
-    """Fetches real corporate fundamentals, ratios, and risk metrics from Tickertape API."""
-    sym = clean_symbol(symbol)
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    
-    # 1. Direct ticker lookup
-    try:
-        url = f"https://api.tickertape.in/stocks/info/{sym}"
-        r = requests.get(url, headers=headers, timeout=5)
-        if r.status_code == 200:
-            res = r.json()
-            if res.get("success") and res.get("data"):
-                return _parse_tickertape_payload(sym, res["data"])
-    except Exception:
-        pass
+def _tt_resolve(sym: str) -> dict | None:
+    """Tickertape /stocks/info payload for exactly this NSE ticker, or None.
 
-    # 2. Search fallback to resolve Tickertape SID (e.g. BEL -> BAJE, FILATEX -> FLTX)
-    try:
-        s_url = f"https://api.tickertape.in/search?text={sym}"
-        sr = requests.get(s_url, headers=headers, timeout=5)
-        if sr.status_code == 200:
-            sdata = sr.json().get("data", {})
-            stocks = sdata.get("stocks", [])
-            for st in stocks:
-                ticker = (st.get("ticker") or "").upper()
-                name = (st.get("name") or "").upper()
-                sid = st.get("sid")
-                if sid and (ticker == sym or sym in name or (st.get("slug") and sym in st.get("slug", "").upper())):
-                    r2 = requests.get(f"https://api.tickertape.in/stocks/info/{sid}", headers=headers, timeout=5)
-                    if r2.status_code == 200 and r2.json().get("success"):
-                        return _parse_tickertape_payload(sym, r2.json().get("data"))
-    except Exception:
-        pass
+    Tickertape's internal ids do NOT always equal the NSE ticker (e.g. its id "BEL" is Bella
+    Casa Fashion, while Bharat Electronics is "BAJE"), and the old lookup trusted whatever
+    came back. The returned info.ticker must equal the requested symbol; a near-miss or a
+    substring match is rejected."""
+    sym = clean_symbol(sym)
 
+    def _accept(data):
+        return data if data and str((data.get("info") or {}).get("ticker") or "").upper() == sym else None
+
+    from urllib.parse import quote
+    j = _tt_json(f"/stocks/info/{quote(sym, safe='')}")
+    got = _accept((j or {}).get("data"))
+    if got:
+        return got
+    s = _tt_json("/stocks/search", {"text": sym})
+    for res in (((s or {}).get("data") or {}).get("searchResults") or []):
+        info = ((res.get("stock") or {}).get("info") or {})
+        if str(info.get("ticker") or "").upper() == sym and res.get("sid"):
+            j2 = _tt_json(f"/stocks/info/{res['sid']}")
+            got = _accept((j2 or {}).get("data"))
+            if got:
+                return got
     return None
+
+
+def _derive_from_statements(inc: list, bal: list, financial: bool, interim: list | None = None) -> dict:
+    """Net margin, revenue growth, D/E and ROCE calculated from the latest reported fiscal
+    year's statements. D/E and ROCE are not computed for banks/insurers/NBFCs (their
+    balance sheets make those ratios meaningless)."""
+    def fy_rows(rows):
+        rows = [r for r in (rows or []) if r.get("endDate")]          # drops the TTM row
+        return sorted(rows, key=lambda r: r["endDate"], reverse=True)
+
+    inc_all = inc
+    inc, bal = fy_rows(inc), fy_rows(bal)
+    out: dict = {}
+    if not inc:
+        return out
+    cur = inc[0]
+    end = cur["endDate"]
+    rev, ni, ebit = cur.get("incTrev"), cur.get("incNinc"), cur.get("incPbi")   # incPbi = profit before interest & tax
+    if rev and rev > 0 and ni is not None:
+        out["npm_pct"] = round(ni / rev * 100.0, 2)
+    if len(inc) > 1 and rev is not None:
+        prev = inc[1].get("incTrev")
+        if prev and prev > 0:
+            out["rev_growth_pct"] = round((rev / prev - 1.0) * 100.0, 2)
+    b = next((x for x in bal if x.get("endDate") == end), None)         # same fiscal year only
+    if b:
+        teq, debt, ta, tcl = b.get("balTeq"), b.get("balTdeb"), b.get("balTota"), b.get("balTcl")
+        if not financial:
+            if teq and teq > 0 and debt is not None:
+                out["de_ratio"] = round(debt / teq, 2)
+            if ebit is not None and ta and tcl is not None and (ta - tcl) > 0:
+                out["roce_pct"] = round(ebit / (ta - tcl) * 100.0, 2)
+        if ni is not None and teq and teq > 0:
+            out["roe_from_statements"] = round(ni / teq * 100.0, 2)
+    out["fy"] = cur.get("displayPeriod")
+    out["fy_end"] = end[:10]
+    out["npm_basis"] = out["fy"]
+    out["growth_basis"] = out["fy"]
+
+    # More current figures where Tickertape has them: trailing-twelve-month net margin
+    # (the row with no end date) and year-on-year growth of the latest reported quarter.
+    ttm = next((r for r in (inc_all or []) if not r.get("endDate")), None)
+    if ttm and ttm.get("incTrev") and ttm["incTrev"] > 0 and ttm.get("incNinc") is not None:
+        out["npm_pct_fy"] = out.get("npm_pct")
+        out["npm_pct"] = round(ttm["incNinc"] / ttm["incTrev"] * 100.0, 2)
+        out["npm_basis"] = "TTM"
+    qs = sorted([r for r in (interim or []) if r.get("endDate")], key=lambda r: r["endDate"], reverse=True)
+    if len(qs) >= 5:
+        latest, year_ago = qs[0], qs[4]
+        lr, yr = latest.get("qIncTrev"), year_ago.get("qIncTrev")
+        if lr is not None and yr and yr > 0:
+            out["rev_growth_fy_pct"] = out.get("rev_growth_pct")
+            out["rev_growth_pct"] = round((lr / yr - 1.0) * 100.0, 2)
+            out["growth_basis"] = f"{latest.get('displayPeriod')} vs year earlier"
+        ln, yn = latest.get("qIncNinc"), year_ago.get("qIncNinc")
+        if ln is not None and yn and yn > 0:
+            out["profit_growth_pct"] = round((ln / yn - 1.0) * 100.0, 2)
+    if qs:
+        out["as_of"] = qs[0].get("displayPeriod")
+    return out
 
 
 def _parse_tickertape_payload(symbol: str, data: dict) -> dict | None:
-    """Tickertape's /stocks/info ratios object does NOT include net profit
-    margin, revenue growth, ROCE, or debt-to-equity at all (confirmed
-    2026-09-11 against the live response: only roe/pe/pb/beta/divYield/
-    marketCap/eps/bps etc. are present) -- those four fields are left None
-    here rather than guessed, so a real value from a second source (see
-    fetch_combined_fundamentals) can fill them in, and so a field that's
-    genuinely unknown reads as unknown, not as a confident-looking number
-    that happens to be wrong for every stock it's applied to."""
+    """Ratios Tickertape reports directly (ROE, PE, P/B, beta, dividend yield, market cap,
+    sector). Margin, growth, D/E and ROCE come from _derive_from_statements."""
     if not data:
         return None
     ratios = data.get("ratios", {}) or {}
     info = data.get("info", {}) or {}
-
-    roe = _parse_float(ratios.get("roe"))
-    pe = _parse_float(ratios.get("pe") or ratios.get("ttmPe"))
-    pb = _parse_float(ratios.get("pb"))
-    div_yield = _parse_float(ratios.get("divYield"))
-    beta = _parse_float(ratios.get("beta"))
-    market_cap = _parse_float(ratios.get("marketCap"))
-    sector = info.get("sector") or ""
-    name = info.get("name") or symbol
-
     return {
         "symbol": symbol,
-        "name": name,
-        "sector": sector,
-        "roe_pct": roe,
-        "roce_pct": None,   # not in this endpoint's payload
-        "pe": pe,
-        "pb": pb,
-        "de_ratio": None,   # not in this endpoint's payload
-        "npm_pct": None,    # not in this endpoint's payload
-        "rev_growth_pct": None,  # not in this endpoint's payload
-        "div_yield": div_yield,
-        "beta": beta,
-        "market_cap": market_cap,
+        "name": info.get("name") or symbol,
+        "sector": info.get("sector") or "",
+        "roe_pct": _parse_float(ratios.get("roe")),
+        "roce_pct": None,
+        "pe": _parse_float(ratios.get("pe") or ratios.get("ttmPe")),
+        "pb": _parse_float(ratios.get("pb")),
+        "de_ratio": None,
+        "npm_pct": None,
+        "rev_growth_pct": None,
+        "div_yield": _parse_float(ratios.get("divYield")),
+        "beta": _parse_float(ratios.get("beta")),
+        "market_cap": _parse_float(ratios.get("marketCap")),
         "source": "tickertape",
         "updated_at": time.time(),
     }
 
 
 def fetch_combined_fundamentals(symbol: str) -> dict | None:
-    """Tickertape first (fast JSON, reliable for roe/pe/pb/beta/div_yield),
-    then screener.in to fill in whatever Tickertape doesn't carry (npm_pct,
-    rev_growth_pct, de_ratio, roce_pct). Merges rather than picking one
-    source, since neither alone covers the full field set. A field still
-    None after both is genuinely unavailable, not fabricated. Returns None
-    only if BOTH sources fail outright."""
-    tt = fetch_tickertape_data(symbol)
-    time.sleep(0.15)
-    sc = fetch_screener_data(symbol)
-
-    if tt is None and sc is None:
+    """Real fundamentals for one NSE symbol from Tickertape only (name kept for callers).
+    Returns None when Tickertape has no exact-ticker match for the symbol."""
+    sym = clean_symbol(symbol)
+    data = _tt_resolve(sym)
+    if not data:
         return None
+    base = _parse_tickertape_payload(sym, data)
+    sid = data.get("sid")
+    financial = any(w in (base.get("sector") or "").lower() for w in _FINANCIAL_SECTOR_WORDS)
+    inc = ((_tt_json(f"/stocks/financials/income/{sid}/annual/normal", {"count": 5}) or {}).get("data")) or []
+    bal = ((_tt_json(f"/stocks/financials/balancesheet/{sid}/annual/normal", {"count": 5}) or {}).get("data")) or []
+    inc_q = ((_tt_json(f"/stocks/financials/income/{sid}/interim/normal", {"count": 6}) or {}).get("data")) or []
+    derived = _derive_from_statements(inc, bal, financial, inc_q)
+    for k in ("roce_pct", "de_ratio", "npm_pct", "rev_growth_pct"):
+        if derived.get(k) is not None:
+            base[k] = derived[k]
+    for k in ("fy", "fy_end", "npm_basis", "growth_basis", "as_of", "profit_growth_pct",
+              "npm_pct_fy", "rev_growth_fy_pct"):
+        if derived.get(k) is not None:
+            base[k] = derived[k]
+    if base.get("roe_pct") is None and derived.get("roe_from_statements") is not None:
+        base["roe_pct"] = derived["roe_from_statements"]
+    base["sid"] = sid
 
-    merged = dict(sc) if sc else {}
-    if tt:
-        for k, v in tt.items():
-            if v is not None or k not in merged:
-                merged[k] = v
-    # Whichever source had it; screener.in is the only source for these three.
-    if sc:
-        for k in ("npm_pct", "rev_growth_pct", "de_ratio", "roce_pct"):
-            if merged.get(k) is None and sc.get(k) is not None:
-                merged[k] = sc[k]
-
-    sources = [s for s in (("tickertape" if tt else None), ("screener.in" if sc else None)) if s]
-    merged["symbol"] = clean_symbol(symbol)
-    merged["source"] = "+".join(sources)
-    merged["updated_at"] = time.time()
-
-    dvm = compute_dvm_score(merged)
-    merged.update(dvm)
-    return merged
+    # Data-quality flags (free, internal consistency checks; stocks carrying a blocking
+    # flag are kept out of the pick lists rather than trusted).
+    flags = []
+    if not derived:
+        flags.append("no_statements")
+    else:
+        try:
+            from datetime import date
+            fy_end = date.fromisoformat(derived["fy_end"])
+            if (date.today() - fy_end).days > 550:
+                flags.append("stale")
+        except Exception:
+            pass
+        rs, rr = derived.get("roe_from_statements"), _parse_float(data.get("ratios", {}).get("roe"))
+        if rs is not None and rr is not None and abs(rs - rr) > 15.0:
+            flags.append("roe_mismatch")
+    roe_now, npm_now = base.get("roe_pct"), base.get("npm_pct")
+    growth_now = base.get("rev_growth_pct")
+    if ((roe_now is not None and abs(roe_now) > 100) or (npm_now is not None and abs(npm_now) > 90)
+            or (growth_now is not None and abs(growth_now) > 1000)):
+        flags.append("outlier")     # e.g. growth measured from a near-zero base year
+    base["data_flags"] = flags
+    base["updated_at"] = time.time()
+    base.update(compute_dvm_score(base))
+    return base
 
 
 def compute_dvm_score(fund_data: dict) -> dict:
@@ -432,9 +403,11 @@ def get_fundamentals(symbol: str, allow_network: bool = False) -> dict:
     cached = _MEM_CACHE.get(sym)
     now = time.time()
 
-    if cached and cached.get("source") in PLACEHOLDER_SOURCES:
-        cached = None  # never serve placeholder values as if they were real
-    if cached and (now - cached.get("updated_at", 0) < CACHE_TTL_SEC):
+    if cached and _is_rejected_source(cached):
+        cached = None  # never serve placeholder or screener.in values
+    # No-network reads keep serving a record for up to twice its refresh interval (the
+    # background warm loop refreshes at 1x); beyond that it is "not available", not stale-trusted.
+    if cached and (now - cached.get("updated_at", 0) < 2 * fundamentals_ttl_sec()):
         if "durability_score" not in cached:
             dvm = compute_dvm_score(cached)
             cached.update(dvm)
@@ -504,7 +477,7 @@ def to_legacy_yfinance_shape(fund: dict) -> dict:
     return out
 
 
-def refresh_stale(symbols: list[str], pace_sec: float = 1.5, max_age_sec: float = CACHE_TTL_SEC) -> int:
+def refresh_stale(symbols: list[str], pace_sec: float = 1.5, max_age_sec: float | None = None) -> int:
     """Synchronous, rate-limited pass over `symbols`: skips anything
     already fresh (real source, within max_age_sec), does a combined fetch
     for everything else, saves the cache periodically. Meant to be called
@@ -513,18 +486,24 @@ def refresh_stale(symbols: list[str], pace_sec: float = 1.5, max_age_sec: float 
     pace takes minutes, which is fine for a periodic warmer and wrong for
     an on-demand scoring call. Returns how many symbols were refreshed."""
     now = time.time()
+    if max_age_sec is None:
+        max_age_sec = fundamentals_ttl_sec()
     refreshed = 0
     for i, raw_sym in enumerate(symbols):
         sym = clean_symbol(raw_sym)
         cached = _MEM_CACHE.get(sym)
         is_real = cached and cached.get("source") not in (None, "unavailable")
-        if is_real and (now - cached.get("updated_at", 0) < max_age_sec):
+        # Real entries are refreshed after max_age_sec; a symbol Tickertape has no exact
+        # match for is only retried after 3 days, so the warm loop is not hammering it.
+        if cached and (now - cached.get("updated_at", 0) < (max_age_sec if is_real else 3 * 86400)):
             continue
         try:
             combined = fetch_combined_fundamentals(sym)
             if combined:
                 _MEM_CACHE[sym] = combined
                 refreshed += 1
+            else:
+                _MEM_CACHE[sym] = {"symbol": sym, "source": "unavailable", "updated_at": time.time()}
         except Exception as e:
             print(f"[fundamental_engine] refresh failed for {sym}: {e}")
         time.sleep(pace_sec)

@@ -643,6 +643,25 @@ def _lt_cohort_loop():
         time.sleep(120)
 
 
+def _penny_cohort_loop():
+    """Lean-mode refresh of the debt-free penny list: re-runs the real scan (cached
+    fundamentals + fresh daily-candle technicals + live quotes) every 10 minutes so its
+    statuses follow the market instead of staying frozen at whatever the file held."""
+    time.sleep(60)
+    while True:
+        try:
+            result = penny_engine.scan_penny_picks(top_n=20, update_live_quotes=True)
+            with _penny_lock:
+                _penny_state["result"] = result
+                _penny_state["updated_at"] = datetime.now(timezone.utc)
+                _penny_state["error"] = None
+        except Exception as exc:
+            with _penny_lock:
+                _penny_state["error"] = f"{type(exc).__name__}: {exc}"
+            traceback.print_exc()
+        time.sleep(600)
+
+
 def _penny_scan_loop():
     while True:
         try:
@@ -2367,6 +2386,7 @@ def start_all_background_threads():
             # to invented values.
             threading.Thread(target=_fundamentals_warm_loop, daemon=True).start()
             threading.Thread(target=_lt_cohort_loop, daemon=True).start()
+            threading.Thread(target=_penny_cohort_loop, daemon=True).start()
             print("[startup] ENABLE_FULL_SCAN_SUITE not set -- running Intraday + Trend Analyser + Swing "
                   "loops only (long-term/penny/options scans off to fit the free-tier 512MB limit)")
         totp_auth.start_totp_refresher_thread()

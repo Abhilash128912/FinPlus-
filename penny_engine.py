@@ -118,6 +118,31 @@ def scan_penny_picks(top_n: int = 20, monthly_sip: float = 200.0, update_live_qu
 
         enriched.append(c)
 
+    # Fresh technicals from the broker's daily candles (not the possibly days-old scan
+    # snapshot): price band, trend and liquidity gates are re-checked on current data.
+    # Where candles cannot be fetched the snapshot values are kept and flagged.
+    import lt_engine
+    fresh_enriched = []
+    for c in enriched:
+        tech = lt_engine.fresh_technicals(c["symbol"], require_ma200=False)
+        if tech:
+            for k in ("trend", "ltp", "ema20", "ma50", "ma200", "rsi", "volume_spike", "avg_volume_10d"):
+                c[k] = tech[k]
+            c["technicals_fresh"] = True
+            c["technicals_as_of"] = tech["last_bar"]
+        else:
+            c["technicals_fresh"] = False
+            c["technicals_as_of"] = "scan snapshot"
+        ltp_now = float(c.get("ltp") or 0.0)
+        if not (5.0 <= ltp_now <= 75.0):
+            continue
+        if c.get("trend") in ("Downtrend", "Distribution"):
+            continue
+        if float(c.get("avg_volume_10d") or 0.0) < 10000:
+            continue
+        fresh_enriched.append(c)
+    enriched = fresh_enriched
+
     # Run screener_engine's compute_quality_penny_stocks with exact gates
     penny_picks = se.compute_quality_penny_stocks(enriched, top_n=top_n, monthly_sip=monthly_sip)
 

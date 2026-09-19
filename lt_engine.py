@@ -367,36 +367,117 @@ def _score_candidate(c: dict, eval_res: dict, financial: bool) -> tuple[float, d
     return round(score, 1), {k: round(v, 1) for k, v in comps.items()}
 
 
+# ── Fresh technicals from the broker's daily candles ─────────────────────────
+# Trend, moving averages and momentum are computed here from INDstocks daily candles
+# (the same feed the NIFTY/BANKNIFTY trend analyser uses), NOT read from the desktop scan
+# snapshot, which can be days old. Cached per symbol for a few hours. If the candles cannot
+# be fetched (e.g. expired token) the candidate falls back to the snapshot values and is
+# marked technicals_fresh=False so the staleness is visible.
+TECH_TTL_SEC = 6 * 3600
+_TECH_CACHE: dict = {}
+
+
+def fresh_technicals(symbol: str, require_ma200: bool = True) -> dict | None:
+    now = time.time()
+    hit = _TECH_CACHE.get(symbol)
+    if hit and now - hit[0] < TECH_TTL_SEC:
+        return hit[1] if (hit[1].get("ma200") is not None or not require_ma200) else None
+    try:
+        import indmoney_feed
+        import trend_engine
+        sid = equity_scan.get_security_id_map().get(symbol)
+        if not sid:
+            return None
+        df = indmoney_feed.get_daily_candles(f"NSE_{sid}")
+        if df is None or df.empty:
+            return None
+        m = trend_engine._metrics_from_daily(df, None)
+        if not m or (require_ma200 and m.get("ma200") is None):   # fewer than ~200 completed daily bars
+            return None
+        cls = se.compute_trend_classification(m)
+        close = df["Close"]
+        out = {
+            "trend": cls.get("trend"),
+            "ltp": float(close.iloc[-1]),
+            "ema20": m["ema20"], "ma50": m["ma50"], "ma200": m["ma200"],
+            "rsi": m["rsi"], "volume_spike": m["volume_spike"],
+            "ret_6m": (float(close.iloc[-1] / close.iloc[-126] - 1.0) * 100.0) if len(close) > 126 else None,
+            "avg_volume_10d": float(df["Volume"].iloc[-10:].mean()),
+            "bars": len(df),
+            "last_bar": str(df.index[-1].date()),
+        }
+        _TECH_CACHE[symbol] = (now, out)
+        return out
+    except Exception as exc:
+        print(f"[lt_engine] fresh technicals unavailable for {symbol}: {exc}")
+        return None
+
+
 def _qualified_candidates(raw_universe: list, min_price: float, max_price: float) -> list:
-    out = []
+    BLOCKING_FLAGS = {"no_statements", "stale", "roe_mismatch"}
+    # Stage 1 -- fundamentals (cheap: local cache). Snapshot price is used only as a wide
+    # pre-filter; the real price band and the trend are checked on fresh data below.
+    stage1 = []
     for row in raw_universe:
         sym = row.get("symbol")
-        ltp = float(row.get("ltp") or 0.0)
-        trend = row.get("trend") or ""
-        if not sym or not (min_price <= ltp <= max_price):
+        snap_ltp = float(row.get("ltp") or 0.0)
+        if not sym or sym in EXCLUDED_SLOW_PSUS or not (min_price * 0.7 <= snap_ltp <= max_price * 1.4):
             continue
-        if sym in EXCLUDED_SLOW_PSUS or trend in ("Downtrend", "Distribution"):
-            continue
-        if row.get("ma200") is None:
-            continue  # < ~200 trading days of price history: too new to judge for a long-term hold
         fund = fundamental_engine.get_fundamentals(sym, allow_network=False)
         if fund.get("durability_score") is None or fund.get("roe_pct") is None or fund.get("npm_pct") is None:
             continue  # no real fundamentals -> cannot be judged
+        if BLOCKING_FLAGS & set(fund.get("data_flags") or []):
+            continue  # statements stale / inconsistent / missing: not trusted
+        if float(fund["npm_pct"]) <= 0 or float(fund["roe_pct"]) < MIN_ROE or float(fund["durability_score"]) < MIN_DURABILITY:
+            continue
         c = dict(row)
-        for k in ("roe_pct", "roce_pct", "de_ratio", "npm_pct", "rev_growth_pct", "pe", "pb",
-                  "durability_score", "dvm_label"):
+        for k in ("roe_pct", "roce_pct", "de_ratio", "npm_pct", "rev_growth_pct", "profit_growth_pct", "pe", "pb",
+                  "durability_score", "dvm_label", "fy", "as_of", "npm_basis", "growth_basis", "data_flags", "sector"):
             c[k] = fund.get(k)
         eval_res = se.compute_sector_aware_lt_quality(c)
         sector_group = eval_res.get("sector_group") or c.get("sector_group") or "General"
-        financial = sector_group == "BFSI"
-        # Profitability / safety gates ("profitable" must be shown by the numbers)
-        if float(c["npm_pct"]) <= 0 or float(c["roe_pct"]) < MIN_ROE or float(c["durability_score"]) < MIN_DURABILITY:
-            continue
+        financial = sector_group == "BFSI" or any(w in (c.get("sector") or "").lower() for w in ("bank", "financ", "insur"))
         if not financial:
             if c.get("roce_pct") is not None and float(c["roce_pct"]) < MIN_ROCE:
                 continue
             if c.get("de_ratio") is not None and float(c["de_ratio"]) > MAX_DEBT_TO_EQUITY:
                 continue
+        stage1.append((c, eval_res, sector_group, financial))
+
+    # Stage 2 -- fresh technicals for the survivors
+    staged = []
+    for c, eval_res, sector_group, financial in stage1:
+        tech = fresh_technicals(c["symbol"])
+        if tech:
+            for k in ("trend", "ltp", "ema20", "ma50", "ma200", "rsi", "volume_spike"):
+                c[k] = tech[k]
+            c["ret_6m"] = tech.get("ret_6m")
+            c["technicals_fresh"] = True
+            c["technicals_as_of"] = tech["last_bar"]
+        else:
+            if row_has_snapshot := (c.get("ma200") is not None and c.get("trend")):
+                c["technicals_fresh"] = False      # snapshot fallback, flagged
+                c["technicals_as_of"] = "scan snapshot"
+            else:
+                continue                            # no usable price history at all
+        ltp = float(c.get("ltp") or 0.0)
+        if not (min_price <= ltp <= max_price):
+            continue
+        if (c.get("trend") or "") in ("Downtrend", "Distribution"):
+            continue
+        staged.append((c, eval_res, sector_group, financial))
+
+    # Relative strength = percentile of 6-month return among the candidates (fresh data only)
+    rets = sorted(c["ret_6m"] for c, *_ in staged if c.get("ret_6m") is not None)
+    for c, *_ in staged:
+        if c.get("ret_6m") is not None and len(rets) > 1:
+            import bisect
+            c["rs_rating"] = round(bisect.bisect_left(rets, c["ret_6m"]) / (len(rets) - 1) * 99.0, 1)
+        else:
+            c["rs_rating"] = None
+
+    out = []
+    for c, eval_res, sector_group, financial in staged:
         score, breakdown = _score_candidate(c, eval_res, financial)
         item = dict(c)
         item.update(eval_res)
@@ -488,6 +569,13 @@ def _pick_record(p: dict) -> dict:
         "pe": p.get("pe"),
         "ma50": p.get("ma50"),
         "ema20": p.get("ema20"),
+        "rev_growth_pct": p.get("rev_growth_pct"),
+        "profit_growth_pct": p.get("profit_growth_pct"),
+        "fundamentals_as_of": p.get("as_of") or p.get("fy"),
+        "fundamentals_basis": {"margin": p.get("npm_basis"), "growth": p.get("growth_basis")},
+        "technicals_fresh": p.get("technicals_fresh"),
+        "technicals_as_of": p.get("technicals_as_of"),
+        "data_flags": p.get("data_flags") or [],
     }
     rec.update(_status_for(p.get("trend"), ltp, gtt))
     return rec
@@ -576,7 +664,8 @@ def get_or_refresh_monthly_picks(raw_universe: list[dict], top_n: int = 10,
         "selection_rules": {
             "gates": f"durability>={MIN_DURABILITY:.0f}, ROE>={MIN_ROE:.0f}%, net margin>0, "
                      f"ROCE>={MIN_ROCE:.0f}% and D/E<={MAX_DEBT_TO_EQUITY} (banks/NBFCs: ROE only), "
-                     "trend not Downtrend/Distribution, 200+ days of price history, real fundamentals only",
+                     "trend (fresh, from daily candles) not Downtrend/Distribution, 200+ days of price history, "
+                     "real Tickertape fundamentals only, statements current and consistent",
             "score": "40% durability + 25% profitability + 25% trend/RS + 10% valuation (missing parts dropped)",
             "stability": f"an incumbent is replaced only when beaten by {SWAP_MARGIN:.0f}+ points; max {MAX_PER_SECTOR_GROUP} per industry sector",
         },
